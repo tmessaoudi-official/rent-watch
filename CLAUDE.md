@@ -367,6 +367,13 @@ scripts/claude-bootstrap/   Reinstalls ~/.claude/ at SessionStart (cloud contain
 - **New skills need a session restart to appear.** Claude Code watches an existing `.claude/skills/`
   directory live, but a newly-created one is not watched until the CLI restarts. The `CLAUDE.md`
   sections bind immediately; the slash commands appear next session.
+- **Commit messages: always `git commit -F -` with a QUOTED heredoc (`<<'EOF'`), never `-m "…"`.**
+  A double-quoted `-m` string runs backtick command substitution, so any `` `Identifier` `` in the message
+  is executed and replaced with its (usually empty) output. Hit on 2026-08-06 in commit `7234550`:
+  `` `using` `` was eaten, leaving *"Closable + for the connection"*, and `bash` reported
+  `using: command not found`. History was **not** rewritten — force-push is unauthorised here and the loss
+  was one word in a message — so the cause is fixed instead. A `<<'EOF'` heredoc is literal: no expansion,
+  no substitution, backticks safe.
 - `ruff` **is** available in this container even though the project has no manifest — so
   `.claude/hooks/lint-on-write.sh` is live and will report on `prototype/scout.py`. Those findings are
   known and deliberately unfixed: the prototype is kept verbatim as received.
