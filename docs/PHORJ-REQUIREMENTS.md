@@ -1,7 +1,7 @@
 # What rent-watch needs from phorj
 
 > Hand this to phorj. Every row is **measured against phorj's tree at `1.0.0-nightly.0`**, not recalled:
-> `Cargo.toml` features, `docs/EXTENSIONS.md`, the `conformance/` corpus, and the `Core.*` symbols the
+> phorj's `Cargo.toml` features, phorj's `docs/EXTENSIONS.md`, its `conformance/` corpus, and the `Core.*` symbols the
 > examples and tests actually reference.
 >
 > Three sections: **EXISTS** (don't build it twice) · **MUST BUILD** (3 items) · **MUST CONFIRM**
