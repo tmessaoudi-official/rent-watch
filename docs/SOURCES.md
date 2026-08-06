@@ -33,7 +33,43 @@ This is not a reason to work around a 403. It is the reason not to have to.
 
 ---
 
-## Tier A — institutional, intermediate / LLI. **Where this project earns its keep**
+## TWO TRACKS, kept separate end to end (ruled 2026-08-06)
+
+*"both! but have them separate! with two emails and two notification!"*
+
+| | **Track 1 — INTERMEDIATE** | **Track 2 — PRIVATE** |
+|---|---|---|
+| Tenure | LLI / logement intermédiaire | LIBRE / loyer libre |
+| Sources | Tier A below | Tier B below |
+| Access | HTTP JSON endpoints (mostly welcome it) | Email alert over IMAP (mostly 403 a plain client) |
+| Mailbox | its own | its own |
+| Notification | its own | its own |
+| Seen-set / dedup | **per track** — a flat listed by In'li AND on SeLoger is two findings, not a duplicate, because the application route differs | |
+
+The split is a first-class concept, not a filter flag: two mailboxes, two notification targets, two
+digests, and `--track intermediate|private|both` on every command.
+
+### The Action Logement clarification — this shrinks Track 1 a lot
+
+*"enumerate all action logement in ile de france"* — measured answer: **Action Logement Immobilier holds
+42 ESH plus exactly ONE logement-intermédiaire subsidiary.** That one is **In'li**.
+[Source: groupe.actionlogement.fr/nos-filiales-immobilieres, via search 2026-08-06 — the page itself
+403s a plain client.]
+
+So "all Action Logement" resolves to a much cleaner answer than a 42-entity list:
+
+- **In'li IS the Action Logement intermediate arm.** One entity, and it is the flagship of Track 1.
+  ~60 000 units across IDF, covering both 78 and 95.
+- The other **42 are ESH — Entreprises Sociales pour l'Habitat, i.e. social landlords.** They are out of
+  scope by the no-social-housing ruling. They appear in Tier A below **only** because several
+  (Seqens, Immobilière 3F, 1001 Vies, Antin) publish a *minority* of intermediate stock alongside their
+  social stock. That is precisely the `mixed_tenure: true` case, and it is why the classifier exists.
+- **For other regions** ("eventually any region"): In'li has regional arms — **In'li Aura** is confirmed
+  (Auvergne-Rhône-Alpes, Annecy). *[Unverified: the full list of In'li regional entities.]* The design
+  consequence is the useful part — region must be **config, not code**, so a new region is a
+  `config/sources.yaml` block plus a commune list, never a code change.
+
+## Tier A — Track 1: institutional, intermediate / LLI. **Where this project earns its keep**
 
 Nothing on the market aggregates these. Status column = HTTP response to a single polite GET.
 

@@ -136,6 +136,87 @@ Measured, not assumed. If CDC Habitat's listing endpoint sits under that path, p
 inside the `Disallow`, CDC Habitat moves to the email-alert route like a private portal. **Never work
 around it.**
 
+### Ⓑ Q16 — Implementation language: phorj, or Python? — raised 2026-08-06
+
+*"i think i want to do it with this language! - it is WIP! but i think it can do it!!"* — referring to
+[phorj](https://github.com/tmessaoudi-official/phorj), the developer's own language.
+
+**I assessed it against this project's actual needs rather than guessing.** It is far more capable than
+"WIP" suggested — and it has exactly two gaps, both load-bearing for Track 2.
+
+**phorj HAS, verified in its `Cargo.toml` and `docs/EXTENSIONS.md` at `1.0.0-nightly.0`:**
+`Core.Json` (default feature) · `Core.Database` = **SQLite via bundled rusqlite** (`database = ["dep:rusqlite"]`) ·
+`Core.HttpClient` (opt-in `http-client`: sync HTTP/1.1 over std TcpStream + rustls + webpki-roots) ·
+`Core.Mail` (opt-in: SMTP **send** with auth, STARTTLS/TLS, optional DKIM) · `Core.Http` incl. a Router ·
+`Core.Regex` · `Core.Decimal` with RoundingMode · `Core.Csv` · `Core.Secret` · `Core.Time` · `Core.Url` ·
+`Core.Log` · `Core.Config` · `Core.Env` · `Core.Console` · `Core.Process` · `Core.Cryptography` ·
+`Core.Validation` — and it compiles to a **single standalone native executable**.
+
+**phorj LACKS exactly two things this project needs:**
+
+1. **IMAP — and it is explicitly DEFERRED, by the developer's own ruling.** `docs/plans/MASTER-PLAN.md`
+   records DEC-413 (2026-07-29): IMAP is an Appendix-A row *"recorded as DEFERRED… post-1.0"*, reason
+   given as *"PHP itself unbundled it"*. `Core.Mail` is SMTP **send**, not IMAP **receive**. Track 2 —
+   the private portals — is email-alert ingestion over IMAP. **This is the blocker, and it is precisely
+   the half that cannot be done another way**, because 5 of the 11 portals 403 a plain HTTP client.
+2. **No HTML parser.** `Core.Html` is a *builder* (`Html.div`, `Html.el`, `Html.attr`) — it renders HTML,
+   it does not parse it. An HTML5 parser exists as a planned item (referenced as W4-10), not shipped.
+   So `type: html` adapters are not buildable in phorj today; `type: json` ones are.
+
+**What that implies, and it is a genuinely good fit rather than a rejection:**
+
+phorj can build **all of Track 1 today** — HttpClient + Json + SQLite + SMTP + Regex is the complete
+happy path for In'li and the JSON-endpoint landlords, and a native single binary is a *better* deploy
+story than Python for a self-hosted watcher. It cannot build Track 2 until IMAP lands.
+
+**Options — a decision, not a default:**
+
+1. **Track 1 in phorj now; Track 2 waits for `Core.Imap`** (recommended). Build order already put Track 1
+   first because it is the differentiated half, and it happens to be exactly what phorj can do. rent-watch
+   becomes phorj's first real application, which is how a language finds its bugs. Cost: Track 2 is
+   blocked on a post-1.0 phorj item, and every phorj bug becomes a rent-watch blocker with one person who
+   can fix it — you.
+2. **Everything in Python now**, port later. Fastest to a working tool on both tracks; `imaplib`,
+   `requests`, `BeautifulSoup`, `sqlite3` are all stdlib-or-trivial, and `prototype/scout.py` already
+   exists. Cost: no dogfooding, and a rewrite later if you still want phorj.
+3. **Hybrid — phorj core + a small Python IMAP feeder** writing into the same SQLite file. Both tracks
+   ship now and the core is dogfooded. Cost: two toolchains in one repo, which is real complexity for a
+   single-user tool.
+4. **phorj for everything, and build `Core.Imap` in phorj first.** Most ambitious. It makes rent-watch
+   the forcing function for a real phorj feature. Cost: a language feature before any product feature.
+
+**Default if unanswered:** option 1 — Track 1 in phorj, Track 2 deferred and clearly marked as blocked
+on `Core.Imap`, with no Python written in the meantime.
+
+**Note the precedent, and why it does not simply settle this:** `twes-in/CLAUDE.md` rules that phorj is
+*"vision, not a target: the language is unfinished and nothing here is built for it. Do not treat it as a
+requirement."* That ruling was for a **commercial invoicing platform** where a pre-1.0 dependency is
+reckless. rent-watch is a **single-user personal tool** — the risk calculus is genuinely different, and
+this is a much more defensible place to dogfood. I am not citing that ruling as a veto; I am flagging
+that it exists so the two repos do not silently contradict each other.
+
+### Ⓑ Q17 — CLI, web app, or both? — raised 2026-08-06
+
+The brief rules a web UI a **non-goal** (`spec/PROJECT_BRIEF.md` §12: *"No web UI. CLI plus push
+notifications. A read-only HTML digest is acceptable later."*). The question reopens it, so it needs a
+ruling rather than an assumption — the brief is a ruling set.
+
+1. **CLI first, then a read-only local web digest** (recommended). The CLI is what `--once` / `--watch`
+   need regardless, and the notification is the primary output. The web page earns its place *later*, for
+   the thing notifications are bad at: browsing 300 accumulated listings, comparing them side by side,
+   and tuning filters without editing YAML. phorj makes this cheap — `Core.Http` Router plus the
+   `Core.Html` builder are already there, and it stays **read-only and localhost**, so no auth, no
+   multi-user, no attack surface. This is the brief's *"read-only HTML digest is acceptable later"*, taken
+   up deliberately.
+2. **CLI only.** Smallest surface, fastest, exactly the brief. Cost: filter tuning stays a YAML-edit loop
+   and there is no way to browse history.
+3. **Web app first.** Nicer to use, but you would be building a UI before the classifier that makes the
+   data trustworthy — and the notification is what actually gets you the flat.
+4. **Both, in parallel.** Doubles the surface before either is proven.
+
+**Default if unanswered:** option 1. Explicitly a *read-only, localhost, no-auth* digest — if it ever
+grows write actions or remote access, that is a new decision, not an extension of this one.
+
 ### Ⓞ Q10 — Playwright allowed?
 §0.10. Only relevant for a source that is impossible otherwise. Chromium is pre-installed in this
 container.
