@@ -16,7 +16,7 @@
 
 ## Already sufficient — no work needed
 
-Verified in `Cargo.toml` / `docs/EXTENSIONS.md`. Listing it so nothing here gets built twice:
+Verified in **phorj's own** `Cargo.toml` and phorj's `docs/EXTENSIONS.md` — paths in the *phorj* repo, not this one; see the note at the end of this file. Listing it so nothing here gets built twice:
 
 | Need | phorj today |
 |---|---|
@@ -130,7 +130,7 @@ nicety — it is the difference between a tested and an untested half of the pro
 IDLE / push, APPEND, flag writes, folder create/delete/rename, quotas, ACLs, threading, server-side sort,
 CONDSTORE/QRESYNC, attachment extraction, multiple simultaneous connections. rent-watch polls a
 single mailbox read-only on an interval. **A minimal read-only client is genuinely sufficient**, and
-`docs/plans/MASTER-PLAN.md` DEC-413 deferred IMAP partly on breadth grounds — this scope is narrow enough
+phorj's own `DEC-413` deferred IMAP partly on breadth grounds — this scope is narrow enough
 to sidestep that reasoning.
 
 ---
@@ -187,6 +187,77 @@ cascade/computed styles.
 
 ---
 
+---
+
+## ③ The transpile question — *"do it in both phorj and php so i can test phorj lift and transpile"*
+
+**Measured first, because the answer inverts the plan.** `phg` refuses to transpile 18 stdlib domains
+(`E-TRANSPILE-*`). Four of them are exactly rent-watch's I/O:
+
+| Domain | Gate | What it costs rent-watch |
+|---|---|---|
+| HTTP client | `E-TRANSPILE-HTTPCLIENT` | **All of Track 1** — its entire mechanism is HTTP |
+| Database | `E-TRANSPILE-DB` | The seen-set, price history, source health |
+| Mail (SMTP) | `E-TRANSPILE-MAIL` | Both tracks' notification |
+| Serving HTTP | `E-TRANSPILE-SERVE` | The web app |
+
+So **a whole-app phorj rent-watch cannot be transpiled to PHP.** The transpiler stops at the first HTTP
+call. That is not a bug — the reasons in the Cargo comments are sound (*"live network I/O has no
+byte-identity mapping"*).
+
+### Do NOT hand-write it twice
+
+Two hand-maintained implementations of the same product is the classic divergence trap: they drift, and
+the drift is silent because each is individually green. Worse, **it would not test the transpiler at
+all** — a hand-written PHP version tests *you*, not `phg`.
+
+### Do this instead — and it is genuinely better than what you asked for
+
+**Write it once in phorj. Let `phg transpile` GENERATE the PHP, and only for the pure core.**
+
+`json = []`, `decimal = []` and `regex` carry **no transpile gate** — they are pure and they lift. And
+rent-watch's architecture already splits along exactly the right line:
+
+| Layer | Content | Transpiles? |
+|---|---|---|
+| `core/tenure` | the classifier — string/regex matching, confidence arithmetic | ✅ **pure** |
+| `core/criteria` | disqualifiers + scoring — comparisons and arithmetic | ✅ **pure** |
+| `core/dedup` | fuzzy matching on `(cp, surface, rent, rooms)` | ✅ **pure** |
+| `core/models` | data types | ✅ **pure** |
+| `adapters/*` | HTTP, IMAP, filesystem | ❌ native |
+| `core/store` | SQLite | ❌ native |
+| `core/notify` | SMTP | ❌ native |
+| web digest | Router / serve | ❌ native |
+
+**What that buys, and it is the real prize:** the **tenure classifier** — the single highest-risk
+component in the product, where a bug means a social-housing false positive — would run
+**byte-identically on three legs**: the tree-walking interpreter, the bytecode VM, and transpiled PHP.
+That is free differential testing on precisely the code that most needs it, and it is a much sharper
+transpiler test than a whole app would be, because the core is deterministic and fixture-driven while
+network I/O is not.
+
+You get your transpiler test, on the part that can actually be tested byte-identically, with no second
+implementation to keep in sync.
+
+### The design constraint this imposes — and it is mechanically checkable
+
+**`src/core/` must not import a native-only module.** No `Core.HttpClient`, `Core.Database`,
+`Core.Mail`, `Core.Http` (serve) or `Core.File` anywhere under `core/`. I/O is passed *in* — the
+classifier takes a listing, not a URL; the store is an interface the core calls, not a thing the core
+opens.
+
+This is ports-and-adapters discipline, and it is worth having regardless of transpiling: an I/O-free core
+is the testable core. The difference here is that **`phg transpile src/core/` succeeding is a
+mechanical proof the discipline held.** A gate can run it in CI: if someone reaches for HTTP inside the
+classifier, the transpile fails and names the gate.
+
+### Optional, later: rent-watch as the motivating case for lifting a gate
+
+The `E-TRANSPILE-HTTPCLIENT` comment already records that *"a curl-mapping may lift this later"*. PHP has
+`curl`, `PDO sqlite`, `DOMDocument`, and historically an IMAP extension — so mappings are *conceivable*
+for HTTP, DB and HTML. If you ever want the whole app to transpile, rent-watch is a good forcing
+function. **Not a prerequisite** for anything above.
+
 ## Open questions back to you
 
 **Q-A — YAML config.** rent-watch's design has `config/criteria.yaml` + `config/sources.yaml`. I saw
@@ -219,3 +290,14 @@ parity blocker"*. If it is still in progress, that changes what Track 1 can do t
 
 Two features. Both narrow. Neither needs a new dependency domain — `rustls` is already admitted, and an
 HTML parser is pure parsing.
+
+---
+
+## A note on paths in this file
+
+Every path in this document that is not obviously rent-watch's — phorj's `Cargo.toml`, phorj's `docs/EXTENSIONS.md`,
+phorj's `src/checker/`, `DEC-413` — belongs to the **phorj** repository, and is named as evidence for a claim
+about phorj rather than as a pointer a rent-watch session should follow. Nothing here should be read as
+authority over rent-watch: **only rent-watch's own `CLAUDE.md` is that** (developer's challenge,
+2026-08-06). `drift-scan.sh` §§ S2/S2b enforce it, and an earlier draft of this very file tripped the
+rule twice — once with a bare path to phorj's `MASTER-PLAN.md` that read exactly like a local one.

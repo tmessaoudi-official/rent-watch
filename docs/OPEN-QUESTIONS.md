@@ -144,7 +144,7 @@ around it.**
 **I assessed it against this project's actual needs rather than guessing.** It is far more capable than
 "WIP" suggested — and it has exactly two gaps, both load-bearing for Track 2.
 
-**phorj HAS, verified in its `Cargo.toml` and `docs/EXTENSIONS.md` at `1.0.0-nightly.0`:**
+**phorj HAS, verified in phorj's `Cargo.toml` and phorj's `docs/EXTENSIONS.md` at `1.0.0-nightly.0`:**
 `Core.Json` (default feature) · `Core.Database` = **SQLite via bundled rusqlite** (`database = ["dep:rusqlite"]`) ·
 `Core.HttpClient` (opt-in `http-client`: sync HTTP/1.1 over std TcpStream + rustls + webpki-roots) ·
 `Core.Mail` (opt-in: SMTP **send** with auth, STARTTLS/TLS, optional DKIM) · `Core.Http` incl. a Router ·
@@ -154,7 +154,7 @@ around it.**
 
 **phorj LACKS exactly two things this project needs:**
 
-1. **IMAP — and it is explicitly DEFERRED, by the developer's own ruling.** `docs/plans/MASTER-PLAN.md`
+1. **IMAP — and it is explicitly DEFERRED, by the developer's own ruling.** phorj's `docs/plans/MASTER-PLAN.md`
    records DEC-413 (2026-07-29): IMAP is an Appendix-A row *"recorded as DEFERRED… post-1.0"*, reason
    given as *"PHP itself unbundled it"*. `Core.Mail` is SMTP **send**, not IMAP **receive**. Track 2 —
    the private portals — is email-alert ingestion over IMAP. **This is the blocker, and it is precisely
@@ -309,5 +309,26 @@ recording that "action logement" was named as a wanted *source*, not as a wanted
   as precedent. **That was a defect** — this repo cannot read a sibling's file and a future session here
   cannot verify it, so it is a dangling cross-reference with the authority of a rumour. The argument was
   restated in rent-watch's own terms and `drift-scan.sh` § S2b now catches the whole class.
+- [2026-08-06] AGREED (Q17): **CLI and the read-only web digest in PARALLEL** — *"both in parallel yes"*.
+  This amends `spec/PROJECT_BRIEF.md` §12, which rules a web UI a non-goal: the digest is now in scope
+  from the start rather than "acceptable later". Constraints kept: **read-only, localhost, no auth, no
+  multi-user**. If it ever grows write actions or remote access that is a NEW decision, not an extension
+  of this one.
+- [2026-08-06] AGREED (transpile): **write it ONCE in phorj; `phg transpile` GENERATES the PHP, and only
+  for the pure core.** The developer asked for both languages to test phorj's transpiler. Measured first:
+  `phg` refuses 18 domains, four of which are rent-watch's whole I/O surface —
+  `E-TRANSPILE-HTTPCLIENT` (all of Track 1), `E-TRANSPILE-DB` (the store), `E-TRANSPILE-MAIL` (both
+  notifications), `E-TRANSPILE-SERVE` (the web app). So a whole-app transpile is impossible today, and
+  hand-writing a second PHP implementation would test the *author*, not the transpiler, while creating a
+  silent-divergence trap. Instead: `core/tenure`, `core/criteria`, `core/dedup` and `core/models` stay
+  **pure** (`json`, `decimal`, `regex` carry no transpile gate), so the classifier — the highest-risk
+  component in the product — runs **byte-identically on three legs**: interpreter, bytecode VM, and
+  transpiled PHP. Free differential testing on exactly the code where a bug means a social-housing false
+  positive.
+- [2026-08-06] AGREED (architecture, follows from the above): **`src/core/` must not import a
+  native-only module.** No `Core.HttpClient`, `Core.Database`, `Core.Mail`, serve or `Core.File` under
+  `core/`. I/O is passed in — the classifier takes a listing, not a URL. This is ports-and-adapters
+  discipline, worth having regardless, and it is **mechanically checkable**: `phg transpile src/core/`
+  succeeding IS the proof the discipline held. Wire it as a gate once `src/` exists.
 - [2026-08-06] AGREED: **run every assumption past the developer** — *"even if you assume anything run
   it by me"*. Assumptions get stated explicitly and recorded here, not absorbed silently.

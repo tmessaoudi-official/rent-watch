@@ -82,9 +82,20 @@ for p in pathlib.Path('.').rglob('*'):
         if '<!--' in line and '-->' not in line: in_comment = True; continue
         if '-->' in line and '<!--' not in line: in_comment = False; continue
         if in_comment or CITE.search(line): continue
-        for ref in re.findall(r'docs/plans/[a-z0-9-]+\.plan\.md', line):
+        # Any cited docs/ path, not just lowercase *.plan.md. An earlier version matched only
+        # `docs/plans/[a-z0-9-]+\.plan\.md`, so a bare reference to phorj's docs/plans/MASTER-PLAN.md
+        # — a foreign file wearing a local-looking path — slipped through both this check and S2b.
+        # Uppercase and non-.plan.md suffixes now count. (This very comment needed the qualifier
+        # adjacent to the path to pass its own rule, which is the rule working.)
+        # A foreign path is FINE when qualified by its repo on the same line ("phorj's docs/…",
+        # "phorj:docs/…"). Bare is the defect, because bare reads as local.
+        qualified = re.search(r"(phorj|twes-in|pdfturbo|stack)(\'s)?[ :/]", line, re.I)
+        for ref in re.findall(r'docs/[A-Za-z0-9_/-]+\.md', line):
+            if qualified: continue
             if not pathlib.Path(ref).is_file():
-                print(f"P1  {p}:{n} points at {ref}, which does not exist")
+                print(f"P1  {p}:{n} cites {ref}, which does not exist in this repo. If it belongs to "
+                      f"another repo, say so explicitly — a bare path reads as local and a future "
+                      f"session will follow it into nothing.")
 PY
 
 # ── S2b: no SIBLING-REPO file cited as authority ─────────────────────────────────────────────────
