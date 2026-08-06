@@ -1,7 +1,7 @@
 ---
 name: converge
 spotlight: true
-description: Run the project's MAXIMAL certification ladder (CLAUDE.md § "Certification ladder"), or a deeper tunable convergence sweep, over an audit/migration/gate. Defaults ARE the twes-in ladder — 3 adversarial evidence-based lenses, TWO consecutive fully-clean rounds, cap 5 rounds, certified by fresh-context reviewer subagents. Override with --cycles/--converge/--angles/--certify. Runs AUTONOMOUSLY by default (twes-in) and reports progress every cycle; --ask restores the approval gate. Escalates in PLAIN TEXT if it cannot converge.
+description: Run the project's MAXIMAL certification ladder (CLAUDE.md § "Certification ladder"), or a deeper tunable convergence sweep, over an audit/migration/gate. Defaults ARE the rent-watch ladder — 3 adversarial evidence-based lenses, TWO consecutive fully-clean rounds, cap 5 rounds, certified by fresh-context reviewer subagents. Override with --cycles/--converge/--angles/--certify. Runs AUTONOMOUSLY by default (rent-watch) and reports progress every cycle; --ask restores the approval gate. Escalates in PLAIN TEXT if it cannot converge.
 user-invocable: true
 args: "[--cycles=N] [--converge=K] [--scope=ladder|3C|6C|custom] [--angles='angle1;angle2;angle3'] [--certify=reviewer|self] [--ask] [--auto-cap=N]"
 side-effects: None — read-only analysis loop; findings incorporated into conversation context only.
