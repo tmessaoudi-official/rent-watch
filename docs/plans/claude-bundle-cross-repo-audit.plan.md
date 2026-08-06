@@ -23,8 +23,13 @@
   credential value is a placeholder; the only non-placeholder values are `*_SSL_VERIFY`. Committing it
   to a public repo is safe.
 - [2026-08-06] OPEN: whether to adopt stack's `claude-setup/<bundle>.tar.gz` pattern here.
-- [2026-08-06] OPEN: whether `install.sh` should stop relying on `cp -u` mtime (clobbers a real
-  workstation's `~/.claude/CLAUDE.md` after a fresh clone — reproduced, see § Open 1).
+- [2026-08-06] AGREED (P1, applied): **the repo is always the truth** — `install.sh` copies the three
+  framework docs UNCONDITIONALLY, replacing `cp -u`. Developer ruling: *"it would be better to always
+  copy what is in the repo to the global folder! the repo is always the truth!"* A file predating the
+  hook is snapshotted once to `<name>.pre-bootstrap.bak` and never re-written, so unconditional copying
+  cannot destroy a global framework irrecoverably. New suite `test-install.sh`, 17 assertions, both
+  guards sabotage-verified. **This is now a port-OUT item for all four siblings** — they all still ship
+  `cp -u` and the same false header claim.
 
 ## Chronology — MEASURED, and both siblings have it wrong
 
@@ -77,13 +82,16 @@ content.
 | `/forge` | ❌ | ✅ | ✅ | ✅ | ✅ |
 | `/qa-sweep` | ❌ | ✅ | ❌ | ❌ | ❌ (rejected: no UI) |
 | bundle tarball committed | ✅ | ❌ | ❌ | ❌ | ❌ |
+| unconditional install (repo is truth) | ❌ | ❌ | ❌ | ❌ | ✅ **only one** |
+| `test-install.sh` | ❌ | ❌ | ❌ | ❌ | ✅ **only one** |
 
 Core skill set is 13 and identical across pdfturbo/phorj/twes-in/rent-watch. stack carries 10 of the 13
 plus 10 stack-specific domain skills; rent-watch adds `/add-source`.
 
 ## What rent-watch was missing — the whole list
 
-**One item, applied.** P2, documentation-of-security: `install.sh`'s header said only *"the upstream
+**Two items, both applied.** P1: `install.sh` used `cp -u` — fixed, see the Decisions Log entry and
+§ "port OUT" item 0. P2, documentation-of-security: `install.sh`'s header said only *"the upstream
 port this was adapted from did exactly that; the block was removed here on purpose"*. It now names the
 exact two-line block, states that this repo is public, says it must not return even commented out, and
 cites phorj's deletion. Ported from phorj's 2026-08-06 wording, which is better than what rent-watch
@@ -94,6 +102,17 @@ inherited.
 ## What to port OUT of rent-watch, per repo
 
 This is the actionable half when the developer runs this exercise on the siblings.
+
+### → ALL FOUR siblings (P1 — the newest ruling, and none of them has it)
+
+0. **`install.sh` still uses `cp -u`, and its header still carries the false claim.** Ruled 2026-08-06:
+   the repo is always the truth, so the copy must be unconditional. `cp -u` was nondeterministic — after
+   a fresh clone the repo file is newer so it clobbered anyway (the header says it does not), and after a
+   hand-edit of the target it silently did nothing so the repo stopped being the truth. Port
+   rent-watch's `install_doc()` helper (unconditional `cp -f` + one-time `.pre-bootstrap.bak` snapshot)
+   and its `test-install.sh`. The snapshot's *never-rewrite* guard matters specifically because all five
+   repos share this hook: opening a sibling installs its copy over yours, so on the next session the
+   target differs from your source again and a naive snapshot would overwrite the original.
 
 ### → `stack` and `pdfturbo` (both P1, both genuinely broken today)
 
@@ -132,27 +151,11 @@ This is the actionable half when the developer runs this exercise on the sibling
 
 ## Open — needs a ruling
 
-1. **`install.sh` relies on `cp -u` mtime, which clobbers a real workstation.** `cp -u` copies when the
-   source is newer, and a fresh `git clone` stamps every file with the clone time — so cloning any of
-   these repos onto the developer's own machine and opening it in Claude Code **overwrites their own
-   `~/.claude/CLAUDE.md`** with that repo's container-adapted copy. Reproduced:
-
-   ```
-   home/CLAUDE.md  (mtime 2026-07-01): "MY OWN hand-maintained global framework"
-   repo/CLAUDE-global.md (mtime now):  "rent-watch container-adapted framework"
-   $ cp -u repo/CLAUDE-global.md home/CLAUDE.md && cat home/CLAUDE.md
-   rent-watch container-adapted framework      ← clobbered
-   ```
-
-   The header comment claims the opposite (*"a hand-edited newer `~/.claude` file on a real workstation
-   is never clobbered"*), which is true only if the file is newer than the clone. **All five repos share
-   this.** Proposed fix: gate on the ephemeral container rather than on mtime — install when the target
-   is absent, or when a container marker is present; otherwise print a one-line notice and skip.
-2. **Adopt stack's `claude-setup/<bundle>.tar.gz`?** stack commits the 517 KB scrubbed bundle so it can
+1. **Adopt stack's `claude-setup/<bundle>.tar.gz`?** stack commits the 517 KB scrubbed bundle so it can
    be re-imported on any machine. Verified safe (all credential values are placeholders). Pro: the
    bundle travels, `/install` works from a clone. Con: a 517 KB binary in git, and it embeds internal
    MCP service topology (scrubbed to `<mcp-client-N>` names).
-3. **`SubagentStop` reminder hook** (stack only). Its current form fires for one named stack agent, so
+2. **`SubagentStop` reminder hook** (stack only). Its current form fires for one named stack agent, so
    it is not portable as-is. The generic pattern — emit `{"systemMessage": …}` when a subagent finishes
    — has low value here, since rent-watch's reviewers already end with an explicit `PANEL VERDICT` line.
    Recommend skipping unless the panel starts being run and then ignored.

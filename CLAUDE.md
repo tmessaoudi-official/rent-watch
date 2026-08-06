@@ -306,6 +306,7 @@ The only thing executable today:
 ```bash
 python3 prototype/scout.py --help      # the superseded prototype
 bash scripts/claude-bootstrap/hooks/test-precompact-handoff.sh   # 35 tests, must stay green
+bash scripts/claude-bootstrap/test-install.sh                    # 17 tests, must stay green
 bash -n .claude/hooks/*.sh scripts/claude-bootstrap/**/*.sh      # shell syntax
 ```
 

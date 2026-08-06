@@ -25,12 +25,13 @@ copyright holder, so relicensing is the developer's to make; it is recorded as a
 
 | File | Role |
 |---|---|
-| `install.sh` | **SessionStart hook.** `cp -u` the three docs below into `~/.claude/`, and create `var/claude/`. Nothing else. |
+| `install.sh` | **SessionStart hook.** Copies the three docs below into `~/.claude/` **unconditionally** — the repo is the truth — and creates `var/claude/`. Nothing else. |
 | `CLAUDE-global.md` | The global reasoning framework → installed as `~/.claude/CLAUDE.md`. The 8-phase workflow, the four-dimension Completion Gate, the 18 Core Operating Rules, evidence grades. |
 | `THINKING.md` | 33 named mental models → `~/.claude/THINKING.md`. Reference only, not auto-loaded — read it or `@THINKING.md` when you want the frameworks in context. |
 | `BLAST-RADIUS.md` | State-dependent destructive-command reference → `~/.claude/BLAST-RADIUS.md`. |
 | `hooks/precompact-handoff.sh` | **PreCompact hook.** Writes `var/claude/handoff/{latest,handoff-<stamp>}.md` before compaction. Deterministic — no LLM call. |
-| `hooks/test-precompact-handoff.sh` | Test suite for the above. Run it after any edit to the hook. |
+| `hooks/test-precompact-handoff.sh` | Test suite for the above (35). Run it after any edit to the hook. |
+| `test-install.sh` | Test suite for `install.sh` (17) — pins the repo-is-truth contract and the one-time snapshot. |
 | `hooks/log-helpers.sh` | `log_obs()`, shared by the hooks. |
 | `apply-pending-settings.sh` | The `.claude/settings.json` hand-over relay. See below — currently **not needed here**, kept deliberately. |
 
@@ -102,8 +103,34 @@ the repo on every session start, with a commented-out `git push --force-with-lea
 block is not reproduced here. **Do not reintroduce it.** `/claude-bundle/` is gitignored as a
 belt-and-braces guard, so that even an accidental copy cannot be committed.
 
-`install.sh` is idempotent: `cp -u` only copies when the repo copy is newer, so running it twice is a
-no-op and a hand-edited newer `~/.claude/CLAUDE.md` on a real workstation is never clobbered.
+## The repo is the truth — `install.sh` copies unconditionally
+
+Ruled 2026-08-06. Every run copies all three docs over whatever is at `~/.claude/`, regardless of
+timestamps. Idempotent (the same bytes land every time) and, more importantly, **deterministic**.
+
+This replaced `cp -u`, and the header it replaced was **wrong on its own terms**. It claimed *"a
+hand-edited newer `~/.claude/CLAUDE.md` on a real workstation is never clobbered"*. But `cp -u` copies
+when the SOURCE is newer, and a fresh `git clone` stamps every file with the clone time — so on a real
+workstation it clobbered anyway. Reproduced:
+
+```
+home/CLAUDE.md        (mtime 2026-07-01): "MY OWN hand-maintained global framework"
+repo/CLAUDE-global.md (mtime now):        "rent-watch container-adapted framework"
+$ cp -u repo/CLAUDE-global.md home/CLAUDE.md && cat home/CLAUDE.md
+rent-watch container-adapted framework      ← clobbered
+```
+
+The converse was just as bad: hand-edit the target and `cp -u` silently did nothing forever, so the
+repo quietly stopped being the truth. Both outcomes depended on mtimes nobody was tracking.
+
+**The safety net.** A file that predates this hook is snapshotted once to
+`<name>.pre-bootstrap.bak`, and that snapshot is never written again. It is not a second source of
+truth — nothing ever reads it back — it exists so that unconditional copying cannot destroy a global
+framework with no way back. The "never written again" half is load-bearing in the **multi-repo** case:
+all five sibling repos ship this hook, so opening `twes-in` installs its copy over ours, and on the
+next rent-watch session the target differs from our source again. Without the guard we would snapshot
+*twes-in's* copy on top of the irreplaceable original. `test-install.sh` asserts exactly that sequence
+— it was added because sabotage-verification showed the simpler assertion passed without the guard.
 
 ## `.claude/settings.json` — the relay, and why it is dormant here
 
@@ -160,7 +187,8 @@ bash scripts/claude-bootstrap/install.sh
 ls -l ~/.claude/{CLAUDE.md,THINKING.md,BLAST-RADIUS.md}
 head -40 ~/.claude/CLAUDE.md          # should open with the rent-watch adaptation header
 bash -n scripts/claude-bootstrap/*.sh scripts/claude-bootstrap/hooks/*.sh
-bash scripts/claude-bootstrap/hooks/test-precompact-handoff.sh
+bash scripts/claude-bootstrap/hooks/test-precompact-handoff.sh   # 35
+bash scripts/claude-bootstrap/test-install.sh                    # 17
 ```
 
 ## Known limits
