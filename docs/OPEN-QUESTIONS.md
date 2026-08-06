@@ -24,7 +24,7 @@ silently just because it was in the prototype.
 
 | # | Filter | Current value | Notes / what to reconsider |
 |---|---|---|---|
-| F1 | **Tenure** | LLI only; PLAI/PLUS/ANRU/ANAH never | Non-negotiable (`CLAUDE.md` §1). PLS and LIBRE are **Q4** below. |
+| F1 | **Tenure** | **LLI + LIBRE in; PLAI/PLUS/PLS/ANRU/ANAH never** | Settled 2026-08-06 (Q4). The exclusion is non-negotiable (`CLAUDE.md` §1); the inclusion of LIBRE is a product choice. |
 | F2 | **Communes** | sartrouville, houilles, maisons-laffitte, bezons, cormeilles, argenteuil, le vesinet, chatou, carrieres-sur-seine, montesson | 10 communes, boucle de Seine. Missing neighbours worth a yes/no: **Le Pecq, Croissy-sur-Seine, Sartrouville-Plateau, Bougival, La Frette, Herblay, Conflans, Achères, Poissy, Saint-Germain-en-Laye**. Also: is this a hard filter at all, or a *preference weight* with a commute constraint as the real filter (**Q1**)? |
 | F3 | **Postcode prefixes** | `78`, `95`, `92` | `92` admits Nanterre/Colombes/Courbevoie — much pricier. Deliberate, or a leftover? Note F2 and F3 currently **both** apply, so `92` only matters for Bezons-adjacent spillover. |
 | F4 | **Minimum rooms** | `4` (T4) | Stated reason: 2 children. Would a **large T3** (≥70 m² with a separate dining space) ever be acceptable? T4 is the single most restrictive filter in LLI stock. |
@@ -78,17 +78,22 @@ Changes: the criteria engine's return type (boolean vs. graded).
 §0.3. Answered in substance by F4/F5 (`4` / `75`). Open only as: is a large T3 ever acceptable?
 **Default if unanswered:** T4 / 75 m², as the prototype has it.
 
-### Ⓑ Q4 — Is PLS in scope? Are LIBRE listings in scope?
-§0.4. **The most consequential question in the file**, and the one the classifier cannot default its
-way out of. Worked through as the example in `.claude/skills/ask-human/SKILL.md`.
-- **PLS**: top tier of *social* financing, high ceilings, marketed alongside intermediate stock.
-  Excluding it drops roughly a third of CDC Habitat T4 stock; including it surfaces units that may need
-  an SNE number.
-- **LIBRE**: private market rate. Including it means the email-alert (IMAP) adapter and a dedicated
-  mailbox become milestone-6 work rather than optional.
+### Ⓐ Q4 — ANSWERED 2026-08-06: PLS **out**, LIBRE **in**
 
-**Default if unanswered:** PLS → *"à vérifier"* digest only (neither a match nor a silent drop).
-LIBRE → **out**, institutional-only, because it halves the build.
+> *"I only want private housing or loyer/logement libre and logement intermediaire/action logement!
+> no social housing!"*
+
+- **PLS → EXCLUDED**, joining PLAI and PLUS. PLS is social housing (SNE + commission d'attribution), and
+  the ruling is no social housing. It is no longer "genuinely ambiguous" for this project — it is out.
+  The excluded set is now `PLAI`, `PLUS`, `PLS`, `ANRU`, `ANAH`, `conventionné`-absent-intermediate-label.
+- **LIBRE → IN SCOPE**, as a full match alongside LLI. This is the largest architectural consequence of
+  any answer so far: the private portals stop being optional, and the `email_alert` (IMAP) adapter moves
+  from milestone 6 to milestone-critical.
+- **"action logement" is a SOURCE, not a tenure** — see § "The Action Logement wrinkle" below. Its
+  intermediate stock is in scope; its social stock is not, and the same page carries both.
+
+~~Ⓑ Q4 — original wording~~ (kept for the record): *Is PLS in scope? Are LIBRE listings in scope?*
+Default had been PLS → digest, LIBRE → out. **Both overridden by the answer above.**
 
 ### Ⓞ Q5 — Floor / elevator: hard reject or scoring penalty?
 §0.5. The prototype hard-rejects (F7); the brief wants a penalty (S5/S6).
@@ -111,7 +116,14 @@ has **no persistent disk**, which breaks price history and the seen-set — and 
 the criteria.
 **Default if unanswered:** Docker on a VPS with a mounted volume; `--watch` with jitter rather than cron.
 
-### Ⓑ Q9 — Notification channel: Telegram / ntfy / email / Slack?
+### Ⓐ Q9 — PARTLY ANSWERED 2026-08-06: email is wanted
+
+> *"just filter and show me/email me the list"*
+
+**Email is in.** Open only on whether email is the ONLY channel or whether a push channel (ntfy) rides
+alongside it for time-critical LIBRE listings, which go fast. See the question set of 2026-08-06.
+
+~~Ⓑ Q9 — original~~: Telegram / ntfy / email / Slack?
 §0.9. `prototype/sources.yaml` scaffolds **ntfy** (topic blank) and **SMTP** (`SCOUT_SMTP_PASS`).
 **Default if unanswered:** ntfy — no account, no bot token, works on mobile, and the prototype already
 leans that way. Needs a topic name; treat the topic as a **secret** (anyone who knows it can read the
@@ -157,6 +169,22 @@ follow the no-trailer rule, so it was applied here for consistency.
 
 ---
 
+## The Action Logement wrinkle — flagged 2026-08-06, needs a ruling
+
+"Action Logement" is an **organisation**, not a tenure. It distributes housing reserved for employees of
+contributing companies, and that reserved stock spans BOTH families:
+
+- its **intermediate / LLI** stock — in scope, and a genuinely good channel because the reservation
+  reduces competition
+- its **social** stock (PLUS/PLAI via employer reservation) — out of scope by the Q4 answer, and it
+  still runs through the SNE and a commission
+
+`AL'in` (the Action Logement platform) and the Action Logement group landlords — **Seqens**,
+**Immobilière 3F**, **1001 Vies Habitat** — publish both on the same pages. So "I want Action Logement"
+resolves to: **yes to the source, with the classifier doing its job on each listing.** Every one of them
+gets `mixed_tenure: true`. Nothing special is needed beyond what §1 already mandates — but it is worth
+recording that "action logement" was named as a wanted *source*, not as a wanted *tenure*.
+
 ## Decisions Log
 
 - [2026-08-06] AGREED: work on `master` only; no `claude/*` branch (developer instruction).
@@ -164,3 +192,14 @@ follow the no-trailer rule, so it was applied here for consistency.
   `.claude/skills/ask-human/SKILL.md` (developer instruction — it times out in this container).
 - [2026-08-06] ASSUMED: stack is **Python** (Q7), from `prototype/scout.py` and available `ruff`.
 - [2026-08-06] ASSUMED: AGPL headers **stripped**, not propagated (Q12) — flagged for ruling.
+- [2026-08-06] AGREED (Q4): **PLS is EXCLUDED** — it is social housing, and the ruling is no social
+  housing. The excluded set becomes PLAI, PLUS, **PLS**, ANRU, ANAH, conventionné-absent-label.
+- [2026-08-06] AGREED (Q4): **LIBRE is IN SCOPE** as a full match. Private portals become first-class;
+  the IMAP `email_alert` adapter becomes milestone-critical rather than milestone-6.
+- [2026-08-06] AGREED: **no auto-application, ever** — *"i don't want you to fill any application for
+  me! just filter and show me/email me the list"*. This was already a ruled non-goal
+  (`spec/PROJECT_BRIEF.md` §12); it is now doubly confirmed and must never be revisited.
+- [2026-08-06] AGREED (Q9, partial): **email delivery is wanted.** Whether a push channel rides
+  alongside it is still open.
+- [2026-08-06] AGREED: **run every assumption past the developer** — *"even if you assume anything run
+  it by me"*. Assumptions get stated explicitly and recorded here, not absorbed silently.
