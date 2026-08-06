@@ -238,6 +238,53 @@ contains personal data.
 
 ---
 
+## Part 2b — Raised by building the tenure classifier (2026-08-06)
+
+Both of these were found by writing the code rather than by planning it, and both are currently
+resolved in the safe direction — so neither blocks anything. They are recorded because the safe
+direction has a cost, and the cost is yours to accept or overturn.
+
+### Ⓞ Q18 — Is **PLI** (Prêt Locatif Intermédiaire) in scope?
+
+`PLI` is the pre-2014 intermediate scheme, superseded by LLI when ordonnance 2014-159 created the
+current regime. Older stock is still marketed under the PLI label, and it is **genuinely not social
+housing** — no SNE number, no commission d'attribution.
+
+But it is not in the `CLAUDE.md` glossary, and Q4 ruled on PLS and LIBRE without mentioning it.
+Treating it as intermediate because it *sounds* intermediate would decide a product question inside
+the classifier, which is exactly the move this project forbids.
+
+**Current behaviour (the default if this stays unanswered):** a `financement: PLI` field yields
+`UNKNOWN` → the *"à vérifier"* digest. Fixture `unknown-003-unrecognised-field-value`.
+
+- **Option 1 — leave it (recommended).** PLI stock in IdF is a small, ageing tail; a digest entry
+  costs one glance. Zero risk.
+- **Option 2 — treat PLI as eligible**, joining LLI. Slightly more reach, and defensible on the
+  facts. Requires a fixture change and a glossary row.
+- **Option 3 — exclude it outright.** Not recommended: it would drop genuinely eligible stock, and
+  the reason to exclude a tenure here is ineligibility, which does not apply.
+
+### Ⓞ Q19 — Sourcing the **plafonds de ressources** bands (classifier tier 4)
+
+Signal tier 4 in `spec/PROJECT_BRIEF.md` §4 compares a quoted income ceiling against known LLI vs
+PLUS/PLAI bands. The bands are far apart, so it discriminates reliably — it is the best signal the
+project is not using.
+
+What is missing is the figures. They vary by zone (A bis / A / B1) and by household size, and they
+are revised annually. `CLAUDE.md` hard rule 1 forbids writing them from memory, and inventing them
+would be worse than the gap: the tier would appear to work while silently dropping eligible listings.
+
+**Current behaviour:** the rung exists in the ladder, `PlafondBands` ships empty, and
+`TenureClassifierTest::testPlafondTierIsInertUntilRealBandsAreSourced()` asserts it stays inert — so
+the day someone loads real figures, the suite says the tier woke up and needs its own fixtures.
+
+Sourcing them needs a decision on *where from*: the annual arrêté on Légifrance is authoritative but
+awkward to parse; ANIL and service-public.fr republish them in readable tables. Neither is a
+five-minute job, and the classifier already clears the floor on tiers 1–3 for every corpus case, so
+this is a genuine enhancement rather than a gap.
+
+---
+
 ## Part 3 — Raised by the bundle integration (2026-08-06)
 
 ### Ⓞ Q12 — Licence
@@ -332,3 +379,22 @@ recording that "action logement" was named as a wanted *source*, not as a wanted
   succeeding IS the proof the discipline held. Wire it as a gate once `src/` exists.
 - [2026-08-06] AGREED: **run every assumption past the developer** — *"even if you assume anything run
   it by me"*. Assumptions get stated explicitly and recorded here, not absorbed silently.
+- [2026-08-06] AGREED: **build the pure core without waiting for phorj** — *"let's start without
+  phorj and then we will do it when it's ready"*. `core/models` + `core/tenure` need none of phorj's
+  three missing modules, no mailbox and no endpoint, so they were written in PHP 8.5 first. The
+  corpus is language-neutral JSON, so the phorj port reads the same file and the two can be diffed
+  fixture-by-fixture. See `docs/plans/core-tenure-classifier.plan.md`.
+- [2026-08-06] AGREED: **PHP 8.5, latest of everything** — *"use php 8.5"*, *"latest of everything"*.
+  PHP 8.5.9, Composer 2.10.2, PHPUnit 13.2.6. Zero Composer dependencies: the container's egress
+  policy blocks GitHub dist downloads, so Composer falls back to full git clones and a PHPUnit dev
+  dependency cost 2.6 GB of `vendor/`. The runner is the official PHAR instead.
+- [2026-08-06] RAISED (Q18): **PLI is not in the glossary** and Q4 did not rule on it. It is
+  genuinely not social housing, but guessing would decide a product question in code, so it
+  classifies as UNKNOWN and digests. Default stands unless overturned.
+- [2026-08-06] RAISED (Q19): **classifier tier 4 (plafonds bands) ships inert.** The rung exists; the
+  figures do not, and hard rule 1 forbids writing them from memory. A test asserts it stays inert so
+  loading real bands is a deliberate, visible act.
+- [2026-08-06] AGREED (tooling): **`tests/sabotage-check.sh` is part of the classifier's test
+  contract.** Every failure mode in this module is silent, so a green suite is not evidence. The
+  sabotage run breaks the classifier 15 ways and requires the suite to catch each one; it found three
+  undetected regressions and one piece of unreachable safety code on the day it was written.

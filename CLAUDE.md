@@ -15,13 +15,15 @@ The full specification is [`spec/PROJECT_BRIEF.md`](spec/PROJECT_BRIEF.md). It i
 for the product, and **every constraint in it is a ruling**, not a draft to be improved on. Read it
 before touching anything under `src/`.
 
-Status: **specification and prototype only.** There is no `src/`, no `config/`, no `tests/`, no
-dependency manifest, no test runner and no CI. What exists: `spec/PROJECT_BRIEF.md`,
-`prototype/scout.py` + `prototype/sources.yaml` (a pre-existing single-file prototype, kept as
-reference material and **not** the shipping implementation), this file, `README.md`,
-`docs/OPEN-QUESTIONS.md`, `.claude/**` and `scripts/claude-bootstrap/**`. Anything below describing
-`src/core/tenure.*` and its siblings is the **target**, not the present. Do not report findings against
-files that do not exist yet, and do not name `pytest` or `ruff` as though they were wired.
+Status: **the pure core exists; nothing else does.** As of 2026-08-06 there is a PHP 8.5
+implementation of `models` + `tenure` under `src/php/Core/`, a 56-case language-neutral classifier
+corpus at `tests/fixtures/tenure/corpus.json`, and a PHPUnit suite. There is still **no**
+`config/`, no adapter, no store, no notification channel, no CLI and no CI. `src/phorj/` is not
+written yet — it waits on the three phorj builds in `docs/PHORJ-REQUIREMENTS.md`.
+
+Anything below describing `criteria`, `dedup`, `store`, `health`, the adapters or `enrich` is the
+**target**, not the present. Do not report findings against files that do not exist yet, and do not
+name `pytest` as though it were wired — the PHP suite is the only test runner here.
 
 **Eleven decisions are still open** and several of them change the architecture — see
 [`docs/OPEN-QUESTIONS.md`](docs/OPEN-QUESTIONS.md). Milestone 1 should not start until the blocking ones
@@ -111,10 +113,10 @@ in the same result set.
 | Term | Meaning | In scope? |
 |---|---|---|
 | **LLI** — Logement Locatif Intermédiaire | Ordonnance 2014-159. Rent capped ~10–20% below market. Income ceilings exist but are far above social housing. Zones A bis / A / B1 only. Allocated **directly by the landlord** — no commission, no SNE number. | **YES — primary target** |
-| **PLS** — Prêt Locatif Social | Highest tier of *social* financing. High ceilings, often marketed alongside intermediate stock. Genuinely ambiguous. | **OPEN — Q4** |
+| **PLS** — Prêt Locatif Social | Highest tier of *social* financing. High ceilings, often marketed alongside intermediate stock. Was genuinely ambiguous; the Q4 answer settled it. | **NEVER** — ruled 2026-08-06 (Q4) |
 | **PLUS** — Prêt Locatif à Usage Social | Mainstream social housing. Requires SNE registration (numéro unique), allocated by commission d'attribution. | **NEVER** |
 | **PLAI** — Prêt Locatif Aidé d'Intégration | Very-low-income social housing. | **NEVER** |
-| **LIBRE** | Private market rate, no cap, no income condition. SeLoger / Leboncoin / PAP / Bien'ici / agencies. | **OPEN — Q4** |
+| **LIBRE** | Private market rate, no cap, no income condition. SeLoger / Leboncoin / PAP / Bien'ici / agencies. | **YES** — ruled 2026-08-06 (Q4), a full match on its own track |
 | **ANRU / ANAH / conventionné** | Various subsidised regimes. Treat as social unless explicitly labelled intermediate. | **NEVER** |
 
 Classifier signal priority (highest → lowest confidence). A lower-priority signal must never override a
@@ -134,16 +136,27 @@ higher one:
 
 ## Architecture
 
-Single repo, single language. Layered, with **adapters as the only site-specific code**.
+Single repo, **two languages**, layered, with **adapters as the only site-specific code**.
+
+Two languages because the developer ruled 2026-08-06: *"do it in both phorj and php so i can test
+phorj lift and transpile"*. So the tree is `src/<lang>/`, and the spec's single-language `src/core/`
+is amended accordingly. The **pure core** — `models`, `tenure`, `criteria`, `dedup` — is written
+twice and diffed fixture-by-fixture against one shared corpus. Everything that touches IMAP, HTTP,
+SQLite or SMTP stays PHP-only: phorj refuses to transpile those domains, so a whole-app port is
+impossible by design rather than by omission (`docs/PHORJ-REQUIREMENTS.md`).
 
 | Layer | Path | Responsibility |
 |---|---|---|
-| Core | `src/core/` | `models`, `tenure` (the classifier), `criteria` (score + hard disqualifiers), `dedup`, `store` (SQLite + price history), `health` |
-| Notify | `src/core/notify/` | One module per channel. Every notification carries `score` + human-readable `reasons[]`. |
-| Adapters | `src/adapters/` | `base` (the `Source` interface), `http_json`, `html`, `email_alert` (IMAP), `browser` (Playwright, opt-in), `sites/` for per-site overrides |
-| Enrich | `src/enrich/` | `transit` (IDFM / PRIM door-to-door commute), `geo` (commune → INSEE code, coords) |
+| Core | `src/php/Core/` · later `src/phorj/core/` | `models`, `tenure` (the classifier), `criteria` (score + hard disqualifiers), `dedup`, `store` (SQLite + price history), `health` |
+| Notify | `src/php/Core/Notify/` | One module per channel. Every notification carries `score` + human-readable `reasons[]`. |
+| Adapters | `src/php/Adapters/` | `base` (the `Source` interface), `http_json`, `html`, `email_alert` (IMAP), `browser` (Playwright, opt-in), `sites/` for per-site overrides |
+| Enrich | `src/php/Enrich/` | `transit` (IDFM / PRIM door-to-door commute), `geo` (commune → INSEE code, coords) |
 | Config | `config/` | `criteria.yaml` (user criteria), `sources.yaml` (source definitions + field maps) — both committed |
 | Fixtures | `tests/fixtures/<source>/` | Frozen HTML/JSON payloads. Parser tests run **offline**. No network in CI. |
+| Classifier corpus | `tests/fixtures/tenure/corpus.json` | **Language-neutral.** Read by both implementations — that shared file is what makes the differential test mean anything. |
+
+PHP is **8.5**, no runtime dependencies, PSR-4 `RentWatch\` → `src/php/`. The test runner is
+PHPUnit's official PHAR, not a Composer dev dependency — see `README.md` § Getting started for why.
 
 Every source implements the same interface — no exceptions:
 
@@ -297,7 +310,28 @@ wiped when the container is reclaimed.
 
 ## Common workflows
 
-<!-- ADAPT: fill from the manifest / Makefile once milestone 1 lands. There is no runner today.
+```bash
+composer install                        # generates the PSR-4 autoloader; zero runtime deps
+bash tools/fetch-phpunit.sh             # the runner — pinned SHA-256 + signature, refuses on mismatch
+composer dump-autoload --dev            # if the corpus suite errors with "Class ... not found"
+php tools/phpunit.phar                  # the core suite — must stay green
+bash tests/sabotage-check.sh            # proves the suite would CATCH a broken classifier
+bash tests/test-tenure-guard.sh         # proves the §1 tripwire still fires, and stays quiet on PHP
+bash .claude/skills/repair/drift-scan.sh                         # config/doc drift; exit 1 on P0/P1
+bash scripts/claude-bootstrap/hooks/test-precompact-handoff.sh   # 35 tests, must stay green
+bash scripts/claude-bootstrap/test-install.sh                    # 17 tests, must stay green
+bash -n .claude/hooks/*.sh tests/*.sh scripts/claude-bootstrap/**/*.sh
+python3 prototype/scout.py --help       # the superseded prototype, reference only
+```
+
+**`tests/sabotage-check.sh` is not optional ceremony.** Every failure mode in the tenure module is
+silent — a classifier that over-rejects looks exactly like a quiet rental market, and one that
+under-rejects looks productive until an application is wasted. A green suite proves the code passes
+the tests; only the sabotage run proves the tests would notice if it stopped working. Run it after
+any change to `src/php/Core/Tenure*`, `Text.php`, or the corpus. It already found three undetected
+regressions and one piece of dead safety code on the day it was written.
+
+<!-- ADAPT: fill from the manifest / Makefile once milestone 1 lands. There is no CLI today.
      Target CLI surface, per spec §10:
        scout doctor              # health-check every source: status, timing, item counts
        scout dump <source>       # raw payload of the first item — for building field maps
@@ -308,26 +342,22 @@ wiped when the container is reclaimed.
      `scout dump` is what makes onboarding a new source take 5 minutes instead of an hour.
      Build it early — it is milestone 1, not a nice-to-have. -->
 
-The only thing executable today:
-
-```bash
-python3 prototype/scout.py --help      # the superseded prototype
-bash scripts/claude-bootstrap/hooks/test-precompact-handoff.sh   # 35 tests, must stay green
-bash scripts/claude-bootstrap/test-install.sh                    # 17 tests, must stay green
-bash -n .claude/hooks/*.sh scripts/claude-bootstrap/**/*.sh      # shell syntax
-```
-
 ## Testing & verification
-
-<!-- ADAPT: fill with the real test/lint/format commands once the stack is chosen (Q7). -->
 
 Required coverage, per spec §11 — non-negotiable once `src/` exists:
 
 - **Fixture-based parser tests.** One frozen payload per source under `tests/fixtures/<source>/`.
   Offline. No network in CI. A parser test that reaches the network is a monitoring check, not a test.
-- **Classifier tests.** ≥30 hand-labelled real listing texts covering pure-LLI In'li, mixed CDC
-  Habitat, an explicit PLAI, an explicit PLS, and an ambiguous case. The suite must go red if the
-  classifier regresses.
+- **Classifier tests.** ≥30 hand-labelled listing texts covering pure-LLI In'li, mixed CDC Habitat,
+  an explicit PLAI, an explicit PLS, and an ambiguous case. The suite must go red if the classifier
+  regresses. **Done** — `tests/fixtures/tenure/corpus.json`, 56 cases, and the suite asserts all five
+  shapes are present so "30 easy ones" cannot satisfy it. The corpus is **still 56/56 synthetic**:
+  the spec asks for *real* texts and those need a captured payload (blocked on the DevTools cURL
+  captures). Every case declares its `provenance` and a test asserts the declared counts, so the gap
+  is visible as data. Replace them with captured texts as sources come online — append, never
+  renumber.
+- **Sabotage-verification is part of the classifier's test contract**, not an extra. See
+  `tests/sabotage-check.sh` and § "Common workflows" above for why a green suite is insufficient here.
 - **Criteria tests.** Table-driven, covering every hard disqualifier and every score component.
 - **Dedup tests.** Including the cross-portal fuzzy case, attacked from both sides (over-merge hides a
   flat, under-merge triple-notifies one).
@@ -340,8 +370,14 @@ prototype/                  Pre-existing single-file prototype. Reference only; 
 docs/OPEN-QUESTIONS.md      Decisions still pending, with the default if unanswered
 docs/plans/                 <topic>.plan.md, each with its own ## Decisions Log
 config/                     criteria.yaml + sources.yaml (committed)          [not yet created]
-src/                        Implementation (see Architecture)                 [not yet created]
+src/php/Core/               PHP 8.5 pure core — models + tenure classifier
+src/phorj/                  phorj port of the same pure core                  [waits on phorj]
+tests/php/                  PHPUnit suites
+tests/fixtures/tenure/      corpus.json — the language-neutral classifier corpus
 tests/fixtures/<source>/    Frozen payloads, one dir per source               [not yet created]
+tests/sabotage-check.sh     Proves the classifier suite detects a regression
+tests/test-tenure-guard.sh  Proves the §1 tripwire fires, and stays quiet on ordinary PHP
+tools/phpunit.phar          Test runner (gitignored — see README § Getting started)
 var/claude/                 Reports, handoffs — gitignored, container-lifetime
 .claude/                    Project skills, reviewer agents, hooks, settings
 scripts/claude-bootstrap/   Reinstalls ~/.claude/ at SessionStart (cloud container)
@@ -374,6 +410,28 @@ scripts/claude-bootstrap/   Reinstalls ~/.claude/ at SessionStart (cloud contain
   `using: command not found`. History was **not** rewritten — force-push is unauthorised here and the loss
   was one word in a message — so the cause is fixed instead. A `<<'EOF'` heredoc is literal: no expansion,
   no substitution, backticks safe.
+- **Composer cannot install anything here, and that shaped the toolchain.** The container's egress
+  policy returns **403 on `codeload.github.com` and on `api.github.com/.../zipball`**, which is where
+  Composer fetches dists from. `git clone` over HTTPS *is* allowed, so `--prefer-source` works — but
+  it pulls full git histories, and installing PHPUnit that way produced a **2.6 GB `vendor/`** for a
+  test runner. The project therefore has **zero Composer dependencies**; `vendor/` holds only the
+  generated autoloader (56 KB) and the runner is PHPUnit's official PHAR at `tools/phpunit.phar`
+  (6 MB, gitignored, fetched from `phar.phpunit.de`, which is not blocked). Do not "fix" this by
+  adding a dev dependency. Per `/root/.ccr/README.md`, a 403 from the proxy is reported, not routed
+  around.
+- **`composer dump-autoload` WITHOUT `--dev` silently breaks the corpus suite.** It omits the
+  `RentWatch\Tests\` PSR-4 entry; PHPUnit still loads the test *files* itself, so the unit tests keep
+  passing while every corpus test errors `Class ... not found`. It reads as a code regression and is
+  a build state. `tests/bootstrap.php` now checks this and prints the fix, but if you see that error,
+  run `composer dump-autoload --dev`.
+- **`.claude/hooks/tenure-guard.sh` false-positives on ordinary PHP, and that is a known cost.** It
+  fired five times while the first PHP was written, every time on prose or syntax: `$flat[] =`
+  (PHP's array append, read as an empty-list literal — the pattern is now anchored to `= []`), a
+  `0.0001` float epsilon read as a lowered confidence threshold, and phrases like *"no tenure
+  signal"*, *"clear the floor"* and *"must never be deleted"*. When it fires, check WHICH pattern
+  matched before assuming a real problem — reproduce with
+  `tr '[:upper:]' '[:lower:]' < file | grep -oE '<pattern from the hook>'`. Reword prose to keep the
+  tripwire credible; never weaken a pattern without a matching case in `tests/test-tenure-guard.sh`.
 - `ruff` **is** available in this container even though the project has no manifest — so
   `.claude/hooks/lint-on-write.sh` is live and will report on `prototype/scout.py`. Those findings are
   known and deliberately unfixed: the prototype is kept verbatim as received.
@@ -400,6 +458,7 @@ Stateful data that must never be casually deleted — see
 CLAUDE.md                          This file — project scope, wins on any conflict
 .claude/settings.json              Allow-list permissions, defaultMode auto, hook wiring
 .claude/hooks/tenure-guard.sh      PostToolUse tripwire on the §1 rule; exits 2 when it fires
+tests/test-tenure-guard.sh         Sabotage test FOR that hook — 10 must-fire, 7 must-stay-silent
 .claude/hooks/lint-on-write.sh     Lints the file just written (ruff / yamllint / shellcheck / json)
 .claude/hooks/format-on-write.sh   Reports formatting drift; never rewrites behind Claude's back
 .claude/agents/tenure-correctness-reviewer.md    correctness + regression lens

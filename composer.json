@@ -1,0 +1,29 @@
+{
+    "name": "tmessaoudi/rent-watch",
+    "description": "Self-hosted watcher for rental listings in Île-de-France — PHP implementation of the pure core",
+    "type": "project",
+    "license": "proprietary",
+    "require": {
+        "php": ">=8.5",
+        "ext-mbstring": "*",
+        "ext-json": "*"
+    },
+    "autoload": {
+        "psr-4": {
+            "RentWatch\\": "src/php/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "RentWatch\\Tests\\": "tests/php/"
+        }
+    },
+    "config": {
+        "sort-packages": true,
+        "optimize-autoloader": true,
+        "preferred-install": "source"
+    },
+    "scripts": {
+        "test": "php tools/phpunit.phar"
+    }
+}

@@ -55,6 +55,16 @@ print(f"{fp}\t{blob}")
 # Nothing parseable (non-Edit/Write shape, or no python3) — stay silent.
 [[ -z "${file_path:-}" ]] && exit 0
 
+# The guard's OWN test feeds it the exact payloads it exists to catch — an emptied excluded set, a
+# lowered floor, PLAI on an allow-list. Scanning that file would make the tripwire fire on every
+# edit to it, forever, which is the fastest way to teach a reader to ignore it. Excluded by exact
+# path, which is narrow enough that it cannot become a hiding place: it is a shell script, the guard
+# only ever reads src/, config/ and tests/, and drift-scan S6 audits the guard's patterns from the
+# outside without consulting this file at all.
+case "$file_path" in
+  */tests/test-tenure-guard.sh) exit 0 ;;
+esac
+
 case "$file_path" in
   */config/*|*/src/*|*/tests/*|*config/*|*src/*|*tests/*) ;;
   *) exit 0 ;;
@@ -66,13 +76,21 @@ blob="$(printf '%s' "${new_text:-}" | tr '[:upper:]' '[:lower:]')"
 hits=()
 
 # 1. Social tenure appearing near an inclusion keyword.
-if grep -Eq '(allow|allowed|include|included|accept|accepted|in_scope|whitelist|enabled)[^.]{0,80}(plai|plus|logement social|conventionn|anru|anah)' <<<"$blob" \
-|| grep -Eq '(plai|plus|logement social|conventionn|anru|anah)[^.]{0,80}(allow|allowed|include|included|accept|accepted|in_scope|whitelist|: *true)' <<<"$blob"; then
-  hits+=("social tenure (PLAI/PLUS/conventionné/ANRU/ANAH) appears next to an inclusion keyword")
+# `pls` joined the alternation on 2026-08-06: the Q4 answer ruled PLS out of scope, so it is an
+# excluded term like the rest, and drift-scan S6 now asserts this pattern covers it.
+if grep -Eq '(allow|allowed|include|included|accept|accepted|in_scope|whitelist|enabled)[^.]{0,80}(plai|plus|pls|logement social|conventionn|anru|anah)' <<<"$blob" \
+|| grep -Eq '(plai|plus|pls|logement social|conventionn|anru|anah)[^.]{0,80}(allow|allowed|include|included|accept|accepted|in_scope|whitelist|: *true)' <<<"$blob"; then
+  hits+=("social tenure (PLAI/PLUS/PLS/conventionné/ANRU/ANAH) appears next to an inclusion keyword")
 fi
 
 # 2. Social tenure being removed from the excluded set.
-if grep -Eq '(exclude|excluded|denied|blocked|forbidden|never)[^.]{0,80}(remove|delete|drop|pop|clear|\[\]|= *none|: *\[\])' <<<"$blob"; then
+# The empty-list alternative is anchored to an ASSIGNMENT (`= []` / `: []`). It used to accept a
+# bare `[]` anywhere within 80 characters, which was fine while this repo held only shell and
+# Python — but `$flat[] = …` is how PHP appends to an array, the exact opposite of clearing one,
+# and the first PHP file written here tripped it inside the conflict rule. Anchoring loses no
+# detection: `EXCLUDED = []`, `excluded_set = []` and `excluded: []` all still fire, and
+# test-tenure-guard.sh sabotage-checks that they do.
+if grep -Eq '(exclude|excluded|denied|blocked|forbidden|never)[^.]{0,80}(remove|delete|drop|pop|clear|= *\[\]|= *none|: *\[\])' <<<"$blob"; then
   hits+=("the excluded-tenure set looks like it is being emptied or shrunk")
 fi
 
@@ -92,7 +110,7 @@ if grep -Eq '(skip|bypass|disable|no)[_ -]?(tenure|classif)' <<<"$blob"; then
 fi
 
 # 6. Making the hard exclusions configurable.
-if grep -Eq '(config|option|setting|toggle|flag|param)[^.]{0,60}(plai|plus|logement social|allow_social|include_social)' <<<"$blob"; then
+if grep -Eq '(config|option|setting|toggle|flag|param)[^.]{0,60}(plai|plus|pls|logement social|allow_social|include_social)' <<<"$blob"; then
   hits+=("social tenure looks like it is becoming a config toggle — CLAUDE.md forbids this")
 fi
 

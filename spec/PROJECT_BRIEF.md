@@ -53,10 +53,10 @@ French housing tenure is the core domain model. Getting it wrong makes the tool 
 | Term | Meaning | In scope? |
 |---|---|---|
 | **LLI** — Logement Locatif Intermédiaire | Created by ordonnance 2014-159. Rent capped ~10–20% below market. Income ceilings exist but are far higher than social housing. Zones A bis / A / B1 only. Allocated **directly by the landlord**, no commission, no SNE number. | **YES — primary target** |
-| **PLS** — Prêt Locatif Social | Highest tier of *social* financing. High ceilings, often marketed alongside intermediate stock. Genuinely ambiguous. | **ASK USER (Q4)** |
+| **PLS** — Prêt Locatif Social | Highest tier of *social* financing. High ceilings, often marketed alongside intermediate stock. | **NEVER** — answered 2026-08-06 (Q4): PLS is social housing (SNE + commission), and the ruling is no social housing |
 | **PLUS** — Prêt Locatif à Usage Social | Mainstream social housing. Requires SNE registration (numéro unique), allocated by commission d'attribution. | **NEVER** |
 | **PLAI** — Prêt Locatif Aidé d'Intégration | Very-low-income social housing. | **NEVER** |
-| **LIBRE** | Private market rate, no cap, no income condition. SeLoger / Leboncoin / PAP / agencies. | **ASK USER (Q4)** |
+| **LIBRE** | Private market rate, no cap, no income condition. SeLoger / Leboncoin / PAP / agencies. | **YES** — answered 2026-08-06 (Q4). Its own track, its own mailbox and notification |
 | **ANRU / ANAH / conventionné** | Various subsidised regimes. Treat as social unless explicitly labelled intermediate. | **NEVER** |
 
 **Critical**: tenure is a property of the *listing*, not of the *source*. In'li is pure LLI,

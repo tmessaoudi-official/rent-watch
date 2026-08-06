@@ -201,7 +201,7 @@ if not g:
 
 # 1. Every excluded term named by the rule must appear in the guard's patterns.
 #    CLAUDE.md §1 is the authority; accent-folded and truncated forms count as covered.
-TERMS = {'PLAI': 'plai', 'PLUS': 'plus', 'ANRU': 'anru', 'ANAH': 'anah',
+TERMS = {'PLAI': 'plai', 'PLUS': 'plus', 'PLS': 'pls', 'ANRU': 'anru', 'ANAH': 'anah',
          'conventionné': 'conventionn', 'logement social': 'logement social'}
 for shown, pattern in TERMS.items():
     if shown.lower() not in c.lower():

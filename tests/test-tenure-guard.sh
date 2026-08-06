@@ -1,0 +1,106 @@
+#!/usr/bin/env bash
+# test-tenure-guard.sh — does the §1 tripwire still fire on the things it is for?
+#
+# `.claude/hooks/tenure-guard.sh` is a PostToolUse grep. `CLAUDE.md` is explicit that it is "a
+# tripwire on this rule, not a guarantee" and that "a clean run proves nothing" — but a tripwire
+# that has quietly stopped tripping is worse than no tripwire, because its silence is read as
+# safety. This asserts both halves:
+#
+#   MUST FIRE   — the writes that would actually relax the rule
+#   MUST NOT    — ordinary PHP that merely looks like them to a regex
+#
+# The second half exists because the first PHP written in this repo tripped the guard four times in
+# one session, every time on prose or on `$array[] =` (PHP's append, which the pattern read as an
+# empty-list literal). A guard that cries wolf on every commit gets ignored, so its false-positive
+# surface is part of its contract and is tested here.
+#
+# Run: bash tests/test-tenure-guard.sh
+
+set -uo pipefail
+
+repo="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+guard="$repo/.claude/hooks/tenure-guard.sh"
+
+pass=0
+fail=0
+
+# Feed a synthetic PostToolUse payload to the guard; exit 2 means it fired.
+fired() {
+  local path="$1" content="$2"
+  local payload
+  payload="$(CONTENT="$content" FP="$path" python3 -c '
+import json, os
+print(json.dumps({"tool_name": "Write",
+                  "tool_input": {"file_path": os.environ["FP"], "content": os.environ["CONTENT"]}}))')"
+
+  CLAUDE_PROJECT_DIR="$repo" bash "$guard" <<<"$payload" >/dev/null 2>&1
+  [[ $? -eq 2 ]]
+}
+
+expect_fire() {
+  local label="$1" content="$2"
+  if fired "$repo/src/php/Core/Thing.php" "$content"; then
+    printf '  \033[32mok\033[0m   FIRES     %s\n' "$label"
+    pass=$((pass + 1))
+  else
+    printf '  \033[31mFAIL\033[0m SILENT    %s  <-- the tripwire has a blind spot here\n' "$label"
+    fail=$((fail + 1))
+  fi
+}
+
+expect_silence() {
+  local label="$1" content="$2" path="${3:-$repo/src/php/Core/Thing.php}"
+  if fired "$path" "$content"; then
+    printf '  \033[31mFAIL\033[0m FIRES     %s  <-- false positive; the guard will be ignored\n' "$label"
+    fail=$((fail + 1))
+  else
+    printf '  \033[32mok\033[0m   silent    %s\n' "$label"
+    pass=$((pass + 1))
+  fi
+}
+
+printf '\n== tenure-guard: fires on relaxation, silent on ordinary code ==\n\n'
+
+# ── MUST FIRE ────────────────────────────────────────────────────────────────────────────────────
+expect_fire "excluded set assigned an empty list" \
+  'const EXCLUDED_TENURES = [];'
+expect_fire "excluded set assigned empty in YAML style" \
+  'excluded_tenures: []'
+expect_fire "excluded set set to none" \
+  'excluded_tenures = None'
+expect_fire "PLAI added to an allow-list" \
+  'allowed_tenures = ["LLI", "PLAI"]'
+expect_fire "PLS added to an allow-list (Q4 ruled PLS out on 2026-08-06)" \
+  'allowed_tenures = ["LLI", "PLS"]'
+expect_fire "PLS becoming a config toggle" \
+  'config option include_pls to surface pls listings'
+expect_fire "social tenure enabled in config" \
+  'plai: true  # enabled'
+expect_fire "fail-closed floor lowered" \
+  'const CONFIDENCE_FLOOR = 0.3;'
+expect_fire "UNKNOWN routed to notification" \
+  'if unknown: notify(listing)'
+expect_fire "classifier bypassed" \
+  'skip_tenure = True'
+
+# ── MUST NOT FIRE ────────────────────────────────────────────────────────────────────────────────
+expect_silence "PHP array append inside the conflict rule" \
+  '$flat[] = new TenureSignal(tier: 2, tenure: Tenure::PLAI); if ($t->isExcluded()) { return $x; }'
+expect_silence "an ordinary PHP empty-array comparison" \
+  'if ($objections !== []) { return $this->verdict(Tenure::UNKNOWN, 0, $flat, $source); }'
+expect_silence "the excluded set being asserted in a test" \
+  "self::assertSame(['ANAH', 'ANRU', 'PLAI', 'PLS', 'PLUS'], \$excluded);"
+expect_silence "a float epsilon that is not a threshold" \
+  'self::assertEqualsWithDelta($a, $b, 0.0001);'
+expect_silence "routing UNKNOWN to the digest, which is the rule" \
+  'if ($tenure === Tenure::UNKNOWN) { return Outcome::DIGEST; }'
+expect_silence "a file outside src/, config/ and tests/" \
+  'excluded_tenures = []' \
+  "$repo/README.md"
+expect_silence "the guard's own test file, which is full of these payloads by design" \
+  'allowed_tenures = ["LLI", "PLAI"]' \
+  "$repo/tests/test-tenure-guard.sh"
+
+printf '\n  %d passed, %d failed\n\n' "$pass" "$fail"
+
+[[ $fail -eq 0 ]]

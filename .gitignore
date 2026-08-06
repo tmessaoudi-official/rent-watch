@@ -26,6 +26,16 @@ seen.json
 .claude/settings.local.json
 /claude-bundle/
 
+# ── PHP ─────────────────────────────────────────────────────────────────────────
+# vendor/ holds only Composer's generated autoloader — this project has zero runtime
+# dependencies. Regenerate with `composer install`.
+/vendor/
+/composer.lock
+# The test runner is PHPUnit's official PHAR rather than a Composer dev dependency: this
+# container's egress policy blocks GitHub dist zipballs, so Composer falls back to full git
+# clones and vendor/ balloons to 2.6 GB for a test runner. See README.md § Getting started.
+/tools/*.phar
+
 # ── Python ──────────────────────────────────────────────────────────────────────
 __pycache__/
 *.py[cod]

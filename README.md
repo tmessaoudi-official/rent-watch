@@ -14,19 +14,55 @@ Single language, single user, single machine. CLI plus push notifications — **
 
 ## Status
 
-**Specification and prototype only.** There is no implementation yet.
+**The pure core is built. Nothing else is.**
+
+`src/php/Core/` holds a PHP 8.5 implementation of the domain models and the tenure classifier —
+the part that needs no mailbox, no reverse-engineered endpoint and no credential, and the part
+everything else depends on. There is no adapter, no store, no notification channel and no CLI yet.
 
 | Path | What it is |
 |---|---|
 | [`spec/PROJECT_BRIEF.md`](spec/PROJECT_BRIEF.md) | The full specification — the source of truth |
-| [`docs/OPEN-QUESTIONS.md`](docs/OPEN-QUESTIONS.md) | **Start here.** Every filter enumerated, and 14 decisions still owed |
+| [`docs/OPEN-QUESTIONS.md`](docs/OPEN-QUESTIONS.md) | **Start here.** Every filter enumerated, and the decisions still owed |
+| `src/php/Core/` | The tenure classifier and the models it works on |
+| `tests/fixtures/tenure/corpus.json` | 56 hand-labelled listing texts — the classifier's ground truth, and language-neutral so the phorj port reads the same file |
 | `prototype/` | A pre-existing single-file prototype, kept as reference. **Not** the shipping implementation — it has no tenure classifier at all |
 | [`CLAUDE.md`](CLAUDE.md) | How code gets delivered here: rules, gates, the eligibility boundary |
 | `.claude/` · `scripts/claude-bootstrap/` | Claude Code configuration ([details](scripts/claude-bootstrap/README.md)) |
 
-Nothing under `src/`, `config/` or `tests/` exists yet, and several open questions change the
-architecture rather than a constant — so milestone 1 waits on the blocking ones in
-`docs/OPEN-QUESTIONS.md`.
+## Getting started
+
+```bash
+composer install            # generates the PSR-4 autoloader. There are no runtime dependencies.
+php tools/phpunit.phar      # the core suite
+```
+
+`tools/phpunit.phar` is gitignored; fetch it once with:
+
+```bash
+bash tools/fetch-phpunit.sh    # downloads, checks a pinned SHA-256, verifies the PGP signature
+```
+
+**Why a PHAR rather than a Composer dev dependency.** This project runs in a container whose egress
+policy blocks GitHub dist downloads (`codeload.github.com` → 403), so Composer falls back to full
+`git clone`s. Installing PHPUnit that way produced a **2.6 GB `vendor/`** for a test runner. With the
+PHAR, `vendor/` is 56 KB of generated autoloader and the runner is one 6 MB file. The project has
+**zero Composer dependencies** by design.
+
+`fetch-phpunit.sh` pins both the SHA-256 and the signing key, and refuses to install on a mismatch.
+Read its header before trusting it: the pin was established trust-on-first-use, because no public
+keyserver is reachable from this container. It is a continuity check, not a root of trust.
+
+Two checks that are not the test suite, and matter more than it does here:
+
+```bash
+bash tests/sabotage-check.sh       # breaks the classifier 15 ways; the suite must catch every one
+bash tests/test-tenure-guard.sh    # the §1 tripwire still fires, and stays quiet on ordinary PHP
+```
+
+Every failure mode in the tenure module is *silent* — a classifier that over-rejects is
+indistinguishable from a quiet rental market. A green suite proves the code passes the tests; only
+the sabotage run proves the tests would notice if the code stopped working.
 
 ## Why this exists
 
@@ -40,9 +76,14 @@ tool ingests those rather than scraping them.
 
 Per `spec/PROJECT_BRIEF.md` §13. Each milestone ships working — no big-bang integration.
 
-1. **Core skeleton** — models, SQLite store, config loading, CLI, one notification channel. Proven
+Built out of order on purpose: the classifier needs nothing from anyone, while every other milestone
+is blocked on a mailbox, an endpoint capture or a phorj module that does not exist yet.
+
+1. **Core skeleton** — models ✅, SQLite store, config loading, CLI, one notification channel. Proven
    end-to-end with a fake source.
-2. **Tenure classifier + tests.** Before any real source; everything depends on it.
+2. **Tenure classifier + tests.** ✅ **Done** (PHP; the phorj port waits on `Core.Imap`, an HTML
+   parser and `sleep` — see `docs/PHORJ-REQUIREMENTS.md`). Before any real source; everything
+   depends on it.
 3. **In'li adapter** — highest-value single source, and pure LLI, so it exercises the happy path.
 4. **Health monitoring + `scout doctor`.** Before adding breadth, or breakage goes unnoticed.
 5. **CDC Habitat** — first mixed-tenure source; validates the classifier against reality.
