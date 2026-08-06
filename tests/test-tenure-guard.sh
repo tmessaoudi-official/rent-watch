@@ -78,6 +78,18 @@ expect_fire "excluded-set ACCESSOR emptied (PHP: return [];)" \
   'public static function excluded(): array { return []; }'
 expect_fire "excluded set emptied as a PHP array value" \
   "\$config = ['excluded' => []];"
+expect_fire "excluded set emptied with PHP's legacy array()" \
+  'const EXCLUDED_TENURES = array();'
+expect_fire "excluded set nulled in YAML" \
+  'excluded_tenures: null'
+expect_fire "excluded set nulled with a YAML tilde" \
+  'excluded_tenures: ~'
+expect_fire "excluded set emptied as a YAML map" \
+  'excluded_tenures: {}'
+expect_fire "excluded set nulled in JSON" \
+  '"excluded_tenures": null'
+expect_fire "excluded set emptied as a bash array" \
+  'EXCLUDED_TENURES=()'
 expect_fire "excluded set assigned empty in YAML style" \
   'excluded_tenures: []'
 expect_fire "excluded set set to none" \

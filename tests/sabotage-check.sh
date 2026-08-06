@@ -61,9 +61,26 @@ run_sabotage() {
   local rc=$?
 
   # A non-zero exit is NOT evidence of detection — a PHP parse error, a missing autoloader or a
-  # failed `cd` produces one too, and asserting on `rc` alone would report those as successes. The
-  # only thing that proves the SUITE caught the sabotage is the suite saying so.
-  if grep -qE '^(FAILURES!|ERRORS!|OK, but)' <<<"$out" && grep -qE 'Failures: [1-9]|Errors: [1-9]' <<<"$out"; then
+  # failed `cd` produces one too, and asserting on `rc` alone would report those as successes.
+  #
+  # Nor is "PHPUnit reported errors" enough on its own, and that was the remaining hole: PHPUnit
+  # turns an autoload-time SYNTAX error into N test errors, which match both greps below and would
+  # print `ok`. Several sabotages here are line-deletes or pattern-pinned seds, so a refactor that
+  # moves the targeted text can silently convert a sabotage into a syntax error — and the script
+  # would then certify the guarantee as covered while the suite never exercised it. A green light
+  # on the one check guarding §1.
+  #
+  # So: a parse/fatal error is never accepted, and the run must have actually executed tests.
+  if grep -qE '(Parse error|Fatal error|syntax error, unexpected)' <<<"$out"; then
+    printf '  \033[31mFAIL\033[0m %-58s (the sabotage produced a PHP parse error, so the suite never\n' "$label"
+    printf '        ran — this proves nothing either way)\n'
+    fail=$((fail + 1))
+    return
+  fi
+
+  if grep -qE '^(FAILURES!|ERRORS!|OK, but)' <<<"$out" \
+    && grep -qE 'Failures: [1-9]|Errors: [1-9]' <<<"$out" \
+    && grep -qE 'Tests: [1-9][0-9]{2,}' <<<"$out"; then
     printf '  \033[32mok\033[0m   %-58s (suite went red, as it must)\n' "$label"
     pass=$((pass + 1))
   elif [[ $rc -ne 0 ]]; then
@@ -100,7 +117,7 @@ run_sabotage "PLAI dropped from the excluded set" \
 
 run_sabotage "conflict rule removed (eligible verdict no longer withholds)" \
   src/php/Core/TenureClassifier.php \
-  's/if ($objections !== \[\]) {/if (false) {/'
+  's/if ($winner->tenure->isEligible()) {/if (false) {/'
 
 run_sabotage "collocation guard removed (bare 'plus' becomes a social label)" \
   src/php/Core/TenureClassifier.php \
@@ -134,9 +151,15 @@ run_sabotage "fail-closed downgrade removed (mixed source keeps an eligible tenu
   src/php/Core/TenureClassifier.php \
   's/if ($tenure->isEligible() \&\& $confidenceBp < self::FLOOR_BP \&\& $source->mixedTenure) {/if (false) {/'
 
-run_sabotage "malformed UTF-8 folded to an empty string again" \
+# BOTH encoding guards at once, deliberately — and the reason is worth recording.
+# The malformed-UTF-8 refusal is defence in depth: the `mb_check_encoding` gate at the top of
+# foldPreserveCase() and the null-check on the preg results below it each catch the same inputs, so
+# removing EITHER ONE leaves the suite correctly green. Sabotaging one alone would report an
+# undetected regression that is nothing of the sort. What must be load-bearing is the pair, so the
+# pair is what gets broken here.
+run_sabotage "both encoding guards removed (malformed UTF-8 accepted again)" \
   src/php/Core/Text.php \
-  's/throw MalformedText::notUtf8(.Text::foldPreserveCase.);/;/'
+  's/!mb_check_encoding(/!true \&\& mb_check_encoding(/; s/if ($collapsed === null) {/if (false) {/'
 
 run_sabotage "undecoded HTML entities accepted as text" \
   src/php/Core/Text.php \
@@ -154,6 +177,26 @@ run_sabotage "ambiguous uppercase acronym guessed instead of digested" \
   src/php/Core/TenureClassifier.php \
   's/return $ambiguousAt === null ? null : \[$ambiguousAt, false\];/return $ambiguousAt === null ? null : [$ambiguousAt, true];/'
 
+run_sabotage "French inflection dropped (labels matched exactly again)" \
+  src/php/Core/Text.php \
+  's/\$parts\[\] = preg_quote(\$word, .\/.) . .(?:es|e|s|x)?.;/$parts[] = preg_quote($word, "\/");/'
+
+run_sabotage "the -al\/-aux branch dropped (logements sociaux stops matching)" \
+  src/php/Core/Text.php \
+  "s/} elseif (str_ends_with(\$word, 'al')) {/} elseif (false) {/"
+
+run_sabotage "doubts compete positionally again (indecidable marker resolved as a tenure)" \
+  src/php/Core/TenureClassifier.php \
+  's/if ($s->tenure === Tenure::UNKNOWN) {/if (false) {/'
+
+run_sabotage "doubts no longer withhold an otherwise-eligible verdict" \
+  src/php/Core/TenureClassifier.php \
+  's/if ($objections !== \[\] || $doubts !== \[\]) {/if ($objections !== []) {/'
+
+run_sabotage "prose field values bypass the collocation guard again" \
+  src/php/Core/TenureClassifier.php \
+  's/$folded) !== 1) {/$folded) === 999) {/'
+
 # NOT SABOTAGED, and the reason is worth recording rather than quietly omitting.
 # `if ($folded === '') { continue; }` in structuredFieldSignals() is defence in depth, not a
 # load-bearing guard: Text::tokenPosition() already returns null for an empty haystack, so removing
@@ -163,7 +206,7 @@ run_sabotage "ambiguous uppercase acronym guessed instead of digested" \
 
 run_sabotage "tier 5 consulted even when higher tiers fired" \
   src/php/Core/TenureClassifier.php \
-  's/$anyEvidence ? \[\] : $this->sourceDefaultSignals($source)/$this->sourceDefaultSignals($source)/'
+  's/array_filter($signals) === \[\] \&\& $doubts === \[\]/true/'
 
 run_sabotage "SOCIAL stops corroborating the excluded tenures" \
   src/php/Core/Tenure.php \

@@ -22,7 +22,7 @@
   ],
   "version": 1,
   "declared_counts": {
-    "synthetic": 65,
+    "synthetic": 77,
     "captured": 0
   },
   "sources": {
@@ -723,6 +723,126 @@
       "fields": { "financement": "LLI", "categorie": "PLAI" },
       "expect": { "tenure": "PLAI", "outcome": "REJECT" },
       "why": "Found by review 2026-08-06. Two structured fields each match at offset 0 of their own value, so the tie-break decides. resolve()'s comparator had its two strlen terms transposed, making the SHORTER evidence win — the opposite of its own docblock — so 'lli' (3) beat 'plai' (4) and an explicit PLAI field landed in the user-visible digest instead of REJECT. A phorj port written from the docblock would have disagreed with the PHP on exactly this input, which is the differential the shared corpus exists to expose."
+    },
+    {
+      "id": "regress-008-feminine-agreement-conventionnee",
+      "provenance": "synthetic",
+      "source": "inli",
+      "title": "T3 en résidence conventionnée",
+      "description": "Appartement 3 pieces, proche gare.",
+      "fields": {},
+      "expect": { "tenure": "CONVENTIONNE", "outcome": "REJECT" },
+      "why": "P0 REGRESSION GUARD (review round 2, 2026-08-06). FRENCH INFLECTION. Every literal was matched exactly with a trailing word-boundary guard, so 'conventionnée' -- the feminine agreement, which is what you write before 'résidence' -- was a NON-MATCH while 'conventionné' matched. On In'li (a pure source) that meant LLI/MATCH at 50 instead of CONVENTIONNE/REJECT. The acronyms (PLAI, ANRU, ANAH, HLM) are invariant, which is exactly why the table read as safe: the terms a reviewer checks first are the ones that could not break. Compare conv-001 and conv-002, which test the ACCENT but not the agreement."
+    },
+    {
+      "id": "regress-009-plural-logements-sociaux",
+      "provenance": "synthetic",
+      "source": "cdc_habitat",
+      "title": "Résidence mixte - Cergy",
+      "description": "Résidence mixte de logements sociaux et intermédiaires. Loyer intermédiaire à partir de 900 euros.",
+      "fields": {},
+      "expect": { "tenure": "SOCIAL", "outcome": "REJECT" },
+      "why": "P0 REGRESSION GUARD (review round 2, 2026-08-06), and the worst of the inflection class. The listing's own description says 'logements sociaux'. Because the plural did not match, NO excluded signal existed at all — so the conflict rule had nothing to see, and 'loyer intermédiaire' carried this to LLI/MATCH at full tier-2 confidence. It was notified. With inflection the social label fires at an earlier position than the intermediate one, wins the tier, and the documented asymmetry applies: an excluded verdict is never softened by a contradicting eligible signal, so this REJECTs rather than digesting. That is the intended reading of a mixed résidence — the specific unit is unproven and the cost of being wrong is a wasted application. (I predicted DIGEST when writing this fixture; the code was right and the prediction was wrong.)"
+    },
+    {
+      "id": "regress-010-plural-prets-locatifs-sociaux",
+      "provenance": "synthetic",
+      "source": "cdc_habitat",
+      "title": "T3 Sarcelles",
+      "description": "Financement par prêts locatifs sociaux. Loyer intermédiaire.",
+      "fields": {},
+      "expect": { "tenure": "PLS", "outcome": "REJECT" },
+      "why": "Same inflection class through a different phrase: 'prêt locatif social' pluralises BOTH nouns and the adjective takes the irregular -al/-aux form, so this guards the '-al' branch of the inflection rule specifically. It also resolves to the precise financing tier rather than the generic SOCIAL, because the expanded phrase is unambiguous. Excluded either way; PLS was ruled out by Q4."
+    },
+    {
+      "id": "regress-011-indecidable-acronym-loses-the-position-race",
+      "provenance": "synthetic",
+      "source": "cdc_habitat",
+      "title": "Loyer intermédiaire - T3 Cergy",
+      "description": "LOGEMENT PLS MODERNE, RESIDENCE CALME.",
+      "fields": {},
+      "expect": { "tenure": "UNKNOWN", "outcome": "DIGEST" },
+      "why": "P0 REGRESSION GUARD (review round 2, 2026-08-06). The indécidable acronym marker used to be a tier-2 signal resolved POSITIONALLY against real labels. Losing that race made it vanish completely -- not an objection (UNKNOWN is not excluded) and not a contradiction (score() skips same-tier signals) -- so this listing was notified, while the SAME TWO SENTENCES IN THE OPPOSITE ORDER digested. Identical facts, different word order, different answer. A doubt now competes with nothing: it cannot beat evidence and it cannot be beaten by it."
+    },
+    {
+      "id": "regress-012-indecidable-acronym-must-not-mask-a-PLAI",
+      "provenance": "synthetic",
+      "source": "cdc_habitat",
+      "title": "LOGEMENT PLUS MODERNE - T3",
+      "description": "FINANCEMENT PLAI.",
+      "fields": {},
+      "expect": { "tenure": "PLAI", "outcome": "REJECT" },
+      "why": "THE OTHER DIRECTION OF regress-011, and the one that made the digest wrong rather than the match. When the indécidable marker WON the position race it masked a determinate PLAI, turning a hard disqualifier into a user-visible 'à vérifier' entry -- CLAUDE.md hard rule 8 says a disqualifier rejects silently and is logged only. The strongest text label the ladder has was being beaten by a signal whose own reason says it knows nothing, decided by byte offset."
+    },
+    {
+      "id": "regress-013-prose-in-a-financing-field",
+      "provenance": "synthetic",
+      "source": "cdc_habitat",
+      "title": "T3 Herblay",
+      "description": "Appartement 3 pieces.",
+      "fields": { "dispositif": "Pinel Plus" },
+      "expect": { "tenure": "UNKNOWN", "outcome": "DIGEST" },
+      "why": "Found by review round 2, 2026-08-06. Tier-1 field values skipped the collocation guard on the argument that 'a structured field is not French prose'. That holds for `financement: PLUS` and fails for the generic keys in TENURE_FIELDS -- categorie, dispositif, typelogement all carry prose in real feeds. 'Pinel Plus' is a real 2023 scheme name, and unguarded it was tenure PLUS at confidence 97 and a SILENT REJECT: nothing arrives, and that is indistinguishable from a quiet market. A field value is now treated as a code only when it contains nothing but financing tokens and separators."
+    },
+    {
+      "id": "regress-014-prose-field-with-the-adverb",
+      "provenance": "synthetic",
+      "source": "cdc_habitat",
+      "title": "T4 Taverny",
+      "description": "Appartement.",
+      "fields": { "categorie": "Maison de plus de 100 m2" },
+      "expect": { "tenure": "UNKNOWN", "outcome": "DIGEST" },
+      "why": "The same defect with the ordinary French adverb rather than a scheme name. 'Maison de plus de 100 m2' in a `categorie` field was tenure PLUS / REJECT at 97."
+    },
+    {
+      "id": "regress-015-code-shaped-field-still-resolves",
+      "provenance": "synthetic",
+      "source": "cdc_habitat",
+      "title": "T3 Ermont",
+      "description": "Appartement.",
+      "fields": { "financement": "PLUS / PLAI" },
+      "expect": { "tenure": "PLUS", "outcome": "REJECT" },
+      "why": "The other side of regress-013: narrowing the field path must not break the case it exists for. A value made only of financing tokens and separators is still read as a code, with no collocation guard, exactly as case-003 requires."
+    },
+    {
+      "id": "regress-016-soft-hyphen-splits-a-social-label",
+      "provenance": "synthetic",
+      "source": "cdc_habitat",
+      "title": "T3 Cergy",
+      "description": "Ce logement­social a loyer intermediaire.",
+      "fields": {},
+      "expect": { "tenure": "SOCIAL", "outcome": "REJECT" },
+      "why": "P0 REGRESSION GUARD (review round 2, 2026-08-06). U+00AD SOFT HYPHEN sits between `logement` and `social`. It is INVISIBLE, so the label looks intact to a reader and was a non-match to the classifier — while `loyer intermediaire` in the same sentence still matched. Verdict was LLI at confidence 90, above the floor, so the fail-closed rule never engaged, and the notification`s reasons[] named the intermediate label with the word `social` absent. The doctrine in MalformedText::undecodedEntities CREATES this input: it tells the adapter that decoding is its job, and an adapter that obeys turns `&shy;` — ordinary hyphenation markup in justified French CMS output — into exactly this byte. Refusing it would punish the adapter for being correct; \\p{Cf} is stripped instead, because these characters are invisible by definition."
+    },
+    {
+      "id": "regress-017-zero-width-space-splits-a-social-label",
+      "provenance": "synthetic",
+      "source": "inli",
+      "title": "T3 Le Vesinet",
+      "description": "Ce logement​social est attribue en commission.",
+      "fields": {},
+      "expect": { "tenure": "SOCIAL", "outcome": "REJECT" },
+      "why": "Same class, different codepoint and a PURE source — where the consequence is worst, because a pure source matches below the floor. U+200B ZERO WIDTH SPACE arrives routinely from WYSIWYG editors and HTML-to-text conversion. U+200C, U+200D, U+200E, U+2060 and U+FEFF are the same category and are closed by the same one-character change to the strip."
+    },
+    {
+      "id": "regress-018-bom-inside-a-label",
+      "provenance": "synthetic",
+      "source": "cdc_habitat",
+      "title": "T2 Sarcelles",
+      "description": "Logement﻿social, numero unique exige.",
+      "fields": {},
+      "expect": { "tenure": "SOCIAL", "outcome": "REJECT" },
+      "why": "U+FEFF, the byte-order mark, appearing mid-string rather than at the head — which is what happens when two decoded fragments are concatenated. Guards the same strip from the third direction."
+    },
+    {
+      "id": "regress-019-invisibles-do-not-damage-a-legitimate-listing",
+      "provenance": "synthetic",
+      "source": "seloger",
+      "title": "T3 Châtenay-Malabry",
+      "description": "Île-de-France, cœur de ville, cadre naïf et calme.",
+      "fields": {},
+      "expect": { "tenure": "LIBRE", "outcome": "MATCH", "max_confidence": 59 },
+      "why": "THE OTHER SIDE OF THE STRIP. Stripping a Unicode category is the kind of fix that quietly damages ordinary text, so this asserts that accented French, the oe ligature and a diaeresis all survive folding untouched and the listing still classifies normally. Without it, a future widening of the stripped set could break real listings with nothing to notice."
     },
     {
       "id": "regress-007-mixed-source-default-only-is-not-established",

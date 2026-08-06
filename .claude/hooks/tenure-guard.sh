@@ -96,7 +96,13 @@ fi
 # uses — going silent. `return []` and `=> []` are therefore listed explicitly, and the assignment
 # form excludes a preceding `!`, `=`, `<` or `>` so comparisons stay quiet. Every shape here, and
 # every shape that must NOT fire, has a case in tests/test-tenure-guard.sh.
-if grep -Eq '(exclude|excluded|denied|blocked|forbidden|never)[^.]{0,80}(remove|delete|drop|pop|clear|[^!=<>] *= *\[\]|=> *\[\]|return *\[\]|= *none|: *\[\])' <<<"$blob"; then
+#
+# The alternation also covers the empty/null idioms of the languages this repo ACTUALLY uses. It
+# carried `= *none` — a Python idiom, and the only Python here is the superseded prototype — while
+# missing the YAML and JSON nulls that `config/criteria.yaml` and `config/sources.yaml` will be
+# written in, and PHP's `array()`. That inversion was a standing gap, not a regression from the
+# narrowing: the pre-narrowing pattern missed them too.
+if grep -Eq '(exclude|excluded|denied|blocked|forbidden|never)[^.]{0,80}(remove|delete|drop|pop|clear|[^!=<>] *= *\[\]|=> *\[\]|return *\[\]|= *none|= *null|= *array\(\)|= *\(\)|: *\[\]|: *\{\}|: *null|: *~)' <<<"$blob"; then
   hits+=("the excluded-tenure set looks like it is being emptied or shrunk")
 fi
 

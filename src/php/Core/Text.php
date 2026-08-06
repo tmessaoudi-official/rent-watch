@@ -82,17 +82,36 @@ final class Text
         $s = strtr($raw, self::FOLD_LOWER + self::FOLD_UPPER);
         $s = str_replace(self::APOSTROPHES, "'", $s);
 
-        // Combining diacritics, for text that arrives NFD-decomposed (`e` + U+0301) rather than
-        // precomposed. The tables above only carry precomposed codepoints, so without this an NFD
-        // `numéro unique d'enregistrement` never matched its literal while an unaccented `LLI` in
-        // the same listing still did — the social side vanished and the eligible side survived.
-        // Locale-free and one line, so the no-ICU rationale above is untouched.
-        $s = (string) preg_replace('/\p{Mn}/u', '', $s);
+        // TWO INVISIBLE CATEGORIES, STRIPPED FOR THE SAME REASON: neither carries meaning, and
+        // either one sitting inside a multi-word label deletes that label while leaving every other
+        // label in the listing standing. The deletion is not chosen fairly, so the failure is
+        // asymmetric — and both directions of it were found by review rather than by the suite.
+        //
+        // \p{Mn} — combining diacritics, for text that arrives NFD-decomposed (`e` + U+0301) rather
+        // than precomposed. Without it an NFD `numéro unique d'enregistrement` never matched while
+        // an unaccented `LLI` in the same listing still did: the social side vanished, the eligible
+        // side survived.
+        //
+        // \p{Cf} — invisible FORMAT characters: U+00AD soft hyphen, U+200B zero-width space,
+        // U+200C/D zero-width (non-)joiner, U+200E LRM, U+2060 word joiner, U+FEFF BOM. Same
+        // asymmetry, one Unicode category over: `Ce logement<U+00AD>social a loyer intermediaire`
+        // lost `logement social` and kept `loyer intermediaire`, classifying an explicitly social
+        // listing as LLI at confidence 90 — above the floor, so the fail-closed rule never engaged.
+        //
+        // Note the doctrine that CREATES this input: MalformedText::undecodedEntities() tells the
+        // adapter that decoding is its job. An adapter that obeys turns `&shy;` -- standard
+        // hyphenation markup in justified French CMS output -- into U+00AD, which passes both the
+        // UTF-8 gate and the entity gate. Refusing these would punish the adapter for being
+        // correct; stripping them is right, because they are invisible by definition.
+        // \s already covers the space-LIKE leaks (NBSP, narrow NBSP) via the collapse below.
+        $stripped = preg_replace('/[\p{Mn}\p{Cf}]/u', '', $s);
+        $collapsed = $stripped === null ? null : preg_replace('/\s+/u', ' ', $stripped);
 
-        $collapsed = preg_replace('/\s+/u', ' ', $s);
-
+        // `null` from either call is a PCRE ERROR, never "nothing to replace". Casting it to string
+        // is what turned an unreadable listing into an unlabelled one in the first place, so the
+        // anti-pattern is not left sitting two lines above its own fix.
         if ($collapsed === null) {
-            throw MalformedText::notUtf8('Text::foldPreserveCase (whitespace collapse)');
+            throw MalformedText::notUtf8('Text::foldPreserveCase (' . preg_last_error_msg() . ')');
         }
 
         return trim($collapsed);
@@ -151,6 +170,76 @@ final class Text
     }
 
     /**
+     * Words that are acronyms, not French words, and therefore never inflect.
+     *
+     * `plai` must be here and the reason is sharp: the generic rule below would generate `plaie`
+     * (a wound) and `plais` (from *plaire*), both real French words, and every listing containing
+     * one would be classified as social housing and dropped in silence.
+     */
+    private const array INVARIANT_WORDS = ['lli', 'plai', 'plus', 'pls', 'anru', 'anah', 'hlm', 'sne', 'apl'];
+
+    /**
+     * Whole-token match that tolerates FRENCH AGREEMENT AND PLURALS.
+     *
+     * THE DEFECT THIS EXISTS FOR: every literal used to be matched exactly, with a trailing
+     * `(?![a-z0-9])` guard. French tenure vocabulary is inflected — the adjective agrees and the
+     * noun phrase pluralises — so `conventionnée`, `logements sociaux` and `prêts locatifs sociaux`
+     * were all non-matches while `conventionné` and `logement social` matched. The acronyms
+     * (`PLAI`, `ANRU`, `ANAH`, `HLM`) are invariant, which is precisely why the table read as safe
+     * on inspection: the terms a reviewer checks first are the ones that could not break.
+     *
+     * A listing whose own description said *« logements sociaux et intermédiaires »* classified as
+     * LLI at full tier-2 confidence and was notified, because no excluded signal existed for the
+     * conflict rule to see.
+     *
+     * The rules are deliberately small and French-specific:
+     *   - a word ending in `-al` also matches `-aux` (`social` → `sociaux`), plus `-e`/`-es`;
+     *   - any other word may take `-e`, `-es`, `-s` or `-x`;
+     *   - words in {@see INVARIANT_WORDS} take nothing at all.
+     *
+     * Over-generation (`logementx`, `uniquee`) is harmless: those are not French words, so they
+     * match no real listing. Under-generation is what costs an application.
+     *
+     * @param string $foldedHaystack must already have been through {@see fold()}
+     *
+     * @return array{int, string}|null byte offset and the text that actually matched, or null
+     */
+    public static function inflectedTokenPosition(string $foldedHaystack, string $needle): ?array
+    {
+        if ($needle === '' || $foldedHaystack === '') {
+            return null;
+        }
+
+        $parts = [];
+
+        foreach (explode(' ', $needle) as $word) {
+            if (in_array($word, self::INVARIANT_WORDS, true)) {
+                $parts[] = preg_quote($word, '/');
+            } elseif (str_ends_with($word, 'al')) {
+                $parts[] = '(?:' . preg_quote($word, '/') . '(?:es|e)?|'
+                    . preg_quote(substr($word, 0, -2), '/') . 'aux)';
+            } else {
+                $parts[] = preg_quote($word, '/') . '(?:es|e|s|x)?';
+            }
+        }
+
+        // `\s*`, not `\s+`, between words. Stripping an invisible \p{Cf} character that sat between
+        // two words JOINS them — `logement<U+200B>social` becomes `logementsocial` — so a pattern
+        // requiring whitespace would still miss the label the strip was meant to rescue. Allowing
+        // zero separation is safe in both directions: `logementsocial` is not a French word, so
+        // nothing legitimate matches by accident, and the guards at each end still require the
+        // whole thing to stand as a token.
+        $pattern = '/(?<![a-z0-9])' . implode('\s*', $parts) . '(?![a-z0-9])/u';
+        $result = preg_match($pattern, $foldedHaystack, $m, PREG_OFFSET_CAPTURE);
+
+        if ($result === false) {
+            throw MalformedText::notUtf8('Text::inflectedTokenPosition (' . preg_last_error_msg() . ')');
+        }
+
+        return $result === 1 ? [$m[0][1], $m[0][0]] : null;
+    }
+
+    /**
      * Reduce a structured field NAME to a comparison key: folded, then stripped of every
      * separator. `typeProduit`, `TYPE_PRODUIT` and `Type de produit` all become `typeproduit`
      * — adapters disagree about field-name style and none of them is wrong.
@@ -160,6 +249,7 @@ final class Text
         $s = self::fold($rawName);
         $s = str_replace([' de ', " d'", ' du ', ' des '], ' ', $s);
 
-        return (string) preg_replace('/[^a-z0-9]/u', '', $s);
+        return preg_replace('/[^a-z0-9]/u', '', $s)
+            ?? throw MalformedText::notUtf8('Text::fieldKey (' . preg_last_error_msg() . ')');
     }
 }

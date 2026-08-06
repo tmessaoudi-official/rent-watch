@@ -46,33 +46,65 @@ curl -sSLf -o "$tmp/phpunit.phar.asc" "${URL}.asc" || printf '  note: no detache
 
 actual="$(sha256sum "$tmp/phpunit.phar" | cut -d' ' -f1)"
 
-if [[ "$actual" == "$EXPECTED_SHA256" ]]; then
+sha_ok=0
+[[ "$actual" == "$EXPECTED_SHA256" ]] && sha_ok=1
+
+if [[ $sha_ok -eq 1 ]]; then
   printf '  sha256 matches the pin\n'
 else
   printf '  sha256 DOES NOT match the pin.\n    expected %s\n    got      %s\n' "$EXPECTED_SHA256" "$actual"
-  printf '  "phpunit-%s.phar" is a moving tag, so a new upstream release looks exactly like a tampered\n' "$VERSION"
-  printf '  download. Check the signature below, confirm the release on phpunit.de, then update\n'
-  printf '  EXPECTED_SHA256 in this file in a commit that names the version.\n'
-  if [[ ! -s "$tmp/phpunit.phar.asc" ]]; then
-    printf '  REFUSING: pin mismatch and no signature to fall back on.\n'
-    exit 1
-  fi
+  printf '  "phpunit-%s.phar" is a moving tag, so a new upstream release looks exactly like a\n' "$VERSION"
+  printf '  tampered download. Only a verified signature can tell them apart.\n'
 fi
+
+# ── Signature check ──────────────────────────────────────────────────────────────────────────────
+# WRITTEN THIS WAY BECAUSE THE OBVIOUS WAY IS BROKEN, and a review caught it here:
+#
+#   if gpg --batch --verify sig file 2>&1 | grep -q "$EXPECTED_KEY"; then   # ← ACCEPTS A BAD SIGNATURE
+#
+# The pipeline's exit status is grep's, not gpg's, and gpg prints `using RSA key <fingerprint>` on
+# its output even when the very next line says `BAD signature`. So a tampered PHAR carrying a
+# signature that merely NAMES the pinned key passed. Demonstrated end to end in
+# tests/test-fetch-phpunit.sh, which is the reason that test exists.
+#
+# `--status-fd=1` emits the machine-readable protocol instead: `VALIDSIG <fingerprint>` appears only
+# for a signature that actually verified. gpg's own exit status is checked separately.
+sig_state='absent'
 
 if [[ -s "$tmp/phpunit.phar.asc" ]]; then
   if gpg --list-keys "$EXPECTED_KEY" >/dev/null 2>&1 \
     || gpg --batch --quiet --keyserver hkps://keys.openpgp.org --recv-keys "$EXPECTED_KEY" >/dev/null 2>&1 \
     || gpg --batch --quiet --keyserver hkps://keyserver.ubuntu.com --recv-keys "$EXPECTED_KEY" >/dev/null 2>&1; then
-    if gpg --batch --verify "$tmp/phpunit.phar.asc" "$tmp/phpunit.phar" 2>&1 | grep -q "$EXPECTED_KEY"; then
-      printf '  signature verified against the pinned key\n'
+    gpg_out="$(gpg --batch --status-fd=1 --verify "$tmp/phpunit.phar.asc" "$tmp/phpunit.phar" 2>/dev/null)"
+    gpg_rc=$?
+
+    if [[ $gpg_rc -eq 0 ]] \
+      && grep -q '^\[GNUPG:\] GOODSIG' <<<"$gpg_out" \
+      && grep -q "^\[GNUPG:\] VALIDSIG $EXPECTED_KEY" <<<"$gpg_out"; then
+      sig_state='good'
+      printf '  signature VERIFIED against the pinned key\n'
     else
-      printf '  REFUSING: the signature is NOT from the pinned key %s\n' "$EXPECTED_KEY"
+      sig_state='bad'
+      printf '  REFUSING: the signature did not verify against the pinned key %s\n' "$EXPECTED_KEY"
       exit 1
     fi
   else
+    sig_state='unverifiable'
     printf '  signature present but UNVERIFIED: no public keyserver is reachable from this host.\n'
-    printf '  Falling back to the sha256 pin alone, which is what was checked above.\n'
-    [[ "$actual" == "$EXPECTED_SHA256" ]] || { printf '  REFUSING: no verification succeeded.\n'; exit 1; }
+  fi
+fi
+
+# What may be installed:
+#   sha pin matches                     -> yes (signature good, or unverifiable, or absent)
+#   sha pin differs + signature GOOD    -> yes, and say so loudly: a new upstream release
+#   sha pin differs, anything else      -> no
+if [[ $sha_ok -eq 0 ]]; then
+  if [[ "$sig_state" == 'good' ]]; then
+    printf '  pin is stale but the signature is valid — this looks like a new upstream release.\n'
+    printf '  UPDATE EXPECTED_SHA256 to %s in a commit that names the version.\n' "$actual"
+  else
+    printf '  REFUSING: sha256 mismatch with no verified signature to justify it.\n'
+    exit 1
   fi
 fi
 

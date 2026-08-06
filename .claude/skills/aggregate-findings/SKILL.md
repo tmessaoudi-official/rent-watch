@@ -46,18 +46,22 @@ disallowed-tools: AskUserQuestion
      `## Decisions Log`). On any conflict with a delta above, CLAUDE.md wins.
   7. ONE TOOLCHAIN, AND THE APPLICATION IS NOT BUILT YET. rent-watch is a single-language,
      single-user, self-hosted CLI watcher — no web UI, no multi-user support, no service tier. As of
-     this banner the repo carries the SPECIFICATION and a PROTOTYPE, not an implementation:
-     `spec/PROJECT_BRIEF.md` (the source of truth — mandatory reading before any application code),
-     `prototype/scout.py` + `prototype/sources.yaml` (a pre-existing single-file prototype, reference
-     material only), `CLAUDE.md`, `README.md`, `docs/OPEN-QUESTIONS.md`, `.claude/` and
-     `scripts/claude-bootstrap/`. **Present since 2026-08-06: `src/php/Core/` (the pure core), `tests/php/`, `composer.json` and a
-     PHPUnit runner at `tools/phpunit.phar` — verify with `git ls-files` rather than trusting this
-     line. Still absent: `config/`, any adapter, a
-     test runner, a linter, CI — all of it.** So: never hardcode a build, test or lint command, and
-     never report a finding about `src/core/tenure.*` as if the file existed. Read the manifest for
-     real script names once one exists; until then, the only executable surface is
-     `python3 prototype/scout.py --help`. When the stack a step needs is absent, say so and skip the
-     step. A finding invented about code that does not exist is worse than an empty report.
+     this banner the repo carries the SPECIFICATION, a PROTOTYPE, and the PURE CORE of the
+     implementation: `spec/PROJECT_BRIEF.md` (the source of truth — mandatory reading before any
+     application code), `prototype/scout.py` + `prototype/sources.yaml` (a pre-existing single-file
+     prototype, reference material only), `CLAUDE.md`, `README.md`, `docs/OPEN-QUESTIONS.md`,
+     `.claude/` and `scripts/claude-bootstrap/`.
+     **PRESENT since 2026-08-06: `src/php/Core/` (models + the tenure classifier), `tests/php/`,
+     `tests/fixtures/tenure/corpus.json`, `composer.json`, and a WORKING TEST RUNNER —
+     `php tools/phpunit.phar`. Tests can be executed here, so Rule 7's "tests MUST be executed"
+     applies in full and "no test runner in the tree" is NOT an available answer.
+     STILL ABSENT: `config/`, every adapter, the store, the notify channels, the CLI, a linter, CI.**
+     Verify with `git ls-files src/ config/ tests/` rather than trusting this paragraph — it has been
+     stale before, in both directions. Never hardcode a build or lint command, and never report a
+     finding about `src/core/tenure.*` (a path that has never existed here; the classifier is
+     `src/php/Core/TenureClassifier.php`). When the stack a step needs is genuinely absent, say so
+     and skip the step. A finding invented about code that does not exist is worse than an empty
+     report.
   8. THE SOCIAL-HOUSING EXCLUSION IS THE LOAD-BEARING INVARIANT, and it is an eligibility fact, not
      a preference. `logement social` (PLAI, PLUS, and `conventionné` / ANRU / ANAH regimes absent an
      explicit intermediate label) must NEVER be surfaced as a match: the user is not eligible, so a

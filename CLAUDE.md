@@ -16,7 +16,7 @@ for the product, and **every constraint in it is a ruling**, not a draft to be i
 before touching anything under `src/`.
 
 Status: **the pure core exists; nothing else does.** As of 2026-08-06 there is a PHP 8.5
-implementation of `models` + `tenure` under `src/php/Core/`, a 65-case language-neutral classifier
+implementation of `models` + `tenure` under `src/php/Core/`, a 77-case language-neutral classifier
 corpus at `tests/fixtures/tenure/corpus.json`, and a PHPUnit suite. There is still **no**
 `config/`, no adapter, no store, no notification channel, no CLI and no CI. `src/phorj/` is not
 written yet — it waits on the three phorj builds in `docs/PHORJ-REQUIREMENTS.md`.
@@ -25,7 +25,7 @@ Anything below describing `criteria`, `dedup`, `store`, `health`, the adapters o
 **target**, not the present. Do not report findings against files that do not exist yet, and do not
 name `pytest` as though it were wired — the PHP suite is the only test runner here.
 
-**Fifteen decisions are still open** and several of them change the architecture — see
+**Sixteen decisions are still open** and several of them change the architecture — see
 [`docs/OPEN-QUESTIONS.md`](docs/OPEN-QUESTIONS.md). Milestone 1 should not start until the blocking ones
 are answered.
 
@@ -351,8 +351,8 @@ Required coverage, per spec §11 — non-negotiable once `src/` exists:
   Offline. No network in CI. A parser test that reaches the network is a monitoring check, not a test.
 - **Classifier tests.** ≥30 hand-labelled listing texts covering pure-LLI In'li, mixed CDC Habitat,
   an explicit PLAI, an explicit PLS, and an ambiguous case. The suite must go red if the classifier
-  regresses. **Done** — `tests/fixtures/tenure/corpus.json`, 65 cases, and the suite asserts all five
-  shapes are present so "30 easy ones" cannot satisfy it. The corpus is **still 65/65 synthetic**:
+  regresses. **Done** — `tests/fixtures/tenure/corpus.json`, 77 cases, and the suite asserts all five
+  shapes are present so "30 easy ones" cannot satisfy it. The corpus is **still 77/77 synthetic**:
   the spec asks for *real* texts and those need a captured payload (blocked on the DevTools cURL
   captures). Every case declares its `provenance` and a test asserts the declared counts, so the gap
   is visible as data. Replace them with captured texts as sources come online — append, never
@@ -428,7 +428,8 @@ scripts/claude-bootstrap/   Reinstalls ~/.claude/ at SessionStart (cloud contain
   run `composer dump-autoload --dev`.
 - **`.claude/hooks/tenure-guard.sh` false-positives on ordinary PHP, and that is a known cost.** It
   fired five times while the first PHP was written, every time on prose or syntax: `$flat[] =`
-  (PHP's array append, read as an empty-list literal — the pattern is now anchored to `= []`), a
+  (PHP's array append, read as an empty-list literal — the pattern now enumerates the shapes that
+  actually empty something: `= []`, `=> []`, `return []`, `: []`, `: null`, `= array()`), a
   `0.0001` float epsilon read as a lowered confidence threshold, and phrases like *"no tenure
   signal"*, *"clear the floor"* and *"must never be deleted"*. When it fires, check WHICH pattern
   matched before assuming a real problem — reproduce with
@@ -461,7 +462,7 @@ Stateful data that must never be casually deleted — see
 CLAUDE.md                          This file — project scope, wins on any conflict
 .claude/settings.json              Allow-list permissions, defaultMode auto, hook wiring
 .claude/hooks/tenure-guard.sh      PostToolUse tripwire on the §1 rule; exits 2 when it fires
-tests/test-tenure-guard.sh         Sabotage test FOR that hook — 10 must-fire, 7 must-stay-silent
+tests/test-tenure-guard.sh         Sabotage test FOR that hook — must-fire and must-stay-silent halves
 .claude/hooks/lint-on-write.sh     Lints the file just written (ruff / yamllint / shellcheck / json)
 .claude/hooks/format-on-write.sh   Reports formatting drift; never rewrites behind Claude's back
 .claude/agents/tenure-correctness-reviewer.md    correctness + regression lens
@@ -469,7 +470,8 @@ tests/test-tenure-guard.sh         Sabotage test FOR that hook — 10 must-fire,
 .claude/agents/completeness-reviewer.md         completeness + blast-radius lens
 .claude/skills/                    Repo-native slash skills; `ls` is the authoritative list
 .claude/skills/repair/drift-scan.sh  The mechanical half of /repair — run it in a gate
-tests/sabotage-check.sh            Breaks the classifier 21 ways; the suite must catch every one
+tests/sabotage-check.sh            Breaks the classifier many ways; the suite must catch every one
+tests/test-fetch-phpunit.sh        Proves the runner fetch refuses a bad signature
 scripts/claude-bootstrap/          SessionStart reinstall of ~/.claude/ + PreCompact handoff
 ```
 

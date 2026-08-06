@@ -182,40 +182,84 @@ final readonly class TenureClassifier
 
         $signals[2] = $this->dropConventionneWhenIntermediateIsStated($signals[1], $signals[2]);
 
+        // ── Doubts are separated from evidence before anything competes ──────────────────────────
+        // An "indécidable" acronym marker (an uppercase PLUS/PLS in a financing collocation that is
+        // followed by an ordinary word) is NOT a tenure claim. It used to be emitted as a tier-2
+        // signal and then resolved positionally against real labels, which was wrong in both
+        // directions and neither was visible to the suite:
+        //
+        //   - when it LOST the position race it vanished entirely — not an objection (UNKNOWN is
+        //     not excluded) and not a contradiction (score() skips same-tier signals) — so
+        //     `Loyer intermédiaire … LOGEMENT PLS MODERNE` was notified while the same two
+        //     sentences in the opposite order digested. Identical facts, different word order.
+        //   - when it WON it masked a determinate label, downgrading an explicit PLAI from REJECT
+        //     to a user-visible digest entry.
+        //
+        // A doubt now competes with nothing. It cannot beat evidence and it cannot be beaten by it;
+        // it simply withholds a verdict that would otherwise be a match.
+        $doubts = [];
+
+        foreach ($signals as $tier => $tierSignals) {
+            $signals[$tier] = array_values(array_filter(
+                $tierSignals,
+                static function (TenureSignal $s) use (&$doubts): bool {
+                    if ($s->tenure === Tenure::UNKNOWN) {
+                        $doubts[] = $s;
+
+                        return false;
+                    }
+
+                    return true;
+                },
+            ));
+        }
+
         // Tier 5 is consulted ONLY when nothing else fired — `CLAUDE.md`: "Source default — lowest
-        // confidence, used only when nothing else fires."
-        $anyEvidence = array_filter($signals) !== [];
-        $signals[5] = $anyEvidence ? [] : $this->sourceDefaultSignals($source);
+        // confidence, used only when nothing else fires." A doubt counts as something having
+        // fired: falling back to the source default there would notify the very listing the doubt
+        // was raised about.
+        $signals[5] = (array_filter($signals) === [] && $doubts === [])
+            ? $this->sourceDefaultSignals($source)
+            : [];
 
+        /** @var list<TenureSignal> $evidence */
+        $evidence = array_merge(...array_values($signals));
         /** @var list<TenureSignal> $flat */
-        $flat = array_merge(...array_values($signals));
+        $flat = [...$evidence, ...$doubts];
 
-        if ($flat === []) {
-            return $this->verdict(Tenure::UNKNOWN, 0, [], $source);
+        if ($evidence === []) {
+            // Either nothing at all, or nothing but doubt. Both are undetermined.
+            return $this->verdict(Tenure::UNKNOWN, 0, $flat, $source);
         }
 
         $winningTier = min(array_keys(array_filter($signals)));
         $winner = $this->resolve($signals[$winningTier]);
 
-        $confidence = $this->score($winningTier, $winner->tenure, $flat);
+        $confidence = $this->score($winningTier, $winner->tenure, $evidence);
 
         // ── The conflict rule ────────────────────────────────────────────────────────────────────
-        // Asymmetric on purpose: it can only ever move a verdict toward withholding.
+        // Asymmetric on purpose: it can only ever move a verdict toward withholding. An EXCLUDED
+        // winner is never softened — not by a contradicting eligible signal, and not by a doubt.
         if ($winner->tenure->isEligible()) {
             $objections = array_values(array_filter(
-                $flat,
+                $evidence,
                 static fn (TenureSignal $s): bool => $s->tenure->isExcluded(),
             ));
 
-            if ($objections !== []) {
+            if ($objections !== [] || $doubts !== []) {
+                $against = array_map(
+                    static fn (TenureSignal $s): string => $s->evidence,
+                    [...$objections, ...$doubts],
+                );
+
                 $flat = [...$flat, new TenureSignal(
                     tier: $winningTier,
                     tenure: Tenure::UNKNOWN,
                     reason: sprintf(
-                        'conflit : verdict %s contredit par %d signal(s) de logement social (%s) — mis en attente de vérification',
+                        'conflit : verdict %s contredit ou fragilisé par %d signal(s) (%s) — mis en attente de vérification',
                         $winner->tenure->value,
-                        count($objections),
-                        implode(', ', array_map(static fn (TenureSignal $s): string => $s->evidence, $objections)),
+                        count($against),
+                        implode(', ', $against),
                     ),
                     evidence: 'conflict-rule',
                     position: $winner->position,
@@ -470,11 +514,15 @@ final readonly class TenureClassifier
         $out = [];
 
         foreach (self::PROCEDURAL as $literal => $tenure) {
-            $position = Text::tokenPosition($folded, $literal);
+            // Inflected for the same reason as the labels: `commissions d'attribution`,
+            // `numéros uniques` and `attributions directes` are all ordinary phrasings.
+            $hit = Text::inflectedTokenPosition($folded, $literal);
 
-            if ($position === null) {
+            if ($hit === null) {
                 continue;
             }
+
+            [$position, $matched] = $hit;
 
             if (in_array($literal, self::NEGATED_BY_SANS, true) && $this->isPrecededBySans($folded, $position)) {
                 continue;
@@ -483,7 +531,7 @@ final readonly class TenureClassifier
             $out[] = new TenureSignal(
                 tier: 3,
                 tenure: $tenure,
-                reason: sprintf('indice de procédure « %s »', $literal),
+                reason: sprintf('indice de procédure « %s »', $matched),
                 evidence: $literal,
                 position: $position,
             );
@@ -552,16 +600,20 @@ final readonly class TenureClassifier
         $hits = [];
 
         foreach (self::LABELS as $literal => $tenure) {
-            $position = Text::tokenPosition($folded, $literal);
+            // Inflected, not exact: French agreement and plurals are not optional decoration.
+            // `conventionnée`, `logements sociaux` and `prêts locatifs sociaux` were all silent
+            // non-matches while their singular masculine forms matched. See Text.
+            $hit = Text::inflectedTokenPosition($folded, $literal);
 
-            if ($position === null) {
+            if ($hit === null) {
                 continue;
             }
 
+            [$position, $matched] = $hit;
             $existing = $hits[$position] ?? null;
 
             if ($existing === null || strlen($literal) > strlen($existing['literal'])) {
-                $hits[$position] = ['tenure' => $tenure, 'literal' => $literal];
+                $hits[$position] = ['tenure' => $tenure, 'literal' => $literal, 'matched' => $matched];
             }
         }
 
@@ -575,6 +627,17 @@ final readonly class TenureClassifier
      */
     private function matchFieldAcronyms(string $folded): array
     {
+        // ONLY when the whole value is financing vocabulary. The docblock at the call site argues
+        // that a structured field "is not French prose" and so needs no collocation guard — true
+        // of `financement: PLUS`, false of the generic keys in TENURE_FIELDS. `categorie`,
+        // `dispositif` and `typelogement` carry prose in real feeds, and `Pinel Plus` is a real
+        // 2023 scheme name: unguarded, that value was tenure PLUS at confidence 97 and a silent
+        // REJECT. So a value is treated as a code only if it contains nothing but financing tokens
+        // and separators; anything else falls through to the prose path and its collocation guard.
+        if (preg_match('/^(?:plus|pls|plai|lli|ou|et|[\s\/\-,:;()])+$/u', $folded) !== 1) {
+            return [];
+        }
+
         $hits = [];
 
         foreach (self::AMBIGUOUS_LABELS as $acronym => $tenure) {
@@ -618,7 +681,15 @@ final readonly class TenureClassifier
         $sep = '[\s\/\-,:;()]{1,3}';
         $ambiguousAt = null;
 
-        if (preg_match_all('/(?<![A-Za-z0-9])' . $a . '(?![A-Za-z0-9])/u', $cased, $matches, PREG_OFFSET_CAPTURE) === 0) {
+        // `=== 0` alone would let a PCRE error (`false`) fall through into the foreach and silently
+        // lose every PLUS/PLS detection in the listing. An error is not an absence of matches.
+        $found = preg_match_all('/(?<![A-Za-z0-9])' . $a . '(?![A-Za-z0-9])/u', $cased, $matches, PREG_OFFSET_CAPTURE);
+
+        if ($found === false) {
+            throw MalformedText::notUtf8('TenureClassifier::financingAcronymPosition (' . preg_last_error_msg() . ')');
+        }
+
+        if ($found === 0) {
             return null;
         }
 

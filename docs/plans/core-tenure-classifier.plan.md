@@ -127,7 +127,11 @@ constructor argument that can change it — per `CLAUDE.md` §1, *"not user-over
 | `tests/fixtures/tenure/corpus.json` | The shared, language-neutral labelled corpus |
 | `tests/php/Core/*Test.php` | PHPUnit suites, corpus-driven + unit |
 | `tests/bootstrap.php` | Fails loudly when the dev autoloader is missing, instead of erroring per-test |
-| `tests/sabotage-check.sh` | Breaks the classifier 15 ways; the suite must catch every one |
+| `tests/sabotage-check.sh` | Breaks the classifier many ways; the suite must catch every one |
+| `src/php/Core/MalformedText.php` | Text the classifier refuses to reason about, rather than folding to `''` |
+| `src/php/Core/PlafondBands.php` | Signal tier 4 — wired, and inert until real figures exist |
+| `tools/fetch-phpunit.sh` | Fetches the runner; pinned SHA-256 + signature, refuses on mismatch |
+| `tests/test-fetch-phpunit.sh` | Proves that refusal actually happens |
 | `tests/test-tenure-guard.sh` | Sabotage test for the §1 tripwire itself — must-fire and must-stay-silent |
 
 ## Blast radius
@@ -286,3 +290,96 @@ absent thing present.
 - `docs/OPEN-QUESTIONS.md`: Q18, Q19, Q20.
 - `.gitignore`: `/vendor/`, `/composer.lock`, `/tools/*.phar`.
 - `README.md`, and this plan.
+
+---
+
+## Round 2 of the panel — 20 findings, 3 more P0
+
+Run against frozen `f00f86c`. It also did not count: I modified the tree while two of the three
+reviewers were still running, so two of them declared the round void on arrival. That is twice.
+The lesson is now mechanical rather than remembered — **no edits between dispatching a panel and
+receiving every report**.
+
+### P0 — French inflection, and it is the best finding the panel has produced
+
+Every literal was matched exactly. French tenure vocabulary is inflected: the adjective agrees and
+the noun phrase pluralises. So `conventionnée`, `logements sociaux` and `prêts locatifs sociaux`
+were all silent non-matches while their singular masculine forms matched.
+
+The reason it survived my reading, the suite AND the sabotage run is worth keeping: the acronyms
+(`PLAI`, `ANRU`, `ANAH`, `HLM`) are **invariant**. The terms anyone checks first are precisely the
+ones that could not break. A listing whose own description read *« logements sociaux et
+intermédiaires »* was notified at full tier-2 confidence, because no excluded signal existed for the
+conflict rule to see.
+
+`plai` had to be exempted from inflection **by name**: the generic rule generates `plaie` (a wound)
+and `plais` (from *plaire*), both real French words, and every listing containing one would have
+been classified as social housing and dropped in silence.
+
+### P0 — a doubt was competing positionally
+
+The "indécidable" acronym marker was emitted as a tier-2 signal and resolved by byte offset against
+real labels. Wrong in both directions, and neither was visible to the suite:
+
+- **Losing** the race made it vanish — not an objection (UNKNOWN is not excluded), not a
+  contradiction (`score()` skips same-tier signals). `Loyer intermédiaire … LOGEMENT PLS MODERNE`
+  was notified; **the same two sentences in the opposite order digested.** Identical facts.
+- **Winning** it masked a determinate PLAI, turning a hard disqualifier into a digest entry.
+
+A doubt now competes with nothing: it cannot beat evidence and cannot be beaten by it.
+
+### P0 — invisible characters split labels, exactly like entities did
+
+`\p{Cf}` — U+00AD soft hyphen, U+200B ZWSP, U+FEFF BOM, U+2060 word joiner — inside `logement social`
+deleted that label and left `loyer intermediaire` standing: LLI at confidence 90, above the floor, so
+the fail-closed rule never engaged. The same asymmetry as undecoded entities, one Unicode category
+over.
+
+The sharp part: **my own doctrine produces the attack input.** `MalformedText::undecodedEntities()`
+tells the adapter that decoding is its job; an adapter that obeys turns `&shy;` — ordinary
+hyphenation markup in justified French CMS output — into U+00AD, which passes both the UTF-8 gate
+and the entity gate.
+
+Stripping alone was not enough either: removing a zero-width character between two words JOINS them
+(`logementsocial`), so multi-word literals now join on `\s*` rather than `\s+`.
+
+### Also fixed
+
+- Tier-1 field values bypassed the collocation guard on the argument that "a field is not French
+  prose". True of `financement: PLUS`, false of `categorie` / `dispositif` / `typelogement`, which
+  carry prose in real feeds — `Pinel Plus` (a real 2023 scheme) was tenure PLUS at 97 and a silent
+  REJECT. A value is now read as a code only when it is nothing but financing tokens and separators.
+- `sabotage-check.sh` reported `ok` for a PHP **parse error**: PHPUnit turns an autoload-time syntax
+  error into test errors, which matched both greps. Several sabotages are line-deletes pinned to
+  exact source text, so a refactor could silently convert one into a syntax error and have the
+  script certify the guarantee as covered. Parse/fatal output is now rejected outright.
+- The tripwire's alternation carried `= none` — a **Python** idiom, in a repo whose only Python is
+  the superseded prototype — while missing the YAML/JSON nulls that `config/*.yaml` will be written
+  in, and PHP's `array()`. Seven shapes added, each with a test case.
+- The 11 skill banners were made **self-contradictory** by round 1's fix: "Present since 2026-08-06:
+  … a PHPUnit runner" and "Still absent: … a test runner" in the same paragraph, with
+  `/pre-commit` offering *"no test runner in the tree yet — N/A with reason"* as an accepted Coverage
+  answer. The ambiguity resolved toward the wrong branch. Rewritten so both halves agree.
+- `.claude/agents/tenure-correctness-reviewer.md`'s **frontmatter** still routed on
+  `src/core/tenure.*`. Round 1 fixed the body and missed the dispatch trigger — the same defect
+  class the round-1 commit message singles out as "the worst", on the same file.
+
+### Reported as P0 but NOT reproducible — recorded so it is not re-litigated
+
+`tools/fetch-phpunit.sh` was reported to accept a BAD signature, because
+`gpg --verify … | grep -q "$KEY"` returns grep's status and gpg prints the fingerprint even on a bad
+signature. **The bypass was never live here:** the script has `set -euo pipefail`, which makes the
+pipeline fail. Verified both ways — vulnerable without `pipefail`, safe with it — and
+`tests/test-fetch-phpunit.sh` now asserts both facts so the disagreement cannot recur. Round 1's
+resilience reviewer had this right and round 2's completeness reviewer tested the line in isolation.
+
+The rewrite was kept anyway: correctness should not depend on an action-at-a-distance shell option
+five lines away. It now checks gpg's exit status and `--status-fd` `VALIDSIG` explicitly, and refuses
+a stale SHA pin unless a signature actually verifies.
+
+### The durable fix for a recurring class
+
+Three separate rounds caught a stale count in `CLAUDE.md` or `README.md`. Counting is not something
+to remember, so `drift-scan.sh` grew **S7**: every prose count of corpus cases and open decisions is
+now checked against the artefact it describes. Its first run found a false positive (the spec's
+`≥30` minimum) which is now excluded, and a deliberate drift was re-introduced to confirm it fires.

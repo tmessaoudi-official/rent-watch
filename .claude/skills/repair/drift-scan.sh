@@ -228,6 +228,72 @@ elif th:
               f"future edit cannot tell which floor its regex encodes.")
 PY
 
+# ── S7: COUNTS WRITTEN IN PROSE vs the artefacts they describe ───────────────────────────────────
+# Three separate review rounds caught a stale corpus count in CLAUDE.md or README.md, each time
+# after fixtures were appended — the number is written in five places and every one of them has to
+# be carried by hand. A count in prose is a claim, and this repo's own rule is that claims get
+# checked mechanically rather than remembered. Cheap, and it retires a whole class of finding.
+say "── S7 counts in prose vs reality"
+python3 - <<'PY' >>"$FINDINGS"
+import json, pathlib, re
+
+corpus = pathlib.Path('tests/fixtures/tenure/corpus.json')
+if not corpus.is_file():
+    raise SystemExit
+
+data = json.loads(corpus.read_text())
+cases = len(data['cases'])
+declared = data.get('declared_counts', {})
+synthetic = sum(1 for c in data['cases'] if c.get('provenance') == 'synthetic')
+
+if declared.get('synthetic') != synthetic:
+    print(f"P0  corpus.json declares {declared.get('synthetic')} synthetic cases but contains {synthetic} — "
+          f"the provenance disclosure is the thing that keeps the 'real texts' gap honest.")
+
+# Any "<N> cases" / "<N>/<N> synthetic" / "<N> hand-labelled" / "<N>-case" claim must equal `cases`.
+CLAIMS = [
+    (r'corpus\.json`?,?\s+(\d+)\s+cases', 'corpus.json … N cases'),
+    (r'still\s+(\d+)/(\d+)\s+synthetic', 'still N/N synthetic'),
+    # NOT preceded by ≥ or "at least": those are the SPEC MINIMUM (spec §4 asks for >=30 texts),
+    # which is a floor the corpus must clear, not a count of what it holds. This check flagged that
+    # sentence on its first run.
+    (r'(?<!≥)(?<!at least )(?<!minimum )\b(\d+)\s+hand-labelled', 'N hand-labelled'),
+    (r'\*\*All\s+(\d+)\s+are synthetic\*\*', 'All N are synthetic'),
+    (r'(\d+)-case (?:language-neutral|synthetic)', 'N-case corpus'),
+]
+
+for doc in ('CLAUDE.md', 'README.md', 'docs/plans/core-tenure-classifier.plan.md'):
+    p = pathlib.Path(doc)
+    if not p.is_file():
+        continue
+    text = p.read_text()
+    for pattern, label in CLAIMS:
+        for m in re.finditer(pattern, text):
+            for g in m.groups():
+                if int(g) != cases:
+                    line = text[:m.start()].count('\n') + 1
+                    print(f"P1  {doc}:{line} claims {g} where the corpus has {cases} ({label}) — "
+                          f"a prose count drifted from the data it describes.")
+
+# The open-decision count in CLAUDE.md must match docs/OPEN-QUESTIONS.md.
+oq = pathlib.Path('docs/OPEN-QUESTIONS.md')
+cm = pathlib.Path('CLAUDE.md')
+if oq.is_file() and cm.is_file():
+    open_qs = len(re.findall(r'^### (?:Ⓑ|Ⓞ)', oq.read_text(), re.M))
+    WORDS = {'one':1,'two':2,'three':3,'four':4,'five':5,'six':6,'seven':7,'eight':8,'nine':9,
+             'ten':10,'eleven':11,'twelve':12,'thirteen':13,'fourteen':14,'fifteen':15,
+             'sixteen':16,'seventeen':17,'eighteen':18,'nineteen':19,'twenty':20}
+    m = re.search(r'\*\*(\w+) decisions are still open\*\*', cm.read_text(), re.I)
+    if m:
+        claimed = WORDS.get(m.group(1).lower())
+        if claimed is None:
+            print(f"P2  CLAUDE.md writes the open-decision count as '{m.group(1)}', which this check "
+                  f"cannot parse — use a word from one..twenty, or a digit.")
+        elif claimed != open_qs:
+            print(f"P1  CLAUDE.md says {m.group(1)} ({claimed}) decisions are open; "
+                  f"docs/OPEN-QUESTIONS.md has {open_qs} (Ⓑ + Ⓞ headings).")
+PY
+
 # ── S5: tool availability (informational — compare against any doc that claims or hedges) ────────
 say "── S5 tool availability (informational)"
 if (( ! QUIET )); then

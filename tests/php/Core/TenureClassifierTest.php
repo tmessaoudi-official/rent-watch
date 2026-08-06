@@ -17,7 +17,7 @@ use RentWatch\Core\TenureClassifier;
 /**
  * Structural invariants — the properties that must hold for EVERY input, not just the corpus ones.
  *
- * The corpus proves the classifier gets 56 specific listings right. This file proves the shape of
+ * The corpus proves the classifier gets every case in `tests/fixtures/tenure/corpus.json` right. This file proves the shape of
  * the module cannot drift: that the excluded set is fixed in code, that the floor is where the
  * rule says, that an unlabelled source fails closed, and that tier 4 is still honestly inert.
  */
