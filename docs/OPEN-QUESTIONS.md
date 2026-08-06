@@ -188,12 +188,17 @@ story than Python for a self-hosted watcher. It cannot build Track 2 until IMAP 
 **Default if unanswered:** option 1 — Track 1 in phorj, Track 2 deferred and clearly marked as blocked
 on `Core.Imap`, with no Python written in the meantime.
 
-**Note the precedent, and why it does not simply settle this:** `twes-in/CLAUDE.md` rules that phorj is
-*"vision, not a target: the language is unfinished and nothing here is built for it. Do not treat it as a
-requirement."* That ruling was for a **commercial invoicing platform** where a pre-1.0 dependency is
-reckless. rent-watch is a **single-user personal tool** — the risk calculus is genuinely different, and
-this is a much more defensible place to dogfood. I am not citing that ruling as a veto; I am flagging
-that it exists so the two repos do not silently contradict each other.
+**On the risk, stated in my own words rather than borrowed:** building a product on a pre-1.0,
+single-developer language means every language bug becomes a product blocker with exactly one person who
+can fix it. For a **commercial platform** that is reckless. For a **single-user personal tool** it is a
+reasonable trade, and arguably the point — rent-watch becomes the forcing function that finds phorj's
+bugs on real work rather than on test programs. That is the actual argument, and it needs no other repo
+to make it.
+
+*(An earlier version of this section cited another repo's `CLAUDE.md` as precedent. That was a defect,
+not a supporting detail: this repo cannot read that file, a future session here cannot verify it, and
+rent-watch's own `CLAUDE.md` is the only authority that governs rent-watch. Removed 2026-08-06 on the
+developer's challenge — the same dangling-cross-reference class that `/repair` § S2 exists to catch.)*
 
 ### Ⓑ Q17 — CLI, web app, or both? — raised 2026-08-06
 
@@ -295,5 +300,14 @@ recording that "action logement" was named as a wanted *source*, not as a wanted
   find came out of measuring rather than recalling (`1001vieshabitat.fr` had no hyphen; Coopération et
   Famille merged into it in 2018; **ICF Habitat Novedis** is a 10 000-unit intermediate/loyer-libre arm
   that the first pass missed entirely).
+- [2026-08-06] AGREED (Q16): **phorj is the implementation language**, and the developer will build the
+  two missing pieces. Requirements spec written to `docs/PHORJ-REQUIREMENTS.md`: `Core.Imap` (read-only,
+  streaming, typed errors, MIME-decoded bodies, **plus a file-backed test transport** mirroring
+  `Mail.FileTransport` — without which Track 2 ships untested) and an **HTML parser with CSS selectors**
+  (`Core.Html` today is a builder, so it renders HTML but cannot read it).
+- [2026-08-06] CORRECTED, on the developer's challenge: an earlier Q16 note cited `twes-in`'s `CLAUDE.md`
+  as precedent. **That was a defect** — this repo cannot read a sibling's file and a future session here
+  cannot verify it, so it is a dangling cross-reference with the authority of a rumour. The argument was
+  restated in rent-watch's own terms and `drift-scan.sh` § S2b now catches the whole class.
 - [2026-08-06] AGREED: **run every assumption past the developer** — *"even if you assume anything run
   it by me"*. Assumptions get stated explicitly and recorded here, not absorbed silently.

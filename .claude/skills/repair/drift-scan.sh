@@ -87,6 +87,30 @@ for p in pathlib.Path('.').rglob('*'):
                 print(f"P1  {p}:{n} points at {ref}, which does not exist")
 PY
 
+# ── S2b: no SIBLING-REPO file cited as authority ─────────────────────────────────────────────────
+# Raised by the developer 2026-08-06: "why would you have twes-in/CLAUDE.md in this repo???" A rent-watch
+# decision record that cites `twes-in/CLAUDE.md` points at a file this repo does not contain and a future
+# session here cannot read — the same dangling-reference class as S2, one level up. rent-watch's own
+# CLAUDE.md is the only authority over rent-watch. The cross-repo AUDIT PLAN is exempt: comparing the
+# siblings is literally its subject.
+say "── S2b sibling-repo files cited as authority"
+python3 - <<'PY' >>"$FINDINGS"
+import pathlib, re
+SIBS = ('twes-in', 'pdfturbo', 'phorj', 'stack')
+EXEMPT = ('claude-bundle-cross-repo-audit.plan.md',)
+pat = re.compile(r'\b(' + '|'.join(SIBS) + r')/[A-Za-z0-9_./-]*(CLAUDE\.md|\.plan\.md)')
+for p in pathlib.Path('.').rglob('*.md'):
+    if any(x in p.parts for x in ('.git', 'var', 'node_modules')): continue
+    if p.name in EXEMPT: continue
+    for n, line in enumerate(p.read_text(errors='replace').splitlines(), 1):
+        if 'earlier version' in line.lower() or 'was a defect' in line.lower(): continue
+        m = pat.search(line)
+        if m:
+            print(f"P2  {p}:{n} cites {m.group(0)} as authority — a sibling repo's file. This repo cannot "
+                  f"read it and a future session cannot verify it; rent-watch's own CLAUDE.md is the only "
+                  f"authority here. State the argument directly instead.")
+PY
+
 # ── S3: inventory tables ─────────────────────────────────────────────────────────────────────────
 say "── S3 inventory tables"
 for f in .claude/hooks/*.sh .claude/agents/*.md; do
