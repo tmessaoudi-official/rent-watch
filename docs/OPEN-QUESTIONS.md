@@ -129,6 +129,13 @@ alongside it for time-critical LIBRE listings, which go fast. See the question s
 leans that way. Needs a topic name; treat the topic as a **secret** (anyone who knows it can read the
 notifications).
 
+### Ⓞ Q15 — CDC Habitat's `robots.txt` disallows `/Recherche/show/` — raised 2026-08-06
+Measured, not assumed. If CDC Habitat's listing endpoint sits under that path, polling it violates
+`robots.txt`, which `CLAUDE.md` hard rule 5 forbids without exception.
+**Default if unanswered:** A3 stays `enabled: false` until the real endpoint path is known. If it is
+inside the `Disallow`, CDC Habitat moves to the email-alert route like a private portal. **Never work
+around it.**
+
 ### Ⓞ Q10 — Playwright allowed?
 §0.10. Only relevant for a source that is impossible otherwise. Chromium is pre-installed in this
 container.
@@ -201,5 +208,11 @@ recording that "action logement" was named as a wanted *source*, not as a wanted
   (`spec/PROJECT_BRIEF.md` §12); it is now doubly confirmed and must never be revisited.
 - [2026-08-06] AGREED (Q9, partial): **email delivery is wanted.** Whether a push channel rides
   alongside it is still open.
+- [2026-08-06] AGREED: **full coverage** — do not trim the source list to a recommended subset.
+  Verified round recorded in `docs/SOURCES.md`: 15 Tier A + 11 Tier B candidates, each fetched once with
+  an honest UA, `robots.txt` read for every pollable Tier A site. Two corrections and one significant
+  find came out of measuring rather than recalling (`1001vieshabitat.fr` had no hyphen; Coopération et
+  Famille merged into it in 2018; **ICF Habitat Novedis** is a 10 000-unit intermediate/loyer-libre arm
+  that the first pass missed entirely).
 - [2026-08-06] AGREED: **run every assumption past the developer** — *"even if you assume anything run
   it by me"*. Assumptions get stated explicitly and recorded here, not absorbed silently.
