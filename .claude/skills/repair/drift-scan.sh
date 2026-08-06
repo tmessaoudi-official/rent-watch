@@ -1,0 +1,210 @@
+#!/usr/bin/env bash
+# drift-scan.sh — the mechanical half of /repair (sections 1-5).
+#
+# WHY THIS IS A SCRIPT AND NOT PROSE IN SKILL.md: the first run of the prose version produced TWO
+# false positives, both from HISTORICAL CITATIONS — the framework's own sentence explaining that it
+# once wrongly listed `/cross-check` as absent, and /repair's banner citing the dangling plan pointer
+# it was written to catch. A drift detector that fires on its own changelog gets ignored within a week,
+# and an ignored detector is worse than none. Citation-awareness is fiddly enough to need testing, and
+# prose cannot be tested. (The same class bit pdfturbo on 2026-08-06: its copy-out grep matched
+# install.sh's own warning about the block that must never return.)
+#
+# Every check writes its findings to stdout as `P0 `/`P1 `/`P2 ` lines. The tally at the end is
+# computed by grepping that output, NOT by incrementing counters inside each check — an earlier version
+# incremented shell variables from inside a python heredoc, which is a subprocess, so it printed a P0
+# and still exited 0. That is the "alert computed but never sent" failure this repo's own source-health
+# rule exists to prevent, and it was found by sabotage-verification rather than by review.
+#
+# Usage: bash .claude/skills/repair/drift-scan.sh [--quiet]
+# Exit:  0 = no P0/P1 drift, 1 = drift found.
+set -uo pipefail
+
+ROOT="${CLAUDE_PROJECT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)}"
+cd "$ROOT" || exit 1
+QUIET=0; [[ "${1:-}" == "--quiet" ]] && QUIET=1
+
+FINDINGS="$(mktemp)"; trap 'rm -f "$FINDINGS"' EXIT
+say() { (( QUIET )) || printf '%s\n' "$1"; }
+
+# ── S1: the shipped framework's skill list vs the filesystem ─────────────────────────────────────
+# install.sh copies CLAUDE-global.md to ~/.claude/CLAUDE.md UNCONDITIONALLY, so a wrong claim there
+# becomes the next session's own system prompt. Highest-severity drift this repo can carry.
+# Only the PARENTHESISED not-installed list is parsed; prose after "NOT installed here" may name an
+# installed skill legitimately while explaining a past defect.
+say "── S1 shipped framework vs .claude/skills/"
+python3 - <<'PY' >>"$FINDINGS"
+import pathlib, re, sys
+have = {p.parent.name for p in pathlib.Path('.claude/skills').glob('*/SKILL.md')}
+g = pathlib.Path('scripts/claude-bootstrap/CLAUDE-global.md')
+if not g.is_file():
+    print("P1  scripts/claude-bootstrap/CLAUDE-global.md missing — install.sh would ship nothing")
+    sys.exit(0)
+m = re.search(r'As built:(.*?)Anything else named in this framework\s*\((.*?)\)\s*is \*\*NOT installed here\*\*',
+              g.read_text(), re.S)
+if not m:
+    print("P1  CLAUDE-global.md § Global Skills Reference no longer has the expected 'As built: … / "
+          "Anything else named (…) is **NOT installed here**' shape — drift-scan cannot verify the "
+          "skill list. Fix the shape, or fix this scanner.")
+    sys.exit(0)
+built  = set(re.findall(r'`/([a-z-]+)`', m.group(1)))
+absent = set(re.findall(r'`/([a-z-]+)`', m.group(2)))
+for s in sorted(have & absent):
+    print(f"P0  /{s} exists at .claude/skills/{s}/ but CLAUDE-global.md lists it as NOT installed. "
+          f"install.sh ships that file to ~/.claude/CLAUDE.md unconditionally, so the next session is "
+          f"told it lacks a skill it has.")
+for s in sorted(have - built - absent):
+    print(f"P0  /{s} exists on disk but appears in NEITHER list — a session will not know it exists.")
+for s in sorted(built - have - {'loop'}):
+    print(f"P1  /{s} is listed as built but .claude/skills/{s}/ does not exist.")
+PY
+
+# ── S1b: reviewer agents named vs defined ────────────────────────────────────────────────────────
+say "── S1b reviewer agents"
+for a in $(grep -rhoE '`[a-z-]+-reviewer`' CLAUDE.md .claude/skills/converge/SKILL.md 2>/dev/null \
+            | tr -d '`' | sort -u); do
+  [[ -f ".claude/agents/$a.md" ]] || printf 'P0  agent %s is named in CLAUDE.md/converge but .claude/agents/%s.md does not exist — /converge would spawn nothing at the gate meant to catch failures\n' "$a" "$a" >>"$FINDINGS"
+done
+
+# ── S2: plan pointers, citation-aware ────────────────────────────────────────────────────────────
+# A reference is a POINTER when it tells the reader where something lives; a CITATION when it
+# describes a past state. Citations are excluded two ways: inside an HTML comment, or on a line
+# carrying a past-tense marker.
+say "── S2 plan pointers"
+python3 - <<'PY' >>"$FINDINGS"
+import pathlib, re
+CITE = re.compile(r'pointed at|used to|formerly|previously|only ever existed|was deleted|no longer|'
+                  r'had REJECTED|correct when written|renamed|retargeted|dangling', re.I)
+for p in pathlib.Path('.').rglob('*'):
+    if p.suffix not in ('.md', '.sh') or not p.is_file(): continue
+    if any(x in p.parts for x in ('.git', 'var', 'node_modules')): continue
+    in_comment = False
+    for n, line in enumerate(p.read_text(errors='replace').splitlines(), 1):
+        if '<!--' in line and '-->' not in line: in_comment = True; continue
+        if '-->' in line and '<!--' not in line: in_comment = False; continue
+        if in_comment or CITE.search(line): continue
+        for ref in re.findall(r'docs/plans/[a-z0-9-]+\.plan\.md', line):
+            if not pathlib.Path(ref).is_file():
+                print(f"P1  {p}:{n} points at {ref}, which does not exist")
+PY
+
+# ── S3: inventory tables ─────────────────────────────────────────────────────────────────────────
+say "── S3 inventory tables"
+for f in .claude/hooks/*.sh .claude/agents/*.md; do
+  [[ -e "$f" ]] || continue
+  grep -q "$(basename "$f")" CLAUDE.md \
+    || printf "P2  %s is not listed in CLAUDE.md § 'Claude config in this repo'\n" "$(basename "$f")" >>"$FINDINGS"
+done
+for f in scripts/claude-bootstrap/*.sh scripts/claude-bootstrap/hooks/*.sh; do
+  [[ -e "$f" ]] || continue
+  grep -q "$(basename "$f")" scripts/claude-bootstrap/README.md \
+    || printf 'P2  %s is not listed in scripts/claude-bootstrap/README.md § What is here\n' "$(basename "$f")" >>"$FINDINGS"
+done
+
+# ── S4: hook wiring, four ways ───────────────────────────────────────────────────────────────────
+say "── S4 hook wiring"
+REG="$(python3 -c "
+import json
+d = json.load(open('.claude/settings.json'))
+print('\n'.join(h['command'].split('/')[-1]
+      for g in d['hooks'].values() for e in g for h in e['hooks']))" 2>/dev/null)"
+for f in .claude/hooks/*.sh; do
+  b="$(basename "$f")"
+  grep -qx "$b" <<<"$REG" \
+    || printf 'P2  %s is on disk but not registered in .claude/settings.json — dead code\n' "$b" >>"$FINDINGS"
+  grep -q 'log_obs' "$f" \
+    || printf 'P2  %s does not use log_obs() — violates Rule 13 of the framework this repo ships\n' "$b" >>"$FINDINGS"
+done
+while read -r b; do
+  [[ -z "$b" ]] && continue
+  [[ -f ".claude/hooks/$b" || -f "scripts/claude-bootstrap/$b" || -f "scripts/claude-bootstrap/hooks/$b" ]] \
+    || printf "P1  settings.json registers '%s' but no such script exists — the hook silently never runs\n" "$b" >>"$FINDINGS"
+done <<<"$REG"
+while read -r mode path; do
+  [[ "$mode" == "100755" ]] \
+    || printf 'P1  %s is mode %s in git — it will not execute after a fresh clone\n' "$path" "$mode" >>"$FINDINGS"
+done < <(git ls-files -s .claude/hooks/ scripts/claude-bootstrap/ 2>/dev/null | awk '$4 ~ /\.sh$/ {print $1, $4}')
+
+# ── S4b: permissions.deny MUST be empty (developer ruling, 2026-08-06) ───────────────────────────
+# Full autonomy: in a web session there is no terminal in which to run a denied command by hand, so a
+# deny entry is a dead end, not a guardrail. Checked mechanically because the natural instinct when
+# porting from a sibling — or when adding a "harmless" .env guard — is to reintroduce one.
+say "── S4b permissions.deny must be empty"
+python3 - <<'PY' >>"$FINDINGS"
+import json, pathlib
+d = json.loads(pathlib.Path('.claude/settings.json').read_text())
+deny = d.get('permissions', {}).get('deny', [])
+if deny:
+    print(f"P1  .claude/settings.json permissions.deny has {len(deny)} entr{'y' if len(deny)==1 else 'ies'} "
+          f"({', '.join(deny[:4])}) — this repo requires FULL AUTONOMY: a denied action cannot be run "
+          f"by hand in a web session, so it is an unrecoverable dead end. See CLAUDE.md § Git autonomy.")
+PY
+
+# ── S6: THE TENURE INVARIANT — rent-watch's own, and the reason this skill is not a generic copy ──
+# The one non-negotiable rule is asserted in ~16 files: CLAUDE.md §1 and its glossary, every skill
+# banner (delta 8), the three agents, and tenure-guard.sh. Prose can drift from prose, but the case
+# that actually matters is prose drifting from the TRIPWIRE: if CLAUDE.md names a term the guard's
+# grep does not cover, the tripwire has a silent blind spot on exactly the rule it exists to watch.
+# Same for the threshold — tenure-guard.sh encodes the 0.6 floor as a character class ([0-5]), so
+# changing the documented threshold without changing that class leaves the guard checking the old one.
+say "── S6 tenure invariant: docs vs the tripwire"
+python3 - <<'PY' >>"$FINDINGS"
+import pathlib, re
+guard = pathlib.Path('.claude/hooks/tenure-guard.sh')
+claude = pathlib.Path('CLAUDE.md')
+if not (guard.is_file() and claude.is_file()):
+    raise SystemExit
+c = claude.read_text()
+# Only the guard's MATCHING PATTERNS count, not the whole file. Its warning message also names every
+# excluded term, so a whole-file substring search passes even when the alternation has lost one —
+# sabotage-verification caught exactly that: gutting `plai` from the patterns went undetected because
+# the echo block still said "PLAI/PLUS/…". What matters is what the grep matches, not what it prints.
+guard_src = guard.read_text()
+g = "\n".join(re.findall(r"grep -Eq '([^']*)'", guard_src))
+if not g:
+    print("P1  tenure-guard.sh has no `grep -Eq '…'` patterns — the tripwire matches nothing at all.")
+    raise SystemExit
+
+# 1. Every excluded term named by the rule must appear in the guard's patterns.
+#    CLAUDE.md §1 is the authority; accent-folded and truncated forms count as covered.
+TERMS = {'PLAI': 'plai', 'PLUS': 'plus', 'ANRU': 'anru', 'ANAH': 'anah',
+         'conventionné': 'conventionn', 'logement social': 'logement social'}
+for shown, pattern in TERMS.items():
+    if shown.lower() not in c.lower():
+        print(f"P2  CLAUDE.md no longer names '{shown}' in the excluded set — if that was deliberate it is a "
+              f"product decision, not drift; if not, the rule lost a term.")
+    elif pattern not in g.lower():
+        print(f"P0  CLAUDE.md's excluded set names '{shown}' but tenure-guard.sh's patterns do not match "
+              f"'{pattern}' — the tripwire has a blind spot on a term the rule covers.")
+
+# 2. One documented threshold, and the guard's character class must bracket it.
+th = sorted(set(re.findall(r'confidence[^.\n]{0,40}?([01]\.\d+)', c, re.I)))
+if len(th) > 1:
+    print(f"P1  CLAUDE.md states more than one fail-closed confidence threshold {th} — one of them is stale.")
+elif th:
+    want = th[0]                                  # e.g. '0.6'
+    digit = int(want.split('.')[1][0])            # 6
+    cls = re.search(r'confidence\[\^\.\]\{0,40\}\(0\\\.\[0-(\d)\]', g)
+    if cls and int(cls.group(1)) != digit - 1:
+        print(f"P0  CLAUDE.md documents a {want} fail-closed threshold but tenure-guard.sh's regex brackets "
+              f"[0-{cls.group(1)}], i.e. it flags values below 0.{int(cls.group(1))+1} — the guard is checking "
+              f"a different floor than the rule states.")
+    if want not in guard_src:
+        print(f"P2  tenure-guard.sh does not mention the documented threshold {want} in its comments — a "
+              f"future edit cannot tell which floor its regex encodes.")
+PY
+
+# ── S5: tool availability (informational — compare against any doc that claims or hedges) ────────
+say "── S5 tool availability (informational)"
+if (( ! QUIET )); then
+  for t in ruff python3 pytest jq yq git shellcheck yamllint shfmt hadolint; do
+    printf '     %-11s %s\n' "$t" "$(command -v "$t" >/dev/null 2>&1 && echo PRESENT || echo absent)"
+  done
+fi
+
+# ── Tally from the findings file — the single source of both the report and the exit code ────────
+sort -u "$FINDINGS" > "$FINDINGS.u" && mv "$FINDINGS.u" "$FINDINGS"
+[[ -s "$FINDINGS" ]] && cat "$FINDINGS"
+n0=$(grep -c '^P0 ' "$FINDINGS" || true); n1=$(grep -c '^P1 ' "$FINDINGS" || true)
+n2=$(grep -c '^P2 ' "$FINDINGS" || true)
+printf '\ndrift-scan: P0=%d P1=%d P2=%d\n' "$n0" "$n1" "$n2"
+(( n0 + n1 == 0 ))

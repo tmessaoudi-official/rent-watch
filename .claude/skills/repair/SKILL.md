@@ -1,0 +1,227 @@
+---
+name: repair
+description: >
+  Detect and repair drift between what CLAUDE.md, the shipped global framework and .claude/ CLAIM
+  exists, and what actually exists — skills, agents, hooks, settings entries, plan pointers, config
+  keys, fixtures, documented commands. Run after adding a skill/agent/hook, after a port from a
+  sibling repo, or any time the config might be stale. Never weakens an invariant.
+user-invocable: true
+disallowed-tools: AskUserQuestion
+---
+
+<!-- ═══════════════════════════════════════════════════════════════════════════════════
+  rent-watch ADAPTATION (2026-08-06) of the machine bundle's `/repair`
+  (`claude-setup-global-20260722`). This skill was REJECTED by the pdfturbo and twes-in ports as
+  "operates on a persistent ~/.claude/", and that judgement was WRONG — the rejection was inherited
+  rather than checked. Its five drift categories (MISSING / STALE / OBSOLETE / ADAPT PENDING /
+  LINGERING) are almost entirely about the PROJECT's own documentation versus the project's own
+  filesystem, which is exactly what this repo needs.
+
+  IT IS PORTED ON EVIDENCE, NOT ON PRINCIPLE. On 2026-08-06 a single session found five drift defects
+  BY HAND, every one of which this skill's scan would have caught mechanically:
+    1. (P0) `CLAUDE-global.md` listed `/cross-check` in its "NOT installed here" set while the skill
+       was installed — and `install.sh` copies that file into `~/.claude/CLAUDE.md` UNCONDITIONALLY,
+       so the next session's own system prompt would deny having a skill it had.
+    2. `/add-source` existed on disk and appeared in no list at all.
+    3. Three files pointed at `docs/plans/claude-bundle-integration.plan.md`, a plan file that only
+       ever existed in twes-in.
+    4. `/cross-check`'s tool row asserted `pytest`/`yq` "may not be" present; both were — asserted
+       from memory in the very row that says to run `command -v`.
+    5. All three project hooks were missing `log_obs`, which the framework they ship mandates
+       (Rule 13).
+  Findings 1 and 2 belong to a drift class the upstream skill does NOT have, because upstream assumed
+  `~/.claude/` was authored in place. Here it is GENERATED from repo files, so the repo can ship a
+  framework that lies about the repo. That check is § 1 below and it runs first.
+
+  ADAPTATIONS: the lean-mode interlock is removed (no lean mode here). `--apply` no longer means
+  "without prompting" — see § "What is never auto-fixed". Questions are plain text
+  (`.claude/skills/ask-human/SKILL.md`); `AskUserQuestion` is forbidden project-wide. Reports go to
+  `var/claude/repair/` (gitignored), never `~/.claude/projects/…`.
+═══════════════════════════════════════════════════════════════════════════════════ -->
+
+## --help
+
+> If ARGUMENTS contains `--help`: output the text below verbatim, then STOP.
+>
+> ```
+> /repair — Detect and repair drift between what the config CLAIMS and what exists.
+>
+>   (none)     Scan, report, fix what is safely fixable, state what is not
+>   --check    Scan only, no writes. Exit 0 = clean, 1 = drift found. Use in a gate.
+>   --quick    Sections 1-3 only (the claim surfaces). ~30s.
+> ```
+
+---
+
+# /repair — drift between claim and reality
+
+Every check below answers one question: **does something this repo asserts still match the
+filesystem?** A stale claim is worse than a missing one, because it is trusted — and in this repo one
+class of stale claim is shipped into the next session's system prompt.
+
+Run it after adding or removing a skill, agent or hook; after porting anything from a sibling repo;
+and before a milestone boundary.
+
+---
+
+## Section 1 — THE SHIPPED FRAMEWORK (run this first; it is the one with teeth)
+
+`scripts/claude-bootstrap/install.sh` copies `CLAUDE-global.md` to `~/.claude/CLAUDE.md`
+**unconditionally, every SessionStart**. So a wrong claim in that file is not a doc bug — it becomes
+the next session's own instructions. This is the highest-severity drift this repo can carry and it is
+invisible to every other check.
+
+```bash
+# Ground truth
+ls .claude/skills/ | sort
+# What the shipped framework says is "As built" vs "NOT installed here"
+grep -n 'As built:' -A2 scripts/claude-bootstrap/CLAUDE-global.md
+grep -n 'NOT installed here' scripts/claude-bootstrap/CLAUDE-global.md
+```
+
+Cross-check both directions and report each mismatch as **P0**:
+
+- a skill **on disk** that the framework lists as NOT installed → a session will refuse to use a tool
+  it has. (This happened; see the banner.)
+- a skill **on disk** in neither list → a session will not know it exists.
+- a skill in the "As built" list with **no directory** → a session will try to invoke nothing.
+
+Do the same for the agents named in `§ "Certification ladder"` of `CLAUDE.md` and the reviewer names
+in `.claude/skills/converge/SKILL.md` — a `/converge` run that spawns an agent by a name with no
+definition fails at the gate that is supposed to catch failures.
+
+## Section 2 — POINTERS THAT GO NOWHERE
+
+```bash
+# Every plan file referenced anywhere, checked for existence
+grep -rhoE 'docs/plans/[a-z0-9-]+\.plan\.md' .claude/ scripts/ docs/ CLAUDE.md README.md 2>/dev/null \
+  | sort -u | while read -r f; do [[ -f "$f" ]] || echo "DANGLING: $f"; done
+
+# Every repo-relative path named in a skill or agent
+grep -rhoE '`(src|config|tests|spec|docs|scripts|prototype|\.claude)/[A-Za-z0-9_./*-]+`' .claude/ \
+  | tr -d '`' | sort -u | while read -r f; do
+      [[ -e "$f" ]] || case "$f" in *\**) ;; *) echo "NAMED-BUT-ABSENT: $f" ;; esac
+    done
+```
+
+**Judgement required on the second list, and this is the trap.** `src/core/tenure.py` and
+`config/sources.yaml` are named all over `.claude/` and do **not** exist yet — that is correct, they
+are the documented target and `CLAUDE.md` says so explicitly. Flag a path only when the text asserts
+it **exists** or tells the reader to **run** it. A `--drift` table row saying "run
+`python3 prototype/scout.py --help`" must resolve; an attack-surface bullet saying "when
+`src/core/tenure.*` lands, check X" must not be flagged. When unsure, report it as a question rather
+than a finding.
+
+## Section 3 — INVENTORY TABLES
+
+`CLAUDE.md` § "Claude config in this repo" and `scripts/claude-bootstrap/README.md` § "What's here"
+both enumerate files. Diff each against `ls`:
+
+```bash
+ls .claude/hooks/ .claude/agents/ .claude/skills/ scripts/claude-bootstrap/ scripts/claude-bootstrap/hooks/
+grep -n '\.claude/\|scripts/claude-bootstrap/' CLAUDE.md | sed -n '/Claude config in this repo/,$p'
+```
+
+A file added without updating the table is **P2**; a table row naming a deleted file is **P1** (a
+future session will look for it).
+
+## Section 4 — HOOK WIRING, THREE WAYS
+
+A hook has to be on disk, registered, executable, and observable. Check all four:
+
+```bash
+ls .claude/hooks/*.sh
+python3 -c "import json;d=json.load(open('.claude/settings.json'));
+print([h['command'] for g in d['hooks'].values() for e in g for h in e['hooks']])"
+git ls-files -s .claude/hooks/ scripts/claude-bootstrap/          # 100755 expected on scripts
+grep -l 'log_obs' .claude/hooks/*.sh                             # Rule 13 — all of them
+```
+
+- on disk but unregistered → dead code, **P2**
+- registered but absent → the hook silently never runs, **P1**
+- mode `100644` on a script → it will not execute after a fresh clone, **P1**
+- no `log_obs` → violates Rule 13 of the framework this repo ships, **P2** (this happened; see banner)
+
+## Section 5 — DOCUMENTED COMMANDS THAT DO NOT RUN
+
+For every command in `CLAUDE.md § "Common workflows"` and every tool named in a skill:
+
+```bash
+for t in ruff python3 pytest jq yq git shellcheck yamllint shfmt hadolint; do
+  printf '%-11s %s\n' "$t" "$(command -v "$t" >/dev/null 2>&1 && echo PRESENT || echo absent)"
+done
+```
+
+Report any doc that claims a command runs when the binary is absent — **and the converse**, which is
+the one that actually bit: a doc hedging that a tool "may not be" present when it demonstrably is.
+Both are the same defect, recalling instead of running.
+
+## Section 6 — CONFIG AND FIXTURES (skip cleanly until `config/` exists)
+
+Once `config/` and `tests/fixtures/` exist:
+
+- every `map:` path in a `sources.yaml` block must exist in that source's committed fixture — a
+  mapping no fixture exercises fails at runtime, not in a test
+- every source with `enabled: true` must have a URL that is not `REMPLACER` (hard rule 1)
+- every key read from `.env` in code must appear in `.env.example`, and vice versa. **Never read the
+  real `.env`** — it is permission-denied and gitignored on purpose
+- every `criteria.yaml` key must be read somewhere, and every key read must be documented
+
+If those directories do not exist, print one line saying so and move on. **Do not report an empty
+`config/` as drift** — `CLAUDE.md` states the repo is spec-and-prototype only.
+
+## Section 7 — LINGERING MARKERS
+
+```bash
+grep -rn '<!-- ADAPT:' CLAUDE.md .claude/ scripts/ 2>/dev/null
+grep -rn 'TODO\|FIXME\|XXX\|REMPLACER' CLAUDE.md .claude/ config/ 2>/dev/null
+find .claude/hooks/ -name '*.sh.template' 2>/dev/null
+```
+
+`<!-- ADAPT: -->` markers are **intentional** — `CLAUDE.md` carries several for sections that cannot
+be written until the stack exists. Report them under their own heading as *pending*, never as drift,
+and never fill one by guessing.
+
+---
+
+## Report
+
+Group by severity, and for every finding give the command whose output proves it. Write the full
+report to `var/claude/repair/<YYYY-MM-DD-HHMMSS>.md` (gitignored) and summarise inline:
+
+```
+/repair — N findings (P0:a P1:b P2:c) · M checks clean · K pending-adaptation
+
+P0  scripts/claude-bootstrap/CLAUDE-global.md:538
+    lists /cross-check as NOT installed; .claude/skills/cross-check/ exists.
+    install.sh ships this file to ~/.claude/CLAUDE.md unconditionally, so the next
+    session is told it lacks the skill.
+    proof: ls .claude/skills/ | grep cross-check  →  cross-check
+    fix:   move it to the "As built" list
+```
+
+## What is never auto-fixed
+
+Fix freely: an inventory table row, a dangling pointer, a skill-list membership, a missing `log_obs`
+line, a stale tool claim, an exec bit. These are documentation catching up with reality.
+
+**Never auto-fix, always report and stop:**
+
+- anything touching the **excluded-tenure set, the 0.6 fail-closed threshold, or where `UNKNOWN` is
+  routed**. If a doc and the code disagree about the social-housing rule, that is not drift to be
+  tidied — the code might be the thing that is wrong, and "repairing" the doc to match would launder a
+  P0 into a consistent lie. Report both sides and stop.
+- a `permissions` change in `.claude/settings.json`.
+- deleting a test, a fixture, or a corpus label.
+- a spec change. `spec/PROJECT_BRIEF.md` is a ruling set; if reality contradicts it, reality is what
+  needs explaining.
+
+If a fix would touch one of these, state it in plain text with numbered options per `/ask-human` and
+**stop** — do not proceed on a default.
+
+## `--check` mode
+
+Scan, print the summary, write no files, exit 1 if any P0/P1 remains. Suitable as a pre-milestone
+gate. Exit 0 means every claim surface in sections 1–5 matched the filesystem at that commit.
+
+$ARGUMENTS

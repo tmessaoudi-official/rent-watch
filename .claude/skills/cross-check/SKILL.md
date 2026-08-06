@@ -128,7 +128,7 @@ you ran as the evidence. Examples of what is checkable here:
 | An env var name or default | `grep '^SCOUT_' .env.example` — **never** read the real `.env`, which is permission-denied and gitignored |
 | A CLI verb or flag exists | run it with `--help`; a documented `scout` verb that is not in the parser is STALE |
 | "N skills / N agents / N hooks exist" | `ls .claude/skills/`, `ls .claude/agents/`, `ls .claude/hooks/` — and check the inventory table in `CLAUDE.md` § "Claude config in this repo" against the result |
-| A tool is available | `command -v <tool>`. In this container `ruff`, `python3`, `jq` and `git` ARE present; `pytest`, `yq`, `shellcheck`, `yamllint`, `shfmt` and `hadolint` may not be. Any doc claiming a command runs, without a manifest that wires it, is conditionally stale. |
+| A tool is available | `command -v <tool>`. Run it, do not recall it. [Verified 2026-08-06 by `command -v`: `ruff`, `python3`, `jq`, `git`, **`pytest`** and **`yq`** ARE present; `shellcheck`, `yamllint`, `shfmt` and `hadolint` are ABSENT.] An earlier version of this row asserted `pytest`/`yq` "may not be" present when both were — asserted from memory in the very row that says to check. Any doc claiming a command runs, without a manifest that wires it, is conditionally stale. |
 | The prototype's behaviour | `python3 prototype/scout.py --help`. The prototype is the one runnable thing; a claim about it is cheap to verify and several in `CLAUDE.md` § Gotchas were written from reading it. |
 
 Report each as **STALE** with: the claim, the command, its actual output, and the corrected value.

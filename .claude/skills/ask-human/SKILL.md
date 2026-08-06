@@ -8,7 +8,7 @@ disallowed-tools: AskUserQuestion
 ---
 
 <!-- ═══════════════════════════════════════════════════════════════════════════════════
-  REWRITTEN 2026-07-27 (developer ruling, recorded in `docs/plans/claude-bundle-integration.plan.md`). This skill previously
+  REWRITTEN 2026-07-27 (developer ruling, recorded in `docs/plans/claude-bundle-cross-repo-audit.plan.md`). This skill previously
   mandated `AskUserQuestion` and forbade prose questions. That is now INVERTED:
 
     `AskUserQuestion` is FORBIDDEN in this project. It silently fails here — it returned

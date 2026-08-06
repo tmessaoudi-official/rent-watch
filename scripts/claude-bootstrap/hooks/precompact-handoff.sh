@@ -15,7 +15,7 @@
 #   2. WRITES INTO THE REPO (`var/claude/handoff/`, gitignored) — not `~/.claude/projects/<slug>/`,
 #      which is wiped when the container is reclaimed.
 #   3. NO statusline/banner writes — the statusline and its `~/.claude/run/` sentinels do not exist
-#      in this container (rejected in `docs/plans/claude-bundle-integration.plan.md`).
+#      in this container (rejected in `docs/plans/claude-bundle-cross-repo-audit.plan.md`).
 #
 # CONTRACT: a PreCompact hook must never block compaction, so this script ALWAYS exits 0. That is the
 # hook contract, not error suppression — every failure path that could LOSE THE HANDOFF logs a reason

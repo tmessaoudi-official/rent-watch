@@ -18,6 +18,15 @@
 
 set -uo pipefail
 
+# Rule 13 observability (global CLAUDE.md, shipped by scripts/claude-bootstrap/install.sh): a hook
+# that runs unattended logs state-changing actions and errors to var/claude/logs/ IN THE REPO. Sourced
+# rather than reimplemented so there is one log format and one destination. Never fatal — a logging
+# failure must not take down the hook that is logging, hence the `|| true` and the no-op fallback.
+_HELPERS="${CLAUDE_PROJECT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}/scripts/claude-bootstrap/hooks/log-helpers.sh"
+# shellcheck disable=SC1090
+[[ -f "$_HELPERS" ]] && source "$_HELPERS" 2>/dev/null || true
+declare -F log_obs >/dev/null 2>&1 || log_obs() { :; }
+
 payload="$(cat)"
 
 py() { command -v python3 >/dev/null 2>&1 && python3 "$@"; }
@@ -98,6 +107,9 @@ esac
 
 [[ ${#hits[@]} -eq 0 ]] && exit 0
 
+# WARN, not INFO: this is the repo's one non-negotiable rule, and a firing here is the single most
+# important line the log can carry — it must be greppable after the session is gone.
+log_obs WARN tenure-guard "FIRED on $file_path — ${#hits[@]} signal(s): ${hits[*]}" || true
 {
   echo "⛔ tenure-guard: this write may relax the non-negotiable social-housing rule."
   echo "   file: $file_path"

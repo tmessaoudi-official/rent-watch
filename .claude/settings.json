@@ -67,12 +67,7 @@
       "WebSearch",
       "mcp__github"
     ],
-    "deny": [
-      "Read(./.env)",
-      "Read(./.env.*)",
-      "Edit(./.env)",
-      "Edit(./.env.*)"
-    ]
+    "deny": []
   },
   "hooks": {
     "SessionStart": [

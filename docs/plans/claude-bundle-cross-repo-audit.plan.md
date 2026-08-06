@@ -56,7 +56,8 @@ Two different questions get conflated, which is how both sibling audits went wro
 **The lineage that actually matters:** phorj invented the container port; pdfturbo hardened it (removed
 the credential copy-out, added `apply-pending-settings.sh`); twes-in added the `LATEST_IS_MANUAL` guard,
 the handoff test suite and the repo-local `log_obs`; stack invented `/cross-check --drift`; rent-watch
-combined twes-in's bootstrap with stack's `cross-check` and added the `.env` deny plus write-time hooks.
+combined twes-in's bootstrap with stack's `cross-check`, added write-time hooks, made the install
+unconditional, and ported `/repair` — the one skill every earlier port had wrongly rejected.
 
 Every repo shares the SAME wiring — `SessionStart → install.sh`, `PreCompact → precompact-handoff.sh`
 (twice, manual + auto matchers). **The mechanism is already unified everywhere.** What diverges is
@@ -74,7 +75,9 @@ content.
 | THINKING.md "edit the REPO copy" rule | ❌ | ❌ | ❌ | ✅ | ✅ |
 | `## Memory System Toggles — NOT APPLICABLE` | ❌ | ❌ | ❌ | ✅ | ✅ |
 | 3-lens reviewer panel | ❌ 2 (1 is a lead-dev) | ✅ 3 | ❌ **1** | ✅ 3 | ✅ 3 |
-| `permissions.deny` for `.env` | ❌ | ❌ | ❌ | ❌ | ✅ **only one** |
+| `permissions.deny` EMPTY (full autonomy) | ✅ | ✅ | ✅ | ✅ | ✅ (was 4 `.env` entries; **removed** 2026-08-06) |
+| `/repair` + `drift-scan.sh` | ❌ | ❌ | ❌ | ❌ | ✅ **only one** |
+| project hooks use `log_obs` (Rule 13) | ? | ? | n/a | n/a | ✅ |
 | write-time `PostToolUse` hooks | ✅ 5 | ✅ 2 | ❌ 0 | ❌ 0 | ✅ 3 |
 | `/cross-check` | ✅ | ❌ | ✅ | ✅ (08-06) | ✅ |
 | `/converge` | ❌ | ✅ | ✅ | ✅ | ✅ |
@@ -114,6 +117,17 @@ This is the actionable half when the developer runs this exercise on the sibling
    repos share this hook: opening a sibling installs its copy over yours, so on the next session the
    target differs from your source again and a naive snapshot would overwrite the original.
 
+9. **`/repair` + `.claude/skills/repair/drift-scan.sh`.** Every earlier port rejected `/repair` as
+   "operates on a persistent `~/.claude/`". That was inherited, not checked: its five drift categories
+   are about the project's own docs versus the project's own filesystem. It is ported here **on
+   evidence** — one session found five drift defects by hand that the scan catches mechanically, the
+   worst being a shipped framework that told the next session it lacked a skill it had. Because
+   `install.sh` now copies unconditionally, every repo has that failure mode. The scanner is
+   citation-aware (it must not fire on its own changelog) and sabotage-verified four ways.
+10. **Wire `log_obs` into project hooks.** rent-watch's three hooks had none, violating Rule 13 of the
+   framework they ship. stack (5 hooks) and pdfturbo (2) should be checked for the same gap — `phorj`
+   and `twes-in` have no project hooks, so it does not apply there.
+
 ### → `stack` and `pdfturbo` (both P1, both genuinely broken today)
 
 1. **`log_obs` writes to `~/.claude/logs/hooks-errors.log`** — wiped when the container is reclaimed,
@@ -145,9 +159,13 @@ This is the actionable half when the developer runs this exercise on the sibling
 
 ### → all four (P2)
 
-8. **`permissions.deny` for `.env`.** rent-watch is the only repo with it. The sibling ruling that
-   `deny` is an unrecoverable dead end in a cloud session is about *commands*; a `Read`/`Edit` path deny
-   on `.env` has no dead-end failure mode and is a real guard.
+8. **~~`permissions.deny` for `.env`~~ — WITHDRAWN, do not port.** rent-watch briefly had four such
+   entries and they were **removed** on 2026-08-06 by developer ruling: *"there should be no permissions
+   denies in this env… if you are denied to do something I can't run it myself, so there must be full
+   autonomy."* I had argued the sibling ruling was about *commands* and that a path deny had no
+   dead-end failure mode. That was wrong on the actual constraint — a denied `Read` still blocks a
+   legitimate audit with no terminal to unblock it. **All four siblings are already correct here**;
+   rent-watch was the outlier. `drift-scan.sh` now asserts `deny` is empty so it cannot creep back.
 
 ## Open — needs a ruling
 

@@ -271,10 +271,17 @@ Takieddine MESSAOUDI <takieddine.messaoudi.official@gmail.com>
   identity must be set explicitly with `git config user.name` / `user.email` at the start of a session.
   **Check it before the first commit of any session — the default is wrong.**
 
-**`deny` rules** stay nearly empty, inherited from the sibling repos' ruling: in a cloud session a
-denied command is an unrecoverable dead end, because there is no terminal in which to run it by hand.
-The one exception is `Read`/`Edit` on `.env`, which is a path deny rather than a command deny and so has
-no dead-end failure mode.
+**`deny` is EMPTY, and stays empty** (developer ruling, 2026-08-06): *"there should be no permissions
+denies in this env… because if you are denied to do something I can't run it myself, so there must be
+full autonomy."* In a web session there is no terminal in which to run a blocked command by hand, so a
+`deny` entry is not a guardrail — it is an unrecoverable dead end that halts the work with no path
+forward. This repo previously carried four `Read`/`Edit` denies on `.env`, argued for on the grounds
+that a *path* deny has no dead-end failure mode. That argument was wrong on the developer's actual
+constraint: a denied `Read` still blocks a legitimate audit with no way to unblock it.
+
+**What protects `.env` instead**, and it is enough: the file is gitignored, `.env.example` is the
+committed template, and hard rule 7 above is the control. `drift-scan.sh` asserts `deny` is empty, so
+the entry cannot creep back in a later port from a sibling repo.
 
 ## Plans live in the repo
 
@@ -388,11 +395,18 @@ CLAUDE.md                          This file — project scope, wins on any conf
 .claude/hooks/tenure-guard.sh      PostToolUse tripwire on the §1 rule; exits 2 when it fires
 .claude/hooks/lint-on-write.sh     Lints the file just written (ruff / yamllint / shellcheck / json)
 .claude/hooks/format-on-write.sh   Reports formatting drift; never rewrites behind Claude's back
-.claude/agents/                    The three certification lenses (see § Certification ladder)
+.claude/agents/tenure-correctness-reviewer.md    correctness + regression lens
+.claude/agents/source-resilience-reviewer.md    resilience + legal posture + secrets lens
+.claude/agents/completeness-reviewer.md         completeness + blast-radius lens
 .claude/skills/                    Repo-native slash skills; `ls` is the authoritative list
+.claude/skills/repair/drift-scan.sh  The mechanical half of /repair — run it in a gate
 scripts/claude-bootstrap/          SessionStart reinstall of ~/.claude/ + PreCompact handoff
 ```
 
-Two project-specific skills beyond the ported set: `/add-source` (onboard a landlord or portal,
-config-only) and `/ask-human` (the plain-text question protocol, which **shadows** the global skill of
-the same name — project scope wins).
+Beyond the ported set: `/add-source` (onboard a landlord or portal, config-only) and `/ask-human` (the
+plain-text question protocol, which **shadows** the global skill of the same name — project scope wins).
+
+`/repair` detects drift between what this config *claims* and what exists. Its mechanical half is
+`bash .claude/skills/repair/drift-scan.sh` — exit 1 on any P0/P1, so it works as a gate. Run it after
+adding a skill, agent or hook, and after any port from a sibling repo. It exists because one session
+found five such defects by hand, including a shipped framework that denied having a skill it had.
