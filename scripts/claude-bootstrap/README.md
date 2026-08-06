@@ -84,6 +84,15 @@ twes-in's `domain-correctness` / `tenancy-security` lenses have no analogue here
 
 **Nothing from the bundle is now pending.** Every remaining item above is a deliberate rejection.
 
+### Cross-repo state
+
+All five `tmessaoudi-official` repos share this bootstrap, and their copies have diverged in content.
+[`docs/plans/claude-bundle-cross-repo-audit.plan.md`](../../docs/plans/claude-bundle-cross-repo-audit.plan.md)
+holds the measured chronology, a feature matrix across all five, and a per-repo list of what to port
+**out of** this repo — rent-watch is currently the newest copy, so most divergences run outward. Read it
+before porting anything in either direction; two sibling repos wrote their own audit on 2026-08-06 and
+both recorded the integration chronology incorrectly.
+
 ## Why `install.sh` is deliberately one-directional
 
 It copies three files **into** `~/.claude/` and never copies anything **out**. `~/.claude.json` holds
