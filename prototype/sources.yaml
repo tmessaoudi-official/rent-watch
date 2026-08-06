@@ -1,0 +1,116 @@
+# ---------------------------------------------------------------------------
+# Criteres de recherche
+# ---------------------------------------------------------------------------
+criteria:
+  communes:            # substring, minuscules, sans accent de preference
+    - sartrouville
+    - houilles
+    - maisons-laffitte
+    - bezons
+    - cormeilles
+    - argenteuil
+    - le vesinet
+    - chatou
+    - carrieres-sur-seine
+    - montesson
+  cp_prefixes: ["78", "95", "92"]
+  min_rooms: 4          # T4 minimum (2 enfants)
+  min_surface: 75
+  max_rent: 1800        # ajuster: plafonds LLI vs budget reel
+  max_floor: 1          # ignore si l'annonce declare un ascenseur
+  require_elevator: false   # true => rejette les annonces "sans ascenseur"
+  exclude_regex: "colocation|meubl|residence etudiante|senior"
+
+# ---------------------------------------------------------------------------
+# Notifications (toutes optionnelles, la console marche toujours)
+# ---------------------------------------------------------------------------
+notify:
+  ntfy_topic: ""        # ex: "scout-appart-takieddine-9f3a" -> app ntfy sur mobile
+  email:
+    host: smtp.gmail.com
+    port: 465
+    from: ""
+    to: ""
+    # mot de passe via variable d'env SCOUT_SMTP_PASS
+
+# ---------------------------------------------------------------------------
+# Sources
+#
+# type: json  -> on tape l'endpoint XHR du site (preferable)
+# type: html  -> scraping CSS (seulement si le rendu est server-side)
+#
+# Workflow pour en ajouter une:
+#   1. DevTools > Network > Fetch/XHR, lancer une recherche sur le site
+#   2. copier l'URL + params (ou le body POST) ici, type: json
+#   3. python scout.py --dump <name>   -> affiche un item brut
+#   4. remplir le bloc `map:` avec les chemins reels
+# ---------------------------------------------------------------------------
+sources:
+
+  # ---- TEMPLATE JSON --------------------------------------------------------
+  - name: inli
+    enabled: false                     # passer a true une fois l'endpoint rempli
+    type: json
+    url: "https://REMPLACER/api/search"
+    method: GET
+    base_url: "https://www.inli.fr"
+    params:
+      page: 1
+      perPage: 50
+    headers:
+      Referer: "https://www.inli.fr/"
+    items_path: "results.items"        # chemin vers la LISTE d'annonces
+    map:
+      ref: "id"
+      title: ["title", "name"]         # liste = premier chemin non vide
+      url: "url"
+      commune: ["city", "address.city"]
+      cp: ["zipCode", "address.postalCode"]
+      rent: ["rent.total", "price"]
+      surface: "surface"
+      rooms: ["rooms", "nbRooms"]
+      floor: "floor"                   # rarement present -> fallback regex sur le texte
+      elevator: "hasElevator"
+      description: "description"
+
+  # ---- TEMPLATE JSON en POST ------------------------------------------------
+  - name: cdc-habitat
+    enabled: false
+    type: json
+    url: "https://REMPLACER/api/annonces/search"
+    method: POST
+    base_url: "https://www.cdc-habitat.fr"
+    headers:
+      Content-Type: "application/json"
+    body:
+      departements: ["78", "95"]
+      typologies: ["T4", "T5"]
+      page: 0
+      size: 50
+    items_path: "content"
+    map:
+      ref: "reference"
+      title: "libelle"
+      url: "lien"
+      commune: "ville"
+      cp: "codePostal"
+      rent: "loyerCC"
+      surface: "surfaceHabitable"
+      rooms: "nbPieces"
+      description: "descriptif"
+
+  # ---- TEMPLATE HTML --------------------------------------------------------
+  - name: exemple-html
+    enabled: false
+    type: html
+    url: "https://REMPLACER/nos-logements"
+    base_url: "https://REMPLACER"
+    item_selector: "article.annonce-card"
+    select:                            # "css@attribut" pour lire un attribut
+      title: "h3.card-title"
+      url: "a.card-link@href"
+      commune: ".card-city"
+      rent: ".card-price"
+      surface: ".card-surface"
+      rooms: ".card-rooms"
+      description: ".card-desc"

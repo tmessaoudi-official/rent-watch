@@ -1,0 +1,64 @@
+# ── Secrets — NEVER commit ──────────────────────────────────────────────────────
+# .env holds IMAP credentials, the notification token, the IDFM/PRIM API key and the
+# RFR income figure. `.env.example` is the committed template. See CLAUDE.md hard rule 7.
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# ── Runtime state ───────────────────────────────────────────────────────────────
+# The seen-set and the listings DB. Deleting these makes the next run RE-NOTIFY
+# EVERYTHING and loses price history for good — see scripts/claude-bootstrap/BLAST-RADIUS.md.
+seen.json
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite3
+
+# ── Claude Code working state ───────────────────────────────────────────────────
+# Reports and PreCompact handoffs. Container-lifetime by design: they survive
+# compaction inside a session and die with the container. Never committed.
+/var/
+.claude/settings.json.bak*
+.claude/settings.local.json
+/claude-bundle/
+
+# ── Python ──────────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+env/
+.Python
+build/
+dist/
+*.egg-info/
+.eggs/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.nox/
+
+# ── Editors / OS ────────────────────────────────────────────────────────────────
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# ── Scratch ─────────────────────────────────────────────────────────────────────
+*.bak
+*.bak.*
+*.orig
+*.rej
+*.log
