@@ -22,7 +22,7 @@
   ],
   "version": 1,
   "declared_counts": {
-    "synthetic": 56,
+    "synthetic": 65,
     "captured": 0
   },
   "sources": {
@@ -48,7 +48,8 @@
       "name": "icf_novedis",
       "family": "institutional",
       "default_tenure": "LLI",
-      "mixed_tenure": false
+      "mixed_tenure": true,
+      "$why": "FLIPPED to true on 2026-08-06 after review. CLAUDE.md's reviewer charter names ICF among the landlords that publish social AND intermediate stock. Novedis is genuinely ICF Habitat's non-social arm, so `false` is defensible for a Novedis-only endpoint and wrong for the group portal — and nothing in this repo yet says which the adapter will target, because config/sources.yaml does not exist. mixed_tenure is the single flag that disarms the fail-closed rule, so it takes the safe value until that is decided. Tracked as an open question."
     },
     "seloger": {
       "name": "seloger",
@@ -153,8 +154,8 @@
       "title": "T4 Bezons",
       "description": "Proche gare, residence calme.",
       "fields": {},
-      "expect": { "tenure": "LLI", "outcome": "MATCH", "max_confidence": 59 },
-      "why": "Second pure source. ICF Novedis is the non-social arm of ICF Habitat."
+      "expect": { "tenure": "UNKNOWN", "outcome": "DIGEST" },
+      "why": "RELABELLED 2026-08-06, with the evidence here and in the commit message as CLAUDE.md requires. This was a pure-source MATCH while icf_novedis declared mixed_tenure:false. That flag was flipped to true after review (see the source table), so the source default alone no longer establishes the tenure and the listing digests. The pure-source MATCH path is still covered by lli-007 (In-li) and libre-001 (SeLoger), so no coverage was lost."
     },
     {
       "id": "lli-009-sans-condition-commission",
@@ -640,7 +641,98 @@
       "description": "Logement interm&eacute;diaire propos&eacute; par le bailleur.",
       "fields": {},
       "expect": { "tenure": "UNKNOWN", "outcome": "DIGEST" },
-      "why": "HONEST LIMIT. HTML entities are the ADAPTER's job to decode, not the classifier's — a classifier that decodes entities hides a broken adapter. So the label is what actually happens today: no signal fires, and a mixed source with no signal digests. If entity decoding moves into the adapter layer this fixture gets a captured, decoded twin rather than a relabel."
+      "why": "HONEST LIMIT. HTML entities are the ADAPTER's job to decode, not the classifier's — a classifier that decodes entities hides a broken adapter. UPDATED 2026-08-06: the label is unchanged but the mechanism is no longer accidental. Undecoded entities are now treated as evidence that the ADAPTER stopped short, so the classifier refuses the text and says so, instead of matching whatever labels happened to survive. See case-006 for why that matters."
+    },
+    {
+      "id": "case-006-separator-breaks-a-social-label",
+      "provenance": "synthetic",
+      "source": "cdc_habitat",
+      "title": "T3 Cergy",
+      "description": "Ce logement&nbsp;social a loyer intermediaire.",
+      "fields": {},
+      "expect": { "tenure": "UNKNOWN", "outcome": "DIGEST" },
+      "why": "THE DANGEROUS HALF OF case-005's LIMIT, added 2026-08-06 after review. case-005 freezes the undecoded-entity limitation on a text where the entity breaks an LLI label, so the result digests and the limit costs nothing. Here the separator breaks the SOCIAL label while an intermediate label survives — the direction that does not fail safe. A corpus should carry the dangerous half of its own documented limit, not only the comfortable one."
+    },
+
+    {
+      "id": "regress-001-sans-commission-d-agence-is-not-a-tenure-tell",
+      "provenance": "synthetic",
+      "source": "cdc_habitat",
+      "title": "T3 Argenteuil",
+      "description": "Location directe par le bailleur, sans commission d'agence.",
+      "fields": {},
+      "expect": { "tenure": "UNKNOWN", "outcome": "DIGEST" },
+      "why": "P0 REGRESSION GUARD (review, 2026-08-06). A bare 'sans commission' was a tier-3 intermediate tell. In the wild that string is almost always 'sans commission d'agence' — a FEE disclaimer that says nothing about how the flat is allocated, and which bailleurs sociaux advertise too. Tier 3 clears the floor unaided, so this exact sentence turned a fail-closed digest into a notification. Only the two literals carrying the ATTRIBUTION sense are tells now."
+    },
+    {
+      "id": "regress-002-vacancy-date-is-not-tenure-LIBRE",
+      "provenance": "synthetic",
+      "source": "cdc_habitat",
+      "title": "Logement conventionné",
+      "description": "Logement libre au 1er août 2026. T3 de 65 m².",
+      "fields": {},
+      "expect": { "tenure": "CONVENTIONNE", "outcome": "REJECT" },
+      "why": "P0 REGRESSION GUARD (review, 2026-08-06), and the worst defect found in this module. 'logement libre' was in the label table as tenure LIBRE; it is not a tenure term at all but the standard French VACANCY phrase. It fired tier 2 at 90 on a move-in date, and the spurious LIBRE then satisfied the conventionné exception — which tested isEligible() rather than 'is an intermediate label'. Result: a listing whose own TITLE reads 'Logement conventionné' reached MATCH, with the word absent from its reasons. A §1 breach via two independently reasonable-looking table entries."
+    },
+    {
+      "id": "regress-003-conventionne-with-a-tier-1-LLI-field",
+      "provenance": "synthetic",
+      "source": "cdc_habitat",
+      "title": "T3 Herblay",
+      "description": "Logement conventionne, loyer plafonne.",
+      "fields": { "financement": "LLI" },
+      "expect": { "tenure": "LLI", "outcome": "MATCH", "min_confidence": 90 },
+      "why": "Found by review 2026-08-06. The conventionne exception looked at tier-2 labels only, so LLI declared through a STRUCTURED FIELD — the strongest evidence the ladder has — did not count as 'explicitly labelled intermediate', while the weaker text label did. Genuine LLI stock digested when its evidence arrived through the best channel. Fail-closed, so not a breach, but inconsistent with the ladder it claims to implement."
+    },
+    {
+      "id": "regress-003b-conventionne-with-LIBRE-is-still-excluded",
+      "provenance": "synthetic",
+      "source": "cdc_habitat",
+      "title": "T2 Domont",
+      "description": "Logement conventionne, loyer libre.",
+      "fields": {},
+      "expect": { "tenure": "CONVENTIONNE", "outcome": "REJECT" },
+      "why": "THE EXCEPTION IS FOR INTERMEDIATE LABELS ONLY, and this is the fixture that says so. CLAUDE.md's glossary excuses conventionne when the listing is 'explicitly labelled intermediate' — LIBRE is not intermediate, it is market rate, so a LIBRE label must NOT disarm the exclusion. Without this case the drop-rule could be widened from '=== LLI' back to 'isEligible()' with the suite staying green, which is exactly how the P0 of 2026-08-06 was built: a spurious LIBRE signal satisfied the exception and a conventionne listing reached MATCH. The two labels here genuinely contradict each other (subsidised vs market rate), so withholding is also the honest reading."
+    },
+    {
+      "id": "regress-004-ambiguous-uppercase-plus-digests",
+      "provenance": "synthetic",
+      "source": "seloger",
+      "title": "LOGEMENT PLUS MODERNE - T3 CHATOU",
+      "description": "BIEN RENOVE, PROCHE COMMERCES.",
+      "fields": {},
+      "expect": { "tenure": "UNKNOWN", "outcome": "DIGEST" },
+      "why": "Found by review 2026-08-06. The collocation guard suppressed adverbial PLUS via a denylist of French adjectives, so any adjective NOT on the list — moderne, confortable, economique, agreable, ensoleille — turned an emphatic title into tenure PLUS and a silent REJECT. A denylist of French adjectives cannot be completed. The guard now asks the closed question instead: does a financing label END the phrase (punctuation, end of text, another acronym)? If a word follows and it is a known comparative, it was the adverb; if a word follows and it is anything else, it is genuinely indecidable and lands here — visible in the digest rather than silently dropped OR silently matched."
+    },
+    {
+      "id": "regress-005-nfd-decomposed-social-tell",
+      "provenance": "synthetic",
+      "source": "cdc_habitat",
+      "title": "T3 - LLI",
+      "description": "Un numéro unique d'enregistrement est exigé pour toute demande.",
+      "fields": {},
+      "expect": { "tenure": "UNKNOWN", "outcome": "DIGEST" },
+      "why": "Found by review 2026-08-06. The fold tables carry PRECOMPOSED accented codepoints only, so text arriving NFD-decomposed ('e' + U+0301) was not folded and 'numéro unique d'enregistrement' never matched its literal — while the unaccented 'LLI' in the same listing still did. The social side vanished and the eligible side survived, which is the wrong direction to fail in. Combining marks are now stripped after the table: one line, locale-free, and portable to phorj. NOTE: this fixture's description is deliberately written with \\u0301 escapes; do not 'tidy' it into precomposed characters, or it stops testing anything."
+    },
+    {
+      "id": "regress-006-structured-field-tie-prefers-the-longer-match",
+      "provenance": "synthetic",
+      "source": "cdc_habitat",
+      "title": "T3 Taverny",
+      "description": "Appartement 3 pieces.",
+      "fields": { "financement": "LLI", "categorie": "PLAI" },
+      "expect": { "tenure": "PLAI", "outcome": "REJECT" },
+      "why": "Found by review 2026-08-06. Two structured fields each match at offset 0 of their own value, so the tie-break decides. resolve()'s comparator had its two strlen terms transposed, making the SHORTER evidence win — the opposite of its own docblock — so 'lli' (3) beat 'plai' (4) and an explicit PLAI field landed in the user-visible digest instead of REJECT. A phorj port written from the docblock would have disagreed with the PHP on exactly this input, which is the differential the shared corpus exists to expose."
+    },
+    {
+      "id": "regress-007-mixed-source-default-only-is-not-established",
+      "provenance": "synthetic",
+      "source": "icf_novedis",
+      "title": "T4 Bezons",
+      "description": "Proche gare, residence calme.",
+      "fields": {},
+      "expect": { "tenure": "UNKNOWN", "outcome": "DIGEST" },
+      "why": "THE FAIL-CLOSED RULE APPLIED TO THE TENURE, not merely to the routing. spec §4 requires the verdict itself to become UNKNOWN below the floor on a mixed source; the code changed only the Outcome, leaving tenure LLI, so the two halves of the object disagreed and the next module written would have believed the eligible half. No fixture exercised the branch until this one, because every mixed source in the corpus declared no default. See also the ICF ruling in this file's source table."
     }
   ]
 }

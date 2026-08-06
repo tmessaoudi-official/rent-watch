@@ -7,6 +7,7 @@ namespace RentWatch\Tests\Core;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
+use RentWatch\Core\MalformedText;
 use RentWatch\Core\Text;
 
 #[CoversClass(Text::class)]
@@ -23,13 +24,56 @@ final class TextTest extends TestCase
         yield 'collapsed whitespace' => ["logement\n\n  intermediaire", 'logement intermediaire'];
         yield 'trimmed' => ['  LLI  ', 'lli'];
         yield 'em dash survives as a separator' => ['LLI — T3', 'lli — t3'];
-        yield 'html entities are NOT decoded' => ['interm&eacute;diaire', 'interm&eacute;diaire'];
+        yield 'NFD-decomposed accent folds like a precomposed one'
+            => ["interme\u{0301}diaire", 'intermediaire'];
+        yield 'a bare ampersand is not an entity' => ['Dupont & Fils', 'dupont & fils'];
     }
 
     #[DataProvider('foldCases')]
     public function testFold(string $raw, string $expected): void
     {
         self::assertSame($expected, Text::fold($raw));
+    }
+
+    /**
+     * Text the classifier must refuse rather than reason about.
+     *
+     * Both were silent §1 hazards before 2026-08-06: malformed UTF-8 made `preg_replace('/u')`
+     * return null, which a `(string)` cast turned into `''` — read downstream as "this listing
+     * named no financing scheme" and matched on the source default. Undecoded entities were worse
+     * than silent: an entity inside one label deleted that label and left the others standing, so
+     * `logement&nbsp;social ... loyer intermediaire` classified as LLI.
+     *
+     * @return iterable<string, array{string, string}>
+     */
+    public static function refusedTexts(): iterable
+    {
+        yield 'cp1252 body under a utf-8 declaration' => ["conventionn\xE9 PLAI", 'not valid UTF-8'];
+        yield 'truncated mid-multibyte character' => ["logement intermediai\xC3", 'not valid UTF-8'];
+        yield 'named html entity' => ['logement&nbsp;social', 'undecoded HTML entities'];
+        yield 'accented named entity' => ['interm&eacute;diaire', 'undecoded HTML entities'];
+        yield 'numeric entity' => ['logement&#160;social', 'undecoded HTML entities'];
+        yield 'hex entity' => ['logement&#xA0;social', 'undecoded HTML entities'];
+    }
+
+    #[DataProvider('refusedTexts')]
+    public function testFoldRefusesTextItCannotHonestlyRead(string $raw, string $expectedMessage): void
+    {
+        $this->expectException(MalformedText::class);
+        $this->expectExceptionMessageMatches('/' . preg_quote($expectedMessage, '/') . '/');
+
+        Text::fold($raw);
+    }
+
+    /** The refusal must not be a silent empty string — that is the defect it replaces. */
+    public function testMalformedTextIsNeverFoldedToAnEmptyString(): void
+    {
+        try {
+            Text::fold("conventionn\xE9 PLAI");
+            self::fail('expected MalformedText');
+        } catch (MalformedText $e) {
+            self::assertNotSame('', $e->getMessage());
+        }
     }
 
     public function testFoldPreserveCaseKeepsCaseButStripsAccents(): void

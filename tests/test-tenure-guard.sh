@@ -24,6 +24,10 @@ guard="$repo/.claude/hooks/tenure-guard.sh"
 pass=0
 fail=0
 
+logdir="$(mktemp -d)"
+[[ -d "$logdir" ]] || { printf 'cannot create a scratch dir for the observability log\n' >&2; exit 1; }
+trap 'rm -rf "$logdir"' EXIT
+
 # Feed a synthetic PostToolUse payload to the guard; exit 2 means it fired.
 fired() {
   local path="$1" content="$2"
@@ -33,7 +37,13 @@ import json, os
 print(json.dumps({"tool_name": "Write",
                   "tool_input": {"file_path": os.environ["FP"], "content": os.environ["CONTENT"]}}))')"
 
-  CLAUDE_PROJECT_DIR="$repo" bash "$guard" <<<"$payload" >/dev/null 2>&1
+  # OBS_LOG is redirected to a scratch file, and that is not tidiness. Without it every run of this
+  # test appended ten synthetic `FIRED on …/Thing.php` lines to the REAL
+  # var/claude/logs/hooks-errors.log — byte-identical in shape to a genuine §1 firing, against a
+  # file that does not exist. tenure-guard.sh calls that line "the single most important line the
+  # log can carry — it must be greppable after the session is gone", and a rehearsal indexed
+  # alongside the real thing destroys exactly that property.
+  OBS_LOG="$logdir/hooks-errors.log" CLAUDE_PROJECT_DIR="$repo" bash "$guard" <<<"$payload" >/dev/null 2>&1
   [[ $? -eq 2 ]]
 }
 
@@ -64,6 +74,10 @@ printf '\n== tenure-guard: fires on relaxation, silent on ordinary code ==\n\n'
 # ── MUST FIRE ────────────────────────────────────────────────────────────────────────────────────
 expect_fire "excluded set assigned an empty list" \
   'const EXCLUDED_TENURES = [];'
+expect_fire "excluded-set ACCESSOR emptied (PHP: return [];)" \
+  'public static function excluded(): array { return []; }'
+expect_fire "excluded set emptied as a PHP array value" \
+  "\$config = ['excluded' => []];"
 expect_fire "excluded set assigned empty in YAML style" \
   'excluded_tenures: []'
 expect_fire "excluded set set to none" \

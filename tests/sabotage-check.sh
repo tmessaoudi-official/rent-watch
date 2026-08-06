@@ -16,6 +16,9 @@ set -uo pipefail
 
 repo="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 work="$(mktemp -d)"
+# Checked, because this script runs `rm -rf "$work/repo"` and there is no `set -e`. An unchecked
+# mktemp failure would leave $work empty and turn that into `rm -rf "/repo"`, as root.
+[[ -n "$work" && -d "$work" ]] || { printf 'mktemp -d failed; refusing to continue\n' >&2; exit 1; }
 trap 'rm -rf "$work"' EXIT
 
 pass=0
@@ -30,9 +33,15 @@ run_sabotage() {
   # src/ and tests/ are copied because the sabotage edits them. vendor/ (composer's autoloader,
   # which resolves PSR-4 relative to its own location) and the runner are symlinked — copying them
   # per sabotage is pure I/O for no isolation benefit.
-  cp -a "$repo/src" "$repo/tests" "$repo/phpunit.xml" "$repo/composer.json" "$work/repo/"
-  cp -a "$repo/vendor" "$work/repo/vendor"
-  ln -s "$repo/tools" "$work/repo/tools"
+  # Checked: an unnoticed copy failure makes the scratch suite fail for the wrong reason, and the
+  # detection assertion below cannot tell that apart from a caught sabotage.
+  if ! cp -a "$repo/src" "$repo/tests" "$repo/phpunit.xml" "$repo/composer.json" "$work/repo/" \
+    || ! cp -a "$repo/vendor" "$work/repo/vendor" \
+    || ! ln -s "$repo/tools" "$work/repo/tools"; then
+    printf '  \033[31mFAIL\033[0m %-58s (could not build the scratch copy)\n' "$label"
+    fail=$((fail + 1))
+    return
+  fi
 
   if ! sed -i "$expr" "$work/repo/$target"; then
     printf '  \033[31mFAIL\033[0m %-58s (sabotage could not be applied)\n' "$label"
@@ -48,12 +57,20 @@ run_sabotage() {
   fi
 
   local out
-  out="$(cd "$work/repo" && php tools/phpunit.phar --no-output --do-not-cache-result 2>&1)"
+  out="$(cd "$work/repo" && php tools/phpunit.phar --colors=never --do-not-cache-result 2>&1)"
   local rc=$?
 
-  if [[ $rc -ne 0 ]]; then
+  # A non-zero exit is NOT evidence of detection — a PHP parse error, a missing autoloader or a
+  # failed `cd` produces one too, and asserting on `rc` alone would report those as successes. The
+  # only thing that proves the SUITE caught the sabotage is the suite saying so.
+  if grep -qE '^(FAILURES!|ERRORS!|OK, but)' <<<"$out" && grep -qE 'Failures: [1-9]|Errors: [1-9]' <<<"$out"; then
     printf '  \033[32mok\033[0m   %-58s (suite went red, as it must)\n' "$label"
     pass=$((pass + 1))
+  elif [[ $rc -ne 0 ]]; then
+    printf '  \033[31mFAIL\033[0m %-58s (suite exited %d but reported no assertion failure — the\n' "$label" "$rc"
+    printf '        harness broke rather than the sabotage being caught)\n'
+    printf '        %s\n' "$(tail -3 <<<"$out")"
+    fail=$((fail + 1))
   else
     printf '  \033[31mFAIL\033[0m %-58s (SUITE STAYED GREEN — this regression is undetected)\n' "$label"
     fail=$((fail + 1))
@@ -91,7 +108,7 @@ run_sabotage "collocation guard removed (bare 'plus' becomes a social label)" \
 
 run_sabotage "comparative suppression removed ('LOGEMENT PLUS GRAND' reads as financing)" \
   src/php/Core/TenureClassifier.php \
-  's/if (!$adverbial) {/if (true) {/'
+  's|^    private const string COMPARATIVE_TAIL = .*$|    private const string COMPARATIVE_TAIL = "zzzznevermatches";|'
 
 run_sabotage "word boundaries removed (substring match: 'plaine' becomes PLAI)" \
   src/php/Core/Text.php \
@@ -111,7 +128,31 @@ run_sabotage "mixedTenure defaults to false (config omission opens the gate)" \
 
 run_sabotage "UNKNOWN routed to the notification channel" \
   src/php/Core/TenureClassifier.php \
-  's/return Outcome::DIGEST;\n/return Outcome::MATCH;\n/; s/if ($tenure === Tenure::UNKNOWN) {/if (false) {/'
+  's/if ($tenure === Tenure::UNKNOWN) {/if (false) {/'
+
+run_sabotage "fail-closed downgrade removed (mixed source keeps an eligible tenure)" \
+  src/php/Core/TenureClassifier.php \
+  's/if ($tenure->isEligible() \&\& $confidenceBp < self::FLOOR_BP \&\& $source->mixedTenure) {/if (false) {/'
+
+run_sabotage "malformed UTF-8 folded to an empty string again" \
+  src/php/Core/Text.php \
+  's/throw MalformedText::notUtf8(.Text::foldPreserveCase.);/;/'
+
+run_sabotage "undecoded HTML entities accepted as text" \
+  src/php/Core/Text.php \
+  's/throw MalformedText::undecodedEntities($entity\[0\]);/;/'
+
+run_sabotage "combining marks no longer stripped (NFD text stops matching)" \
+  src/php/Core/Text.php \
+  '/p{Mn}/d'
+
+run_sabotage "conventionne exception widened back to any eligible tenure" \
+  src/php/Core/TenureClassifier.php \
+  's/static fn (TenureSignal $s): bool => $s->tenure === Tenure::LLI,/static fn (TenureSignal $s): bool => $s->tenure->isEligible(),/'
+
+run_sabotage "ambiguous uppercase acronym guessed instead of digested" \
+  src/php/Core/TenureClassifier.php \
+  's/return $ambiguousAt === null ? null : \[$ambiguousAt, false\];/return $ambiguousAt === null ? null : [$ambiguousAt, true];/'
 
 # NOT SABOTAGED, and the reason is worth recording rather than quietly omitting.
 # `if ($folded === '') { continue; }` in structuredFieldSignals() is defence in depth, not a

@@ -41,11 +41,12 @@
       claiming works (paste the real stdout). Where a generated artefact IS the deliverable, the
       capture-is-not-delivery rule still holds: `var/` is gitignored and the container is reclaimed,
       so send it with `SendUserFile` in the same turn.
-    • THE EXECUTABLE SURFACE MAY NOT EXIST YET. As of this adaptation the repo carries
-      `spec/PROJECT_BRIEF.md` and `prototype/`, but no `src/`, no `config/`, no `tests/`, no
-      dependency manifest and no test runner. Rule 7's "tests MUST be executed" therefore has to be
-      answered honestly: build the runner as part of the first milestone rather than claiming a
-      passing suite that cannot exist, and never name `pytest`/`ruff` as if they were wired.
+    • THE EXECUTABLE SURFACE IS PHP, AND PARTLY BUILT. As of 2026-08-06 the repo carries a PHP 8.5
+      pure core at `src/php/Core/` with a PHPUnit suite (`php tools/phpunit.phar`) and a classifier
+      corpus. There is still no `config/`, no adapter and no CI. Rule 7's "tests MUST be executed"
+      is therefore satisfiable and REQUIRED — run the suite and paste its output. Never name
+      `pytest` as if it were wired; the PHP suite is the only runner here. Verify the current shape
+      with `git ls-files src/ config/ tests/` rather than trusting this paragraph.
     • ELIGIBILITY IS A CORRECTNESS PROPERTY, NOT A PREFERENCE. The project's one non-negotiable rule
       (CLAUDE.md §1) is that `logement social` — PLAI, PLUS, `conventionné`/ANRU/ANAH — must never be
       surfaced as a match. Treat any doubt as fail-closed, and treat a change that could re-enable an

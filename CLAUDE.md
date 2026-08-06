@@ -16,7 +16,7 @@ for the product, and **every constraint in it is a ruling**, not a draft to be i
 before touching anything under `src/`.
 
 Status: **the pure core exists; nothing else does.** As of 2026-08-06 there is a PHP 8.5
-implementation of `models` + `tenure` under `src/php/Core/`, a 56-case language-neutral classifier
+implementation of `models` + `tenure` under `src/php/Core/`, a 65-case language-neutral classifier
 corpus at `tests/fixtures/tenure/corpus.json`, and a PHPUnit suite. There is still **no**
 `config/`, no adapter, no store, no notification channel, no CLI and no CI. `src/phorj/` is not
 written yet — it waits on the three phorj builds in `docs/PHORJ-REQUIREMENTS.md`.
@@ -25,7 +25,7 @@ Anything below describing `criteria`, `dedup`, `store`, `health`, the adapters o
 **target**, not the present. Do not report findings against files that do not exist yet, and do not
 name `pytest` as though it were wired — the PHP suite is the only test runner here.
 
-**Eleven decisions are still open** and several of them change the architecture — see
+**Fifteen decisions are still open** and several of them change the architecture — see
 [`docs/OPEN-QUESTIONS.md`](docs/OPEN-QUESTIONS.md). Milestone 1 should not start until the blocking ones
 are answered.
 
@@ -36,15 +36,16 @@ are answered.
 > **`logement social` (PLAI, PLUS) must NEVER be surfaced as a match.**
 
 This is not a config toggle bolted on at the end. It is a first-class domain concept with its own
-module (`src/core/tenure.*`), its own test suite, and a **fail-closed default**. It is an
+module (`src/php/Core/TenureClassifier.php` + `Tenure.php`), its own test suite, and a
+**fail-closed default**. It is an
 **eligibility fact**, not a ranking preference: the user is not eligible, so a social-housing false
 positive is not a slightly-wrong result — it is a wasted application and the reason a user stops
 trusting the tool.
 
 Concretely, when working in this repo:
 
-- The excluded set — `PLAI`, `PLUS`, `ANRU`, `ANAH`, `conventionné` absent an explicit intermediate
-  label — is **not user-overridable**. Do not add a config key, flag, env var or default that can
+- The excluded set — `PLAI`, `PLUS`, `PLS`, `ANRU`, `ANAH`, `conventionné` absent an explicit
+  intermediate label — is **not user-overridable**. Do not add a config key, flag, env var or default that can
   re-enable them. Such a key is a P0 finding even if nothing currently sets it.
 - If the classifier's confidence is `< 0.6` **and** the source is known to mix social and intermediate
   stock → tenure is `UNKNOWN`, and the listing goes to the low-priority *"à vérifier"* digest. It must
@@ -312,7 +313,7 @@ wiped when the container is reclaimed.
 
 ```bash
 composer install                        # generates the PSR-4 autoloader; zero runtime deps
-bash tools/fetch-phpunit.sh             # the runner — pinned SHA-256 + signature, refuses on mismatch
+bash tools/fetch-phpunit.sh             # the runner — pinned SHA-256, refuses on mismatch
 composer dump-autoload --dev            # if the corpus suite errors with "Class ... not found"
 php tools/phpunit.phar                  # the core suite — must stay green
 bash tests/sabotage-check.sh            # proves the suite would CATCH a broken classifier
@@ -320,7 +321,7 @@ bash tests/test-tenure-guard.sh         # proves the §1 tripwire still fires, a
 bash .claude/skills/repair/drift-scan.sh                         # config/doc drift; exit 1 on P0/P1
 bash scripts/claude-bootstrap/hooks/test-precompact-handoff.sh   # 35 tests, must stay green
 bash scripts/claude-bootstrap/test-install.sh                    # 17 tests, must stay green
-bash -n .claude/hooks/*.sh tests/*.sh scripts/claude-bootstrap/**/*.sh
+bash -n .claude/hooks/*.sh tests/*.sh tools/*.sh scripts/claude-bootstrap/**/*.sh
 python3 prototype/scout.py --help       # the superseded prototype, reference only
 ```
 
@@ -350,8 +351,8 @@ Required coverage, per spec §11 — non-negotiable once `src/` exists:
   Offline. No network in CI. A parser test that reaches the network is a monitoring check, not a test.
 - **Classifier tests.** ≥30 hand-labelled listing texts covering pure-LLI In'li, mixed CDC Habitat,
   an explicit PLAI, an explicit PLS, and an ambiguous case. The suite must go red if the classifier
-  regresses. **Done** — `tests/fixtures/tenure/corpus.json`, 56 cases, and the suite asserts all five
-  shapes are present so "30 easy ones" cannot satisfy it. The corpus is **still 56/56 synthetic**:
+  regresses. **Done** — `tests/fixtures/tenure/corpus.json`, 65 cases, and the suite asserts all five
+  shapes are present so "30 easy ones" cannot satisfy it. The corpus is **still 65/65 synthetic**:
   the spec asks for *real* texts and those need a captured payload (blocked on the DevTools cURL
   captures). Every case declares its `provenance` and a test asserts the declared counts, so the gap
   is visible as data. Replace them with captured texts as sources come online — append, never
@@ -377,6 +378,7 @@ tests/fixtures/tenure/      corpus.json — the language-neutral classifier corp
 tests/fixtures/<source>/    Frozen payloads, one dir per source               [not yet created]
 tests/sabotage-check.sh     Proves the classifier suite detects a regression
 tests/test-tenure-guard.sh  Proves the §1 tripwire fires, and stays quiet on ordinary PHP
+tools/fetch-phpunit.sh      Fetches the runner; pinned SHA-256, refuses to install on a mismatch
 tools/phpunit.phar          Test runner (gitignored — see README § Getting started)
 var/claude/                 Reports, handoffs — gitignored, container-lifetime
 .claude/                    Project skills, reviewer agents, hooks, settings
@@ -432,7 +434,8 @@ scripts/claude-bootstrap/   Reinstalls ~/.claude/ at SessionStart (cloud contain
   matched before assuming a real problem — reproduce with
   `tr '[:upper:]' '[:lower:]' < file | grep -oE '<pattern from the hook>'`. Reword prose to keep the
   tripwire credible; never weaken a pattern without a matching case in `tests/test-tenure-guard.sh`.
-- `ruff` **is** available in this container even though the project has no manifest — so
+- `ruff` **is** available in this container, and although the PHP side now has a `composer.json`
+  there is still no Python manifest — so
   `.claude/hooks/lint-on-write.sh` is live and will report on `prototype/scout.py`. Those findings are
   known and deliberately unfixed: the prototype is kept verbatim as received.
 
@@ -466,6 +469,7 @@ tests/test-tenure-guard.sh         Sabotage test FOR that hook — 10 must-fire,
 .claude/agents/completeness-reviewer.md         completeness + blast-radius lens
 .claude/skills/                    Repo-native slash skills; `ls` is the authoritative list
 .claude/skills/repair/drift-scan.sh  The mechanical half of /repair — run it in a gate
+tests/sabotage-check.sh            Breaks the classifier 21 ways; the suite must catch every one
 scripts/claude-bootstrap/          SessionStart reinstall of ~/.claude/ + PreCompact handoff
 ```
 

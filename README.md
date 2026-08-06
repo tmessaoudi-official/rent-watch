@@ -25,7 +25,7 @@ everything else depends on. There is no adapter, no store, no notification chann
 | [`spec/PROJECT_BRIEF.md`](spec/PROJECT_BRIEF.md) | The full specification — the source of truth |
 | [`docs/OPEN-QUESTIONS.md`](docs/OPEN-QUESTIONS.md) | **Start here.** Every filter enumerated, and the decisions still owed |
 | `src/php/Core/` | The tenure classifier and the models it works on |
-| `tests/fixtures/tenure/corpus.json` | 56 hand-labelled listing texts — the classifier's ground truth, and language-neutral so the phorj port reads the same file |
+| `tests/fixtures/tenure/corpus.json` | 65 hand-labelled listing texts — the classifier's ground truth, and language-neutral so the phorj port reads the same file. **All 65 are synthetic**: `spec/PROJECT_BRIEF.md` §4 asks for *real* texts, and capturing those needs a source endpoint that does not exist yet. Every case declares its `provenance` and a test asserts the counts, so the gap is data rather than a promise |
 | `prototype/` | A pre-existing single-file prototype, kept as reference. **Not** the shipping implementation — it has no tenure classifier at all |
 | [`CLAUDE.md`](CLAUDE.md) | How code gets delivered here: rules, gates, the eligibility boundary |
 | `.claude/` · `scripts/claude-bootstrap/` | Claude Code configuration ([details](scripts/claude-bootstrap/README.md)) |
@@ -40,7 +40,7 @@ php tools/phpunit.phar      # the core suite
 `tools/phpunit.phar` is gitignored; fetch it once with:
 
 ```bash
-bash tools/fetch-phpunit.sh    # downloads, checks a pinned SHA-256, verifies the PGP signature
+bash tools/fetch-phpunit.sh    # downloads and checks a pinned SHA-256; refuses to install on a mismatch
 ```
 
 **Why a PHAR rather than a Composer dev dependency.** This project runs in a container whose egress
@@ -49,14 +49,16 @@ policy blocks GitHub dist downloads (`codeload.github.com` → 403), so Composer
 PHAR, `vendor/` is 56 KB of generated autoloader and the runner is one 6 MB file. The project has
 **zero Composer dependencies** by design.
 
-`fetch-phpunit.sh` pins both the SHA-256 and the signing key, and refuses to install on a mismatch.
-Read its header before trusting it: the pin was established trust-on-first-use, because no public
-keyserver is reachable from this container. It is a continuity check, not a root of trust.
+`fetch-phpunit.sh` pins the SHA-256 and refuses to install on a mismatch. It ALSO pins the signing
+key and verifies the published PGP signature — **but only where a keyserver is reachable, which it is
+not from this container**, so in practice the SHA-256 pin is what runs and the script says so on
+stdout. Read its header before trusting it: the pin was established trust-on-first-use, making it a
+continuity check rather than a root of trust.
 
 Two checks that are not the test suite, and matter more than it does here:
 
 ```bash
-bash tests/sabotage-check.sh       # breaks the classifier 15 ways; the suite must catch every one
+bash tests/sabotage-check.sh       # breaks the classifier 21 ways; the suite must catch every one
 bash tests/test-tenure-guard.sh    # the §1 tripwire still fires, and stays quiet on ordinary PHP
 ```
 
@@ -81,9 +83,10 @@ is blocked on a mailbox, an endpoint capture or a phorj module that does not exi
 
 1. **Core skeleton** — models ✅, SQLite store, config loading, CLI, one notification channel. Proven
    end-to-end with a fake source.
-2. **Tenure classifier + tests.** ✅ **Done** (PHP; the phorj port waits on `Core.Imap`, an HTML
-   parser and `sleep` — see `docs/PHORJ-REQUIREMENTS.md`). Before any real source; everything
-   depends on it.
+2. **Tenure classifier + tests.** ✅ **Done in PHP**, against a 65-case synthetic corpus — spec §4's
+   *real* listing texts are still outstanding and are blocked on capturing a payload. The phorj port
+   waits on `Core.Imap`, an HTML parser and `sleep` (see `docs/PHORJ-REQUIREMENTS.md`). Before any
+   real source; everything depends on it.
 3. **In'li adapter** — highest-value single source, and pure LLI, so it exercises the happy path.
 4. **Health monitoring + `scout doctor`.** Before adding breadth, or breakage goes unnoticed.
 5. **CDC Habitat** — first mixed-tenure source; validates the classifier against reality.

@@ -48,7 +48,9 @@ disallowed-tools: AskUserQuestion
      `spec/PROJECT_BRIEF.md` (the source of truth — mandatory reading before any application code),
      `prototype/scout.py` + `prototype/sources.yaml` (a pre-existing single-file prototype, reference
      material only), `CLAUDE.md`, `README.md`, `docs/OPEN-QUESTIONS.md`, `.claude/` and
-     `scripts/claude-bootstrap/`. **Absent: `src/`, `config/`, `tests/`, a dependency manifest, a
+     `scripts/claude-bootstrap/`. **Present since 2026-08-06: `src/php/Core/` (the pure core), `tests/php/`, `composer.json` and a
+     PHPUnit runner at `tools/phpunit.phar` — verify with `git ls-files` rather than trusting this
+     line. Still absent: `config/`, any adapter, a
      test runner, a linter, CI — all of it.** So: never hardcode a build, test or lint command, and
      never report a finding about `src/core/tenure.*` as if the file existed. Read the manifest for
      real script names once one exists; until then, the only executable surface is

@@ -48,7 +48,9 @@ disallowed-tools: AskUserQuestion
      `spec/PROJECT_BRIEF.md` (the source of truth — mandatory reading before any application code),
      `prototype/scout.py` + `prototype/sources.yaml` (a pre-existing single-file prototype, reference
      material only), `CLAUDE.md`, `README.md`, `docs/OPEN-QUESTIONS.md`, `.claude/` and
-     `scripts/claude-bootstrap/`. **Absent: `src/`, `config/`, `tests/`, a dependency manifest, a
+     `scripts/claude-bootstrap/`. **Present since 2026-08-06: `src/php/Core/` (the pure core), `tests/php/`, `composer.json` and a
+     PHPUnit runner at `tools/phpunit.phar` — verify with `git ls-files` rather than trusting this
+     line. Still absent: `config/`, any adapter, a
      test runner, a linter, CI — all of it.** So: never hardcode a build, test or lint command, and
      never report a finding about `src/core/tenure.*` as if the file existed. Read the manifest for
      real script names once one exists; until then, the only executable surface is
@@ -176,8 +178,8 @@ git log --oneline -50 | grep -iE 'fix|refactor|revert|why'
 
 **If that corpus comes back empty, say so and stop early.** A greenfield tree has almost no structure
 to interrogate and no record to interrogate it against — under the gate below, nearly every finding
-would fail the Chesterton check and be dropped anyway. Reporting "0 findings — no `src/` tree
-yet; the specification and the prototype are the only structure that exists" is the correct output
+would fail the Chesterton check and be dropped anyway. Reporting "0 findings — the parts of the tree this lens interrogates do not exist
+yet" is the correct output
 for the parts that do not exist — but `prototype/scout.py` and `spec/PROJECT_BRIEF.md` ARE real and
 are fair game, so do not wave them off as absent either; manufacturing structural criticism of code
 that does not exist is the failure mode this skill is most prone to.

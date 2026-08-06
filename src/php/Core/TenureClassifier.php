@@ -67,8 +67,12 @@ final readonly class TenureClassifier
         'logement intermediaire' => Tenure::LLI,
         'loyer intermediaire' => Tenure::LLI,
         'lli' => Tenure::LLI,
+        // `loyer libre` is the tenure term. `logement libre` is NOT — it is the standard French
+        // VACANCY phrase (`libre au 1er août`, `libre de suite`), and it was in this table until
+        // 2026-08-06, when a review showed it firing tier 2 at 90 on a move-in date. Worse, the
+        // spurious LIBRE satisfied the conventionné exception below, so a listing whose own title
+        // said `conventionné` reached MATCH. Do not add vacancy vocabulary here.
         'loyer libre' => Tenure::LIBRE,
-        'logement libre' => Tenure::LIBRE,
         'pret locatif intermediaire' => Tenure::LLI,
         'conventionne anah' => Tenure::ANAH,
         'conventionne anru' => Tenure::ANRU,
@@ -119,10 +123,14 @@ final readonly class TenureClassifier
      * and length, as everywhere else.
      */
     private const array PROCEDURAL = [
-        // Intermediate: allocated by the landlord, no commission.
+        // Intermediate: allocated by the landlord, no commission d'attribution.
+        // Both literals must carry the ATTRIBUTION sense explicitly. A bare `sans commission` was
+        // here until 2026-08-06 and is a fee disclaimer — in the wild it is almost always
+        // `sans commission d'agence`, which says nothing about how the flat is allocated and which
+        // bailleurs sociaux advertise too. Tier 3 clears the floor unaided, so it turned a
+        // fail-closed digest into a notification on a phrase orthogonal to tenure.
         'sans condition de commission' => Tenure::LLI,
         "sans commission d'attribution" => Tenure::LLI,
-        'sans commission' => Tenure::LLI,
         'attribution directe' => Tenure::LLI,
         // Social: allocated through the national register and a commission.
         "numero unique d'enregistrement" => Tenure::SOCIAL,
@@ -148,12 +156,31 @@ final readonly class TenureClassifier
 
     public function classify(RawListing $listing, SourceProfile $source): Classification
     {
-        $signals = [
-            1 => $this->structuredFieldSignals($listing),
-            2 => $this->labelSignals($listing),
-            3 => $this->proceduralSignals($listing),
-            4 => $this->plafondSignals(),
-        ];
+        try {
+            $signals = [
+                1 => $this->structuredFieldSignals($listing),
+                2 => $this->labelSignals($listing),
+                3 => $this->proceduralSignals($listing),
+                4 => $this->plafondSignals(),
+            ];
+        } catch (MalformedText $e) {
+            // NOT swallowed into an empty result — that is the defect this replaces. The listing
+            // becomes visibly undetermined, with a reason naming the encoding, so it surfaces in
+            // the "à vérifier" digest instead of vanishing or matching on the source default.
+            return $this->verdict(
+                Tenure::UNKNOWN,
+                0,
+                [new TenureSignal(
+                    tier: 0,
+                    tenure: Tenure::UNKNOWN,
+                    reason: 'texte illisible : ' . $e->getMessage(),
+                    evidence: 'malformed-text',
+                )],
+                $source,
+            );
+        }
+
+        $signals[2] = $this->dropConventionneWhenIntermediateIsStated($signals[1], $signals[2]);
 
         // Tier 5 is consulted ONLY when nothing else fired — `CLAUDE.md`: "Source default — lowest
         // confidence, used only when nothing else fires."
@@ -214,6 +241,29 @@ final readonly class TenureClassifier
      */
     private function verdict(Tenure $tenure, int $confidenceBp, array $signals, SourceProfile $source): Classification
     {
+        // The §1 fail-closed rule, applied to the TENURE and not merely to the routing.
+        // `spec/PROJECT_BRIEF.md` §4 requires the verdict itself to become UNKNOWN, withholding
+        // the notification rather than merely downgrading its priority — so a caller
+        // reading `$classification->tenure` has to see UNKNOWN, or the two halves of the object
+        // disagree and the next module to be written will believe the eligible one.
+        if ($tenure->isEligible() && $confidenceBp < self::FLOOR_BP && $source->mixedTenure) {
+            $signals = [...$signals, new TenureSignal(
+                tier: 0,
+                tenure: Tenure::UNKNOWN,
+                reason: sprintf(
+                    'confiance %d < %d sur « %s », source à parc mixte (social et intermédiaire) — '
+                    . 'tenure non établie, mise en attente de vérification',
+                    $confidenceBp,
+                    self::FLOOR_BP,
+                    $source->name,
+                ),
+                evidence: 'fail-closed',
+            )];
+
+            $tenure = Tenure::UNKNOWN;
+            $confidenceBp = 0;
+        }
+
         return new Classification($tenure, $confidenceBp, $signals, $this->route($tenure, $confidenceBp, $source));
     }
 
@@ -277,8 +327,13 @@ final readonly class TenureClassifier
      */
     private function resolve(array $tierSignals): TenureSignal
     {
+        // The strlen terms were transposed until 2026-08-06, so the SHORTER evidence won a tie —
+        // the opposite of what this docblock says, and reachable: two structured fields each match
+        // at offset 0 within their own value, so `{financement: LLI, categorie: PLAI}` was decided
+        // by `lli` being three characters. A phorj port written from the docblock would have
+        // disagreed with this implementation on exactly that input.
         usort($tierSignals, static fn (TenureSignal $a, TenureSignal $b): int
-            => [$a->position, -strlen($b->evidence)] <=> [$b->position, -strlen($a->evidence)]);
+            => [$a->position, -strlen($a->evidence)] <=> [$b->position, -strlen($b->evidence)]);
 
         return $tierSignals[0];
     }
@@ -335,48 +390,74 @@ final readonly class TenureClassifier
         }
 
         foreach (self::AMBIGUOUS_LABELS as $acronym => $tenure) {
-            $position = $this->financingAcronymPosition($cased, $acronym);
+            $hit = $this->financingAcronymPosition($cased, $acronym);
 
-            if ($position === null) {
+            if ($hit === null) {
                 continue;
             }
 
-            $out[] = new TenureSignal(
-                tier: 2,
-                tenure: $tenure,
-                reason: sprintf('acronyme de financement « %s » en contexte', $acronym),
-                evidence: $acronym,
-                position: $position,
-            );
+            [$position, $confident] = $hit;
+
+            $out[] = $confident
+                ? new TenureSignal(
+                    tier: 2,
+                    tenure: $tenure,
+                    reason: sprintf('acronyme de financement « %s » en contexte', $acronym),
+                    evidence: $acronym,
+                    position: $position,
+                )
+                : new TenureSignal(
+                    tier: 2,
+                    tenure: Tenure::UNKNOWN,
+                    reason: sprintf(
+                        '« %s » en majuscules après un mot de financement, mais suivi d\'un mot : '
+                        . 'label de financement ou adverbe, indécidable — à vérifier',
+                        $acronym,
+                    ),
+                    evidence: $acronym . '?',
+                    position: $position,
+                );
         }
 
-        return $this->dropConventionneWhenIntermediateIsStated($out);
+        return $out;
     }
 
     /**
      * `CLAUDE.md` glossary: conventionné is treated as social "unless explicitly labelled
-     * intermediate". So when an intermediate label is present in the same text, a bare
-     * `conventionne` stops being evidence — LLI stock genuinely is conventionné, and leaving the
-     * signal in would send a correctly-identified LLI listing to the digest through the conflict
-     * rule. `conventionne anah` / `conventionne anru` are named regimes and are unaffected.
+     * **intermediate**". When such a label is present, a bare `conventionne` stops being evidence —
+     * LLI stock genuinely is conventionné, and leaving the signal in would send a
+     * correctly-identified LLI listing to the digest through the conflict rule.
      *
-     * @param list<TenureSignal> $signals
+     * TWO CORRECTIONS FROM THE 2026-08-06 REVIEW, both of which this got wrong:
+     *
+     * 1. It tested `isEligible()`, i.e. LLI **or LIBRE**. LIBRE is not an intermediate label, so a
+     *    spurious LIBRE signal disarmed the exclusion — and combined with `logement libre` then
+     *    being in the label table, a listing whose own title read *"Logement conventionné"* reached
+     *    MATCH with the word absent from its reasons. Only an LLI label qualifies now.
+     * 2. It saw tier 2 only, so a `financement: LLI` structured field — the STRONGEST evidence the
+     *    ladder has — did not count as "explicitly labelled intermediate" while the weaker text
+     *    label did. Both tiers are considered.
+     *
+     * `conventionne anah` / `conventionne anru` are named regimes; this exception never applies to them.
+     *
+     * @param list<TenureSignal> $fieldSignals
+     * @param list<TenureSignal> $labelSignals
      *
      * @return list<TenureSignal>
      */
-    private function dropConventionneWhenIntermediateIsStated(array $signals): array
+    private function dropConventionneWhenIntermediateIsStated(array $fieldSignals, array $labelSignals): array
     {
         $statesIntermediate = array_any(
-            $signals,
-            static fn (TenureSignal $s): bool => $s->tenure->isEligible(),
+            [...$fieldSignals, ...$labelSignals],
+            static fn (TenureSignal $s): bool => $s->tenure === Tenure::LLI,
         );
 
         if (!$statesIntermediate) {
-            return $signals;
+            return $labelSignals;
         }
 
         return array_values(array_filter(
-            $signals,
+            $labelSignals,
             static fn (TenureSignal $s): bool
                 => !($s->tenure === Tenure::CONVENTIONNE && $s->evidence === 'conventionne'),
         ));
@@ -529,12 +610,13 @@ final readonly class TenureClassifier
      *                      Its byte offsets align with {@see Text::fold()}'s output, because
      *                      folding removes accents first and lowercasing ASCII preserves length.
      */
-    private function financingAcronymPosition(string $cased, string $acronym): ?int
+    private function financingAcronymPosition(string $cased, string $acronym): ?array
     {
         $a = preg_quote($acronym, '/');
         $colloc = self::COLLOCATION;
         $acros = self::ACRONYMS;
         $sep = '[\s\/\-,:;()]{1,3}';
+        $ambiguousAt = null;
 
         if (preg_match_all('/(?<![A-Za-z0-9])' . $a . '(?![A-Za-z0-9])/u', $cased, $matches, PREG_OFFSET_CAPTURE) === 0) {
             return null;
@@ -556,13 +638,23 @@ final readonly class TenureClassifier
                 continue;
             }
 
-            $adverbial = preg_match('/^\s*(?i:' . self::COMPARATIVE_TAIL . ')(?![A-Za-z0-9])/u', $after) === 1;
-
-            if (!$adverbial) {
-                return $offset;
+            // A financing label ENDS a noun phrase: `Logement PLUS.`, `Logement PLUS - …`,
+            // `Logement PLUS, …`, `PLUS / PLAI`, `PLS ou PLUS`. That is a small closed set, unlike
+            // the set of French adjectives an adverbial `PLUS` could modify.
+            if (preg_match('/^\s*$|^\s*[,;:.!?)\]\/\-–—]|^\s*(?:(?i:ou|et)\s+)?(?:' . $acros . ')(?![A-Za-z0-9])/u', $after) === 1) {
+                return [$offset, true];
             }
+
+            // A word follows. If it is a comparative we know it was the adverb, so drop it.
+            if (preg_match('/^\s*(?i:' . self::COMPARATIVE_TAIL . ')(?![A-Za-z0-9])/u', $after) === 1) {
+                continue;
+            }
+
+            // Otherwise it is genuinely ambiguous — `LOGEMENT PLUS MODERNE` in a shouted title.
+            // Do NOT guess. See the method docblock for why this becomes a digest entry.
+            $ambiguousAt ??= $offset;
         }
 
-        return null;
+        return $ambiguousAt === null ? null : [$ambiguousAt, false];
     }
 }

@@ -64,11 +64,38 @@ final class Text
      */
     public static function foldPreserveCase(string $raw): string
     {
+        // Checked BEFORE anything else, and it throws rather than degrading. See MalformedText:
+        // `preg_replace(…, '/u')` returns null on malformed UTF-8, and casting that to string
+        // produced '' — which the classifier read as "this listing mentioned no financing scheme"
+        // and matched on the source default. An unreadable listing is not an unlabelled one.
+        if ($raw !== '' && !mb_check_encoding($raw, 'UTF-8')) {
+            throw MalformedText::notUtf8('Text::foldPreserveCase');
+        }
+
+        // An HTML entity here means an adapter stopped short. Refuse rather than classify around
+        // it: an entity sitting inside a multi-word label deletes that label and leaves the others
+        // standing, and the label it deletes is not chosen fairly.
+        if (preg_match('/&(?:[a-zA-Z][a-zA-Z0-9]{1,10}|#\d{1,6}|#[xX][0-9a-fA-F]{1,6});/', $raw, $entity) === 1) {
+            throw MalformedText::undecodedEntities($entity[0]);
+        }
+
         $s = strtr($raw, self::FOLD_LOWER + self::FOLD_UPPER);
         $s = str_replace(self::APOSTROPHES, "'", $s);
-        $s = (string) preg_replace('/\s+/u', ' ', $s);
 
-        return trim($s);
+        // Combining diacritics, for text that arrives NFD-decomposed (`e` + U+0301) rather than
+        // precomposed. The tables above only carry precomposed codepoints, so without this an NFD
+        // `numéro unique d'enregistrement` never matched its literal while an unaccented `LLI` in
+        // the same listing still did — the social side vanished and the eligible side survived.
+        // Locale-free and one line, so the no-ICU rationale above is untouched.
+        $s = (string) preg_replace('/\p{Mn}/u', '', $s);
+
+        $collapsed = preg_replace('/\s+/u', ' ', $s);
+
+        if ($collapsed === null) {
+            throw MalformedText::notUtf8('Text::foldPreserveCase (whitespace collapse)');
+        }
+
+        return trim($collapsed);
     }
 
     /**
@@ -111,12 +138,16 @@ final class Text
         }
 
         $pattern = '/(?<![a-z0-9])' . preg_quote($needle, '/') . '(?![a-z0-9])/u';
+        $result = preg_match($pattern, $foldedHaystack, $m, PREG_OFFSET_CAPTURE);
 
-        if (preg_match($pattern, $foldedHaystack, $m, PREG_OFFSET_CAPTURE) === 1) {
-            return $m[0][1];
+        // `false` is a PCRE ERROR, not "no match", and treating the two alike is how an unreadable
+        // listing becomes an unlabelled one. Inputs here have already been through fold(), so this
+        // should be unreachable — which is exactly why it must be loud if it ever happens.
+        if ($result === false) {
+            throw MalformedText::notUtf8('Text::tokenPosition (' . preg_last_error_msg() . ')');
         }
 
-        return null;
+        return $result === 1 ? $m[0][1] : null;
     }
 
     /**

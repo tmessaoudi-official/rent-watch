@@ -283,6 +283,34 @@ awkward to parse; ANIL and service-public.fr republish them in readable tables. 
 five-minute job, and the classifier already clears the floor on tiers 1–3 for every corpus case, so
 this is a genuine enhancement rather than a gap.
 
+### Ⓞ Q20 — Which ICF endpoint will the adapter target, and is it `mixed_tenure`?
+
+`mixed_tenure` is the single flag that disarms the fail-closed rule: when it is `false`, a listing
+with no tenure signal at all is notified on the source default alone. So every `false` is a claim
+that the landlord publishes **no social stock whatsoever**.
+
+The corpus declares four such sources — `inli`, `seloger`, `leboncoin` and, until review,
+`icf_novedis`. The first three are defensible: In'li is Action Logement's intermediate arm, and the
+two portals are private-market. **ICF is not**, and `CLAUDE.md`'s own reviewer charter names ICF
+among the landlords that publish social *and* intermediate stock. ICF Habitat **Novedis** genuinely
+is the non-social arm, so `false` is right for a Novedis-only endpoint and wrong for the group
+portal — and nothing in this repo yet says which the adapter will hit, because `config/sources.yaml`
+does not exist.
+
+**Current behaviour (the default if this stays unanswered):** `icf_novedis` is `mixed_tenure: true`.
+A Novedis listing with no signal now digests instead of notifying — slightly noisier, and safe.
+
+- **Option 1 — leave it `true` until the adapter is written (recommended).** Costs a few digest
+  entries; cannot cost an application. The flag can be flipped with evidence once we can see what a
+  Novedis payload actually contains.
+- **Option 2 — set it `false` now**, on the strength of Novedis being the non-social arm. Correct if
+  and only if the adapter targets a Novedis-only listing endpoint, which is unverified.
+- **Option 3 — drop ICF from the source list** until someone confirms an endpoint. Loses the
+  second-highest-value Tier A source for no safety gain over option 1.
+
+Whichever way this goes, the day `config/sources.yaml` lands there must be a check that binds each
+declared `mixed_tenure` to the corpus, so the two cannot drift apart silently.
+
 ---
 
 ## Part 3 — Raised by the bundle integration (2026-08-06)

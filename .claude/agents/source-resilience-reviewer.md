@@ -22,8 +22,11 @@ change appears to…", stop and go read it.
 
 ## Rule zero-point-five — do not invent a subject, and never read `.env`
 
-As of 2026-08-06 there is no `src/`, no `config/` and no `.env.example`. If the diff does not touch a
-file that exists, say so rather than manufacturing a finding. And `.env` is **permission-denied and
+As of 2026-08-06 `src/php/Core/` exists (the pure core: models + the tenure classifier) and so does
+`tests/php/`. There is still no `config/`, no adapter, no network code and no `.env.example` — so
+this lens's usual subjects are mostly still absent, and saying so is the right output. Check with
+`git ls-files src/ config/ tests/` rather than trusting this line, which was wrong for a while. If
+the diff does not touch a file that exists, say so rather than manufacturing a finding. And `.env` is **permission-denied and
 gitignored on purpose** — audit `.env.example` and the code's reads of the environment. Never `cat`
 the real `.env`, and never paste a value you found in one into a finding.
 

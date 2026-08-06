@@ -48,7 +48,9 @@ disallowed-tools: AskUserQuestion
      `spec/PROJECT_BRIEF.md` (the source of truth — mandatory reading before any application code),
      `prototype/scout.py` + `prototype/sources.yaml` (a pre-existing single-file prototype, reference
      material only), `CLAUDE.md`, `README.md`, `docs/OPEN-QUESTIONS.md`, `.claude/` and
-     `scripts/claude-bootstrap/`. **Absent: `src/`, `config/`, `tests/`, a dependency manifest, a
+     `scripts/claude-bootstrap/`. **Present since 2026-08-06: `src/php/Core/` (the pure core), `tests/php/`, `composer.json` and a
+     PHPUnit runner at `tools/phpunit.phar` — verify with `git ls-files` rather than trusting this
+     line. Still absent: `config/`, any adapter, a
      test runner, a linter, CI — all of it.** So: never hardcode a build, test or lint command, and
      never report a finding about `src/core/tenure.*` as if the file existed. Read the manifest for
      real script names once one exists; until then, the only executable surface is
@@ -170,7 +172,7 @@ Run a Phase 6 Second Sweep on current uncommitted changes. **Never auto-applies 
    - **Bug hunt**: logic errors, off-by-one, null/nil/undefined deref, unchecked error returns, unhandled edge cases
    - **Security**: credentials/secrets in code, injection risks (SQL, shell, template), missing input validation at system boundaries
    - **Contracts**: changed function signatures, changed CLI flags, changed `config/*.yaml` keys, changed SQLite schema or `Source` interface methods — flag every one as a potential breaking change. For a `sources.yaml` key, say whether existing source blocks keep parsing; for a schema change, say what happens to an existing `seen`/listings database
-   - **Tests**: new behavior without a test? Modified behavior without updated tests? Derive the runner from the dependency manifest once one exists — do **not** name `pytest`, `ruff` or any command from memory. There is no manifest and no test runner in the tree as of 2026-08-06, so the honest answer is often "no runner present yet — N/A with reason" rather than a command that cannot run
+   - **Tests**: new behavior without a test? Modified behavior without updated tests? Derive the runner from the dependency manifest once one exists — do **not** name `pytest`, `ruff` or any command from memory. As of 2026-08-06 the runner is `php tools/phpunit.phar` and the manifest is `composer.json`; run the suite rather than assuming there is none, so the honest answer is often "no runner present yet — N/A with reason" rather than a command that cannot run
    - **Docs**: changed public interface without updated documentation?
 
    **Shell scripts** (`.sh`):

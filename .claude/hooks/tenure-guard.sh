@@ -84,13 +84,19 @@ if grep -Eq '(allow|allowed|include|included|accept|accepted|in_scope|whitelist|
 fi
 
 # 2. Social tenure being removed from the excluded set.
-# The empty-list alternative is anchored to an ASSIGNMENT (`= []` / `: []`). It used to accept a
-# bare `[]` anywhere within 80 characters, which was fine while this repo held only shell and
-# Python — but `$flat[] = …` is how PHP appends to an array, the exact opposite of clearing one,
-# and the first PHP file written here tripped it inside the conflict rule. Anchoring loses no
-# detection: `EXCLUDED = []`, `excluded_set = []` and `excluded: []` all still fire, and
-# test-tenure-guard.sh sabotage-checks that they do.
-if grep -Eq '(exclude|excluded|denied|blocked|forbidden|never)[^.]{0,80}(remove|delete|drop|pop|clear|= *\[\]|= *none|: *\[\])' <<<"$blob"; then
+#
+# The empty-list alternatives are anchored to the SHAPES THAT ACTUALLY EMPTY SOMETHING, because a
+# bare `[]` anywhere within 80 characters is not one of them in PHP: `$flat[] = …` is an append —
+# the exact opposite of clearing — and `!== []` is a comparison. Both tripped the guard while the
+# first PHP in this repo was being written.
+#
+# Anchoring to `= []` alone was NOT enough, and the first attempt at this comment wrongly claimed it
+# lost no detection. A 2026-08-06 review showed `public static function excluded(): array { return
+# []; }` — precisely how you would empty an excluded-set accessor in the language this repo now
+# uses — going silent. `return []` and `=> []` are therefore listed explicitly, and the assignment
+# form excludes a preceding `!`, `=`, `<` or `>` so comparisons stay quiet. Every shape here, and
+# every shape that must NOT fire, has a case in tests/test-tenure-guard.sh.
+if grep -Eq '(exclude|excluded|denied|blocked|forbidden|never)[^.]{0,80}(remove|delete|drop|pop|clear|[^!=<>] *= *\[\]|=> *\[\]|return *\[\]|= *none|: *\[\])' <<<"$blob"; then
   hits+=("the excluded-tenure set looks like it is being emptied or shrunk")
 fi
 

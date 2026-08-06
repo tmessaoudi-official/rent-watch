@@ -22,11 +22,19 @@ to…", stop and go read it.
 
 ## Rule zero-point-five — do not invent a subject
 
-As of 2026-08-06 this repo has **no `src/`, no `config/`, no `tests/`**. It has
-`spec/PROJECT_BRIEF.md` and `prototype/scout.py`. If the diff does not touch a file that exists, say
-so and return `PANEL VERDICT: CLEAN — no tenure-path files in this diff` rather than manufacturing a
-finding about `src/core/tenure.py`. A fabricated finding is worse than an empty report, and it
-destroys the panel's credibility for the round that matters.
+**The tenure path EXISTS as of 2026-08-06 and it is PHP, not Python.** It is
+`src/php/Core/TenureClassifier.php`, `Tenure.php`, `Text.php`, `Outcome.php` and the corpus at
+`tests/fixtures/tenure/corpus.json`; the suite is `tests/php/Core/` run with `php tools/phpunit.phar`.
+There is still no `config/` and no adapter.
+
+This paragraph used to say the opposite, and until 2026-08-06 it also told you to return
+`PANEL VERDICT: CLEAN` when the diff did not touch `src/core/tenure.py` — a path that never existed
+in this repo. Following it literally gave a scripted route to CLEAN on the one module `CLAUDE.md` §1
+exists to protect. **Verify what exists with `git ls-files src/ tests/` before concluding anything
+about absence.**
+
+What still holds: do not attribute a finding to a file that does not exist, and never claim to have
+read a suite you did not run. A fabricated finding is worse than an empty report.
 
 ## The claim you are attacking
 
