@@ -341,3 +341,23 @@ A changelog that overstates is worse than one that omits, because the next sessi
 - [2026-08-08 14:05] AGREED (carried from `2f119d7`, missing from this log until now): the ntfy
   `topic` sits in the strict name list rather than the ambiguous one, so `{"topic":"…"}` from an HTTP
   client is masked and not only `NTFY_TOPIC=`.
+- [2026-08-07 00:00] AGREED: **every open question in `docs/OPEN-QUESTIONS.md` is closed by applying
+  its own documented default** — *"let's answer all the questions then continue non stop till you
+  finish everything"*. 21 resolved in one pass, each entry recording what was applied and the one
+  line that reverses it. The four items that remain blocked are **inputs, not decisions**: the
+  DevTools cURL captures, IMAP credentials, one real portal alert email, and the `plafonds` figures.
+- [2026-08-07 00:00] AGREED (Q22, was the one BLOCKING question): **config is JSON.**
+  `config/criteria.json` + `config/sources.json`, `ext-json`, `sources` keyed by name so a duplicate
+  is unwritable. `_`-prefixed keys are ignored; any other unknown key is a hard validation error.
+  `spec/PROJECT_BRIEF.md` §9 and `CLAUDE.md`'s architecture table amended in the same change, and
+  every `.claude/**` reference renamed with it (the `yq` recipes in `/cross-check` became `jq`).
+- [2026-08-07 00:00] AGREED (F3): postcode prefix **`92` removed** — every commune in F2 is 78 or 95,
+  so it could never admit anything the commune filter also admitted.
+- [2026-08-07 00:00] AGREED (Q5): `max_floor` and `require_elevator` **do not exist as config keys**.
+  Floor and lift are score components only, so the prototype's silent drop cannot come back via config.
+- [2026-08-07 00:00] AGREED (S6): the high-floor penalty needs the lift **explicitly absent**, not
+  merely unmentioned. `null` is not `false` (hard rule 9), and that is why S6 is its own component
+  rather than the negation of S5.
+- [2026-08-07 00:00] AGREED (F9): tenure terms are **not** added to `exclude_patterns`. A
+  user-editable regex duplicating §1 would be a second, weaker copy of the one guarantee that must
+  not be config-overridable.

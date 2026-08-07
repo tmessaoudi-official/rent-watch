@@ -11,9 +11,79 @@ bundle integration raised on its own.
 > **Ⓐ Answered · Ⓞ Open · Ⓑ Blocking** — Ⓑ means milestone 1 should not start until it is settled,
 > because the answer changes the architecture rather than a constant.
 
+> ## ⚑ ALL QUESTIONS ANSWERED — 2026-08-07
+>
+> *"let's answer all the questions then continue non stop till you finish everything"* — the developer.
+>
+> Every question in this file is now closed by applying its own **"Default if unanswered"**, which is
+> what that instruction authorises: each default was written to be the safe, reversible choice, and
+> adopting them wholesale is a smaller decision than any one of them individually. **Nothing is
+> blocking.** Milestone 1 proceeds.
+>
+> Two honest caveats on what "answered" means here:
+>
+> 1. **A default applied is not the same as a preference expressed.** Every one of these is a one-line
+>    config or doc edit to overturn, and each resolution below says which line. Where a default would
+>    have been expensive or irreversible to undo, it is called out in that question's entry.
+> 2. **Four things remain genuinely blocked on the developer**, and no default can unblock them,
+>    because they need data only the developer can obtain: the DevTools cURL captures for the first
+>    sources (hard rule 1 forbids writing an endpoint from memory), IMAP credentials for the alert
+>    mailbox, one real portal alert email to shape the parser against, and the `plafonds` figures for
+>    Q19. Those are inputs, not decisions — they are listed in `docs/plans/milestone-1-pipeline.plan.md`.
+
 ---
 
 ## Part 1 — The filters, enumerated
+
+> **SETTLED 2026-08-07 — every row below is now a ruling, and `config/criteria.json` is its
+> implementation.** The tables are kept as written because they record what was reconsidered and why.
+> Where a row asked a question, the answer is in the *Resolution* column added below each table. The
+> committed config is the authority from here on; if the two ever disagree, the config is right and this
+> file is stale.
+
+### Resolution of 1a — hard disqualifiers as shipped
+
+| # | Shipped in `config/criteria.json` | Resolution |
+|---|---|---|
+| F1 | (not a config key) | `Tenure::isExcluded()` is hard-coded. §1 is not user-overridable, so it is deliberately absent from config. |
+| F2 | `communes` — the same 10 | **Kept as a hard filter** (Q1). The named neighbours are **not** added: adding a commune is a one-line config edit the day it is wanted, and adding ten unrequested ones widens the search on my judgement rather than the developer's. Matching is on **normalised commune + postcode only**, never a substring search over the description — the prototype's *"proche Chatou"* over-match is fixed by construction. |
+| F3 | `postcode_prefixes` — `78`, `95` | **`92` REMOVED.** F2 and F3 both apply, so `92` only ever admitted Bezons-adjacent spillover — and every commune in F2 is in 78 or 95. A prefix that can never match anything the commune filter also passes is dead config that reads as intent. If a 92 commune is ever wanted, it is added to F2 and F3 together. |
+| F4 | `min_rooms: 4` | Kept (Q3). Unknown room count does **not** disqualify. |
+| F5 | `min_surface_m2: 75` | Kept (Q3). Unknown surface does **not** disqualify. |
+| F6 | `max_rent_cc: 1800` | Kept, **charges comprises**, hard (Q2). An unknown CC rent does not disqualify. |
+| F7 | *(absent)* | **Removed as a disqualifier** (Q5) — it is score component S5/S6 now. |
+| F8 | *(absent)* | **Removed entirely** (Q5), as this row itself anticipated. |
+| F9 | `exclude_patterns` | **Rewritten.** The `meubl` bug is real and is fixed by matching the term only as a **property type** — `location meublée`, `appartement meublé`, `meublé de tourisme`, `bail mobilité` — never as a bare stem. `cuisine équipée et meublée` therefore passes, where the prototype's `meubl` excluded it. All the suggested additions are adopted except `logement social` / `PLAI` / `PLUS`, which are **deliberately NOT here**: tenure exclusion is the classifier's job and duplicating it in a user-editable regex would create a second, weaker copy of §1 that a config edit could delete. |
+
+### Resolution of 1b — score weights as shipped
+
+Adopted as proposed, with two changes. **S2 ships at weight 0 and disabled** (Q1) — it cannot silently
+contribute a quarter of the score with no API key. **S8 is adopted**: tenure confidence scales the
+whole score rather than adding to it, because a low-confidence LLI verdict should rank below a
+high-confidence one at every other component, not merely lose a fixed number of points.
+
+| # | Weight | Note |
+|---|---|---|
+| S1 | 25 | Needs a **ranked** list. Shipped ranking, revisable in one edit: `commune_rank` puts **Sartrouville, Houilles, Maisons-Laffitte** top, then Le Vésinet / Chatou / Croissy-adjacent, then the rest. |
+| S2 | 0 | Disabled (Q1). |
+| S3 | 15 | Rent headroom below the ceiling. Zero when CC rent is unknown, with a `reasons[]` entry. |
+| S4 | 10 | Surface above the minimum. |
+| S5 | 15 | Floor ≤ 1 **or** an elevator is declared. |
+| S6 | −20 | High floor **and** an elevator explicitly absent. **Not** applied when the lift is merely unmentioned — that is the `null`-is-not-`false` trap (hard rule 9), and it is why S6 is a separate component rather than the negation of S5. |
+| S7 | 10 | Freshness. |
+| S8 | × factor | Confidence multiplier, not an additive term. `UNKNOWN` never reaches scoring at all — it digests. |
+
+Weights are normalised, so the enabled set summing to 75 rather than 100 does not depress every score.
+
+### Resolution of 1c — notification routing as shipped
+
+| Route | Ruling |
+|---|---|
+| High priority | **score ≥ 70** → immediate push at high priority. Below that, immediate at normal priority. Nothing is batched: the brief's whole premise is that good LLI stock goes within hours, so a batching delay would defeat the tool. |
+| Normal | every `MATCH` below 70. |
+| *"à vérifier"* digest | **on demand via `scout digest`**, plus an automatic daily emission at the first run after 08:00 local. Not per-listing — that is what makes it a digest rather than a second notification stream. |
+| `SOURCE_BROKEN` | **same channel, low priority, and de-duplicated**: at most one alert per source per 24 h, so a source broken for a week does not send seven identical pushes and train the developer to ignore them. |
+| Rent drop | **any drop of ≥ 20 € or ≥ 2%**, whichever is smaller in absolute terms. A 5 € correction is noise; 20 €/month is 240 €/year and worth a glance. |
 
 This is the part to review line by line. Every value below is **taken from
 `prototype/sources.yaml`**, which the developer wrote — so these are existing choices, not proposals.
@@ -63,18 +133,35 @@ These are from the brief §5; **none has a weight yet**, and the weights are a d
 
 ## Part 2 — Blocking architecture decisions
 
-### Ⓑ Q1 — Commune list, or a commute constraint?
+### Ⓐ Q1 — ANSWERED 2026-08-07: commune stays the hard filter
+
+**ANSWERED 2026-08-07 — the default applies.** F2 remains a hard filter; S2 (commute) ships with
+weight 0 and is inert until an IDFM key exists. `src/php/Enrich/Transit.php` is therefore NOT
+milestone-1 infrastructure. `config/criteria.json` carries `commute.enabled: false` so turning it on
+is one visible edit, not a code change.
+
 `spec/PROJECT_BRIEF.md` §0.1. F2 is a flat commune set. The alternative is *"≤ N minutes door-to-door
 to a named station"* via the IDFM/PRIM API, with commune as a score weight instead of a filter.
 **Default if unanswered:** keep F2 as the hard filter, ship S2 disabled, revisit after milestone 8.
 Changes: whether `src/php/Enrich/Transit.php` is milestone-1 infrastructure or a later add-on.
 
-### Ⓑ Q2 — Max rent: hard cutoff or soft?
+### Ⓐ Q2 — ANSWERED 2026-08-07: hard cutoff, charges comprises
+
+**ANSWERED 2026-08-07 — the default applies.** Hard cutoff at 1800 € **charges comprises**. Every
+source is normalised to CC before comparison; a listing whose CC rent is unknown is NOT disqualified
+on rent (hard rule 9 — `null` is not zero), it loses the rent-headroom score component and carries a
+`reasons[]` entry saying the rent basis was unknown.
+
 §0.2. F6 is `1800`. Soft would notify up to `1980` at a reduced score.
 **Default if unanswered:** hard cutoff at 1800 **charges comprises**, and normalise every source to CC.
 Changes: the criteria engine's return type (boolean vs. graded).
 
-### Ⓞ Q3 — Minimum rooms / surface
+### Ⓐ Q3 — ANSWERED 2026-08-07: T4 / 75 m², both hard
+
+**ANSWERED 2026-08-07 — the default applies.** `min_rooms: 4`, `min_surface_m2: 75`, both hard
+disqualifiers. A large T3 is not in scope. An **unknown** room count or surface does not disqualify —
+that is the prototype's bug (hard rule 9); it scores as if at the minimum and says so in `reasons[]`.
+
 §0.3. Answered in substance by F4/F5 (`4` / `75`). Open only as: is a large T3 ever acceptable?
 **Default if unanswered:** T4 / 75 m², as the prototype has it.
 
@@ -95,28 +182,59 @@ Changes: the criteria engine's return type (boolean vs. graded).
 ~~Ⓑ Q4 — original wording~~ (kept for the record): *Is PLS in scope? Are LIBRE listings in scope?*
 Default had been PLS → digest, LIBRE → out. **Both overridden by the answer above.**
 
-### Ⓞ Q5 — Floor / elevator: hard reject or scoring penalty?
+### Ⓐ Q5 — ANSWERED 2026-08-07: scoring penalty, never a reject
+
+**ANSWERED 2026-08-07 — the default applies.** The brief wins over the prototype. Floor and elevator
+are score components only (S5 +15 / S6 −20). `max_floor` and `require_elevator` do NOT exist in
+`config/criteria.json`, so the prototype's silent drop cannot be reintroduced by a config edit.
+
 §0.5. The prototype hard-rejects (F7); the brief wants a penalty (S5/S6).
 **Default if unanswered:** follow the brief — scoring penalty, no hard reject. The prototype's
 behaviour silently drops good flats whose listing omits the lift.
 
-### Ⓞ Q6 — Automatic LLI income-eligibility checking?
+### Ⓐ Q6 — ANSWERED 2026-08-07: OFF
+
+**ANSWERED 2026-08-07 — the default applies.** Income-eligibility checking is **off**. `RFR_N2` stays
+out of `.env.example`'s required set and nothing reads it. Ceilings are checked by hand. This keeps
+personal financial data out of the process entirely rather than merely out of git.
+
 §0.6. Requires the RFR N-2 figure in `.env`. **This is personal financial data** — it stays in `.env`,
 never in git, never in a log, never in a notification body.
 **Default if unanswered:** **off**. Do not ask for the figure; check ceilings manually.
 
-### Ⓐ Q7 — Stack: Python or TypeScript?
+### Ⓐ Q7 — SUPERSEDED 2026-08-06 by Q16, closed 2026-08-07
+
+**CLOSED 2026-08-07.** Neither. The stack is **PHP 8.5** now and **phorj** for the pure core once its
+two missing modules land (Q16). `pytest` / `ruff` / `mypy` are not part of this project's toolchain;
+the runner is PHPUnit's PHAR. The Ⓐ marker below was already stale — recorded here so it stops
+reading as an open toolchain question.
+
 §0.7. **Answered by the artefacts**: `prototype/scout.py` is Python, and `ruff` is already available in
 the container. Treating this as **Python** unless told otherwise. Confirm the toolchain: `uv` or plain
 `pip` + `requirements.txt`? `pytest` + `ruff` + `mypy`?
 
-### Ⓑ Q8 — Runtime host: local cron / VPS / Docker / GitHub Actions?
+### Ⓐ Q8 — ANSWERED 2026-08-07: Docker on a VPS, mounted volume
+
+**ANSWERED 2026-08-07 — the default applies.** Docker on a VPS with `state/` on a mounted volume;
+`scout run --watch` with jitter rather than cron, so the process owns its own schedule and the run log
+is continuous. **GitHub Actions is ruled out explicitly**: no persistent disk means no seen-set, which
+means re-notifying everything on every run.
+
 §0.8. Changes where state lives and whether the SQLite file is durable. GitHub Actions in particular
 has **no persistent disk**, which breaks price history and the seen-set — and a public repo would leak
 the criteria.
 **Default if unanswered:** Docker on a VPS with a mounted volume; `--watch` with jitter rather than cron.
 
-### Ⓐ Q9 — PARTLY ANSWERED 2026-08-06: email is wanted
+### Ⓐ Q9 — ANSWERED 2026-08-07: email **and** ntfy, both optional, console always
+
+**ANSWERED 2026-08-07.** The open half — email only, or a push channel alongside — resolves to
+**both, and neither is required to run.** `config/criteria.json` carries a `notify.channels` list; the
+shipped default enables `console` only, because a channel that needs a credential cannot be the
+default in a repo whose `.env` is not filled in. Enabling `ntfy` or `email` without its credential is a
+**startup refusal**, not a silent no-op — an unsent notification is the failure this project cannot
+afford. LIBRE listings go fast, which is the argument for push; email is the argument for a readable
+record. Having both, gated on config, costs one interface and two small classes.
+
 
 > *"just filter and show me/email me the list"*
 
@@ -129,7 +247,12 @@ alongside it for time-critical LIBRE listings, which go fast. See the question s
 leans that way. Needs a topic name; treat the topic as a **secret** (anyone who knows it can read the
 notifications).
 
-### Ⓞ Q15 — CDC Habitat's `robots.txt` disallows `/Recherche/show/` — raised 2026-08-06
+### Ⓐ Q15 — ANSWERED 2026-08-07: CDC Habitat stays disabled
+
+**ANSWERED 2026-08-07 — the default applies.** `cdc_habitat` ships in `config/sources.json` with
+`enabled: false` and a `_comment` naming the `robots.txt` `Disallow`. It is not enabled until the real
+endpoint path is known to sit outside it; if it does not, CDC Habitat moves to the email-alert route.
+
 Measured, not assumed. If CDC Habitat's listing endpoint sits under that path, polling it violates
 `robots.txt`, which `CLAUDE.md` hard rule 5 forbids without exception.
 **Default if unanswered:** A3 stays `enabled: false` until the real endpoint path is known. If it is
@@ -222,13 +345,27 @@ ruling rather than an assumption — the brief is a ruling set.
 **Default if unanswered:** option 1. Explicitly a *read-only, localhost, no-auth* digest — if it ever
 grows write actions or remote access, that is a new decision, not an extension of this one.
 
-### Ⓞ Q10 — Playwright allowed?
+### Ⓐ Q10 — ANSWERED 2026-08-07: no
+
+**ANSWERED 2026-08-07 — the default applies.** No browser automation. `type: browser` is a recognised
+value in the source schema that the loader **refuses** with a clear message, rather than an
+unimplemented adapter that fails at fetch time. Email-alert ingestion is the private-portal path.
+
 §0.10. Only relevant for a source that is impossible otherwise. Chromium is pre-installed in this
 container.
 **Default if unanswered:** **no** — the brief makes email-alert ingestion the private-portal path, and
 `browser.*` stays an unimplemented opt-in stub.
 
-### Ⓐ Q11 — Repo visibility
+### Ⓐ Q11 — ANSWERED 2026-08-07: criteria stay non-personal in git
+
+**ANSWERED 2026-08-07.** Making the repo private is the developer's action and cannot be done from
+here. What IS done from here is the mitigation that makes it survivable either way: `config/criteria.json`
+is committed with the **prototype's already-public values** (they have been in `prototype/sources.yaml`
+in this public repo since before this session) and nothing personal is added to it — no name, no
+employer, no income figure, no exact address, no household detail beyond the room count that F4 already
+implies. A `criteria.local.json` override, gitignored, is read when present and wins field-by-field, so
+genuinely private tuning never has to enter git.
+
 §0.11 recommends **private**. The repo is currently **public** (it was made public during this session
 so the sibling repos could be cloned). That is a real exposure: `config/criteria.yaml` will carry the
 target communes, the budget and the household composition. `.env` is gitignored, so no credential is at
@@ -244,7 +381,11 @@ One question, and it is a genuine notify/digest tradeoff I decided unilaterally 
 breach. It is resolved in the safe direction, so nothing is blocked — but the cost falls on you, in
 digest entries, every day the tool runs.
 
-### Ⓞ Q21 — How much digest noise is an uppercase `PLUS` worth?
+### Ⓐ Q21 — ANSWERED 2026-08-07: keep the guard
+
+**ANSWERED 2026-08-07 — the default applies (option 1).** The shouted-`PLUS` doubt stays exactly as
+it is. Nothing changes; `trap-005b` keeps digesting. Revisit only against real captured payloads.
+
 
 `PLUS` is both the mainstream social-housing scheme and one of the commonest words in French. The
 classifier holds it behind a collocation guard: an uppercase `PLUS` next to a financing noun is the
@@ -281,7 +422,25 @@ that `plus de 3 chambres` does not digest half the market (`trap-010` pins that)
 
 ## Part 2d — Raised by starting milestone 1 (2026-08-07)
 
-### Ⓑ Q22 — `config/*.yaml` cannot be parsed here. What format do the two config files take?
+### Ⓐ Q22 — ANSWERED 2026-08-07: JSON. Milestone 1 is unblocked.
+
+**ANSWERED 2026-08-07 — the default applies (option 1).** The two config files are
+`config/criteria.json` and `config/sources.json`, parsed by `ext-json`. `spec/PROJECT_BRIEF.md` §9 and
+`CLAUDE.md`'s architecture table are amended to say `.json` in the same change.
+
+Three consequences worth writing down, because each one is a thing a later session would otherwise
+have to rediscover:
+
+- **Comments.** JSON has none, so any key whose name begins with `_` is ignored by the loader —
+  `_comment` by convention. The loader **rejects unknown keys** that do NOT begin with `_`, so a typo
+  is a loud validation error rather than a silently-ignored setting. That is the trade that makes the
+  underscore convention safe rather than merely ugly.
+- **`mixed_tenure` is not optional and not defaulted in the file.** `SourceProfile` defaults it to
+  `true` in code, and the loader ALSO refuses a source block that omits it. Two independent guards on
+  the one flag that disarms §1's fail-closed rule.
+- **phorj can read the same file.** `Core.Json` is a default feature, so the shared-corpus argument
+  that killed option 2 (PHP array files) is preserved.
+
 
 **BLOCKING.** Nothing in milestone 1 above the store can be built until this is settled: the adapter
 contract, the criteria engine and the CLI all read config, and the file format decides what you edit
@@ -328,7 +487,12 @@ inli:
 **Default if unanswered:** option 1, and `spec/PROJECT_BRIEF.md` §9 plus `CLAUDE.md`'s architecture
 table are amended to say `.json`.
 
-### Ⓞ Q23 — Five health thresholds I chose rather than derived
+### Ⓐ Q23 — ANSWERED 2026-08-07: leave all five
+
+**ANSWERED 2026-08-07 — the default applies (option 1).** All five constants stay at their current
+values. They can only be tuned against run history that does not exist yet, and all five alert in the
+safe direction. Re-open when `scout doctor` has a month of real runs behind it.
+
 
 **Not blocking** — all five have working defaults and all five alert in the safe direction. Raised so they
 are tuned against real run history instead of defended as if they had been measured.
@@ -364,7 +528,12 @@ bad-field-map alert for no false accusation of a genuinely quiet source; 3. rais
 
 **Default if unanswered:** option 1.
 
-### Ⓞ Q24 — Should the store keep the tenure verdict, so a past decision can be audited?
+### Ⓐ Q24 — ANSWERED 2026-08-07: schema v3, with the criteria layer
+
+**ANSWERED 2026-08-07 — the default applies (option 1).** `tenure`, `confidence_bp` and `signals_json`
+land on `listings` in schema **v3**, together with Q25's `duration_ms` on `source_runs`, at the same
+time as the criteria layer that consumes them — i.e. in this milestone.
+
 
 **Not blocking milestone 1**, but it gets more expensive with every stored listing.
 
@@ -384,7 +553,12 @@ that verdicts are not auditable and drop the reviewer-agent clause; 4. none of t
 
 **Default if unanswered:** option 1.
 
-### Ⓞ Q25 — `scout doctor` is specified to report timing; nothing measures it
+### Ⓐ Q25 — ANSWERED 2026-08-07: schema v3, same migration as Q24
+
+**ANSWERED 2026-08-07 — the default applies (option 1).** `source_runs.duration_ms` lands in the same
+schema v3 as Q24, and `scout doctor` prints it. `SourceHealth` gains a `lastDurationMs` field so the
+spec's fourth `doctor` column stops being aspirational.
+
 
 Spec §8: *"`scout doctor` command: run every source once, report status, **timing**, and item
 counts."* Status and item counts are implemented; `source_runs` has no duration column and
@@ -404,7 +578,12 @@ Both of these were found by writing the code rather than by planning it, and bot
 resolved in the safe direction — so neither blocks anything. They are recorded because the safe
 direction has a cost, and the cost is yours to accept or overturn.
 
-### Ⓞ Q18 — Is **PLI** (Prêt Locatif Intermédiaire) in scope?
+### Ⓐ Q18 — ANSWERED 2026-08-07: PLI keeps digesting
+
+**ANSWERED 2026-08-07 — the default applies (option 1).** `financement: PLI` stays UNKNOWN → digest.
+It is a small ageing tail and a digest entry costs one glance; promoting it would decide a product
+question inside the classifier on the strength of the label sounding intermediate.
+
 
 `PLI` is the pre-2014 intermediate scheme, superseded by LLI when ordonnance 2014-159 created the
 current regime. Older stock is still marketed under the PLI label, and it is **genuinely not social
@@ -424,7 +603,14 @@ the classifier, which is exactly the move this project forbids.
 - **Option 3 — exclude it outright.** Not recommended: it would drop genuinely eligible stock, and
   the reason to exclude a tenure here is ineligibility, which does not apply.
 
-### Ⓞ Q19 — Sourcing the **plafonds de ressources** bands (classifier tier 4)
+### Ⓐ Q19 — ANSWERED 2026-08-07: tier 4 stays inert
+
+**ANSWERED 2026-08-07.** `PlafondBands` ships empty and the test that asserts the tier stays inert
+stands. Writing the figures from memory is forbidden (hard rule 1) and inventing them would be worse
+than the gap: the tier would appear to work while silently dropping eligible listings. Tiers 1–3 clear
+the floor on every corpus case, so this is an enhancement, not a hole. Source them from the annual
+arrêté when someone has the figures in hand.
+
 
 Signal tier 4 in `spec/PROJECT_BRIEF.md` §4 compares a quoted income ceiling against known LLI vs
 PLUS/PLAI bands. The bands are far apart, so it discriminates reliably — it is the best signal the
@@ -443,7 +629,14 @@ awkward to parse; ANIL and service-public.fr republish them in readable tables. 
 five-minute job, and the classifier already clears the floor on tiers 1–3 for every corpus case, so
 this is a genuine enhancement rather than a gap.
 
-### Ⓞ Q20 — Which ICF endpoint will the adapter target, and is it `mixed_tenure`?
+### Ⓐ Q20 — ANSWERED 2026-08-07: ICF stays `mixed_tenure: true`
+
+**ANSWERED 2026-08-07 — the default applies (option 1).** `icf_novedis` keeps `mixed_tenure: true`
+until a real Novedis payload can be inspected. The binding check this section asked for is now
+implemented: `ConfigTest::testEveryCorpusSourceAgreesWithConfig()` fails if a `mixed_tenure` in
+`config/sources.json` disagrees with the same source in `tests/fixtures/tenure/corpus.json`, so the two
+cannot drift apart silently.
+
 
 `mixed_tenure` is the single flag that disarms the fail-closed rule: when it is `false`, a listing
 with no tenure signal at all is notified on the source default alone. So every `false` is a claim
@@ -475,7 +668,11 @@ declared `mixed_tenure` to the corpus, so the two cannot drift apart silently.
 
 ## Part 3 — Raised by the bundle integration (2026-08-06)
 
-### Ⓞ Q12 — Licence
+### Ⓐ Q12 — ANSWERED 2026-08-07: unlicensed
+
+**ANSWERED 2026-08-07 — the default applies.** The repo stays unlicensed (all rights reserved). No
+`LICENSE` file, no SPDX headers restored. If AGPL is ever adopted that is a new decision.
+
 The `scripts/claude-bootstrap/` scripts carried `SPDX-License-Identifier: AGPL-3.0-or-later` in
 `twes-in`. rent-watch declares **no licence**, so those headers were **stripped** rather than
 propagated — importing AGPL into an unlicensed repo by accident is a licensing decision nobody made.
@@ -483,14 +680,24 @@ Same copyright holder throughout, so this is the developer's call.
 **Default if unanswered:** stay unlicensed (all rights reserved), which is the safe state for a private
 personal tool. If AGPL is adopted, restore the headers and add a `LICENSE`.
 
-### Ⓞ Q13 — Commit trailers
+### Ⓐ Q13 — ANSWERED 2026-08-07: no trailers, as ruled
+
+**ANSWERED 2026-08-07.** The developer ruled this directly on 2026-07-29 and again in this session:
+author and committer are `Takieddine MESSAOUDI`, and there is never a `Co-Authored-By` or
+`Claude-Session` trailer. The harness default is overridden. Closed.
+
 `CLAUDE.md` § "Git autonomy" adopts the sibling repos' ruling: commits are authored as
 `Takieddine MESSAOUDI <takieddine.messaoudi.official@gmail.com>` with **no `Co-Authored-By` and no
 `Claude-Session` trailer**. This container's harness instructs the opposite. All three sibling repos
 follow the no-trailer rule, so it was applied here for consistency.
 **Say so if you want the harness default instead** — it is a one-line change to `CLAUDE.md`.
 
-### Ⓞ Q14 — `/qa-sweep` stays rejected
+### Ⓐ Q14 — ANSWERED 2026-08-07: still rejected, revisit with the digest
+
+**ANSWERED 2026-08-07.** Q17 put the read-only digest in scope, which is the condition this question
+named — but the digest does not exist yet, so there is nothing to crawl. `/qa-sweep` stays rejected and
+this re-opens automatically the day the digest ships, not before.
+
 `pdfturbo` ported it because it had a UI to crawl. rent-watch has no UI by design. Recorded in
 `scripts/claude-bootstrap/README.md` § "What was rejected" so it is not re-imported "for later".
 **No decision needed unless a read-only HTML digest is built.**
@@ -588,3 +795,38 @@ recording that "action logement" was named as a wanted *source*, not as a wanted
   contract.** Every failure mode in this module is silent, so a green suite is not evidence. The
   sabotage run breaks the classifier 15 ways and requires the suite to catch each one; it found three
   undetected regressions and one piece of unreachable safety code on the day it was written.
+- [2026-08-07] AGREED (all questions): **every open question is closed by applying its documented
+  default** — *"let's answer all the questions then continue non stop till you finish everything"*.
+  21 questions resolved in one pass. The per-question entries above each say what was applied and
+  what one line reverses it.
+- [2026-08-07] AGREED (Q22, was BLOCKING): **config is JSON** — `config/criteria.json` +
+  `config/sources.json`, parsed by `ext-json`. `spec/PROJECT_BRIEF.md` §9 and `CLAUDE.md`'s
+  architecture table amended to `.json` in the same change. Keys beginning `_` are ignored
+  (`_comment` by convention); every other unknown key is a **hard validation error**, so the
+  comment convention cannot double as a typo swallower. Milestone 1 unblocked.
+- [2026-08-07] AGREED (Q9): **console always, ntfy and email both available and both optional.**
+  Shipped default enables `console` only. A channel enabled without its credential is a **startup
+  refusal**, never a silent no-op — an unsent notification is the one failure mode this project
+  cannot tolerate quietly.
+- [2026-08-07] AGREED (Q5 + F7/F8): **floor and elevator are scoring only.** `max_floor` and
+  `require_elevator` do not exist as config keys, so the prototype's silent drop of a good flat whose
+  listing forgot to mention the lift cannot be reintroduced by editing config.
+- [2026-08-07] AGREED (F3): **postcode prefix `92` removed.** Every commune in F2 is in 78 or 95, so
+  `92` could never admit anything F2 also admitted. Dead config that reads as intent is worse than no
+  config.
+- [2026-08-07] AGREED (F9): **the `meubl` over-exclusion is a real bug and is fixed** — the term is
+  matched as a property type, never as a bare stem, so `cuisine équipée et meublée` is no longer
+  excluded. Tenure terms (`logement social`, `PLAI`, `PLUS`) are deliberately **NOT** added to
+  `exclude_patterns`: that would be a second, weaker copy of §1 living in a user-editable file.
+- [2026-08-07] AGREED (1c): **score ≥ 70 is high priority; nothing is batched**; the digest is
+  on-demand plus one daily emission; `SOURCE_BROKEN` is de-duplicated to at most one alert per source
+  per 24 h; a rent drop notifies at ≥ 20 € or ≥ 2%.
+- [2026-08-07] AGREED (Q24 + Q25): **schema v3 lands in this milestone** — `listings.tenure`,
+  `listings.confidence_bp`, `listings.signals_json` and `source_runs.duration_ms`, with the migration
+  `upgradeFrom()` already supports.
+- [2026-08-07] AGREED (Q11): repo visibility is the developer's action, but the mitigation ships
+  regardless — committed criteria carry only values already public in `prototype/sources.yaml`, and a
+  gitignored `config/criteria.local.json` overrides field-by-field so private tuning never enters git.
+- [2026-08-07] AGREED (Q20): the `mixed_tenure` drift check this file asked for is **implemented** —
+  a test binds every source's flag in `config/sources.json` to the same source in the classifier
+  corpus, so the two cannot diverge silently.

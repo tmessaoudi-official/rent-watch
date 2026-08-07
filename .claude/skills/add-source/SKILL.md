@@ -1,7 +1,7 @@
 ---
 name: add-source
 description: >
-  Use when onboarding a new landlord or portal into config/sources.yaml. Walks live-endpoint
+  Use when onboarding a new landlord or portal into config/sources.json. Walks live-endpoint
   discovery, field-map building, fixture capture, tenure labelling and the health baseline so that
   adding a source stays config-only.
 user-invocable: true
@@ -23,7 +23,7 @@ disallowed-tools: AskUserQuestion
 > If ARGUMENTS contains `--help`: output the text below verbatim, then STOP.
 >
 > ```
-> /add-source <name> — Onboard a new listing source into config/sources.yaml, config-only.
+> /add-source <name> — Onboard a new listing source into config/sources.json, config-only.
 >
 > Flags:
 >   --url <url>     Search page URL to start discovery from
@@ -77,35 +77,51 @@ Start with `enabled: false`, an `items_path`, and no `map:`. Run `scout dump <na
 item, then fill `map:` from the real payload shape. `scout dump` is what makes this take five minutes
 instead of an hour — if it does not exist yet, building it comes first.
 
-```yaml
-- name: <name>
-  enabled: false
-  family: institutional
-  type: json
-  default_tenure: null        # hint only — the classifier still runs. See Step 4.
-  mixed_tenure: true          # fail-closed default. See Step 4 before changing it.
-  url: "REMPLACER"
-  method: GET
-  base_url: "https://…"
-  params: {}
-  headers:
-    Referer: "https://…/"
-  items_path: "results.items"
-  map:
-    ref: "id"                         # must be STABLE across runs — see Step 5
-    title: ["title", "name"]
-    url: "url"
-    commune: ["city", "address.city"]
-    cp: ["zipCode", "address.postalCode"]
-    rent: ["rent.total", "price"]
-    charges_included: true            # or false — sources are inconsistent; normalise, never assume
-    surface: "surface"
-    rooms: ["rooms", "nbRooms"]
-    floor: "floor"
-    elevator: "hasElevator"
-    description: "description"
-    tenure_field: "financement"       # ← the highest-value mapping. Look hard for it.
+Config is **JSON**, not YAML — ruled 2026-08-07 (Q22): this container has no `ext-yaml` and cannot
+install a parser. `sources.json` is an **object keyed by source name**, so a duplicate name is
+impossible to write rather than merely discouraged. JSON has no comments, so any key beginning with `_`
+is ignored by the loader (`_comment` by convention); **every other unknown key is a hard error**, which
+is what keeps that convention from doubling as a typo swallower.
+
+```json
+{
+  "sources": {
+    "<name>": {
+      "_comment": "why this endpoint, and anything the next reader would ask",
+      "enabled": false,
+      "family": "institutional",
+      "type": "json",
+      "default_tenure": null,
+      "mixed_tenure": true,
+      "url": "REMPLACER",
+      "method": "GET",
+      "headers": { "Referer": "https://…/" },
+      "items_path": "results.items",
+      "map": {
+        "ref": "id",
+        "title": ["title", "name"],
+        "url": "url",
+        "commune": ["city", "address.city"],
+        "cp": ["zipCode", "address.postalCode"],
+        "rent": ["rent.total", "price"],
+        "charges_included": true,
+        "surface": "surface",
+        "rooms": ["rooms", "nbRooms"],
+        "floor": "floor",
+        "elevator": "hasElevator",
+        "description": "description",
+        "tenure_field": "financement"
+      }
+    }
+  }
+}
 ```
+
+- `default_tenure` — hint only, the classifier still runs. See Step 4.
+- `mixed_tenure` — the fail-closed switch. **Required**, never defaulted in the file. See Step 4.
+- `charges_included` — `true` or `false`. Sources are inconsistent; normalise, never assume.
+- `tenure_field` — the highest-value mapping. Look hard for it.
+- `ref` — must be STABLE across runs. See Step 5.
 
 A path may be a list — the first non-empty one wins.
 

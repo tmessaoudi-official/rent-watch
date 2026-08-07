@@ -121,9 +121,9 @@ you ran as the evidence. Examples of what is checkable here:
 |---|---|
 | A file/path layout claim | `ls` / `find` the path. A documented path that does not exist is STALE. As of 2026-08-06 `src/php/Core/` and `tests/` EXIST and `config/`, `src/php/Adapters/` and `src/phorj/` do not — so check, do not recall: this row asserted all three were absent for four commits after two of them landed. Report a path claim as stale only where the doc asserts it EXISTS. |
 | "the classifier corpus has ≥30 hand-labelled cases" | `python3 -c "import json;print(len(json.load(open('tests/fixtures/tenure/corpus.json'))['cases']))"` — the cases live INSIDE one JSON file, so the `ls \| wc -l` this row used to give counted 1 and would have passed a corpus of any size. The brief's §4 number is a requirement; the count is the check |
-| "source X is enabled" | `yq '.sources[] \| select(.name=="X") \| .enabled' config/sources.yaml` |
-| "every enabled source has a verified URL" | `grep -n 'REMPLACER' config/sources.yaml` — any hit on an `enabled: true` block is STALE and a hard-rule-1 violation |
-| "source X mixes social and intermediate stock" | `yq '.sources[] \| select(.name=="X") \| .mixed_tenure' config/sources.yaml` — and cross-read the fixture: a fixture containing a `PLAI`/`PLUS` value on a `mixed_tenure: false` source is the highest-severity drift this repo can have |
+| "source X is enabled" | `jq '.sources.X.enabled' config/sources.json` |
+| "every enabled source has a verified URL" | `grep -n 'REMPLACER' config/sources.json` — any hit on an `enabled: true` block is STALE and a hard-rule-1 violation |
+| "source X mixes social and intermediate stock" | `jq '.sources.X.mixed_tenure' config/sources.json` — and cross-read the fixture: a fixture containing a `PLAI`/`PLUS` value on a `mixed_tenure: false` source is the highest-severity drift this repo can have |
 | A `map:` field path | check it against that source's committed fixture — a mapped path absent from the fixture is STALE and fails silently at runtime |
 | An env var name or default | `grep '^SCOUT_' .env.example` — **never** read the real `.env`, which is permission-denied and gitignored |
 | A CLI verb or flag exists | run it with `--help`; a documented `scout` verb that is not in the parser is STALE |

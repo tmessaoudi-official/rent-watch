@@ -153,7 +153,7 @@ Three rent-watch classifications that outrank the rest when they apply:
 2. A staged **schema migration** is Config/infra *and* a blast-radius item: state whether it is
    reversible, and what it does to already-stored listings, their tenure verdicts and their price
    history. A migration that silently re-marks stored listings as unseen re-notifies everything.
-3. A staged change to a **`config/sources.yaml` key or the `Source` interface** is a Public-interface
+3. A staged change to a **`config/sources.json` key or the `Source` interface** is a Public-interface
    change with every existing source block as its consumer — name them, or show the change is purely
    additive and old blocks still parse.
 

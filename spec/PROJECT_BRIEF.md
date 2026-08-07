@@ -92,8 +92,8 @@ logement-scout/
 │   │   └── geo.*             # commune → INSEE code, coords
 │   └── cli.*
 ├── config/
-│   ├── criteria.yaml
-│   └── sources.yaml
+│   ├── criteria.json
+│   └── sources.json
 ├── tests/
 │   └── fixtures/             # frozen HTML + JSON payloads per source
 ├── .env.example
@@ -251,8 +251,18 @@ Requirements:
 
 ## 9. Configuration & secrets
 
-- `config/criteria.yaml` — user criteria, committed.
-- `config/sources.yaml` — source definitions and field mappings, committed.
+- `config/criteria.json` — user criteria, committed.
+- `config/sources.json` — source definitions and field mappings, committed.
+
+  **Amended 2026-08-07 (Q22).** These two were specified as `.yaml`. This container has no `ext-yaml`
+  and cannot install a parser (the egress policy 403s Composer's dist source), so a `.yaml` config
+  would sit unread. JSON is parsed by `ext-json`, which is always present, and by phorj's `Core.Json`,
+  which keeps the shared-file property that makes the two implementations comparable. Keys beginning
+  with `_` are ignored — `_comment` by convention, since JSON has none — and every other unrecognised
+  key is a hard validation error.
+
+  A gitignored `config/criteria.local.json`, when present, overrides `criteria.json` field by field.
+  That is how personal tuning stays out of git while the committed file stays a working default.
 - `.env` — **gitignored**. Holds: IMAP credentials, Telegram token, IDFM API key, RFR for
   eligibility checks, any site credentials. Ship a `.env.example`.
 - Never commit personal financial data. Never log credentials.

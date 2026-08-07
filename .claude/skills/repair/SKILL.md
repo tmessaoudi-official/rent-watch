@@ -106,7 +106,7 @@ grep -rhoE '`(src|config|tests|spec|docs|scripts|prototype|\.claude)/[A-Za-z0-9_
 
 **Judgement required on the second list, and this is the trap — in BOTH directions.**
 
-`config/sources.yaml` is named all over `.claude/` and does not exist yet. That is correct: it is the
+`config/sources.json` is named all over `.claude/` and does not exist yet. That is correct: it is the
 documented target, and a bullet saying "when it lands, check X" is not drift.
 
 **`src/core/tenure.py` is NOT in that category, and this paragraph said it was until 2026-08-06.**

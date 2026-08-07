@@ -157,7 +157,7 @@ Respect flags:
 
 **Agent B: Stubs & Placeholder Detection** — empty function bodies, `raise NotImplementedError`, hardcoded placeholder returns, shell scripts with TODO bodies.
 
-**Agent C: Partial Feature Implementations** — unhandled switch/match cases, parsed-but-unused CLI flags or config keys, stub adapters, features with empty branches, and missing branches in the tenure decision tree (an unhandled `Tenure` variant, a confidence band with no route, a signal source declared in the spec but never consulted — an unreachable or unhandled tenure is a real gap, not a style note). Also: a source declared in `config/sources.yaml` with no fixture, and a CLI verb promised in `spec/PROJECT_BRIEF.md` §10 that does not exist.
+**Agent C: Partial Feature Implementations** — unhandled switch/match cases, parsed-but-unused CLI flags or config keys, stub adapters, features with empty branches, and missing branches in the tenure decision tree (an unhandled `Tenure` variant, a confidence band with no route, a signal source declared in the spec but never consulted — an unreachable or unhandled tenure is a real gap, not a style note). Also: a source declared in `config/sources.json` with no fixture, and a CLI verb promised in `spec/PROJECT_BRIEF.md` §10 that does not exist.
 
 **Agent D: Undocumented Features (code exists, docs absent)** — commands not in CLAUDE.md, env vars not in the committed .env files (api/.env, api/.env.test, infra/.env), Makefile targets not in README, hook scripts not in docs.
 

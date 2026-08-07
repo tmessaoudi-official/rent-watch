@@ -125,7 +125,7 @@ fi
 #
 # The alternation also covers the empty/null idioms of the languages this repo ACTUALLY uses. It
 # carried `= *none` — a Python idiom, and the only Python here is the superseded prototype — while
-# missing the YAML and JSON nulls that `config/criteria.yaml` and `config/sources.yaml` will be
+# missing the YAML and JSON nulls that `config/criteria.json` and `config/sources.json` will be
 # written in, and PHP's `array()`. That inversion was a standing gap, not a regression from the
 # narrowing: the pre-narrowing pattern missed them too.
 #
@@ -137,7 +137,7 @@ fi
 # test ran over the whole write, so ONE occurrence of `source` anywhere disarmed the pattern for the
 # entire file. The counter-example the round-5 commit itself led with,
 # `public static function excluded(): array { return []; }`, went silent by adding one word of
-# docblock above it, and `config/sources.yaml` was permanently exempt because its own content
+# docblock above it, and `config/sources.json` was permanently exempt because its own content
 # guarantees the token.
 #
 # Narrowing it to the matched span does not rescue it either: `communes:` sits just before the match
@@ -160,7 +160,7 @@ fi
 # "confidence < 0.6" in CLAUDE.md, so the first pattern looked for `0.[0-5]` — but the classifier
 # stores confidence in INTEGER BASIS POINTS (`FLOOR_BP = 60`) precisely so that PHP and phorj cannot
 # disagree on a float, and a run of `0.6` appears nowhere in src/. A 2026-08-06 review set the floor
-# to 0 and watched the tripwire stay silent. The float form is kept because config/criteria.yaml and
+# to 0 and watched the tripwire stay silent. The float form is kept because config/criteria.json and
 # the notification payload will both express confidence as a fraction; the integer form is what the
 # code actually uses. Both must be covered, and tests/test-tenure-guard.sh has a case for each.
 #
@@ -242,7 +242,7 @@ fi
 
 # 6. Making the hard exclusions configurable.
 # A leading `#` or `//` means the line is a COMMENT describing the source, not a key enabling it:
-# `# config: CDC Habitat publishes PLUS and PLAI alongside LLI` is exactly the note config/sources.yaml
+# `# config: CDC Habitat publishes PLUS and PLAI alongside LLI` is exactly the note config/sources.json
 # will carry about a mixed-tenure landlord, and firing on it teaches the reader to ignore the guard.
 # PER LINE, and the previous form was broken in BOTH directions by the flattening: `^ *(#|//|\*)`
 # could only ever anchor at the start of the whole write, so a leading comment line hid every toggle

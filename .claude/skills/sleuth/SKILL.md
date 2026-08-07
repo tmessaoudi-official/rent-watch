@@ -88,7 +88,7 @@ Beyond agents A–J, always run **agent K** on this repo:
 
 > **K — Tenure and silent-failure divergence.** rent-watch decides the same thing in more than one
 > place — the classifier, the criteria engine, a source's `default_tenure` hint, a per-site adapter
-> override in `adapters/sites/`, and `config/sources.yaml` — and every one of those is a chance for two
+> override in `adapters/sites/`, and `config/sources.json` — and every one of those is a chance for two
 > answers to disagree. Unlike a display bug, a disagreement here is invisible: the tool simply says
 > nothing, or says the wrong thing confidently. Hunt for places they can:
 > **(1) Tenure-decision divergence** — tenure decided in the classifier and *re-decided* anywhere else
@@ -113,7 +113,7 @@ Beyond agents A–J, always run **agent K** on this repo:
 > **(5) Dedup ↔ notification divergence** — a cluster key computed one way when storing and another
 > when looking up, so the same flat re-notifies forever or a genuine second flat is swallowed; a price
 > history that records a drop the notifier never surfaces, or vice versa.
-> **(6) Config ↔ code divergence** — a `config/sources.yaml` or `criteria.yaml` key read under one
+> **(6) Config ↔ code divergence** — a `config/sources.json` or `criteria.yaml` key read under one
 > name and documented under another, a field map referencing a path the fixture does not contain, a
 > `.env` var consumed in code but absent from `.env.example`. A config key that silently does nothing
 > is indistinguishable from one that works.

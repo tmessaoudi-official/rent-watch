@@ -154,7 +154,7 @@ impossible by design rather than by omission (`docs/PHORJ-REQUIREMENTS.md`).
 | Notify | `src/php/Core/Notify/` | One module per channel. Every notification carries `score` + human-readable `reasons[]`. |
 | Adapters | `src/php/Adapters/` | `base` (the `Source` interface), `http_json`, `html`, `email_alert` (IMAP), `browser` (Playwright, opt-in), `sites/` for per-site overrides |
 | Enrich | `src/php/Enrich/` | `transit` (IDFM / PRIM door-to-door commute), `geo` (commune → INSEE code, coords) |
-| Config | `config/` | `criteria.yaml` (user criteria), `sources.yaml` (source definitions + field maps) — both committed |
+| Config | `config/` | `criteria.json` (user criteria), `sources.json` (source definitions + field maps) — both committed. **JSON, not YAML** — ruled 2026-08-07 (Q22): no `ext-yaml` here and no way to install one. `_`-prefixed keys are comments; any other unknown key is a validation error. A gitignored `criteria.local.json` overrides field-by-field |
 | Fixtures | `tests/fixtures/<source>/` | Frozen HTML/JSON payloads. Parser tests run **offline**. No network in CI. |
 | Classifier corpus | `tests/fixtures/tenure/corpus.json` | **Language-neutral.** Read by both implementations — that shared file is what makes the differential test mean anything. |
 
@@ -426,7 +426,7 @@ state/                      The SQLite seen-set, price history and run log. Giti
 prototype/                  Pre-existing single-file prototype. Reference only; do not extend in place
 docs/OPEN-QUESTIONS.md      Decisions still pending, with the default if unanswered
 docs/plans/                 <topic>.plan.md, each with its own ## Decisions Log
-config/                     criteria.yaml + sources.yaml (committed)          [not yet created]
+config/                     criteria.json + sources.json (committed) — JSON, ruled 2026-08-07 (Q22)
 src/php/Core/               PHP 8.5 pure core — models + tenure classifier + source health
 src/php/Store/              SQLite seen-set, price history and run log
 src/phorj/                  phorj port of the same pure core                  [waits on phorj]
