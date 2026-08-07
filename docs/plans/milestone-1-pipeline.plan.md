@@ -515,3 +515,22 @@ A changelog that overstates is worse than one that omits, because the next sessi
   rather than to guess one. The cost is stated: a listing it cannot read confidently gets no tenure
   signal and DIGESTS on a mixed source. It must never follow the links to scrape the page — that is
   the route hard rule 4 gates, and doing it from the email path would bypass the gate entirely.
+- [2026-08-07 23:40] SABOTAGE RESULT for the network adapters, recorded rather than left unverified
+  (the previous commit said it was still running and did not claim a result): **230 detected, 6
+  undetected.** Two of the six were MY OWN broken sed expressions and not test gaps — a multi-line
+  `\n` pattern that sed cannot match, and an over-escaped regex — and the tests they were meant to
+  drive do exist and do assert the guarantee. Both expressions are fixed; the fix is NOT yet
+  re-verified, because a full run takes ~20 minutes and the session was ending.
+  **The remaining FOUR are genuine test gaps, and they are the first work of the next session:**
+  1. **the honest User-Agent** (hard rule 5) — nothing asserts the string, so replacing it with a
+     browser disguise leaves the suite green. This is the rule the project is most explicit about.
+  2. **the rent plausibility band** in `EmailAlertSource` — the fixture does not contain a bare
+     five-digit number that could be misread as a rent, so removing the 200–20000 guard changes
+     nothing. Needs an alert fixture carrying a reference number or a bare postcode.
+  3. **SMTP continuing without STARTTLS** when the server does not advertise it — this is the one
+     that sends a credential in the clear, and it currently has no test at all. It needs a scripted
+     fake SMTP server on a loopback socket, which is real work and worth it.
+  4. **SMTP masking the base64 form of the password** — `NetworkAdaptersTest` constructs a
+     `ChannelError` directly with the literals, so it proves `Redact` works and proves nothing about
+     `SmtpTransport::secrets()` actually passing them. Same shape as the `mixed_tenure` guard that
+     was decorative: the test asserts the mechanism, not the wiring.

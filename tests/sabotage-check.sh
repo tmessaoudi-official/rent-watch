@@ -1150,7 +1150,7 @@ run_sabotage "robots.txt stops being consulted before a fetch (hard rule 5)" \
 
 run_sabotage "an unreadable robots.txt starts allowing everything (fails OPEN)" \
   src/php/Adapters/Http/Robots.php \
-  's%if (!\$this->parsed) {\n            return false;%if (false) {%'
+  's%if (!\$this->parsed) {%if (false) {%'
 
 run_sabotage "an empty Disallow starts meaning disallow-everything" \
   src/php/Adapters/Http/Robots.php \
@@ -1186,7 +1186,7 @@ run_sabotage "the text/plain part stops being preferred over HTML" \
 
 run_sabotage "block tags stop becoming newlines when HTML is stripped" \
   src/php/Adapters/Mail/EmailMessage.php \
-  's%~</(p|div|br|li|tr|h\[1-6\]|td)\\\\s\*>|<br\\\\s\*/?>~i%~<XXNOMATCHXX>~i%'
+  's%(p|div|br|li|tr|h%(XX|div|br|li|tr|h%'
 
 run_sabotage "tracking parameters stop being stripped from an alert link id" \
   src/php/Adapters/EmailAlertSource.php \
