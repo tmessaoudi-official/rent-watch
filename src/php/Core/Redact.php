@@ -70,10 +70,30 @@ final readonly class Redact
         . '|sur|please|veuillez|to|for|via|au|aux|du|de|des|dans|depuis|avec|use|utilisez'
         . '|rejected|rejete|rejeté|impossible|echec|échec|indisponible|unavailable|timeout';
 
-    public static function text(?string $message): ?string
+    /**
+     * @param list<string> $literals exact secret VALUES the caller knows, masked before any pattern
+     *                               runs. For secrets that cannot be recognised by name — see below.
+     */
+    public static function text(?string $message, array $literals = []): ?string
     {
         if ($message === null || $message === '') {
             return $message;
+        }
+
+        // LITERALS FIRST, and they exist because one real secret in this project cannot be masked by
+        // name at all: the ntfy topic travels as a URL PATH SEGMENT (`https://host/my-topic`), so
+        // there is no `topic=` to anchor on. The pattern below covers the default `ntfy.*` host, and
+        // a review demonstrated it leaking the moment the server is self-hosted under any other
+        // name — which `.env.example` exists to allow. `NTFY_SERVER` being configurable is exactly
+        // what makes a hostname-anchored rule insufficient.
+        //
+        // Sorted longest-first so a topic that contains another secret as a substring is masked
+        // whole rather than leaving a fragment behind.
+        $sorted = array_values(array_filter($literals, static fn (string $v): bool => strlen(trim($v)) >= 4));
+        usort($sorted, static fn (string $a, string $b): int => strlen($b) <=> strlen($a));
+
+        foreach ($sorted as $literal) {
+            $message = str_replace($literal, self::MASK, $message);
         }
 
         $names = implode('|', array_map(preg_quote(...), self::SECRET_NAMES));

@@ -1,0 +1,205 @@
+<?php
+
+declare(strict_types=1);
+
+namespace RentWatch\Tests\Core;
+
+use PHPUnit\Framework\TestCase;
+use RentWatch\Core\Dedup;
+use RentWatch\Core\RawListing;
+
+/**
+ * Dedup, attacked from BOTH sides, as `CLAUDE.md` § Testing requires.
+ *
+ * The two failure modes are not symmetric and the tests are weighted accordingly:
+ *
+ * - **Over-merge hides a flat** — silent, and indistinguishable from that flat never having been
+ *   published. Most of the cases below attack this direction.
+ * - **Under-merge triple-notifies one** — visible, annoying, self-correcting.
+ */
+final class DedupTest extends TestCase
+{
+    private function listing(
+        string $source,
+        string $id,
+        ?string $commune = 'Chatou',
+        ?int $rentCc = 1450,
+        ?float $surface = 84.0,
+        ?int $rooms = 4,
+        ?int $floor = null,
+    ): RawListing {
+        return new RawListing(
+            sourceName: $source,
+            externalId: $id,
+            commune: $commune,
+            rentCc: $rentCc,
+            surfaceM2: $surface,
+            rooms: $rooms,
+            floor: $floor,
+        );
+    }
+
+    private function reason(RawListing $a, RawListing $b, string $fa = 'private', string $fb = 'private'): ?string
+    {
+        return (new Dedup())->duplicateReason($a, $b, $fa, $fb);
+    }
+
+    // ---------------------------------------------------------------- must merge
+
+    public function testTheSameFlatOnTwoPrivatePortalsIsOneFinding(): void
+    {
+        // SeLoger and Logic-Immo are the same group (docs/SOURCES.md B5) and duplicate heavily.
+        // This is the case dedup exists for.
+        $reason = $this->reason(
+            $this->listing('seloger', 'a1'),
+            $this->listing('logic_immo', 'b9'),
+        );
+
+        self::assertNotNull($reason);
+        self::assertStringContainsString('logic_immo', $reason);
+    }
+
+    public function testSmallRoundingDifferencesStillMerge(): void
+    {
+        // Portals round rent and surface differently for the same flat.
+        $reason = $this->reason(
+            $this->listing('seloger', 'a1', rentCc: 1450, surface: 84.0),
+            $this->listing('logic_immo', 'b9', rentCc: 1470, surface: 85.0),
+        );
+
+        self::assertNotNull($reason);
+    }
+
+    // ---------------------------------------------------------------- must NOT merge
+
+    public function testTwoListingsThatAGREEONNOTHINGAreNotDuplicates(): void
+    {
+        // THE most important case in this file. Two listings in the same commune stating nothing
+        // else share no positive evidence at all — merging them is the over-merge that hides a
+        // flat, and it is exactly what a naive "same commune" key would do.
+        $reason = $this->reason(
+            $this->listing('seloger', 'a1', rentCc: null, surface: null, rooms: null),
+            $this->listing('logic_immo', 'b9', rentCc: null, surface: null, rooms: null),
+        );
+
+        self::assertNull($reason);
+    }
+
+    public function testAgreeingOnRoomCountAloneIsNotEnough(): void
+    {
+        // A T4 filter means EVERY candidate is a T4, so merging on room count alone collapses the
+        // whole result set into a single notification.
+        $reason = $this->reason(
+            $this->listing('seloger', 'a1', rentCc: null, surface: null, rooms: 4),
+            $this->listing('logic_immo', 'b9', rentCc: null, surface: null, rooms: 4),
+        );
+
+        self::assertNull($reason);
+    }
+
+    public function testTwoUNKNOWNCommunesAreNotTheSameCommune(): void
+    {
+        $reason = $this->reason(
+            $this->listing('seloger', 'a1', commune: null),
+            $this->listing('logic_immo', 'b9', commune: null),
+        );
+
+        self::assertNull($reason);
+    }
+
+    public function testDifferentCommunesNeverMerge(): void
+    {
+        self::assertNull($this->reason(
+            $this->listing('seloger', 'a1', commune: 'Chatou'),
+            $this->listing('logic_immo', 'b9', commune: 'Houilles'),
+        ));
+    }
+
+    public function testAStatedRentDisagreementIsDecisive(): void
+    {
+        // Even with surface and rooms matching perfectly. Two flats whose rents differ by more than
+        // the tolerance are two flats.
+        self::assertNull($this->reason(
+            $this->listing('seloger', 'a1', rentCc: 1450),
+            $this->listing('logic_immo', 'b9', rentCc: 1750),
+        ));
+    }
+
+    public function testAStatedSurfaceDisagreementIsDecisive(): void
+    {
+        self::assertNull($this->reason(
+            $this->listing('seloger', 'a1', surface: 84.0),
+            $this->listing('logic_immo', 'b9', surface: 110.0),
+        ));
+    }
+
+    public function testDifferentFloorsNeverMerge(): void
+    {
+        // Two identical flats in the same building on different floors are genuinely two flats, and
+        // in a new development they are common.
+        self::assertNull($this->reason(
+            $this->listing('seloger', 'a1', floor: 2),
+            $this->listing('logic_immo', 'b9', floor: 5),
+        ));
+    }
+
+    // ---------------------------------------------------------------- tracks
+
+    public function testAFlatOnInliAndOnSeLogerIsTWOFindings(): void
+    {
+        // docs/SOURCES.md: "a flat listed by In'li AND on SeLoger is two findings, not a duplicate,
+        // because the application route differs." Applying to In'li directly is a different act
+        // from applying through an agency — collapsing them hides the better route.
+        self::assertNull($this->reason(
+            $this->listing('inli', 'a1'),
+            $this->listing('seloger', 'b9'),
+            'institutional',
+            'private',
+        ));
+    }
+
+    public function testTwoListingsFromTheSameSourceAreNeverFuzzyMatched(): void
+    {
+        // Within a source the source's own id is authoritative and exact. Fuzzy matching here would
+        // second-guess the only identifier that is actually reliable.
+        self::assertNull($this->reason(
+            $this->listing('seloger', 'a1'),
+            $this->listing('seloger', 'b9'),
+        ));
+    }
+
+    // ---------------------------------------------------------------- clustering
+
+    public function testClusteringKeepsTheFirstAndRecordsWhatItAbsorbed(): void
+    {
+        $clusters = (new Dedup())->cluster([
+            ['listing' => $this->listing('seloger', 'a1'), 'family' => 'private'],
+            ['listing' => $this->listing('logic_immo', 'b9'), 'family' => 'private'],
+            ['listing' => $this->listing('leboncoin', 'c3', commune: 'Houilles'), 'family' => 'private'],
+        ]);
+
+        self::assertCount(2, $clusters);
+        self::assertSame('a1', $clusters[0]['listing']->externalId, 'the first is kept');
+        // Recorded rather than dropped: knowing the same flat is on two portals is a second
+        // application route, and a silently discarded duplicate is indistinguishable from a
+        // listing that was never fetched.
+        self::assertSame(['logic_immo:b9'], $clusters[0]['duplicates']);
+        self::assertSame([], $clusters[1]['duplicates']);
+    }
+
+    public function testClusteringDoesNotCollapseAWholeResultSet(): void
+    {
+        // The regression this whole file guards: every candidate passes a T4 filter, so a weak rule
+        // turns twenty findings into one notification and nineteen silent losses.
+        $items = [];
+        for ($i = 0; $i < 20; ++$i) {
+            $items[] = [
+                'listing' => $this->listing('seloger', 'x' . $i, rentCc: 1400 + $i * 40, surface: 80.0 + $i),
+                'family' => 'private',
+            ];
+        }
+
+        // All from the same source, so nothing may merge at all.
+        self::assertCount(20, (new Dedup())->cluster($items));
+    }
+}

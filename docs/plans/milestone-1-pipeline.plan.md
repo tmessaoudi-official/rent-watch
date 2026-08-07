@@ -20,7 +20,8 @@ failures are silent, and they are cheapest to get right before anything depends 
 | `FixtureSource` — offline, shares the mapper with every network adapter | **done**, and it is what `scout replay` will use |
 | `criteria` (score + hard disqualifiers) | **done**, `src/php/Core/CriteriaEngine.php` + `Verdict.php` |
 | `HttpJsonSource` — the first NETWORK adapter | **blocked on an input**, not a decision: no endpoint in this repo has been verified, and hard rule 1 forbids writing one from memory. Needs a DevTools cURL capture |
-| Notification formatter + one channel | not started |
+| `dedup` — cross-portal clustering | **done**, `src/php/Core/Dedup.php` |
+| Notification formatter + channels (console, ntfy, email) | **done**, `src/php/Core/Notify/` |
 | `scout` CLI (`doctor`, `dump <source>`, `run --once`) | not started |
 
 ## Settled — the config file format
@@ -411,3 +412,34 @@ A changelog that overstates is worse than one that omits, because the next sessi
   that differs only in which field carries the phrase.
   (3) the accented-pattern sabotage never applied at all, so it had been reporting nothing for its
   whole life. Fixed to disable the check rather than reword its message.
+- [2026-08-07 20:30] AGREED (dedup): merge only on POSITIVE evidence, never on the absence of a
+  difference. Two listings that agree on nothing because they state nothing are not duplicates —
+  `MIN_CORROBORATING_FACTS = 2` is what enforces it, and it is the single most load-bearing constant
+  in the module. With 1, agreeing on room count alone merges every T4 in a commune, and a T4 filter
+  means every candidate is a T4: the whole result set collapses into one notification and the rest
+  are silent losses.
+- [2026-08-07 20:30] AGREED (dedup, from `docs/SOURCES.md`): **tracks do not merge.** A flat on In'li
+  AND on SeLoger is two findings, because the application route differs — applying directly is a
+  different act from applying through an agency, with different competition. Collapsing them hides
+  the better route behind the worse one.
+- [2026-08-07 20:30] AGREED (notify): a `Channel::send()` **throws on failure and never returns
+  silently**. A channel that swallows a delivery error is the notification-layer form of
+  `except Exception: return []` — the run reports success, the listing is marked notified, and the
+  flat is gone. `Notifier::delivered()` is what the caller asks before marking anything notified.
+- [2026-08-07 20:30] AGREED (notify, Q28 made concrete): `Notifier` attempts EVERY usable channel and
+  collects the failures rather than stopping at the first. A partial outage must not cost the
+  delivery that would have succeeded.
+- [2026-08-07 20:30] AGREED (secrets): `Redact::text()` gained an optional `$literals` argument, and
+  it exists for one secret whose shape defeats every name-based rule — the ntfy topic travels as a
+  URL PATH SEGMENT, so there is no `topic=` to anchor on. The existing pattern covers the default
+  `ntfy.*` host and leaks the moment the server is self-hosted under another name, which
+  `.env.example` exists to permit. `NtfyChannel` passes its topic to every `ChannelError` it raises.
+  A test asserts the leak still exists without the literal, so the argument cannot be quietly dropped.
+- [2026-08-07 20:30] AGREED (notify): the headline leads with commune, size and rent — NOT the
+  source's own title, which is written to sell and buries the facts. A notification is read on a lock
+  screen, and an hors-charges rent is FLAGGED rather than shown as if comparable to the budget.
+- [2026-08-07 20:30] FOUND BY A TEST: the `NotifyTest` listing helper used `??`, which swallows an
+  EXPLICIT null override — so `['rentCc' => null]` silently kept the default and the hors-charges
+  test asserted against a listing that had a CC rent after all. A helper that quietly ignores what a
+  test asked for makes the test prove something other than what it says.
+

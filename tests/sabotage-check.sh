@@ -996,6 +996,71 @@ run_sabotage "a fixture path may escape the repo" \
   src/php/Adapters/FixtureSource.php \
   "s%if (str_contains(\\\$relative, '..')) {%if (false) {%"
 
+# ── Dedup and the notification layer, added 2026-08-07 ────────────────────────────
+# Over-merge HIDES a flat and under-merge only notifies twice, so the dedup sabotages attack the
+# first direction. A notification that is computed and not delivered is worse than none at all
+# (hard rule 2), which is what the notify sabotages attack.
+
+run_sabotage "dedup merges on ONE corroborating fact (every T4 in a commune collapses)" \
+  src/php/Core/Dedup.php \
+  's%MIN_CORROBORATING_FACTS = 2%MIN_CORROBORATING_FACTS = 1%'
+
+run_sabotage "dedup treats two UNKNOWN communes as the same commune" \
+  src/php/Core/Dedup.php \
+  's%if (\$communeA === null || \$communeB === null || \$communeA === .. || \$communeA !== \$communeB) {%if (false) {%'
+
+run_sabotage "dedup stops respecting the track boundary (In'li merges with SeLoger)" \
+  src/php/Core/Dedup.php \
+  's%if (\$familyA !== \$familyB) {%if (false) {%'
+
+run_sabotage "dedup ignores a stated rent disagreement" \
+  src/php/Core/Dedup.php \
+  's%RENT_TOLERANCE_RATIO = 0.03%RENT_TOLERANCE_RATIO = 9.99%'
+
+run_sabotage "dedup ignores a stated surface disagreement" \
+  src/php/Core/Dedup.php \
+  's%SURFACE_TOLERANCE_RATIO = 0.03%SURFACE_TOLERANCE_RATIO = 9.99%'
+
+run_sabotage "dedup starts fuzzy-matching two listings from the SAME source" \
+  src/php/Core/Dedup.php \
+  's%if (\$a->sourceName === \$b->sourceName) {%if (false) {%'
+
+run_sabotage "a broken channel stops being reported (a send failure goes silent)" \
+  src/php/Core/Notify/Notifier.php \
+  's%\$failures\[\] = \$e;%%'
+
+run_sabotage "delivery is reported as successful when no channel is usable" \
+  src/php/Core/Notify/Notifier.php \
+  's%return count(\$failures) < count(\$this->usable) \&\& \$this->usable !== \[\];%return true;%'
+
+run_sabotage "the process starts with no usable channel at all" \
+  src/php/Core/Notify/Notifier.php \
+  's%if (\$this->usable !== \[\]) {%if (true) {%'
+
+run_sabotage "console alone starts counting as a remote channel" \
+  src/php/Core/Notify/Notifier.php \
+  "s%if (\\\$channel->name() !== 'console') {%if (true) {%"
+
+run_sabotage "a channel throwing an unexpected error escapes and aborts the run" \
+  src/php/Core/Notify/Notifier.php \
+  "s%Throwable %DomainException %"
+
+run_sabotage "a rent drop crossing the ceiling loses its new-match announcement" \
+  src/php/Core/Notify/Formatter.php \
+  "s%(\\\$nowQualifies ? 'PASSE SOUS LE PLAFOND' : 'Baisse de loyer')%'Baisse de loyer'%"
+
+run_sabotage "an hors-charges rent is shown as though it were charges comprises" \
+  src/php/Core/Notify/Formatter.php \
+  "s% € HC% € CC%"
+
+run_sabotage "the literal-secret mask is dropped (a self-hosted ntfy topic leaks)" \
+  src/php/Core/Redact.php \
+  's%\$message = str_replace(\$literal, self::MASK, \$message);%%'
+
+run_sabotage "a known duplicate is silently dropped instead of shown" \
+  src/php/Core/Notify/Formatter.php \
+  "s%if (\\\$duplicates !== \[\]) {%if (false) {%"
+
 printf '\n  %d sabotage(s) detected, %d undetected\n' "$pass" "$fail"
 
 if (( fail > 0 )); then
