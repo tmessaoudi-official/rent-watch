@@ -145,11 +145,20 @@ suite, see whether it goes red. That is the right instinct and it is how the sha
 this project were made. **Do it in a pinned worktree, not in the working tree.**
 
 ```bash
-w=$(mktemp -d) && git worktree add --detach "$w" <the frozen commit> && cd "$w"
-ln -s "$OLDPWD/vendor" vendor && ln -s "$OLDPWD/tools" tools
+w=$(mktemp -d)/wt && git worktree add --detach "$w" <the frozen commit> && cd "$w"
+cp -a "$OLDPWD/vendor" vendor && cp -a "$OLDPWD/tools/." tools/
+git status --porcelain          # MUST be empty before you run anything
 # …probe here, then:
 cd - && git worktree remove --force "$w"
 ```
+
+**`cp -a`, not `ln -s`, and this is not a style preference.** Composer's `vendor/composer/autoload_psr4.php`
+computes its base directory from its own location, so a symlinked `vendor/` points PSR-4 at the
+PRISTINE `src/` and every sabotage silently passes — one reviewer got `0 detected, 144 undetected`
+that way and nearly reported it as a finding. Symlinking `tools` into the existing `tools/` nests it
+as `tools/tools`, and `.gitignore`'s `/vendor/` has a trailing slash that does not match a symlink,
+so both show up as untracked and `sabotage-check.sh` then declares the tree dirty. Use a UNIQUE
+worktree path: three lenses run concurrently and a shared one gets deleted underneath you mid-run.
 
 Three things go wrong when a probe runs in the live tree, and all three have happened:
 

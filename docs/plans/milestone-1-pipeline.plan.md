@@ -261,3 +261,43 @@ should require that, and it is the one action left over from this round.
   and warns when the tree is dirty. Two reviewers independently saw it report undetected sabotages
   once and neither could say which, because both had piped it through `tail`. A gate whose verdict
   cannot be reconstructed from its own last ten lines is a gate nobody can act on.
+
+### Round 13 — 23 findings, two P0, both of them round-12 repairs overshooting
+
+The tree was frozen and stayed frozen. Two reviewers still contaminated their own first runs, this
+time by following the worktree recipe I had written one commit earlier — which was wrong.
+
+- [2026-08-08 09:20] AGREED: a name component boundary is a DELIMITER **or a case transition**.
+  Requiring `_`/`-`/`.` alone missed camelCase entirely — `clientSecret`, `accessToken`, `botToken`,
+  `refreshToken`, `userPassword` — which is the dominant JSON key convention and the literal spelling
+  of every OAuth field. An OAuth 401 body reached `source_runs.error` and the notification in
+  cleartext. `apiKey` survived only by accident, because `apikey` is a whole entry in the name list.
+  The camel assertions need `(?-i:…)` or the case-insensitive flag collapses them to nothing.
+- [2026-08-08 09:20] AGREED: `LOGIN` keys off the IMAP **tag**, `PASS` off a stoplist, and neither
+  off the end of the line. Anchoring at EOL leaked whenever the adapter WRAPPED the library error
+  with its own context — which is the natural way to satisfy hard rule 3 — so `… > A01 LOGIN user
+  pass (tentative 1/3)` masked the mailbox and left the password beside it. Note the stoplist's
+  DIRECTION: an unlisted word is masked, so a missing entry costs a masked diagnostic word and never
+  a leaked credential. The earlier lookahead had it the other way round.
+- [2026-08-08 09:20] AGREED: base64 credential blobs need three shapes, because the obvious single
+  rule excluded the commonest secret here. `base64_encode()` of a 16-character Google app password is
+  22–24 characters and may contain no digit at all, so a rule demanding 24 AND a digit missed exactly
+  the secret the plaintext rule leaks — using the very discriminator that leak was caused by.
+- [2026-08-08 09:20] AGREED: the Latin-1 `&nbsp;` byte is stripped by the byte fallback. `\xA0` is
+  not valid UTF-8, so the `/u` trim returns null, and a plain `trim()` left it standing — an id of
+  one such byte looked non-empty and collapsed every listing in the run onto `:id:%A0`. The exact
+  over-merge that method's own docblock describes itself as preventing.
+- [2026-08-08 09:20] AGREED: **the counting window is bounded on the OLD side only.** I asserted in
+  two comments that a late-committed run "self-corrects on the next run" and never tested it. Under
+  repetition it does not: two writers, one stamping from a lagging `Date:` header, gave eleven
+  consecutive real failures reported `OK` indefinitely, because the upper bound read
+  `failedRunsInWindow` as 0 of 11. A failure is a failure whatever its clock says. The upper bound
+  stays on the MEAN, where a future-stamped row would otherwise inflate every later verdict.
+- [2026-08-08 09:20] AGREED: the worktree recipe uses `cp -a`, never `ln -s`. Composer's PSR-4 map
+  resolves relative to its own location, so a symlinked `vendor/` points at the PRISTINE `src/` and
+  every sabotage silently reports as undetected — one reviewer got `0 detected, 144 undetected` and
+  nearly reported it as a finding. `sabotage-check.sh`'s own comment claimed `vendor/` was symlinked
+  when the code copies it, which is what invited the mistake.
+- [2026-08-08 09:20] AGREED: the worktree rule lives in `CLAUDE.md` § "Certification ladder", not
+  only in the agent charters. The charters are exactly the surface that is absent in the
+  self-graded fallback the ladder itself names.

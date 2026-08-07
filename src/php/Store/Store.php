@@ -672,8 +672,10 @@ final readonly class Store
         //     CLOCK is the thing that is wrong: an hour-slow clock discarded three real failures and
         //     reported OK, with `totalRuns` counting only the survivors — a silent discard.
         //   insertion order — a run committed late but stamped earlier wins, so one success logged
-        //     after three failures reads OK. Two writers make that reachable. It self-corrects on
-        //     the NEXT run, i.e. one poll interval.
+        //     after three failures reads OK. Two writers make that reachable. A SINGLE such row
+        //     self-corrects on the next run; a writer that stamps stale SYSTEMATICALLY keeps the
+        //     last-run rule quiet indefinitely, and what catches that is WARN_FLAKY — which is why
+        //     `windowCounts()` counts failures whatever their clock says. Both are alerting.
         //
         // Bounded-by-one-run beats bounded-by-the-skew beats unbounded. So the log's own order wins,
         // and `$nowIso` is used for exactly one thing below: STALE, which genuinely cannot be
@@ -942,22 +944,23 @@ final readonly class Store
     {
         // Anchored on the LAST-INSERTED row, deliberately, and NOT on `max(at_epoch)`.
         //
-        // Both choices lose the window when a row is forward-skewed, and they lose it for different
-        // lengths of time. Anchoring on the last row loses it for exactly one run — the next real
-        // run becomes the anchor and everything recovers. Anchoring on the maximum loses it FOREVER,
-        // because the skewed row stays the maximum and every real row sits outside its window. A
-        // self-healing degradation beats a permanent one, so this reads the log's own order for the
-        // same reason `health()` does.
+        // Both choices lose the MEAN when a row is forward-skewed, and they lose it for different
+        // lengths of time. Anchoring on the last row loses it until the next real run; anchoring on
+        // the maximum loses it FOREVER, because the skewed row stays the maximum and every real row
+        // sits outside its window. A bounded degradation beats a permanent one, so this reads the
+        // log's own order for the same reason `health()` does.
         $reference = (int) $runs[array_key_last($runs)]['at_epoch'];
         $cutoff = $reference - self::ROLLING_WINDOW_DAYS * 86400;
         $total = 0;
         $failed = 0;
 
-        // Same two rules as rollingMeanBefore(): skip, and bound both ends.
+        // COUNTING is bounded on the OLD side only. The upper bound belongs on the MEAN, where a
+        // future-stamped row would otherwise inflate every later verdict — but applied to the counts
+        // it hid failures: two writers on one source, one stamping from a lagging `Date:` header,
+        // gave eleven consecutive real failures with `failedRunsInWindow` reading 0 of 11, so
+        // neither BROKEN nor WARN_FLAKY could fire. A failure is a failure whatever its clock says.
         for ($i = \count($runs) - 1; $i >= 0; --$i) {
-            $at = (int) $runs[$i]['at_epoch'];
-
-            if ($at < $cutoff || $at > $reference) {
+            if ((int) $runs[$i]['at_epoch'] < $cutoff) {
                 continue;
             }
 
@@ -1065,11 +1068,15 @@ final readonly class Store
         $trimmed = preg_replace('/^[\p{Z}\p{C}\s]+|[\p{Z}\p{C}\s]+$/u', '', $value);
 
         // preg_replace returns null on a PCRE failure, and with the `u` flag the demonstrated cause
-        // is invalid UTF-8 — the same input `Text::fold()` refuses with MalformedText. Falling back
-        // to the ASCII trim keeps the bytes, so the id still DISTINGUISHES listings; discarding
-        // them would merge every malformed one onto a single key, which is the failure this method
-        // exists to prevent.
-        return $trimmed ?? trim($value);
+        // is invalid UTF-8 — the same input `Text::fold()` refuses with MalformedText.
+        //
+        // The fallback strips the LATIN-1 spaces as well as the ASCII ones, and that is the whole
+        // point of it. A Windows-1252 page is the likeliest encoding accident in this domain, and
+        // its `&nbsp;` is the single byte `\xA0`: with a plain `trim()` an id of one such byte was
+        // non-empty, so it passed the "does this source publish an id?" test and collapsed every
+        // listing in the run onto `:id:%A0` — the exact over-merge the docblock above describes.
+        // `\x85` (NEL) and `\xAD` (soft hyphen) are the other two that appear in scraped text.
+        return $trimmed ?? trim($value, " \t\n\r\0\x0B\x85\xA0\xAD");
     }
 
     /** Fold for comparison, falling back to the raw bytes rather than collapsing unreadable input to one key. */

@@ -37,9 +37,11 @@ run_sabotage() {
 
   rm -rf "$work/repo"
   mkdir -p "$work/repo"
-  # src/ and tests/ are copied because the sabotage edits them. vendor/ (composer's autoloader,
-  # which resolves PSR-4 relative to its own location) and the runner are symlinked — copying them
-  # per sabotage is pure I/O for no isolation benefit.
+  # src/ and tests/ are copied because the sabotage edits them. vendor/ is COPIED TOO, and that is
+  # load-bearing rather than wasteful: composer's `autoload_psr4.php` computes its base directory
+  # from its own location, so a symlinked vendor/ resolves PSR-4 back to the PRISTINE src/ and every
+  # sabotage silently reports as undetected. A reviewer hit exactly that and got 0/144. Only the
+  # runner is symlinked — it is a self-contained PHAR with no path assumptions.
   # Checked: an unnoticed copy failure makes the scratch suite fail for the wrong reason, and the
   # detection assertion below cannot tell that apart from a caught sabotage.
   if ! cp -a "$repo/src" "$repo/tests" "$repo/phpunit.xml" "$repo/composer.json" "$work/repo/" \
@@ -118,7 +120,18 @@ if ! (cd "$repo" && php tools/phpunit.phar --no-output --do-not-cache-result >/d
   printf '        false positive. Fix the suite first, then re-run.\n\n'
   exit 1
 fi
-printf '  baseline: suite is green — sabotage results are meaningful\n\n'
+printf '  baseline: suite is green — sabotage results are meaningful\n'
+
+# BEFORE the work, not after it. A dirty tree is not fatal — checking uncommitted changes is a
+# legitimate use — but every sabotage copies src/ and tests/ wholesale, so an edit landing mid-run
+# silently changes what is under test. Warning at the END put it ~130 lines above the verdict, past
+# the `tail` that everyone reads.
+if [[ -n "$(cd "$repo" && git status --porcelain 2>/dev/null)" ]]; then
+  printf '  \033[33mNOTE\033[0m the working tree is dirty; each sabotage copies it as-is, so an edit\n'
+  printf '       landing mid-run changes what is under test. Results are advisory until it is clean.\n'
+fi
+
+printf '\n'
 
 run_sabotage "PLS dropped from the excluded set" \
   src/php/Core/Tenure.php \
@@ -509,7 +522,7 @@ run_sabotage "timestamp round-trip check dropped (2026-02-30 rolls forward to 2 
 
 run_sabotage "Unicode trim reverts to ASCII trim (an nbsp id collapses the whole run)" \
   src/php/Store/Store.php \
-  's%return $trimmed ?? trim($value);%return trim($value);%'
+  's%trim($value, ".*")%trim($value)%'
 
 run_sabotage "no-information floor removed (id-less, url-less, title-less listings share one key)" \
   src/php/Store/Store.php \
@@ -737,19 +750,11 @@ run_sabotage "SASL AUTH PLAIN base64 passes through" \
 
 run_sabotage "the padded-base64 blob pattern is removed" \
   src/php/Core/Redact.php \
-  "s%{24,}%{999,}%"
+  's%{16,}%{999,}%g'
 
-run_sabotage "the credential verb pattern goes case-insensitive (French prose is eaten)" \
+run_sabotage "the LOGIN tag requirement is dropped (French prose is eaten)" \
   src/php/Core/Redact.php \
-  "s%\$~m'%\$~mi'%g"
-
-# A dirty tree is not fatal — checking uncommitted work is a legitimate use — but every sabotage
-# copies `src/` and `tests/` wholesale, so an edit landing mid-run silently changes what is under
-# test. Both reviewers who saw a phantom failure were editing the tree while this ran.
-if [[ -n "$(cd "$repo" && git status --porcelain 2>/dev/null)" ]]; then
-  printf '  \033[33mNOTE\033[0m the working tree is dirty; each sabotage copies it as-is, so an edit\n'
-  printf '       landing mid-run changes what is under test. Results are advisory until it is clean.\n'
-fi
+  's%(\[A-Za-z\]{0,4}\[0-9\]{1,5})\[ .t\]+(LOGIN)%(LOGIN)%'
 
 
 # ── The store, round five ─────────────────────────────────────────────────────────────────────────
@@ -768,11 +773,11 @@ run_sabotage "the secret-name affix matches mid-word again (project vocabulary i
 
 run_sabotage "the base64 blob drops its padding requirement (identifiers are eaten)" \
   src/php/Core/Redact.php \
-  's%={1,2}%%'
+  's%\[A-Za-z0-9+/\]{16,}==%[A-Za-z0-9+/]{999,}==%'
 
-run_sabotage "the credential verb pattern stops anchoring at end-of-line (prose is eaten)" \
+run_sabotage "the whole-line base64 rule is removed (SMTP AUTH blobs pass through)" \
   src/php/Core/Redact.php \
-  's%\[ .t\]\*.r?$~m%[ \\t]*~%g'
+  's%.\[A-Za-z0-9+/\]{16,}={0,2}%^zzz-no-such-blob%'
 
 run_sabotage "a value of pure punctuation is masked again (JSON parse errors are eaten)" \
   src/php/Core/Redact.php \
@@ -786,6 +791,13 @@ run_sabotage "record() reverts to a deferred transaction (the busy handler is sk
   src/php/Store/Store.php \
   "s%\$this->pdo->exec('BEGIN IMMEDIATE');%\$this->pdo->beginTransaction();%"
 
+# NOT SABOTAGED, and recorded rather than quietly omitted: `upgradeFrom()`'s own `BEGIN IMMEDIATE`.
+# The `record()` sabotage uses an unanchored sed that rewrites BOTH sites, so it goes red on
+# `record()`'s half alone — reverting only the migration site leaves the suite green. Covering it
+# honestly needs two processes racing to open the same v1 database, and the wait it would assert is
+# BUSY_TIMEOUT_MS = five seconds, which is not a price this suite should pay on every run. The risk
+# is bounded: a migration runs once per database, and losing that race fails loudly.
+
 run_sabotage "journalMode() reports what was asked for, not what was given" \
   src/php/Store/Store.php \
   "s%\$journalMode = \$mode === false ? 'unknown' : (string) \$mode->fetchColumn();%\$journalMode = 'wal';%"
@@ -797,6 +809,32 @@ run_sabotage "the span reverts to last-minus-first (a skewed first run disables 
 run_sabotage "fractional seconds are capped at six digits again (Go nanoseconds refused)" \
   src/php/Store/Store.php \
   's%(.d+)(?=%(\\d{1,6})(?=%'
+
+# ── The store, round six ──────────────────────────────────────────────────────────────────────────
+#
+# Round 13 returned 23 findings, two P0, and both were round-12 repairs overshooting: the name affix
+# went from matching too much to missing camelCase entirely, and the verb rule went from leaking
+# all-letter passwords to leaking any line the adapter had wrapped with its own context.
+
+run_sabotage "the camelCase left boundary is removed (clientSecret stops matching)" \
+  src/php/Core/Redact.php \
+  's%|(?-i:(?<=\[a-z0-9\])(?=\[A-Z\]))%%'
+
+run_sabotage "the camelCase right boundary is removed (clientSecretKey stops matching)" \
+  src/php/Core/Redact.php \
+  's%|(?-i:(?=\[A-Z\]\[a-z\]))%%'
+
+run_sabotage "the PASS stoplist is emptied (protocol responses are eaten)" \
+  src/php/Core/Redact.php \
+  "s%'command|commande|failed%'zzz-no-such-word|failed%"
+
+run_sabotage "the ntfy topic drops back to the ambiguous list (a JSON body leaks it)" \
+  src/php/Core/Redact.php \
+  "s%^        'topic',\$%%"
+
+run_sabotage "the failure count is bounded on the new side again (a stale writer hides failures)" \
+  src/php/Store/Store.php \
+  "s%if ((int) \$runs\[\$i\]\['at_epoch'\] < \$cutoff) {%if ((int) \$runs[\$i]['at_epoch'] < \$cutoff || (int) \$runs[\$i]['at_epoch'] > \$reference) {%"
 
 printf '\n  %d sabotage(s) detected, %d undetected\n' "$pass" "$fail"
 

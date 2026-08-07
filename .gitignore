@@ -24,6 +24,9 @@ seen.json
 # reclaimed container, which is exactly when someone runs `git add .` to salvage work. They hold
 # un-checkpointed pages, including adapter error text.
 *.sq3
+*.sq3-wal
+*.sq3-shm
+*.sq3-journal
 *.sqlite-wal
 *.sqlite-shm
 *.sqlite-journal

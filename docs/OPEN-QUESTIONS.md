@@ -334,7 +334,7 @@ table are amended to say `.json`.
 are tuned against real run history instead of defended as if they had been measured.
 
 Spec §8 names two numbers (3 consecutive empty runs, a >70% drop below the rolling mean) and those
-are implemented as written. A review panel found two more failure shapes it does not name, and
+are implemented as written. A review panel found four more failure shapes it does not name, and
 closing them needed thresholds the spec does not supply:
 
 | Constant | Value | What it decides |

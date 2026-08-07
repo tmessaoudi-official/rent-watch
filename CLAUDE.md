@@ -248,6 +248,16 @@ Docs, `CLAUDE.md`, `spec/`, `.claude/**` and planning-file edits qualify. Anythi
 **Milestone boundaries always get MAXIMAL**, against a **frozen commit** — freeze first, because a
 round run on a moving tree cannot count toward the two-clean requirement.
 
+**Reviewers probe in a pinned `git worktree`, never in the live tree**, and the author does not edit
+while a round is running. Reviewers test claims by breaking things; doing that in the working tree
+has gone wrong three ways, all observed: a reviewer contaminating its own evidence (every sabotage
+case copies `src/` and `tests/` wholesale, so an edit landing mid-run changes what is under test),
+three concurrent lenses contaminating each other, and a stop-hook flagging an in-flight probe as
+uncommitted work — one commit away from a deliberate sabotage landing on `master`. Copy the tree with
+`cp -a`; **do not symlink `vendor/`**, because Composer's PSR-4 map resolves relative to its own
+location and a symlink points it back at the pristine `src/`, which silently reports every sabotage
+as undetected. The full recipe is in each agent charter under § "Probe in a worktree".
+
 Availability chain: reviewer subagents → (if subagents are unavailable) three distinct-lens self-passes
 **with mandatory disclosure that certification was self-graded**. Never silently skip a gate.
 
@@ -382,21 +392,26 @@ Required coverage, per spec §11 — non-negotiable once `src/` exists:
 - **Store tests.** The store has the most silent failure modes in the tree, and a review panel found
   25 defects in its first cut — so its contract is written down rather than left to judgement. Every
   test must exist in a named category: **identity** (nothing collapses onto a shared key: blank and
-  Unicode-whitespace ids, the no-information floor, URL and title normalisation, source scoping);
-  **order** (a stale sighting manufactures no price drop, does not overwrite current state, and does
-  not corrupt the changes-only history; every run is logged whatever its timestamp says); **time**
-  (a trailing `Z` is UTC on any host timezone, fractional seconds of any width parse, a non-existent
-  date is refused, the DST gap is an instant); **health** (every `SourceStatus` member reachable and
-  asserted, every `SourceHealth` field asserted — five of them were once replaceable with constants
-  while the suite stayed green); **persistence** (the seen-set and price history survive reopening;
-  an older schema is upgraded and a newer one refused); **concurrency** (WAL and the busy timeout
-  take effect — two processes are designed behaviour here, not an edge case); **secrets** (`Redact`
-  masks before anything is persisted or shown, and does not eat the diagnostic). A new store
-  behaviour without a category is a behaviour nobody decided to guarantee.
+  Unicode-whitespace ids in UTF-8 *and* Latin-1, the no-information floor, URL and title
+  normalisation, source scoping); **order** (a stale sighting manufactures no price drop, does not
+  overwrite current state, and does not corrupt the changes-only history; every run is logged
+  whatever its timestamp says); **rent events** (a drop, a rise, an unknown rent and a rent that
+  vanishes and returns are four different facts); **time** (a trailing `Z` is UTC on any host
+  timezone, fractional seconds of any width parse, a non-existent date is refused, the DST gap is an
+  instant); **health** (every `SourceStatus` member reachable and asserted, every `SourceHealth`
+  field asserted — five were once replaceable with constants while the suite stayed green); **
+  persistence** (the seen-set and price history survive reopening; an older schema is upgraded and a
+  newer one refused; a snapshot carries every field it claims); **concurrency** (WAL, and a second
+  writer that WAITS rather than failing — demonstrated, because a deferred transaction silently
+  skips SQLite's busy handler); **failure paths** (every refusal is loud and leaves nothing
+  half-written); **secrets** (`Redact` masks before anything is persisted or shown, and does not eat
+  the diagnostic). A new store behaviour without a category is a behaviour nobody decided to
+  guarantee.
 
   **`scout doctor` and the run loop MUST pass `$nowIso` to `Store::health()`.** Without it the store
-  has no clock, and two verdicts become underivable: `STALE` never fires at all, and a run stamped
-  in the future cannot be disqualified. **`doctor` must also print `Store::journalMode()`**: WAL can
+  has no clock, and ONE verdict becomes underivable: `STALE` never fires at all. That is the clock's
+  only job — an earlier version also used it to filter the run log, and that discarded real failures
+  whenever the clock itself was the wrong thing. **`doctor` must also print `Store::journalMode()`**: WAL can
   be silently refused on a network mount, and a store in rollback-journal mode makes two processes
   contend instead of share. Both failures are silent.
 

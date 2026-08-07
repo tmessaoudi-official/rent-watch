@@ -134,6 +134,58 @@ final class RedactTest extends TestCase
         // A SUFFIXED component — a second mailbox, a rotated key. The affix has to reach past the
         // name on the right as well as the left, and only the left was pinned.
         yield 'suffixed env-var name' => ['IMAP_PASSWORD_2=hunter2 refusé', ['hunter2']];
+        yield 'suffixed WITHOUT an underscore' => ['IMAP_PASSWORD2=hunter2 refusé', ['hunter2']];
+        yield 'prefixed with a digit' => ['x2password=hunter2', ['hunter2']];
+
+        // camelCase is the dominant JSON key convention and the literal spelling of every OAuth
+        // field. Requiring a `_`/`-`/`.` delimiter around the name missed all of these, and an
+        // OAuth 401 body reached the database and the notification in cleartext.
+        yield 'clientSecret' => ['{"error":"invalid_client","clientSecret":"cdc-h4b1t4t-9f2a"}', ['cdc-h4b1t4t-9f2a']];
+        yield 'accessToken' => ['{"accessToken":"ya29.A0ARrdaM9REDACTME"}', ['ya29.A0ARrdaM9REDACTME']];
+        yield 'refreshToken' => ['{"refreshToken":"rt-abc123"}', ['rt-abc123']];
+        yield 'botToken in var_export' => ["'botToken' => 'AAF-xyz1234'", ['AAF-xyz1234']];
+        yield 'userPassword' => ['userPassword: hunter2', ['hunter2']];
+        yield 'clientSecretKey' => ['clientSecretKey=abc123def', ['abc123def']];
+        // `clientSecretKey` is rescued by `key` even without the right-hand camel boundary, so it
+        // cannot pin it. `secretValue` can: `value` is not a name.
+        yield 'a camelCase suffix that no other name rescues' => ['secretValue=abc123def', ['abc123def']];
+        yield 'ntfy topic in a JSON body' => [
+            '{"error":"forbidden","topic":"rentwatch-a8f3e2"}',
+            ['rentwatch-a8f3e2'],
+        ];
+
+        // The adapter WRAPS the library error with its own context — the natural way to satisfy
+        // hard rule 3 — so nothing can be assumed about what follows the credential.
+        yield 'IMAP LOGIN wrapped by the adapter' => [
+            'échec IMAP sur « inli » : > A01 LOGIN alertes-immo@example.net abcdefghijklmnop (tentative 1/3)',
+            ['abcdefghijklmnop'],
+        ];
+        yield 'POP3 PASS mid-line' => ['échec POP3 : PASS abcdefghijklmnop — vérifiez .env', ['abcdefghijklmnop']];
+        yield 'IMAP LOGIN with a trailing response' => ['a01 LOGIN alice hunter2 (réponse: NO)', ['hunter2']];
+
+        // base64_encode() of a 16-character app password is 22 chars with no digit — so a rule
+        // demanding 24 AND a digit missed exactly the secret the plaintext rule leaks.
+        // `base64_encode()` of a 16-character app password is 22–24 characters. This one is also
+        // DIGIT-FREE, which is the case the `==` rule exists for: the single-`=` rule demands a
+        // digit, `+` or `/`, so a blob made only of letters reaches nothing else.
+        yield 'base64 app password, padded and digit-free' => [
+            'CLIENT -> SERVER: dmtzbnRwbHlrdGdwdHdocw==',
+            ['dmtzbnRwbHlrdGdwdHdocw'],
+        ];
+
+        // A blob on its own line with NO padding at all — a secret whose length is a multiple of
+        // three. Nothing precedes it, so no verb rule reaches it either; only the whole-line rule
+        // does. SMTP AUTH puts the user and the password on separate lines exactly like this.
+        yield 'unpadded base64 alone on a line' => [
+            "334 UGFzc3dvcmQ6\nSHVudGVyMiFzZWNyZXRwYXNz\n535 5.7.8 auth failed",
+            ['SHVudGVyMiFzZWNyZXRwYXNz'],
+        ];
+
+        // IMAP is CRLF on the wire; every other fixture here uses bare newlines.
+        yield 'CRLF multi-line trace' => [
+            "a01 LOGIN alice hunter2secret\r\na02 NO auth failed\r\n",
+            ['hunter2secret'],
+        ];
     }
 
     /**
@@ -230,6 +282,19 @@ final class RedactTest extends TestCase
         ];
 
         // The verb rule is case-SENSITIVE: a real protocol trace shouts, French prose does not.
+        // An untagged LOGIN is a server response or French prose, never a command.
+        yield 'an untagged LOGIN is prose' => [
+            'échec LOGIN sur imap.example.net',
+            ['LOGIN sur imap.example.net'],
+        ];
+
+        yield 'an untagged AUTHENTICATE is a server response' => [
+            'a01 BAD AUTHENTICATE mechanism not supported',
+            ['mechanism not supported'],
+        ];
+
+        yield 'PASS followed by a protocol word' => ['-ERR PASS required', ['PASS required']];
+
         yield 'a lowercase verb at end of line is prose' => [
             'réponse inattendue: pass invalide',
             ['pass invalide'],

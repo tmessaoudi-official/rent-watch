@@ -357,14 +357,18 @@ final class StoreTest extends TestCase
      */
     public function testAnExternalIdOfOnlyUnicodeWhitespaceIsNoIdAtAll(): void
     {
-        foreach (["\u{00A0}", "\u{2007}", "\u{202F}", "\u{3000}", "\u{200B}", "\u{FEFF}", " \t "] as $blank) {
+        // The last entry is the LATIN-1 spelling of `&nbsp;` — a single `\xA0` byte. It is not
+        // valid UTF-8, so the Unicode trim's `/u` pattern returns null and the byte fallback is what
+        // has to strip it. With a plain `trim()` it survived, made the id look non-empty, and
+        // collapsed every listing in the run onto `:id:%A0`.
+        foreach (["\u{00A0}", "\u{2007}", "\u{202F}", "\u{3000}", "\u{200B}", "\u{FEFF}", " \t ", "\xA0"] as $blank) {
             $a = $this->listing(externalId: $blank, url: 'https://a.test/1', title: 'T2 Nanterre');
             $b = $this->listing(externalId: $blank, url: 'https://a.test/2', title: 'T4 Meudon');
 
             self::assertNotSame(
                 $this->store->dedupKey($a),
                 $this->store->dedupKey($b),
-                sprintf('two distinct flats collided on a blank id (U+%04X)', mb_ord($blank) ?: 0),
+                sprintf('two distinct flats collided on a blank id (%s)', bin2hex($blank)),
             );
         }
     }
@@ -1103,7 +1107,7 @@ final class StoreTest extends TestCase
             // WAL leaves `-wal` and `-shm` sidecars beside the database. They are real files, they
             // hold un-checkpointed pages including `source_runs.error` text, and forgetting them
             // here is the same forgetting that left them out of `.gitignore`.
-            foreach ([$path, $path . '-wal', $path . '-shm'] as $file) {
+            foreach ([$path, $path . '-wal', $path . '-shm', $path . '-journal'] as $file) {
                 if (is_file($file)) {
                     unlink($file);
                 }
@@ -1207,8 +1211,11 @@ final class StoreTest extends TestCase
         $health = $this->store->health('inli');
 
         self::assertSame(SourceStatus::OK, $health->status);
+        // The MEAN excludes it — that is what the upper bound on `rollingMeanBefore()` is for. The
+        // COUNT includes it, deliberately: a run happened, whatever its clock says, and bounding the
+        // count on the new side is what let a stale-stamping writer hide eleven real failures.
         self::assertSame(10.0, $health->rollingMean, 'the 2036 run inflated the mean of every later verdict');
-        self::assertSame(5, $health->runsInWindow);
+        self::assertSame(6, $health->runsInWindow);
     }
 
     /**
@@ -1297,7 +1304,7 @@ final class StoreTest extends TestCase
 
         // All four in-window predecessors, not just the two on the near side of the bad row.
         self::assertSame(55.0, $health->rollingMean);
-        self::assertSame(5, $health->runsInWindow);
+        self::assertSame(6, $health->runsInWindow, 'the out-of-range run still happened');
     }
 
     /**
@@ -1405,14 +1412,16 @@ final class StoreTest extends TestCase
         // this reachable: `--watch` alongside a manual `doctor`.
         $this->store->recordRun('inli', 25, true, null, '2026-08-10T08:59:00+00:00');
 
-        // ACCEPTED COST, argued rather than hidden. Recency is the log's own order, so this run
-        // reads as the latest and the verdict goes quiet for ONE cycle. The alternatives are worse:
-        // ordering by timestamp lets a future-stamped row hide every later run FOREVER, and
-        // filtering by a clock discards real runs when the CLOCK is what is wrong. The property
-        // that matters is the BOUND, so that is what this test pins.
-        self::assertSame(SourceStatus::OK, $this->store->health('inli', '2026-08-10T10:00:00+00:00')->status);
+        // The LAST-RUN rule goes quiet — this run reads as the latest and it succeeded — but the
+        // source does NOT read healthy, because `windowCounts()` still sees three failures in the
+        // window. That is the difference between the two rules, and it is why the counting window
+        // is bounded on the old side only.
+        $quieted = $this->store->health('inli', '2026-08-10T10:00:00+00:00');
 
-        // …and one poll later, the truth is back. The bound is one run.
+        self::assertSame(SourceStatus::WARN_FLAKY, $quieted->status);
+        self::assertTrue($quieted->status->isAlerting(), 'a late-committed success silenced the alert');
+
+        // …and one poll later the sharper verdict is back.
         $this->store->recordRun('inli', 0, false, 'HTTP 502', '2026-08-10T09:45:00+00:00');
 
         $health = $this->store->health('inli', '2026-08-10T10:00:00+00:00');
@@ -1447,13 +1456,15 @@ final class StoreTest extends TestCase
     }
 
     /**
-     * With a clock, a run stamped in the future is provably wrong and is dropped.
+     * A run stamped in the future changes NOTHING outside the STALE branch.
      *
-     * Without one there is no way to tell a skewed row from a correct one, so the fallback is
-     * insertion order — whose failure lasts exactly one run, where the timestamp-order failure
-     * lasts forever.
+     * This test used to claim the clock disqualified such a run — it does not, and has not since
+     * recency went back to insertion order. It passed identically with the clock argument removed,
+     * so it would have stayed green whether clock filtering were re-introduced or deleted: a test
+     * shaped exactly like the dead safety code this project removes on sight. It now asserts the
+     * property that is actually load-bearing, in both directions.
      */
-    public function testAClockDisqualifiesARunStampedInTheFuture(): void
+    public function testAFutureStampedRunDoesNotChangeAnyVerdictButStale(): void
     {
         foreach (range(1, 7) as $day) {
             $this->store->recordRun('inli', 25, true, null, sprintf('2026-08-%02dT09:00:00+00:00', $day));
@@ -1465,10 +1476,12 @@ final class StoreTest extends TestCase
             $this->store->recordRun('inli', 0, false, 'HTTP 502', sprintf('2026-08-%02dT09:00:00+00:00', $day));
         }
 
-        $health = $this->store->health('inli', '2026-08-10T10:00:00+00:00');
+        $withClock = $this->store->health('inli', '2026-08-10T10:00:00+00:00');
+        $without = $this->store->health('inli');
 
-        self::assertSame(SourceStatus::BROKEN, $health->status);
-        self::assertSame('2026-08-10T09:00:00+00:00', $health->lastFailureAt);
+        self::assertSame(SourceStatus::BROKEN, $without->status);
+        self::assertSame($without->status, $withClock->status, 'the clock changed a non-STALE verdict');
+        self::assertSame('2026-08-10T09:00:00+00:00', $withClock->lastFailureAt);
     }
 
     /** A log where EVERY run is in the future is a clock problem, and says so. */
@@ -1480,6 +1493,35 @@ final class StoreTest extends TestCase
 
         self::assertSame(SourceStatus::STALE, $health->status);
         self::assertStringContainsString('horloge', $health->detail);
+    }
+
+    /**
+     * A writer that stamps stale SYSTEMATICALLY must not keep a source quiet indefinitely.
+     *
+     * Two writers on one source — an HTTP adapter and an email-alert adapter can carry the same
+     * name, and the email path stamps from a lagging `Date:` header — with one succeeding on stale
+     * stamps. The last-run rule stays quiet because the last-INSERTED row is the success, and two
+     * comments in `Store` claimed that self-corrects "on the next run". It does not, under
+     * repetition: eleven consecutive real failures read `OK` indefinitely, because the window's
+     * upper bound counted `failedRunsInWindow` as 0 of 11. Counting is now bounded on the old side
+     * only — a failure is a failure whatever its clock says — so `WARN_FLAKY` catches it.
+     */
+    public function testASystematicallyStaleWriterCannotKeepASourceQuiet(): void
+    {
+        $day = static fn (int $i): string => sprintf('2026-08-%02dT09:00:00+00:00', $i);
+
+        $this->store->recordRun('inli', 20, true, null, $day(1));
+
+        for ($i = 2; $i <= 12; ++$i) {
+            $this->store->recordRun('inli', 0, false, 'boom', $day($i));   // real failure, real stamp
+            $this->store->recordRun('inli', 18, true, null, $day(1));      // stale-stamped success
+        }
+
+        $health = $this->store->health('inli', $day(13));
+
+        self::assertTrue($health->status->isAlerting(), 'eleven real failures reported as healthy');
+        self::assertSame(SourceStatus::WARN_FLAKY, $health->status);
+        self::assertSame(11, $health->failedRunsInWindow);
     }
 
     /**
