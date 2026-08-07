@@ -115,6 +115,11 @@ scout replay <fixture>        # re-run parsing against a saved fixture
 `scout dump` is what makes onboarding a new source take five minutes instead of an hour, so it lands in
 milestone 1.
 
+Two obligations on `doctor`, both of which are silent when forgotten: it must pass the current time
+to `Store::health()` — without a clock the `STALE` verdict cannot fire at all — and it must print
+`Store::journalMode()`, because WAL can be refused on a network mount and a store in rollback-journal
+mode makes two processes contend instead of share.
+
 ## Adding a source
 
 Adding a source is **config-only** in the common case — a block in `config/sources.yaml`, no code. The

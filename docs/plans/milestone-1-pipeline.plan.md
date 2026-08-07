@@ -211,3 +211,53 @@ at a commit before the panel is spawned.
 - [2026-08-07 23:30] AGREED: the WAL sidecars (`*-wal`, `*-shm`) are gitignored for `.sqlite` and
   `.sqlite3`, not only `.db`. They exist between a write and a clean close — i.e. after a crash or a
   reclaimed container, which is exactly when someone runs `git add .` to salvage work.
+
+### Round 12 — 27 findings, four P0, and two of my own round-11 repairs reverted
+
+The tree WAS frozen this time. Two reviewers still contaminated their own first runs by probing the
+live working tree, caught it themselves, and re-ran in pinned worktrees — the reviewer charters
+should require that, and it is the one action left over from this round.
+
+- [2026-08-08 04:10] AGREED: **recency is the log's own insertion order, full stop.** The clock-aware
+  filter added last round was worse than what it replaced: it only disqualifies rows stamped after
+  `now`, so a row skewed by an hour is fully credible once that hour has passed — and when the CLOCK
+  is the thing that is wrong (a CLI building `$nowIso` with `gmdate()` while `recordRun()` uses
+  `date('c')` on a Paris host is a two-hour skew and an ordinary bug), it DISCARDED three real
+  failures and reported `OK` with `totalRuns` counting only the survivors. The three candidates fail
+  for different lengths of time — insertion order for one run, timestamp+clock for the duration of
+  the skew, timestamp alone forever — and bounded-by-one-run wins. The clock now touches exactly one
+  verdict: `STALE`.
+- [2026-08-08 04:10] AGREED: the one-run window where a late-committed run silences an alert is an
+  ACCEPTED, TESTED cost, not a defect to fix. `testALateCommittedRunDoesNotEraseABrokenVerdict` pins
+  the bound rather than the absence.
+- [2026-08-08 04:10] AGREED: the `Redact` verb rule is STRUCTURAL — a credential trace ends after its
+  arguments, prose keeps going. Both character-based attempts failed in opposite directions: a
+  negative lookahead ate `PASS command issued in wrong state`, and "must contain a digit or a symbol"
+  LEAKED every all-letter password. A Google app password is sixteen lowercase letters and a
+  dedicated Gmail mailbox is what `.env.example` provisions, so that leak was on the primary
+  ingestion path. Every fixture used `alertes-immo@example.net`, which carries an `@` — the fixtures
+  made one mailbox shape look universal.
+- [2026-08-08 04:10] AGREED: the name affix matches a SEPARATED component, never a substring. The
+  first version turned every secret name into a substring match and ate this project's own
+  vocabulary — `passage:` (PRIM), `passed:`, `tokens:`, `bypass:`, `signatures:`, `signal=`,
+  `keyword=`, `design=` — all of which survived before the affix existed.
+- [2026-08-08 04:10] AGREED: no `u`-flagged patterns in `Redact`, deliberately. A `u` pattern returns
+  null on Latin-1 bytes and the fail-closed guard then masks the WHOLE message — and a Windows-1252
+  French page is the likeliest encoding accident in this domain. The guard's own comment had the
+  trigger backwards, and the `u` flag had been added on its strength.
+- [2026-08-08 04:10] AGREED: `record()` uses `BEGIN IMMEDIATE`, not PDO's deferred
+  `beginTransaction()`. **`busy_timeout` did nothing before this**: SQLite deliberately skips the
+  busy handler when a deferred transaction upgrades to a write lock, because retrying there can only
+  deadlock. The constant claimed a behaviour that did not happen until the test written to
+  demonstrate it went red — which is the anti-bandaid gate working exactly as intended.
+- [2026-08-08 04:10] AGREED: `$span` is `max − min` over the whole log. `last − first` over rows in
+  insertion order went negative on a forward-skewed FIRST run — the run most likely to be skewed,
+  since it is the one after a boot — and a negative span disabled the wrong-field-map detector for
+  the life of the database.
+- [2026-08-08 04:10] AGREED: fractional seconds are padded AND truncated to six digits. `{1,6}`
+  refused widths 7–9, which is .NET's `o` format and Go's RFC3339Nano at full precision — the
+  producer the code comment itself named.
+- [2026-08-08 04:10] AGREED: `tests/sabotage-check.sh` repeats every failing LABEL in its summary,
+  and warns when the tree is dirty. Two reviewers independently saw it report undetected sabotages
+  once and neither could say which, because both had piped it through `tail`. A gate whose verdict
+  cannot be reconstructed from its own last ten lines is a gate nobody can act on.

@@ -130,6 +130,10 @@ final class RedactTest extends TestCase
         // The French spellings, which a French-language IMAP or SMTP error would actually carry.
         yield 'mot de passe' => ['mot de passe: hunter2 incorrect', ['hunter2']];
         yield 'motdepasse' => ['motdepasse=hunter2', ['hunter2']];
+
+        // A SUFFIXED component — a second mailbox, a rotated key. The affix has to reach past the
+        // name on the right as well as the left, and only the left was pinned.
+        yield 'suffixed env-var name' => ['IMAP_PASSWORD_2=hunter2 refusé', ['hunter2']];
     }
 
     /**
@@ -204,6 +208,31 @@ final class RedactTest extends TestCase
         yield 'the SASL mechanism name is the diagnostic' => [
             'AUTHENTICATE XOAUTH2 rejected, server requires PLAIN over TLS',
             ['XOAUTH2'],
+        ];
+
+        // `$hasAlnum`: a value made only of punctuation is not a secret, and `unexpected token: }`
+        // is the canonical JSON parse failure — the message a broken adapter emits.
+        yield 'a punctuation-only value is not a secret' => [
+            'JSON error at offset 412: unexpected token: }',
+            ['unexpected token: }'],
+        ];
+
+        // The base64 blob rule needs BOTH the `=` padding and a digit/`+`/`/`, or it eats the long
+        // camelCase identifiers French portal APIs produce — name-first, keeping the value.
+        yield 'a long camelCase query parameter is not base64' => [
+            'GET https://www.inli.fr/recherche?typeDeBienRechercheParUtilisateur=appartement -> 500',
+            ['typeDeBienRechercheParUtilisateur=appartement'],
+        ];
+
+        yield 'a long identifier without padding is not base64' => [
+            'champ inconnu: caracteristiquesDuLogement2Principal ignoré',
+            ['caracteristiquesDuLogement2Principal'],
+        ];
+
+        // The verb rule is case-SENSITIVE: a real protocol trace shouts, French prose does not.
+        yield 'a lowercase verb at end of line is prose' => [
+            'réponse inattendue: pass invalide',
+            ['pass invalide'],
         ];
 
         yield 'rents and counts are not secrets' => [

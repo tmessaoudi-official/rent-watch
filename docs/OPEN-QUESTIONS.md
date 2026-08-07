@@ -328,9 +328,9 @@ inli:
 **Default if unanswered:** option 1, and `spec/PROJECT_BRIEF.md` §9 plus `CLAUDE.md`'s architecture
 table are amended to say `.json`.
 
-### Ⓞ Q23 — Two health thresholds I chose rather than derived
+### Ⓞ Q23 — Five health thresholds I chose rather than derived
 
-**Not blocking** — both have working defaults and both alert in the safe direction. Raised so they
+**Not blocking** — all five have working defaults and all five alert in the safe direction. Raised so they
 are tuned against real run history instead of defended as if they had been measured.
 
 Spec §8 names two numbers (3 consecutive empty runs, a >70% drop below the rolling mean) and those

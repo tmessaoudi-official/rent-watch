@@ -23,10 +23,13 @@ seen.json
 # WAL sidecars. They exist only between a write and a clean close — i.e. after a crash or a
 # reclaimed container, which is exactly when someone runs `git add .` to salvage work. They hold
 # un-checkpointed pages, including adapter error text.
+*.sq3
 *.sqlite-wal
 *.sqlite-shm
+*.sqlite-journal
 *.sqlite3-wal
 *.sqlite3-shm
+*.sqlite3-journal
 
 # ── Claude Code working state ───────────────────────────────────────────────────
 # Reports and PreCompact handoffs. Container-lifetime by design: they survive

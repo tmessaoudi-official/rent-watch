@@ -25,6 +25,11 @@ trap 'rm -rf "$work"' EXIT
 
 pass=0
 fail=0
+# Every failure's LABEL, repeated in the summary. Two reviewers independently saw this script report
+# undetected sabotages once and could not say which, because both had piped it through `tail` and the
+# inline FAIL lines had scrolled away. A gate whose verdict cannot be reconstructed from its own last
+# ten lines is a gate nobody can act on.
+failed_labels=()
 
 # Each entry: label :: file :: sed expression that breaks the guarantee
 run_sabotage() {
@@ -42,12 +47,14 @@ run_sabotage() {
     || ! ln -s "$repo/tools" "$work/repo/tools"; then
     printf '  \033[31mFAIL\033[0m %-58s (could not build the scratch copy)\n' "$label"
     fail=$((fail + 1))
+    failed_labels+=("$label")
     return
   fi
 
   if ! sed -i "$expr" "$work/repo/$target"; then
     printf '  \033[31mFAIL\033[0m %-58s (sabotage could not be applied)\n' "$label"
     fail=$((fail + 1))
+    failed_labels+=("$label")
     return
   fi
 
@@ -55,6 +62,7 @@ run_sabotage() {
   if cmp -s "$repo/$target" "$work/repo/$target"; then
     printf '  \033[31mFAIL\033[0m %-58s (sabotage was a no-op — the pattern no longer matches)\n' "$label"
     fail=$((fail + 1))
+    failed_labels+=("$label")
     return
   fi
 
@@ -77,6 +85,7 @@ run_sabotage() {
     printf '  \033[31mFAIL\033[0m %-58s (the sabotage produced a PHP parse error, so the suite never\n' "$label"
     printf '        ran — this proves nothing either way)\n'
     fail=$((fail + 1))
+    failed_labels+=("$label")
     return
   fi
 
@@ -90,9 +99,11 @@ run_sabotage() {
     printf '        harness broke rather than the sabotage being caught)\n'
     printf '        %s\n' "$(tail -3 <<<"$out")"
     fail=$((fail + 1))
+    failed_labels+=("$label")
   else
     printf '  \033[31mFAIL\033[0m %-58s (SUITE STAYED GREEN — this regression is undetected)\n' "$label"
     fail=$((fail + 1))
+    failed_labels+=("$label")
   fi
 }
 
@@ -634,7 +645,7 @@ run_sabotage "millisecond timestamps refused again (what every JSON API emits)" 
 
 run_sabotage "IMAP LOGIN / POP3 PASS credentials pass through unmasked" \
   src/php/Core/Redact.php \
-  's%(LOGIN|PASS)%(zzz-no-such-verb)%'
+  "s%(LOGIN)%(zzz-no-such-verb)%"
 
 run_sabotage "the Telegram bot token in a URL path passes through" \
   src/php/Core/Redact.php \
@@ -678,11 +689,7 @@ run_sabotage "recency ignores the clock (a late-committed run erases BROKEN)" \
 
 run_sabotage "a future-stamped run is trusted even when a clock is available" \
   src/php/Store/Store.php \
-  's%(int) $run\[.at_epoch.\] <= $now%true%'
-
-run_sabotage "credible runs are not re-sorted by time (insertion order wins again)" \
-  src/php/Store/Store.php \
-  's%usort($credible, static fn (array $a, array $b): int%$noop = (static fn (array $a, array $b): int%'
+  's%$at <= $now%true%'
 
 run_sabotage "an unstamped legacy database is stamped current instead of upgraded" \
   src/php/Store/Store.php \
@@ -710,7 +717,7 @@ run_sabotage "fractional seconds narrow again (a Go feed's .1Z is refused)" \
 
 run_sabotage "secret names stop matching inside an env-var (IMAP_PASSWORD leaks)" \
   src/php/Core/Redact.php \
-  "s%\$affix = .\[A-Za-z0-9_..-\]\*.;%\$affix = 'zzz-no-such-affix';%"
+  "s%^        \$before = .*%        \$before = '(?<![A-Za-z0-9_])';%"
 
 run_sabotage "a single-quoted secret value stops being masked" \
   src/php/Core/Redact.php \
@@ -730,12 +737,74 @@ run_sabotage "SASL AUTH PLAIN base64 passes through" \
 
 run_sabotage "the padded-base64 blob pattern is removed" \
   src/php/Core/Redact.php \
-  's%\\b\[A-Za-z0-9+/\]{24,}={1,2}%zzz-no-such-blob%'
+  "s%{24,}%{999,}%"
 
 run_sabotage "the credential verb pattern goes case-insensitive (French prose is eaten)" \
   src/php/Core/Redact.php \
-  's%|.S+))?)~u.%|\\S+))?)~ui\x27%'
+  "s%\$~m'%\$~mi'%g"
 
-printf '\n  %d sabotage(s) detected, %d undetected\n\n' "$pass" "$fail"
+# A dirty tree is not fatal — checking uncommitted work is a legitimate use — but every sabotage
+# copies `src/` and `tests/` wholesale, so an edit landing mid-run silently changes what is under
+# test. Both reviewers who saw a phantom failure were editing the tree while this ran.
+if [[ -n "$(cd "$repo" && git status --porcelain 2>/dev/null)" ]]; then
+  printf '  \033[33mNOTE\033[0m the working tree is dirty; each sabotage copies it as-is, so an edit\n'
+  printf '       landing mid-run changes what is under test. Results are advisory until it is clean.\n'
+fi
+
+
+# ── The store, round five ─────────────────────────────────────────────────────────────────────────
+#
+# Round 12 returned 27 findings, four P0, and the two worst were BOTH repairs from round 11 that
+# went one step too far: a clock-aware recency that discarded real runs when the CLOCK was wrong,
+# and a Redact affix that turned every secret name into a substring match. Each now has a sabotage.
+
+run_sabotage "STALE measured from the last-inserted row instead of the newest credible one" \
+  src/php/Store/Store.php \
+  "s%\$silentFor = \$now - max(\$credible);%\$silentFor = \$now - (int) \$last['at_epoch'];%"
+
+run_sabotage "the secret-name affix matches mid-word again (project vocabulary is eaten)" \
+  src/php/Core/Redact.php \
+  "s%^        \$after = .*%        \$after = '';%"
+
+run_sabotage "the base64 blob drops its padding requirement (identifiers are eaten)" \
+  src/php/Core/Redact.php \
+  's%={1,2}%%'
+
+run_sabotage "the credential verb pattern stops anchoring at end-of-line (prose is eaten)" \
+  src/php/Core/Redact.php \
+  's%\[ .t\]\*.r?$~m%[ \\t]*~%g'
+
+run_sabotage "a value of pure punctuation is masked again (JSON parse errors are eaten)" \
+  src/php/Core/Redact.php \
+  "s%^        \$hasAlnum = .*%        \$hasAlnum = '';%"
+
+run_sabotage "the base64 blob pattern eats long camelCase identifiers again" \
+  src/php/Core/Redact.php \
+  "s%(?=\[A-Za-z0-9+/\]\*\[0-9+/\])%%"
+
+run_sabotage "record() reverts to a deferred transaction (the busy handler is skipped)" \
+  src/php/Store/Store.php \
+  "s%\$this->pdo->exec('BEGIN IMMEDIATE');%\$this->pdo->beginTransaction();%"
+
+run_sabotage "journalMode() reports what was asked for, not what was given" \
+  src/php/Store/Store.php \
+  "s%\$journalMode = \$mode === false ? 'unknown' : (string) \$mode->fetchColumn();%\$journalMode = 'wal';%"
+
+run_sabotage "the span reverts to last-minus-first (a skewed first run disables the detector)" \
+  src/php/Store/Store.php \
+  "s%\$span = max(\$epochs) - min(\$epochs);%\$span = (int) \$last['at_epoch'] - (int) \$runs[0]['at_epoch'];%"
+
+run_sabotage "fractional seconds are capped at six digits again (Go nanoseconds refused)" \
+  src/php/Store/Store.php \
+  's%(.d+)(?=%(\\d{1,6})(?=%'
+
+printf '\n  %d sabotage(s) detected, %d undetected\n' "$pass" "$fail"
+
+if (( fail > 0 )); then
+  printf '\n  undetected or unapplied:\n'
+  printf '    - %s\n' "${failed_labels[@]}"
+fi
+
+printf '\n'
 
 [[ $fail -eq 0 ]]

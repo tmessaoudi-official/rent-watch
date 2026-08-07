@@ -26,7 +26,9 @@ final readonly class Redact
     public const string MASK = '[masqué]';
 
     /**
-     * Names whose value is unambiguously a secret. Matched case-insensitively, after `:` or `=`.
+     * Names whose value is unambiguously a secret. Matched case-insensitively, after `:`, `=` or
+     * PHP's `=>` — `var_export()` on a config array is the likeliest accidental leak in this
+     * language, and it emits neither of the first two.
      *
      * `pass` earns its place the hard way: it was missing, and `pass=` is exactly the shape
      * `imap_open()` and DSN errors emit — on the primary ingestion path.
@@ -58,10 +60,16 @@ final readonly class Redact
 
         // A name may carry an affix, because `_` is a word character and `\bpassword\b` therefore
         // does NOT match inside `IMAP_PASSWORD`. Every credential variable in `.env.example`
-        // defeated the masker on exactly that: `IMAP_PASSWORD=`, `SMTP_PASSWORD=`,
-        // `TELEGRAM_BOT_TOKEN=`, `IDFM_API_KEY=` and `NTFY_TOPIC=` all went through untouched,
-        // while the docblock claimed the IDFM key was covered.
-        $affix = '[A-Za-z0-9_.\-]*';
+        // defeated the masker on exactly that.
+        //
+        // But the affix must be a SEPARATED component — `FOO_password_BAR`, not `passage`. The
+        // first version allowed any surrounding letters, which turned every name into a substring
+        // match and ate this project's own vocabulary: `passage:` (the PRIM enrichment domain),
+        // `passed:`, `tokens:`, `bypass:`, `signatures:`, `keyword=`, `signal=` and `design=`.
+        // All of those survived before the affix existed. Hence the boundaries below: a component
+        // ends at `_`, `-` or `.`, and never mid-word.
+        $before = '(?<![A-Za-z0-9])(?:[A-Za-z0-9]+[_.\-])*';
+        $after = '(?:[_.\-][A-Za-z0-9]+)*(?![A-Za-z0-9])';
 
         // A value that is itself a URL is never the secret — the secret is INSIDE it, and the
         // query-parameter branch reaches that on its own pass.
@@ -76,8 +84,14 @@ final readonly class Redact
         // The negative lookahead stops a later pattern from masking an EARLIER pattern's output:
         // `IDFM_API_KEY=<secret>` was matched by the `api_key` rule and then again by the `key`
         // rule, which consumed `[masqué` and left a stray `]` behind.
+        // …and the UNQUOTED branch must contain at least one alphanumeric. `unexpected token: }` is
+        // the canonical JSON parse failure — the message a broken adapter emits — and `}` is not a
+        // secret. The requirement sits inside that branch only: applied to the whole value it also
+        // rejected every quoted one, because the lookahead ran past the closing quote.
+        $hasAlnum = '(?=[^\s&"\'\)\],;]*[A-Za-z0-9])';
         $value = '(?!https?://)(?!' . preg_quote(self::MASK, '~') . ')'
-            . '(?:Bearer\s+|Basic\s+)?(?:' . $quoted . '|[^\s&"\'\)\],;]+)';
+            . '(?:Bearer\s+|Basic\s+)?'
+            . '(?:' . $quoted . '|' . $hasAlnum . '[^\s&"\'\)\],;]+)';
 
         // `name` `=>` `value` is PHP's own array syntax, and `var_export()` on a config array is the
         // likeliest way a credential reaches an exception message in this language.
@@ -104,25 +118,39 @@ final readonly class Redact
             // SASL: `AUTH PLAIN <base64>` decodes to \0user\0password. The mechanism name is kept
             // because WHICH mechanism the server rejected is the entire diagnostic.
             '~\b(AUTH|AUTHENTICATE)\s+([A-Za-z0-9\-]{3,20})\s+[A-Za-z0-9+/=]{12,}~' => '$1 $2 ' . self::MASK,
-            // A padded base64 blob standing alone. The `=` padding is what makes this narrow enough
-            // to use: ordinary prose does not produce it.
-            '~\b[A-Za-z0-9+/]{24,}={1,2}~' => self::MASK,
-            // IMAP `A01 LOGIN <user> <pass>` and POP3 `PASS <pass>` — space-separated, no delimiter
-            // at all, and on the primary ingestion path.
+            // A padded base64 blob standing alone. The `=` padding narrows it, but not enough on
+            // its own: `?typeDeBienRechercheParUtilisateur=appartement` is a real query parameter
+            // on a French portal and was eaten NAME-first, keeping the value — backwards. So the
+            // blob must also carry a digit, `+` or `/`, which a camelCase identifier does not.
+            '~\b(?=[A-Za-z0-9+/]*[0-9+/])[A-Za-z0-9+/]{24,}={1,2}~' => self::MASK,
+            // IMAP `<tag> LOGIN <user> <pass>` and POP3 `PASS <pass>` — space-separated, no
+            // delimiter at all, and on the primary ingestion path.
             //
-            // CASE-SENSITIVE, and the argument must be quoted or contain a non-letter. Both rules
-            // are load-bearing, and an earlier five-word negative lookahead was not enough: the
-            // pattern ate `PASS command issued in wrong state` (RFC 1939), `LOGIN please use the
-            // referral server` (RFC 2221), *"un formulaire de login au lieu des annonces"*, *"does
-            // not pass validation"*, and `Pass Navigo` — the literal name of the Paris transit card,
-            // in the IDFM enrichment domain this project has. A credential contains a digit or a
-            // symbol; an English or French word does not.
-            '~\b(LOGIN|PASS)\s+((?:' . $quoted . '|\S*[\d@:!#$%^&*+=/\\\\|?]\S*)(?:\s+(?:' . $quoted . '|\S+))?)~u'
+            // The discriminator is STRUCTURAL: a credential trace ENDS after its arguments, prose
+            // keeps going. Two earlier attempts used the argument's CHARACTERS instead and each
+            // failed in a different direction — a five-word negative lookahead ate `PASS command
+            // issued in wrong state` (RFC 1939) and `Pass Navigo` (the Paris transit card, in the
+            // IDFM domain this project has), and "must contain a digit or a symbol" LEAKED every
+            // all-letter password: a Google app password is sixteen lowercase letters, and a
+            // dedicated Gmail mailbox is exactly what `.env.example` provisions. The suite stayed
+            // green through that because every fixture used `alertes-immo@example.net`, which
+            // carries an `@` — the fixtures made one mailbox shape look universal.
+            //
+            // `m` so each line of a multi-line trace is anchored. NO `u`: a `u`-flagged pattern
+            // returns null on Latin-1 bytes and the fail-closed guard then masks the WHOLE message,
+            // and a Windows-1252 French page is the likeliest encoding accident in this domain.
+            '~\b(LOGIN)[ \t]+(?:' . $quoted . '|\S+)[ \t]+(?:' . $quoted . '|\S+)[ \t]*\r?$~m'
                 => '$1 ' . self::MASK,
+            '~\b(PASS)[ \t]+(?:' . $quoted . '|\S+)[ \t]*\r?$~m' => '$1 ' . self::MASK,
+            // The mechanism name survives: WHICH mechanism the server rejected is the diagnostic.
+            '~\b(AUTHENTICATE)[ \t]+([A-Za-z0-9\-]{3,20})[ \t]+(?:' . $quoted . '|\S+)[ \t]*\r?$~m'
+                => '$1 $2 ' . self::MASK,
             // key=…, token: …, "client_secret": "…", Authorization: Bearer …
-            '~\b(' . $affix . '(?:' . $names . ')' . $affix . ')\b' . $delimiter . $value . '~i'
+            // The key's own closing quote is captured into `$1`, so `['api_key' => '…']` keeps its
+            // bracket count instead of coming out as `['api_key=[masqué]]`.
+            '~(' . $before . '(?:' . $names . ')' . $after . '["\']?)\s*(?:=>|[:=])\s*' . $value . '~i'
                 => '$1=' . self::MASK,
-            '~\b(' . $affix . '(?:' . $ambiguous . ')' . $affix . ')\b["\']?\s*(?:=>|=)\s*' . $value . '~i'
+            '~(' . $before . '(?:' . $ambiguous . ')' . $after . ')["\']?\s*(?:=>|=)\s*' . $value . '~i'
                 => '$1=' . self::MASK,
             // The RFR income figure. `CLAUDE.md` hard rule 7 names it in the same breath as the
             // IMAP password, and the eligibility comparison of Q6 is exactly the code that would
@@ -139,11 +167,15 @@ final readonly class Redact
         foreach ($patterns as $pattern => $replacement) {
             $replaced = preg_replace($pattern, $replacement, $message);
 
-            // preg_replace returns null on a PCRE failure — in practice, invalid UTF-8 reaching a
-            // `u`-less pattern with a backtrack limit, or a catastrophic backtrack. Refusing to
-            // persist ANY message is the wrong trade (it would hide the breakage the message
-            // reports), so the masked-so-far text is kept and the rest is dropped rather than
-            // passed through unmasked. Failing open here would defeat the whole point of the class.
+            // `preg_replace` returns null on a PCRE failure. The demonstrated trigger is the
+            // BACKTRACK LIMIT ({@see RedactTest::testAPcreFailureFailsClosed}, which lowers it) —
+            // NOT invalid UTF-8, which a `u`-LESS pattern handles fine. An earlier version of this
+            // comment had that backwards, a `u` flag was added elsewhere on its strength, and one
+            // Latin-1 byte then masked an entire diagnostic. There are no `u`-flagged patterns
+            // here now, deliberately.
+            //
+            // Failing OPEN would return the original unmasked text, which is the one outcome this
+            // class exists to prevent. Losing a diagnostic is recoverable; leaking is not.
             if ($replaced === null) {
                 return self::MASK;
             }

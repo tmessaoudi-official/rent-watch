@@ -657,6 +657,10 @@ final class StoreTest extends TestCase
             '2026-08-07T09:00:00.123Z',
             '2026-08-07T09:00:00.123+02:00',
             '2026-08-07T09:00:00.123456Z',
+            // .NET's `o` format emits seven digits; Go's RFC3339Nano emits up to nine. Both were
+            // refused while the code comment claimed any width was accepted.
+            '2026-08-07T09:00:00.1234567Z',
+            '2026-08-07T09:00:00.123456789Z',
         ];
 
         foreach ($accepted as $index => $iso) {
@@ -933,19 +937,17 @@ final class StoreTest extends TestCase
         unlink($base);
         $nested = $base . '.d/state/rent-watch.sqlite3';
 
+        // Registered BEFORE the assertions, not cleaned up after them: inline cleanup is skipped by
+        // any run that reddens an assertion, which is every sabotage run — 48 real databases were
+        // left in /tmp by the time a reviewer counted them.
+        $this->temporaryPaths[] = $nested;
+        $this->temporaryDirectories[] = \dirname($nested);
+        $this->temporaryDirectories[] = \dirname($nested, 2);
+
         $store = Store::open($nested);
 
         self::assertSame(Store::SCHEMA_VERSION, $store->schemaVersion());
         self::assertFileExists($nested);
-
-        foreach ([$nested, $nested . '-wal', $nested . '-shm'] as $file) {
-            if (is_file($file)) {
-                unlink($file);
-            }
-        }
-
-        rmdir(\dirname($nested));
-        rmdir(\dirname($nested, 2));
     }
 
     /** Both PRAGMAs actually take effect — `journal_mode` in particular is a QUERY pragma. */
@@ -958,6 +960,79 @@ final class StoreTest extends TestCase
         self::assertSame('wal', $store->journalMode());
         self::assertSame('wal', $pdo->query('PRAGMA journal_mode')->fetchColumn());
         self::assertSame(Store::BUSY_TIMEOUT_MS, (int) $pdo->query('PRAGMA busy_timeout')->fetchColumn());
+    }
+
+    /**
+     * `journalMode()` reports what SQLite ACTUALLY gave us, not what we asked for.
+     *
+     * The method's whole justification is the read-back — `journal_mode` is a query pragma and
+     * SQLite does not raise when it refuses, so a network mount silently stays in rollback mode.
+     * Every assertion was satisfied by hardcoding `'wal'` until this case existed: `:memory:`
+     * legitimately answers something else, which is the cheapest available proof of a real read.
+     */
+    public function testJournalModeReportsWhatSqliteActuallyGave(): void
+    {
+        self::assertSame('memory', Store::open(':memory:')->journalMode());
+    }
+
+    /**
+     * A second writer WAITS rather than failing instantly.
+     *
+     * This is the demonstration `BUSY_TIMEOUT_MS` is justified by, and it was cited by name in that
+     * constant's docblock before it existed. Without the timeout SQLite returns
+     * `SQLSTATE[HY000]: General error: 5 database is locked` immediately; with it, the second
+     * connection blocks and retries. Two processes are designed behaviour here — `run --watch`
+     * alongside a manual `doctor` — so waiting is correct, not a retry papered over a race.
+     *
+     * The timeout is lowered on the second connection so the test costs a fraction of a second
+     * rather than five; what is being asserted is that it waited AT ALL.
+     */
+    public function testASecondWriterWaitsRatherThanFailing(): void
+    {
+        $path = $this->temporaryDatabase();
+        $holder = Store::open($path);
+        $second = Store::open($path);
+
+        $holderPdo = (new \ReflectionProperty(Store::class, 'pdo'))->getValue($holder);
+        $secondPdo = (new \ReflectionProperty(Store::class, 'pdo'))->getValue($second);
+        self::assertInstanceOf(\PDO::class, $holderPdo);
+        self::assertInstanceOf(\PDO::class, $secondPdo);
+
+        $secondPdo->exec('PRAGMA busy_timeout = 400');
+        $holderPdo->exec('BEGIN IMMEDIATE');            // takes the write lock and keeps it
+
+        $startedAt = hrtime(true);
+
+        try {
+            $second->record($this->listing(externalId: 'ANN-1'), 1000, '2026-08-07T09:00:00+00:00');
+            self::fail('the second writer got the lock while the first was holding it');
+        } catch (\PDOException $failure) {
+            $waitedMs = (hrtime(true) - $startedAt) / 1_000_000;
+
+            self::assertStringContainsString('locked', $failure->getMessage());
+            self::assertGreaterThan(300, $waitedMs, 'the second writer gave up instantly instead of waiting');
+        } finally {
+            $holderPdo->exec('ROLLBACK');
+        }
+    }
+
+    /**
+     * A forward-skewed FIRST run must not disable the wrong-field-map detector.
+     *
+     * `$span` was `last − first` over rows in INSERTION order, so a first run stamped in the future
+     * made it negative — and a negative span can never satisfy the floor, switching `NEVER_PRODUCED`
+     * off for the life of the database. The first run after a boot is the one most likely to be
+     * skewed, which is what makes this the reachable case rather than the exotic one.
+     */
+    public function testASkewedFirstRunDoesNotDisableTheFieldMapDetector(): void
+    {
+        $this->store->recordRun('newsource', 0, true, null, '2036-01-01T09:00:00+00:00');
+
+        foreach (range(1, 20) as $day) {
+            $this->store->recordRun('newsource', 0, true, null, sprintf('2026-08-%02dT09:00:00+00:00', $day));
+        }
+
+        self::assertSame(SourceStatus::NEVER_PRODUCED, $this->store->health('newsource')->status);
     }
 
     /**
@@ -1019,6 +1094,9 @@ final class StoreTest extends TestCase
     /** @var list<string> */
     private array $temporaryPaths = [];
 
+    /** @var list<string> */
+    private array $temporaryDirectories = [];
+
     protected function tearDown(): void
     {
         foreach ($this->temporaryPaths as $path) {
@@ -1032,7 +1110,15 @@ final class StoreTest extends TestCase
             }
         }
 
+        // Deepest first, so a nested tree comes apart.
+        foreach ($this->temporaryDirectories as $directory) {
+            if (is_dir($directory)) {
+                rmdir($directory);
+            }
+        }
+
         $this->temporaryPaths = [];
+        $this->temporaryDirectories = [];
     }
 
     private function temporaryDatabase(): string
@@ -1260,6 +1346,25 @@ final class StoreTest extends TestCase
     }
 
     /**
+     * A forward-skewed run must not make a stopped schedule look healthy.
+     *
+     * Silence is measured from the newest run that is NOT stamped in the future. Measuring from the
+     * last-inserted row instead made `$silentFor` negative whenever that row carried a bad clock,
+     * so a source that had not run for a year reported `OK` — the same silent-absence class
+     * `STALE` was added to close, arrived at through the fix for it.
+     */
+    public function testASkewedRunDoesNotMaskAStoppedSchedule(): void
+    {
+        $this->store->recordRun('inli', 25, true, null, '2026-01-01T09:00:00+00:00');
+        $this->store->recordRun('inli', 25, true, null, '2036-01-01T09:00:00+00:00');   // skewed clock
+
+        self::assertSame(
+            SourceStatus::STALE,
+            $this->store->health('inli', '2026-11-01T09:00:00+00:00')->status,
+        );
+    }
+
+    /**
      * A source onboarded forty-five minutes ago is not told its field map is wrong.
      *
      * Three successful empty polls at a fifteen-minute interval satisfied `NEVER_PRODUCED` with no
@@ -1296,13 +1401,49 @@ final class StoreTest extends TestCase
 
         self::assertSame(SourceStatus::BROKEN, $this->store->health('inli', '2026-08-10T10:00:00+00:00')->status);
 
-        // Committed last, but it happened BEFORE the final failure and says so.
+        // Committed last, but it happened BEFORE the final failure and says so. Two writers make
+        // this reachable: `--watch` alongside a manual `doctor`.
         $this->store->recordRun('inli', 25, true, null, '2026-08-10T08:59:00+00:00');
+
+        // ACCEPTED COST, argued rather than hidden. Recency is the log's own order, so this run
+        // reads as the latest and the verdict goes quiet for ONE cycle. The alternatives are worse:
+        // ordering by timestamp lets a future-stamped row hide every later run FOREVER, and
+        // filtering by a clock discards real runs when the CLOCK is what is wrong. The property
+        // that matters is the BOUND, so that is what this test pins.
+        self::assertSame(SourceStatus::OK, $this->store->health('inli', '2026-08-10T10:00:00+00:00')->status);
+
+        // …and one poll later, the truth is back. The bound is one run.
+        $this->store->recordRun('inli', 0, false, 'HTTP 502', '2026-08-10T09:45:00+00:00');
 
         $health = $this->store->health('inli', '2026-08-10T10:00:00+00:00');
 
         self::assertSame(SourceStatus::BROKEN, $health->status);
         self::assertTrue($health->status->isAlerting());
+    }
+
+    /**
+     * A SLOW clock must not discard real runs, silently or otherwise.
+     *
+     * Filtering the log by `at_epoch <= $nowIso` reported `OK` on a source in sustained failure
+     * whenever the clock was the thing that was wrong — a CLI building `$nowIso` with `gmdate()`
+     * while `recordRun()` used `date('c')` on a Paris host is a two-hour skew and an ordinary bug.
+     * Worse, the discard was invisible: `totalRuns` counted only the survivors. The clock now
+     * touches exactly one verdict.
+     */
+    public function testASlowClockDoesNotDiscardRealRuns(): void
+    {
+        $this->store->recordRun('inli', 25, true, null, '2026-08-10T09:00:00+00:00');
+
+        foreach (['09:15', '09:30', '09:45'] as $time) {
+            $this->store->recordRun('inli', 0, false, 'Connection refused', '2026-08-10T' . $time . ':00+00:00');
+        }
+
+        // The clock is two hours behind every failure it is being asked about.
+        $health = $this->store->health('inli', '2026-08-10T08:00:00+00:00');
+
+        self::assertSame(SourceStatus::BROKEN, $health->status);
+        self::assertSame(4, $health->totalRuns, 'runs were discarded, and nothing said so');
+        self::assertSame('2026-08-10T09:45:00+00:00', $health->lastFailureAt);
     }
 
     /**

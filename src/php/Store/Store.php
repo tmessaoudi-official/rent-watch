@@ -156,14 +156,15 @@ final readonly class Store
     /**
      * Create the schema if it is absent. Idempotent — running it twice is a no-op, not an error.
      *
-     * A database whose recorded version is not exactly `SCHEMA_VERSION` is REFUSED, in both
-     * directions. The newer direction is obvious. The older one was the gap: `CREATE TABLE IF NOT
-     * EXISTS` adds no columns to a table that already exists, and nothing re-stamped `schema_meta`,
-     * so the day `SCHEMA_VERSION` becomes 2 every existing database would have opened as v1
-     * forever, with `schemaVersion()` reporting 1 and nothing downstream able to detect it.
+     * An OLDER database is upgraded by {@see upgradeFrom()}; a NEWER one is refused, because this
+     * code cannot know what a future version means. Both directions used to refuse, and the older
+     * half of that was wrong: `CREATE TABLE IF NOT EXISTS` adds no columns to an existing table and
+     * nothing re-stamped `schema_meta`, so refusing was the only signal a user would ever get and
+     * they would get it forever, with no path forward.
      *
-     * There is no upgrade path here because there is nothing to upgrade from. Writing version 2
-     * means writing that path in this method, and the refusal below is what makes forgetting loud.
+     * A database with no recorded version at all is treated as version 1 and upgraded, not stamped
+     * current — that is the state a crash between the DDL and the version INSERT leaves, and it is
+     * indistinguishable from a legacy database.
      */
     public function migrate(): void
     {
@@ -253,7 +254,7 @@ final readonly class Store
      */
     private function upgradeFrom(int $recorded): void
     {
-        $this->pdo->beginTransaction();
+        $this->pdo->exec('BEGIN IMMEDIATE');
 
         try {
             if ($recorded < 2) {
@@ -289,7 +290,7 @@ final readonly class Store
             $stamp = $this->pdo->prepare("UPDATE schema_meta SET value = :value WHERE key = 'schema_version'");
             $stamp->execute(['value' => (string) self::SCHEMA_VERSION]);
 
-            $this->pdo->commit();
+            $this->pdo->exec('COMMIT');
         } catch (\Throwable $failure) {
             self::rollBackQuietly($this->pdo);
 
@@ -378,7 +379,13 @@ final readonly class Store
         $key = $this->dedupKey($listing);
         $epoch = self::epoch($atIso);
 
-        $this->pdo->beginTransaction();
+        // BEGIN IMMEDIATE, not PDO's deferred `beginTransaction()`. A deferred transaction takes
+        // the write lock lazily, on its first write — and SQLite deliberately SKIPS the busy handler
+        // there, because retrying inside an already-open transaction can only deadlock. So
+        // `busy_timeout` did nothing for this method: a second writer failed in 0.2 ms rather than
+        // waiting the configured five seconds. The constant claimed a behaviour that did not happen
+        // until the test written to demonstrate it went red.
+        $this->pdo->exec('BEGIN IMMEDIATE');
 
         try {
             $existing = $this->pdo->prepare('SELECT seen_epoch, rent_cc FROM listings WHERE dedup_key = :key');
@@ -481,7 +488,7 @@ final readonly class Store
                 $history->execute(['key' => $key, 'rent' => $rentCc, 'at' => $atIso, 'epoch' => $epoch]);
             }
 
-            $this->pdo->commit();
+            $this->pdo->exec('COMMIT');
         } catch (\Throwable $failure) {
             // The two writes must agree. Half of this — a `listings` row asserting a rent with no
             // matching history row — leaves the one data set that cannot be reconstructed in a
@@ -652,38 +659,25 @@ final readonly class Store
             );
         }
 
-        // WHICH RUN IS "THE LAST ONE" — and neither obvious answer is right on its own.
+        // WHICH RUN IS "THE LAST ONE" — settled, after three rounds of getting it wrong.
         //
-        // By TIMESTAMP: one forward-skewed row (NTP not synced after a resume, a VM restored from a
-        // snapshot) sorts last forever and hides every later run — twenty consecutive failures
-        // reported as OK, permanently.
-        // By INSERTION: a run committed late but stamped earlier wins — two processes writing the
-        // same source, which `--watch` alongside a manual `doctor` makes routine — so one success
-        // logged after three failures erases a BROKEN verdict. Self-healing, but wrong meanwhile.
+        // INSERTION ORDER, always. Not the timestamp, and not the timestamp filtered by a clock.
+        // The three candidates fail for different LENGTHS of time, and that is the whole argument:
         //
-        // A CLOCK settles it, and that is the whole reason `$nowIso` exists: a row stamped after
-        // `now` is provably wrong and is dropped, and among what remains the greatest timestamp is
-        // genuinely the most recent observation. Without a clock we fall back to insertion order,
-        // because its failure lasts one run and the other's lasts forever. The CLI is required to
-        // pass `$nowIso` — see `CLAUDE.md` § "Testing & verification".
-        if ($nowIso !== null) {
-            $now = self::epoch($nowIso);
-            $credible = array_values(array_filter($runs, static fn (array $run): bool => (int) $run['at_epoch'] <= $now));
-
-            if ($credible === []) {
-                return new SourceHealth(
-                    sourceName: $sourceName,
-                    status: SourceStatus::STALE,
-                    detail: 'tous les runs sont horodatés dans le futur — vérifiez l\'horloge de la machine',
-                    totalRuns: \count($runs),
-                );
-            }
-
-            usort($credible, static fn (array $a, array $b): int
-                => [(int) $a['at_epoch'], (int) $a['id']] <=> [(int) $b['at_epoch'], (int) $b['id']]);
-
-            $runs = $credible;
-        }
+        //   timestamp, no clock — one future-stamped row sorts last FOREVER and hides every later
+        //     run. Twenty consecutive failures reported OK, permanently.
+        //   timestamp + clock — a clock only disqualifies rows stamped after `now`. A row skewed by
+        //     an hour is fully credible once that hour has passed, and then it hides every real run
+        //     logged after it for the duration of the skew. It is also worse than useless when the
+        //     CLOCK is the thing that is wrong: an hour-slow clock discarded three real failures and
+        //     reported OK, with `totalRuns` counting only the survivors — a silent discard.
+        //   insertion order — a run committed late but stamped earlier wins, so one success logged
+        //     after three failures reads OK. Two writers make that reachable. It self-corrects on
+        //     the NEXT run, i.e. one poll interval.
+        //
+        // Bounded-by-one-run beats bounded-by-the-skew beats unbounded. So the log's own order wins,
+        // and `$nowIso` is used for exactly one thing below: STALE, which genuinely cannot be
+        // derived without a clock. It never filters, reorders or discards a run.
 
         $last = $runs[array_key_last($runs)];
         $lastCount = (int) $last['item_count'];
@@ -755,9 +749,18 @@ final readonly class Store
         }
 
         if ($nowIso !== null) {
-            // `$runs` has already been filtered to credible rows and sorted by timestamp above,
-            // so the last one IS the newest real observation.
-            $silentFor = self::epoch($nowIso) - (int) $last['at_epoch'];
+            // The ONLY use of the clock, and the only verdict that needs one. Silence is measured
+            // from the newest run that is not stamped in the future, because a future-stamped row
+            // would otherwise make this negative and report a stopped schedule as healthy. Nothing
+            // is discarded from `$runs` — the other verdicts still see the whole log.
+            $now = self::epoch($nowIso);
+            $credible = array_filter($epochs, static fn (int $at): bool => $at <= $now);
+
+            if ($credible === []) {
+                return $health(SourceStatus::STALE, 'tous les runs sont horodatés dans le futur — vérifiez l\'horloge de la machine');
+            }
+
+            $silentFor = $now - max($credible);
 
             if ($silentFor > self::ROLLING_WINDOW_DAYS * 86400) {
                 return $health(SourceStatus::STALE, sprintf(
@@ -979,7 +982,10 @@ final readonly class Store
     private static function rollBackQuietly(\PDO $pdo): void
     {
         try {
-            $pdo->rollBack();
+            // `exec('ROLLBACK')` rather than `PDO::rollBack()`, to match the `BEGIN IMMEDIATE`
+            // above: PDO tracks only transactions it started itself, so `rollBack()` would throw
+            // "no active transaction" on every call regardless of the real state.
+            $pdo->exec('ROLLBACK');
         } catch (\Throwable) {
             // The engine already rolled back — verified in BOTH journal modes: SQLITE_FULL leaves
             // `inTransaction()` false and `rollBack()` throws. (An earlier version of this comment
@@ -1023,8 +1029,12 @@ final readonly class Store
         // trims trailing zeros, so a Go-backed JSON feed emits `.1Z` for `.100`. Padding to the six
         // digits PHP round-trips accepts every width instead of the two that happened to be tried.
         $normalised = preg_replace_callback(
-            '~\.(\d{1,6})(?=[+\-]\d{2}:\d{2}$)~',
-            static fn (array $m): string => '.' . str_pad($m[1], 6, '0'),
+            '~\.(\d+)(?=[+\-]\d{2}:\d{2}$)~',
+            // Pad up to six and TRUNCATE beyond it. `{1,6}` accepted widths 1–6 and refused 7–9 —
+            // precisely .NET's `o` format (7) and Go's RFC3339Nano at full precision (9), the
+            // producer the comment above names. Sub-microsecond precision is not information this
+            // store can use, so discarding it is correct rather than lossy.
+            static fn (array $m): string => '.' . substr(str_pad($m[1], 6, '0'), 0, 6),
             $normalised,
         ) ?? $normalised;
 

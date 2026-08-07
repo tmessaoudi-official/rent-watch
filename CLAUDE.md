@@ -396,8 +396,9 @@ Required coverage, per spec §11 — non-negotiable once `src/` exists:
 
   **`scout doctor` and the run loop MUST pass `$nowIso` to `Store::health()`.** Without it the store
   has no clock, and two verdicts become underivable: `STALE` never fires at all, and a run stamped
-  in the future cannot be disqualified — so recency falls back to insertion order, where a run
-  committed late but stamped early can erase a `BROKEN`. Both failures are silent.
+  in the future cannot be disqualified. **`doctor` must also print `Store::journalMode()`**: WAL can
+  be silently refused on a network mount, and a store in rollback-journal mode makes two processes
+  contend instead of share. Both failures are silent.
 
 ## File layout quick reference
 
