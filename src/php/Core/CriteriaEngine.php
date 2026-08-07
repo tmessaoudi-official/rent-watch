@@ -1,0 +1,270 @@
+<?php
+
+declare(strict_types=1);
+
+namespace RentWatch\Core;
+
+use RentWatch\Config\Criteria;
+
+/**
+ * Applies the hard disqualifiers, then scores what survives.
+ *
+ * ORDER MATTERS AND IT IS FIXED HERE, in one place, so no caller can re-derive it slightly
+ * differently:
+ *
+ * 1. **The classifier's outcome first.** `REJECT` and `DIGEST` are decided by
+ *    {@see TenureClassifier} and are not re-litigated — that is what makes `CLAUDE.md` §1's
+ *    fail-closed rule apply in exactly one place. A criteria engine that could promote a `DIGEST`
+ *    to a match would be a second, weaker copy of the rule.
+ * 2. **Then the hard disqualifiers**, which reject silently and are logged only (hard rule 8).
+ * 3. **Then the score**, which orders what is left and decides notification priority.
+ *
+ * THE THREE TRAPS THIS FILE IS WRITTEN AGAINST, all of them silent:
+ *
+ * - **`null` is not zero** (hard rule 9). Every unknown measurement passes the filter it cannot be
+ *   judged by, and loses the score component instead. The prototype's `(l.rooms or 0) < min_rooms`
+ *   rejects every listing that did not state a room count, and nothing arrives to say so.
+ * - **A disqualifier applied before enrichment** rejects on a field enrichment would have filled.
+ *   Enrichment does not exist yet; when it does, it runs before this.
+ * - **Confidence must not multiply the score** (ruled 2026-08-07, Q31). It did, and the arithmetic
+ *   made high priority unreachable for 16 of 31 expected matches and for the whole LIBRE track.
+ */
+final readonly class CriteriaEngine
+{
+    /**
+     * Below this confidence a match is capped at normal priority however well it scores.
+     *
+     * This is what S8 was actually asking for — *"a 0.65 LLI and a 0.98 LLI should not rank
+     * equally"* — expressed as a routing gate rather than as a multiplier on the score. As a
+     * multiplier it made the priority threshold arithmetically unreachable: realised confidences are
+     * about {50, 80, 90, 97}, so a listing at 50 needed a normalised 140 to clear 70. Worse, it
+     * inverted the ordering of anything scoring below zero, because multiplying a negative by a
+     * fraction moves it toward zero and the LESS trustworthy verdict won.
+     */
+    public const int HIGH_PRIORITY_MIN_CONFIDENCE_BP = 80;
+
+    public function __construct(private readonly Criteria $criteria) {}
+
+    /**
+     * @param int|null $firstSeenAgeSeconds how long ago this listing was first seen, or `null` if
+     *                                      it is new to the store right now
+     */
+    public function judge(RawListing $listing, Classification $classification, ?int $firstSeenAgeSeconds = null): Verdict
+    {
+        if ($classification->outcome === Outcome::REJECT) {
+            return Verdict::rejected('tenure: ' . $classification->tenure->value);
+        }
+
+        $disqualifier = $this->disqualify($listing);
+        if ($disqualifier !== null) {
+            return Verdict::rejected($disqualifier);
+        }
+
+        // AFTER the disqualifiers, deliberately. A listing that is the wrong size in the wrong
+        // commune should be rejected on that, not filed in a digest the developer has to read.
+        if ($classification->outcome === Outcome::DIGEST) {
+            $reasons = $classification->reasons();
+
+            if ($reasons === []) {
+                // The commonest digest case produces NO signals at all — nothing fired, which is
+                // exactly why it withheld. An entry with an empty `reasons[]` is a bare link, and a
+                // digest of bare links is one the developer stops opening, which quietly costs the
+                // fail-closed rule its only landing zone. Say the silence out loud instead.
+                $reasons = ["régime du logement indéterminé : aucun signal dans l'annonce, "
+                    . 'et cette source publie aussi du logement social'];
+            }
+
+            return Verdict::digest($reasons);
+        }
+
+        return $this->score($listing, $classification, $firstSeenAgeSeconds);
+    }
+
+    /**
+     * The first hard rule this listing fails, or `null`.
+     *
+     * Returns the FIRST rather than all of them: this feeds a log line, and "rejected: commune" is
+     * what a human needs. Location is checked first because it is the cheapest and the commonest
+     * rejection.
+     */
+    private function disqualify(RawListing $listing): ?string
+    {
+        // --- location (F2/F3, and the Q32 ruling on what an unknown one does) ---
+        if (!$listing->hasLocationEvidence()) {
+            return 'no commune and no postcode — the listing carries no location evidence at all';
+        }
+
+        if (!$this->matchesLocation($listing)) {
+            return 'commune: ' . ($listing->commune ?? '(absent)') . ' / ' . ($listing->postcode ?? '(absent)');
+        }
+
+        // --- property kind (F9) ---
+        $pattern = $this->criteria->excludedBy($listing->title, $listing->description);
+        if ($pattern !== null) {
+            return 'excluded kind of property (pattern: ' . $pattern . ')';
+        }
+
+        // --- size (F4/F5) — an UNKNOWN measurement never disqualifies ---
+        if ($this->criteria->minRooms !== null && $listing->rooms !== null && $listing->rooms < $this->criteria->minRooms) {
+            return 'rooms: ' . $listing->rooms . ' < ' . $this->criteria->minRooms;
+        }
+
+        if ($this->criteria->minSurfaceM2 !== null && $listing->surfaceM2 !== null && $listing->surfaceM2 < $this->criteria->minSurfaceM2) {
+            return 'surface: ' . $listing->surfaceM2 . ' m² < ' . $this->criteria->minSurfaceM2 . ' m²';
+        }
+
+        // --- rent (F6), charges comprises, and never on an HC-only figure ---
+        $rentCc = $listing->effectiveRentCc();
+        if ($this->criteria->maxRentCc !== null && $rentCc !== null && $rentCc > $this->criteria->maxRentCc) {
+            return 'rent: ' . $rentCc . ' € CC > ' . $this->criteria->maxRentCc . ' € CC';
+        }
+
+        return null;
+    }
+
+    /**
+     * Location, under the Q32 ruling: judged on whichever of the two fields is present.
+     *
+     * With a commune, {@see Criteria::matchesCommune()} applies and the postcode narrows it. With
+     * only a postcode — an ordinary shape when a selector catches the address but not the city —
+     * the prefix alone decides, which is looser than the commune list but is the right kind of
+     * loose: it admits a few neighbouring communes rather than dropping a real listing silently.
+     */
+    private function matchesLocation(RawListing $listing): bool
+    {
+        if ($listing->commune !== null) {
+            return $this->criteria->matchesCommune($listing->commune, $listing->postcode);
+        }
+
+        if ($this->criteria->postcodePrefixes === []) {
+            return true;
+        }
+
+        $digits = preg_replace('~\D+~', '', (string) $listing->postcode) ?? '';
+        if ($digits === '') {
+            return false;
+        }
+
+        foreach ($this->criteria->postcodePrefixes as $prefix) {
+            if (str_starts_with($digits, $prefix)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function score(RawListing $listing, Classification $classification, ?int $firstSeenAgeSeconds): Verdict
+    {
+        $w = $this->criteria->weights;
+        $total = $w->positiveTotal();
+        $earned = 0;
+        $reasons = [];
+
+        // --- S1 commune preference ---
+        $rank = $this->criteria->rankOf($listing->commune);
+        if ($w->commune > 0) {
+            $worst = $this->criteria->worstRank();
+            // An UNRANKED commune scores as the bottom of the ranked list rather than as zero: it is
+            // in `communes`, so it is wanted. Zero would punish a commune for the config author not
+            // having got round to ranking it.
+            $effective = $rank ?? $worst;
+            $share = $worst <= 1 ? 1.0 : (($worst - $effective) / ($worst - 1));
+            $earned += (int) round($w->commune * $share);
+
+            if ($listing->commune !== null) {
+                $reasons[] = $rank === 1
+                    ? $listing->commune . ' — commune de premier choix'
+                    : $listing->commune;
+            }
+        }
+
+        // --- S3 rent headroom ---
+        $rentCc = $listing->effectiveRentCc();
+        if ($w->rentHeadroom > 0) {
+            if ($rentCc !== null && $this->criteria->maxRentCc !== null && $this->criteria->maxRentCc > 0) {
+                $headroom = max(0, $this->criteria->maxRentCc - $rentCc);
+                $earned += (int) round($w->rentHeadroom * min(1.0, $headroom / $this->criteria->maxRentCc));
+                $reasons[] = $rentCc . ' € CC — ' . $headroom . ' € sous le plafond';
+            } elseif ($listing->rentHc !== null) {
+                // Named explicitly, because this is the case where the ceiling could not be applied
+                // at all. A 1750 € HC flat is roughly 1900 € CC; the developer must see that the
+                // figure shown is not comparable to the budget.
+                $reasons[] = $listing->rentHc . ' € HORS CHARGES — total réel inconnu, plafond non vérifiable';
+            } else {
+                $reasons[] = 'loyer non communiqué';
+            }
+        }
+
+        // --- S4 surface above the minimum ---
+        if ($w->surface > 0) {
+            if ($listing->surfaceM2 !== null) {
+                $min = $this->criteria->minSurfaceM2 ?? 0.0;
+                // Saturates at +50% of the minimum. Without a cap a 300 m² outlier would take the
+                // full weight and flatten every real difference between 80 and 95 m².
+                $over = $min > 0.0 ? min(1.0, max(0.0, ($listing->surfaceM2 - $min) / ($min * 0.5))) : 0.0;
+                $earned += (int) round($w->surface * $over);
+                $reasons[] = rtrim(rtrim(number_format($listing->surfaceM2, 1, ',', ' '), '0'), ',') . ' m²';
+            } else {
+                $reasons[] = 'surface non communiquée';
+            }
+        }
+
+        if ($listing->rooms !== null) {
+            $reasons[] = $listing->rooms . ' pièces';
+        } else {
+            $reasons[] = 'nombre de pièces non communiqué';
+        }
+
+        // --- S5 / S6 floor and lift ---
+        // TWO components, not one signed component, and that is the `null`-is-not-`false` rule
+        // (hard rule 9) made structural: the BONUS needs a low floor or a declared lift, and the
+        // PENALTY needs the lift to be EXPLICITLY absent. A listing that simply does not mention a
+        // lift gets neither — which is right, because most listings do not mention one, and
+        // penalising silence is how the prototype dropped good flats.
+        $lowFloor = $listing->floor !== null && $listing->floor <= 1;
+        if ($w->lift > 0 && ($lowFloor || $listing->hasElevator === true)) {
+            $earned += $w->lift;
+            $reasons[] = $listing->hasElevator === true
+                ? 'ascenseur'
+                : ($listing->floor === 0 ? 'rez-de-chaussée' : ($listing->floor . 'er étage'));
+        }
+
+        if (!$lowFloor && $listing->hasElevator === false && $listing->floor !== null) {
+            $earned += $w->highFloorNoLift;
+            $reasons[] = $listing->floor . 'e étage SANS ascenseur';
+        }
+
+        // --- S7 freshness ---
+        if ($w->freshness > 0) {
+            $window = $this->criteria->freshnessMinutes * 60;
+            if ($firstSeenAgeSeconds === null || $firstSeenAgeSeconds <= $window) {
+                $earned += $w->freshness;
+                $reasons[] = 'publiée à l\'instant';
+            }
+        }
+
+        // Clamped, and the clamp is not cosmetic: `highFloorNoLift` is negative and is deliberately
+        // excluded from `$total`, so `$earned` can go below zero. A negative score would sort below
+        // a rejected listing and, before the Q31 ruling removed the confidence multiplier, would
+        // have ranked a low-confidence verdict ABOVE a high-confidence one.
+        $normalised = $total > 0
+            ? (int) round(max(0, min($total, $earned)) * 100 / $total)
+            // No positive weight configured at all. Scoring is off, not "everything scores zero" —
+            // a zero would read as a bad listing rather than an unconfigured one.
+            : 100;
+
+        array_unshift($reasons, ...$classification->reasons());
+
+        $highPriority = $normalised >= $this->criteria->notify->highPriorityScore
+            && $classification->confidenceBp >= self::HIGH_PRIORITY_MIN_CONFIDENCE_BP;
+
+        if ($normalised >= $this->criteria->notify->highPriorityScore
+            && $classification->confidenceBp < self::HIGH_PRIORITY_MIN_CONFIDENCE_BP) {
+            $reasons[] = 'priorité normale malgré le score : confiance '
+                . $classification->confidenceBp . '/100 sur le régime du logement';
+        }
+
+        return Verdict::matched($normalised, array_values($reasons), $highPriority);
+    }
+}

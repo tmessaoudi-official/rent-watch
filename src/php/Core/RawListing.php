@@ -59,6 +59,52 @@ final readonly class RawListing
     ) {}
 
     /**
+     * Rent charges comprises, derived when it was not reported directly.
+     *
+     * RULED 2026-08-07 (Q32, amending Q2). Q2 said only *"normalise every source to CC"*, which left
+     * three distinct cases collapsing into one "unknown":
+     *
+     * - **`rentCc` present** — use it.
+     * - **`rentHc` and `charges` both present** — CC is their sum, and it is derivable. Calling this
+     *   unknown throws away a hard filter on a listing whose total is right there.
+     * - **`rentHc` only** — genuinely unknown, and it must STAY unknown. A 1750 € HC flat is roughly
+     *   1900 € CC, so treating HC as CC notifies it against an 1800 € ceiling it does not meet.
+     *
+     * Returns `null` for the last case and for a listing with no rent at all. `null` here means *the
+     * ceiling cannot be applied*, never *below the ceiling* — the criteria engine must not disqualify
+     * on it (hard rule 9), and says so in `reasons[]` instead.
+     */
+    public function effectiveRentCc(): ?int
+    {
+        if ($this->rentCc !== null) {
+            return $this->rentCc;
+        }
+
+        if ($this->rentHc !== null && $this->charges !== null) {
+            return $this->rentHc + $this->charges;
+        }
+
+        return null;
+    }
+
+    /**
+     * Does this listing carry any location evidence at all?
+     *
+     * RULED 2026-08-07 (Q32). F4/F5/F6 each say explicitly what an unknown measurement does; F2/F3
+     * said nothing, and both readings are wrong. Rejecting on unknown silently drops every listing
+     * from a source whose commune selector drifted — and source health does NOT fire, because the
+     * fetch succeeded and the item count is non-zero. Passing on unknown stops filtering geography
+     * altogether, and Leboncoin is a national portal.
+     *
+     * So: a listing with neither field is rejected (location is the one criterion with no score
+     * fallback), and a listing with one of the two is judged on that one.
+     */
+    public function hasLocationEvidence(): bool
+    {
+        return $this->commune !== null || $this->postcode !== null;
+    }
+
+    /**
      * Every free-text surface the classifier reads, in one string.
      *
      * Title and description are joined rather than searched separately because landlords put the

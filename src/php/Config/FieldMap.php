@@ -30,6 +30,7 @@ final readonly class FieldMap
      * @param list<string> $commune
      * @param list<string> $postcode
      * @param list<string> $rent
+     * @param list<string> $rentHc  explicit hors-charges path, for a source that publishes BOTH
      * @param list<string> $charges
      * @param list<string> $surface
      * @param list<string> $rooms
@@ -46,6 +47,7 @@ final readonly class FieldMap
         public array $commune = [],
         public array $postcode = [],
         public array $rent = [],
+        public array $rentHc = [],
         public array $charges = [],
         public array $surface = [],
         public array $rooms = [],
@@ -62,7 +64,7 @@ final readonly class FieldMap
     {
         return array_merge(
             $this->ref, $this->title, $this->url, $this->commune, $this->postcode,
-            $this->rent, $this->charges, $this->surface, $this->rooms, $this->bedrooms,
+            $this->rent, $this->rentHc, $this->charges, $this->surface, $this->rooms, $this->bedrooms,
             $this->floor, $this->elevator, $this->description, $this->tenureField,
         );
     }
@@ -102,6 +104,7 @@ final readonly class FieldMap
 
         $ref = $paths('ref');
         $rent = $paths('rent');
+        $rentHc = $paths('rent_hc');
 
         $chargesIncluded = null;
         if ($r->has('charges_included')) {
@@ -115,6 +118,7 @@ final readonly class FieldMap
             commune: $paths('commune'),
             postcode: $paths('cp'),
             rent: $rent,
+            rentHc: $rentHc,
             charges: $paths('charges'),
             surface: $paths('surface'),
             rooms: $paths('rooms'),
@@ -131,6 +135,17 @@ final readonly class FieldMap
             throw ConfigError::at(
                 $r->pointer() . '.ref',
                 'required — without a stable id every run re-notifies every listing',
+            );
+        }
+
+        // `rent_hc` is unambiguous by its own name, so it needs no declaration — but pairing it
+        // with a `rent` that is ALSO hors charges would give two HC paths and no CC one, which is
+        // silently the same rent twice rather than the pair it looks like.
+        if ($rentHc !== [] && $chargesIncluded === false) {
+            throw ConfigError::at(
+                $r->pointer() . '.rent_hc',
+                'mapped alongside a `rent` that is itself hors charges. Map `rent` to the charges-'
+                    . 'comprises figure and `rent_hc` to the hors-charges one, or drop one of them',
             );
         }
 

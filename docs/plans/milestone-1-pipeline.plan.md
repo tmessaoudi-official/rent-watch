@@ -15,8 +15,11 @@ failures are silent, and they are cheapest to get right before anything depends 
 | Tenure verdict persistence, `doctor` timing | **deferred to schema v3** — Q24, Q25. v2 is spent: it carries `listings.seen_epoch` |
 | Config loading (`config/criteria.json`, `config/sources.json`) | **done** — `src/php/Config/`, ruled JSON 2026-08-07 (Q22) |
 | `ConfigTest::testEveryCorpusSourceAgreesWithConfig()` — the `mixed_tenure` drift guard | **done**, `tests/php/Config/ConfigTest.php` |
-| `Source` adapter contract + first adapter | not started |
-| `criteria` (score + hard disqualifiers) | not started |
+| `Source` adapter contract (`src/php/Adapters/Source.php`) | **done** — `fetch()` throws, never returns `[]` on failure |
+| `Payload` + `ListingMapper` — dotted paths, number/boolean parsing, field flattening | **done** |
+| `FixtureSource` — offline, shares the mapper with every network adapter | **done**, and it is what `scout replay` will use |
+| `criteria` (score + hard disqualifiers) | **done**, `src/php/Core/CriteriaEngine.php` + `Verdict.php` |
+| `HttpJsonSource` — the first NETWORK adapter | **blocked on an input**, not a decision: no endpoint in this repo has been verified, and hard rule 1 forbids writing one from memory. Needs a DevTools cURL capture |
 | Notification formatter + one channel | not started |
 | `scout` CLI (`doctor`, `dump <source>`, `run --once`) | not started |
 
@@ -376,3 +379,35 @@ A changelog that overstates is worse than one that omits, because the next sessi
 - [2026-08-07 00:00] AGREED (F9): tenure terms are **not** added to `exclude_patterns`. A
   user-editable regex duplicating §1 would be a second, weaker copy of the one guarantee that must
   not be config-overridable.
+- [2026-08-07 19:40] AGREED (adapter contract): `Source::fetch()` **throws and never returns `[]`**
+  on failure — hard rule 3 given something to be satisfied BY. `SourceError` masks its message at
+  CONSTRUCTION rather than at display, because `Store::recordRun()` persists that text and
+  `Store::health()` interpolates it into a user-facing detail; masking late means masking twice and
+  forgetting one. The original is deliberately not kept as a property — anything reachable gets
+  logged eventually.
+- [2026-08-07 19:40] AGREED: an item with **no stable id fails the run**; it is neither skipped nor
+  given a synthetic id. A content hash or an array index changes whenever the ad is edited or the
+  result order shifts, so the listing is "new" on every run and notifies forever — silently breaking
+  the store's "new exactly once" guarantee.
+- [2026-08-07 19:40] AGREED (`item_count`, per Q30): the adapter returns everything it PARSED, before
+  criteria. Counting matches would make source health a measure of the rental market rather than of
+  the adapter.
+- [2026-08-07 19:40] FOUND BY A TEST, not by reading — **a money bug**. `Payload::number()` first
+  used "the rightmost separator is the decimal point", which reads the ordinary French `1.450 €` as
+  1.450 and yields **1**: a 1450 € flat recorded as 1 €, passing every ceiling with maximum headroom.
+  The rule is now "the last separator is a decimal point unless exactly three digits follow it".
+- [2026-08-07 19:40] AGREED: `config/` **joins the sabotage harness's copy list**. The config tests
+  read the committed files through a repo-root constant, so without it every one of them ERRORS in
+  the scratch copy — and an errored suite is a red suite, which the harness cannot tell apart from a
+  caught sabotage. Every sabotage would have reported `ok` while proving nothing.
+- [2026-08-07 19:40] FOUND BY SABOTAGE (3 holes in the new tests, all real):
+  (1) the `mixed_tenure` explicit guard was **decorative** — deleting it falls through to
+  `requireBool()`, whose generic "required key is missing" also matched the assertion, so the test
+  passed while the guard was gone. The test now asserts the guidance text only the guard produces.
+  (2) the **title-only exclusion scope was unfalsifiable** while every title pattern was `^`-anchored:
+  a `^` with no `m` flag cannot match inside an appended description either way, so widening the
+  scope was a semantic no-op. Two unanchored patterns were added — phrases unambiguous in a title and
+  ordinary in a description — which gives the scope something real to protect, plus a fixture pair
+  that differs only in which field carries the phrase.
+  (3) the accented-pattern sabotage never applied at all, so it had been reporting nothing for its
+  whole life. Fixed to disable the check rather than reword its message.

@@ -15,14 +15,21 @@ The full specification is [`spec/PROJECT_BRIEF.md`](spec/PROJECT_BRIEF.md). It i
 for the product, and **every constraint in it is a ruling**, not a draft to be improved on. Read it
 before touching anything under `src/`.
 
-Status: **the pure core and the store exist; nothing else does.** As of 2026-08-07 there is a PHP 8.5
+Status: **the pure core, the store, the config layer, the adapter contract and the criteria engine
+exist. The notification channels and the CLI do not.** As of 2026-08-07 there is a PHP 8.5
 implementation of `models` + `tenure` under `src/php/Core/`, a 114-case language-neutral classifier
 corpus at `tests/fixtures/tenure/corpus.json`, the seen-set / price-history / run-log store under
-`src/php/Store/` with `SourceHealth` + `SourceStatus` in `Core/`, and a PHPUnit suite. There is still
-**no** `config/`, no adapter, no notification channel, no CLI and no CI. `src/phorj/` is not written
+`src/php/Store/` with `SourceHealth` + `SourceStatus` in `Core/`, a strict JSON config layer under
+`src/php/Config/` with both files committed, the `Source` contract plus `Payload` / `ListingMapper` /
+`FixtureSource` under `src/php/Adapters/`, the criteria engine (`CriteriaEngine` + `Verdict`), and a
+PHPUnit suite. `scout run --once` is demonstrable end to end today against a frozen payload.
+
+There is still **no** notification channel, **no** CLI, **no** dedup and no CI. The first NETWORK
+adapter is blocked on an input rather than a decision: no endpoint here has been verified, and hard
+rule 1 forbids writing one from memory. `src/phorj/` is not written
 yet — it waits on the three phorj builds in `docs/PHORJ-REQUIREMENTS.md`.
 
-Anything below describing `criteria`, `dedup`, the adapters or `enrich` is the **target**, not the
+Anything below describing `dedup`, `enrich` or the notification channels is the **target**, not the
 present. Do not report findings against files that do not exist yet, and do not name `pytest` as
 though it were wired — the PHP suite is the only test runner here.
 

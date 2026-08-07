@@ -44,7 +44,12 @@ run_sabotage() {
   # runner is symlinked — it is a self-contained PHAR with no path assumptions.
   # Checked: an unnoticed copy failure makes the scratch suite fail for the wrong reason, and the
   # detection assertion below cannot tell that apart from a caught sabotage.
-  if ! cp -a "$repo/src" "$repo/tests" "$repo/phpunit.xml" "$repo/composer.json" "$work/repo/" \
+  # config/ JOINED THIS LIST on 2026-08-07 and it is not optional. The config layer's tests read
+  # `config/criteria.json` and `config/sources.json` through a repo-root constant, so without it
+  # every one of them ERRORS in the scratch copy — and an errored suite is a red suite, which this
+  # harness cannot tell apart from a caught sabotage. Every sabotage would have reported `ok` while
+  # proving nothing at all, which is precisely the failure the whole script exists to detect.
+  if ! cp -a "$repo/src" "$repo/tests" "$repo/config" "$repo/phpunit.xml" "$repo/composer.json" "$work/repo/" \
     || ! cp -a "$repo/vendor" "$work/repo/vendor" \
     || ! ln -s "$repo/tools" "$work/repo/tools"; then
     printf '  \033[31mFAIL\033[0m %-58s (could not build the scratch copy)\n' "$label"
@@ -898,6 +903,98 @@ run_sabotage "the counting window loses its upper edge (a future-stamped row ale
 run_sabotage "the counting window ignores the clock (a stale writer hides failures)" \
   src/php/Store/Store.php \
   "s%\$edge = \$now ?? (int)%\$edge = (int)%"
+
+# ── The config, adapter and criteria layers, added 2026-08-07 ─────────────────────
+# Every failure mode below is SILENT in the same way the classifier's are: a listing that is
+# wrongly rejected is indistinguishable from a listing that was never published.
+
+run_sabotage "an unknown room count starts disqualifying (the prototype's bug)" \
+  src/php/Core/CriteriaEngine.php \
+  's%\$listing->rooms !== null \&\& \$listing->rooms <%(\$listing->rooms ?? 0) <%'
+
+run_sabotage "an unknown surface starts disqualifying" \
+  src/php/Core/CriteriaEngine.php \
+  's%\$listing->surfaceM2 !== null \&\& \$listing->surfaceM2 <%(\$listing->surfaceM2 ?? 0.0) <%'
+
+run_sabotage "charges comprises stops being derived from HC + charges" \
+  src/php/Core/RawListing.php \
+  's%if (\$this->rentHc !== null \&\& \$this->charges !== null) {%if (false) {%'
+
+run_sabotage "the title-only exclusion starts matching the description too" \
+  src/php/Config/Criteria.php \
+  's%\$foldedTitle = Text::fold(\$title);%\$foldedTitle = Text::fold(\$title . "\\n" . \$description);%'
+
+run_sabotage "a DIGEST verdict gets promoted into scoring" \
+  src/php/Core/CriteriaEngine.php \
+  's%if (\$classification->outcome === Outcome::DIGEST) {%if (false) {%'
+
+run_sabotage "an excluded tenure stops being rejected by the criteria engine" \
+  src/php/Core/CriteriaEngine.php \
+  's%if (\$classification->outcome === Outcome::REJECT) {%if (false) {%'
+
+run_sabotage "the score stops being clamped (a penalty can drive it negative)" \
+  src/php/Core/CriteriaEngine.php \
+  's%(int) round(max(0, min(\$total, \$earned)) \* 100 / \$total)%(int) round(\$earned * 100 / \$total)%'
+
+run_sabotage "a listing with no location evidence stops being rejected" \
+  src/php/Core/CriteriaEngine.php \
+  's%if (!\$listing->hasLocationEvidence()) {%if (false) {%'
+
+run_sabotage "the high-floor penalty starts firing on an UNMENTIONED lift" \
+  src/php/Core/CriteriaEngine.php \
+  's%\$listing->hasElevator === false \&\& \$listing->floor !== null%\$listing->hasElevator !== true \&\& \$listing->floor !== null%'
+
+run_sabotage "an unknown config key becomes silently ignored" \
+  src/php/Config/Reader.php \
+  's%if (\$this->remaining === \[\]) {%if (true) {%'
+
+run_sabotage "mixed_tenure stops being required in a source block" \
+  src/php/Config/ConfigLoader.php \
+  "s%if (!\\\$r->has('mixed_tenure')) {%if (false) {%"
+
+run_sabotage "an excluded default_tenure becomes acceptable in config" \
+  src/php/Config/ConfigLoader.php \
+  's%if (\$defaultTenure->isExcluded()) {%if (false) {%'
+
+run_sabotage "an enabled source may carry an unverified REMPLACER url" \
+  src/php/Config/ConfigLoader.php \
+  's%if (str_contains(\$url, self::UNVERIFIED_URL)) {%if (false) {%'
+
+run_sabotage "any underscore-prefixed key becomes a comment again" \
+  src/php/Config/Reader.php \
+  "s%if (str_starts_with(\\\$name, '_') \&\& array_key_exists(substr(\\\$name, 1), \\\$data)) {%if (str_starts_with(\\\$name, '_')) {%"
+
+run_sabotage "a missing items_path yields an empty list instead of throwing" \
+  src/php/Adapters/FixtureSource.php \
+  's%if (\$items === null) {%if (false) { \$items = [];%'
+
+run_sabotage "an item with no stable id gets skipped instead of failing the run" \
+  src/php/Adapters/ListingMapper.php \
+  "s%if (\\\$ref === null || \\\$ref === '') {%if (false) {%"
+
+run_sabotage "the thousands-separator rule is dropped (1.450 becomes 1)" \
+  src/php/Adapters/Payload.php \
+  's%if (\$trailing === 3) {%if (false) {%'
+
+run_sabotage "an unrecognised boolean spelling becomes false instead of null" \
+  src/php/Adapters/Payload.php \
+  's%default => null,%default => false,%'
+
+run_sabotage "zero and false start counting as absent values" \
+  src/php/Adapters/Payload.php \
+  's%if (\$value === null) {%if (!\$value) {%'
+
+run_sabotage "an accented exclude pattern stops being refused" \
+  src/php/Config/ConfigLoader.php \
+  's%x80-%xFE-%'
+
+run_sabotage "SourceError stops masking credentials before they are persisted" \
+  src/php/Adapters/SourceError.php \
+  's%Redact::text(\$message)%\$message%'
+
+run_sabotage "a fixture path may escape the repo" \
+  src/php/Adapters/FixtureSource.php \
+  "s%if (str_contains(\\\$relative, '..')) {%if (false) {%"
 
 printf '\n  %d sabotage(s) detected, %d undetected\n' "$pass" "$fail"
 

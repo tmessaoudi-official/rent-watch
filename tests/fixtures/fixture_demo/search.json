@@ -1,0 +1,151 @@
+{
+  "$comment": "Frozen payload for the `fixture_demo` source. NOT a capture from any real landlord — every value is invented, and it is shaped to exercise the pipeline's known traps rather than to look realistic. A real captured payload replaces this per source, under tests/fixtures/<source>/, scrubbed before committing.",
+  "$traps": {
+    "item-2": "an excluded tenure (PLAI) stated in a structured field — must REJECT, never notify",
+    "item-3": "a mixed-source listing with no tenure signal at all — must DIGEST, never match (fail-closed). Also the only item using the ALTERNATE payload shape (address.city, price, nbRooms), so the field map's fallback candidates are genuinely exercised rather than merely declared",
+    "item-4": "rooms and surface absent — must NOT be disqualified (hard rule 9: null is not zero)",
+    "item-5": "rent reported hors charges with charges alongside — CC must be DERIVED as 1480, which passes the 1800 ceiling",
+    "item-6": "hasElevator false with a high floor — a score penalty, never a rejection",
+    "item-7": "a parking space, no rooms and no surface — the size filters cannot catch it, so the title exclusion must",
+    "item-8": "a French-formatted rent string and a relative URL — number parsing and base_url resolution",
+    "item-9": "wrong commune — must be disqualified on location",
+    "item-10": "commune absent but postcode present — judged on the postcode alone (Q32)"
+  },
+  "results": {
+    "count": 10,
+    "items": [
+      {
+        "id": "demo-0001",
+        "title": "T4 lumineux - Sartrouville",
+        "description": "Bel appartement de 4 pieces, 88 m2, proche RER A. Logement locatif intermediaire.",
+        "url": "https://example.test/annonces/demo-0001",
+        "city": "Sartrouville",
+        "zipCode": "78500",
+        "financement": "LLI",
+        "rent": { "total": 1450, "charges": 120 },
+        "surface": 88,
+        "rooms": 4,
+        "floor": 2,
+        "hasElevator": true
+      },
+      {
+        "id": "demo-0002",
+        "title": "T4 - Argenteuil",
+        "description": "Appartement 4 pieces, 82 m2, secteur calme.",
+        "url": "https://example.test/annonces/demo-0002",
+        "city": "Argenteuil",
+        "zipCode": "95100",
+        "financement": "PLAI",
+        "rent": { "total": 890, "charges": 90 },
+        "surface": 82,
+        "rooms": 4,
+        "floor": 1,
+        "hasElevator": true
+      },
+      {
+        "id": "demo-0003",
+        "title": "T4 - Houilles",
+        "description": "Appartement 4 pieces de 80 m2, cuisine equipee, proche gare.",
+        "url": "https://example.test/annonces/demo-0003",
+        "address": { "city": "Houilles", "postalCode": "78800" },
+        "price": 1620,
+        "rent": { "charges": 140 },
+        "surface": 80,
+        "nbRooms": 4,
+        "floor": 3,
+        "hasElevator": true
+      },
+      {
+        "id": "demo-0004",
+        "title": "Grand T4 - Maisons-Laffitte - logement intermediaire",
+        "description": "Vaste appartement renove, LLI, quartier residentiel.",
+        "url": "https://example.test/annonces/demo-0004",
+        "city": "Maisons-Laffitte",
+        "zipCode": "78600",
+        "financement": "LLI",
+        "rent": { "total": 1700, "charges": 150 },
+        "floor": 1,
+        "hasElevator": true
+      },
+      {
+        "id": "demo-0005",
+        "title": "T4 - Chatou - loyer intermediaire",
+        "description": "4 pieces, 84 m2, balcon, parking en sous-sol inclus.",
+        "url": "https://example.test/annonces/demo-0005",
+        "city": "Chatou",
+        "zipCode": "78400",
+        "financement": "LLI",
+        "rentHc": 1350,
+        "rent": { "charges": 130 },
+        "surface": 84,
+        "rooms": 4,
+        "floor": 0,
+        "hasElevator": false
+      },
+      {
+        "id": "demo-0006",
+        "title": "T4 - Bezons - logement intermediaire",
+        "description": "4 pieces de 79 m2 au 4eme etage, immeuble sans ascenseur.",
+        "url": "https://example.test/annonces/demo-0006",
+        "city": "Bezons",
+        "zipCode": "95870",
+        "financement": "LLI",
+        "rent": { "total": 1390, "charges": 110 },
+        "surface": 79,
+        "rooms": 4,
+        "floor": 4,
+        "hasElevator": false
+      },
+      {
+        "id": "demo-0007",
+        "title": "Parking en sous-sol - Sartrouville",
+        "description": "Emplacement securise, acces badge.",
+        "url": "https://example.test/annonces/demo-0007",
+        "city": "Sartrouville",
+        "zipCode": "78500",
+        "rent": { "total": 95, "charges": 0 }
+      },
+      {
+        "id": "demo-0008",
+        "title": "T4 - Cormeilles-en-Parisis - logement intermediaire",
+        "description": "Appartement 4 pieces, 91 m2, terrasse, ascenseur.",
+        "url": "/annonces/demo-0008",
+        "city": "Cormeilles-en-Parisis",
+        "zipCode": "95240",
+        "financement": "LLI",
+        "rent": { "total": "1 540,00 €", "charges": "125 €" },
+        "surface": "91,5",
+        "rooms": "4",
+        "floor": "3",
+        "hasElevator": "oui"
+      },
+      {
+        "id": "demo-0009",
+        "title": "T4 - Nanterre - logement intermediaire",
+        "description": "4 pieces, 86 m2, proche La Defense.",
+        "url": "https://example.test/annonces/demo-0009",
+        "city": "Nanterre",
+        "zipCode": "92000",
+        "financement": "LLI",
+        "rent": { "total": 1590, "charges": 140 },
+        "surface": 86,
+        "rooms": 4,
+        "floor": 2,
+        "hasElevator": true
+      },
+      {
+        "id": "demo-0010",
+        "title": "T4 - logement intermediaire",
+        "description": "4 pieces de 83 m2, secteur boucle de Seine.",
+        "url": "https://example.test/annonces/demo-0010",
+        "zipCode": "78360",
+        "financement": "LLI",
+        "rent": { "total": 1480, "charges": 120 },
+        "surface": 83,
+        "rooms": 4,
+        "floor": 2,
+        "hasElevator": true
+      }
+    ]
+  }
+}

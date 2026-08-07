@@ -108,6 +108,7 @@
         "cp": ["zipCode", "address.postalCode"],
         "rent": ["rent.total", "price"],
         "charges_included": true,
+        "rent_hc": "rentHc",
         "charges": "rent.charges",
         "surface": "surface",
         "rooms": ["rooms", "nbRooms"],

@@ -190,7 +190,12 @@ final class ConfigTest extends TestCase
         unset($source['sources']['demo']['mixed_tenure']);
 
         $this->expectException(ConfigError::class);
-        $this->expectExceptionMessageMatches('~mixed_tenure: required~');
+        // Matching only `mixed_tenure: required` was NOT enough, and a sabotage run proved it:
+        // deleting the explicit guard falls through to `requireBool()`, whose generic "required key
+        // is missing" ALSO matches that pattern. The test passed while the guard was gone. Asserting
+        // the guidance text is what makes the guard load-bearing rather than decorative — it is the
+        // sentence that tells whoever hit this WHY the flag matters.
+        $this->expectExceptionMessageMatches('~arms the fail-closed rule~');
 
         ConfigLoader::sourcesFromArray($source);
     }
@@ -567,6 +572,29 @@ final class ConfigTest extends TestCase
             'Appartement 3 pieces, 65 m2, parking.',
             false,
             'a bare `parking` pattern would delete this before the classifier ever ran',
+        ];
+        // THE PAIR THAT MAKES THE TITLE-ONLY SCOPE FALSIFIABLE. A sabotage run showed that while
+        // every title pattern was `^`-anchored, widening the scope to the description was a
+        // semantic no-op — a `^` with no `m` flag cannot match inside appended text either way — so
+        // the two-list design was protecting nothing a test could disprove. These two use an
+        // UNANCHORED title pattern, and they differ only in which field carries the phrase.
+        yield 'a parking phrase in the DESCRIPTION is an amenity' => [
+            'T4 Sartrouville 88m2',
+            'Emplacement de stationnement inclus, cave et ascenseur.',
+            false,
+            'if the exclusion ever reads the description, this good flat vanishes silently',
+        ];
+        yield 'the same phrase in the TITLE is the property type' => [
+            'Emplacement de stationnement - Sartrouville',
+            'Acces badge.',
+            true,
+            'and if the title scope is dropped entirely, this parking ad gets notified',
+        ];
+        yield 'loue parking in a title is excluded even unanchored' => [
+            'Particulier loue parking - Houilles',
+            '',
+            true,
+            'the anchored pattern misses this: the title does not START with the property type',
         ];
         yield 'an ordinary listing is not excluded' => [
             'Bel appartement T4 - Maisons-Laffitte',
