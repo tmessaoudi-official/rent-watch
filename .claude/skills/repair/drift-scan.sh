@@ -347,7 +347,10 @@ if unknown:
 # check would be actively wrong in both directions, on the exact commit it exists to police.
 EXPECT = {'cases': cases, 'synthetic': synthetic}
 CLAIMS = [
-    (r'corpus\.json`?,?\s+(\d+)\s+cases', 'corpus.json … N cases', ('cases',)),
+    # `,?` was not enough: CLAUDE.md's File-layout block separates with an EM DASH, which is the
+    # phrasing the un-exempted fenced block actually uses, so the hole the exemption fix was written
+    # for stayed open for that shape. Any separator now counts.
+    (r'corpus\.json`?\s*[—–,:-]?\s+(\d+)\s+cases', 'corpus.json … N cases', ('cases',)),
     (r'still\s+(\d+)/(\d+)\s+synthetic', 'still N/N synthetic', ('synthetic', 'cases')),
     # NOT preceded by ≥ or "at least": those are the SPEC MINIMUM (spec §4 asks for >=30 texts),
     # which is a floor the corpus must clear, not a count of what it holds. This check flagged that

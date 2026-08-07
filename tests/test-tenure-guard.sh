@@ -130,6 +130,19 @@ expect_fire "a skipped test in the CamelCase corpus suite" \
 expect_fire "a skipped test in the CamelCase classifier suite" \
   '$this->markTestSkipped("todo: revisit PLS handling");' \
   "$repo/tests/php/Core/TenureClassifierTest.php"
+# PHPUnit's attribute family skips a test with the runner exiting 0 — the construct list stopped at
+# markTestSkipped and missed it entirely.
+expect_fire "a PHPUnit attribute skip on a corpus test" \
+  "#[RequiresPhpExtension('rentwatch_corpus')]
+public function testCorpusCaseClassifiesAsLabelled(): void {}" \
+  "$repo/tests/php/Core/TenureCorpusTest.php"
+# The runner CONFIG route: one line here drops the whole 93-case §1 corpus and every other automated
+# control in the repo still reports green. phpunit.xml sits at the repo root and was outside the
+# guard's path filter entirely.
+expect_fire "the corpus suite excluded in phpunit.xml" \
+  '<testsuite name="core"><exclude>tests/php/Core/TenureCorpusTest.php</exclude></testsuite>' \
+  "$repo/phpunit.xml"
+
 expect_fire "UNKNOWN routed to notification" \
   'if unknown: notify(listing)'
 expect_fire "classifier bypassed" \
@@ -138,6 +151,11 @@ expect_fire "classifier bypassed" \
 # ── MUST NOT FIRE ────────────────────────────────────────────────────────────────────────────────
 expect_silence "PHP array append inside the conflict rule" \
   '$flat[] = new TenureSignal(tier: 2, tenure: Tenure::PLAI); if ($t->isExcluded()) { return $x; }'
+# `!== null` contains `= null`, so the null idioms need the same `[^!=<>]` guard the empty-list
+# idioms have carried since round 2. Found by sweeping the real tree after widening pattern 7:
+# the classifier's own `excludedLabelInUnknownField(...) … if ($doubt !== null)` fired.
+expect_silence "an ordinary PHP not-null comparison beside the word excluded" \
+  '$excludedLabel = $this->excludedLabelInUnknownField($value); if ($excludedLabel !== null) { return $x; }'
 expect_silence "an ordinary PHP empty-array comparison" \
   'if ($objections !== []) { return $this->verdict(Tenure::UNKNOWN, 0, $flat, $source); }'
 expect_silence "the excluded set being asserted in a test" \
@@ -160,14 +178,30 @@ expect_silence "routing UNKNOWN to the digest, which is the rule" \
 # because the tree is five files: no config/, no adapter, no notify module, no health module —
 # which is exactly where the guard's vocabulary collides with ordinary code. A tripwire that fires
 # on correct code is read as noise within a day, which costs more than the gap it closed.
-expect_silence "a communes block in criteria.yaml" \
+# ACCEPTED NOISE, asserted as such. These two fire, and that is the deliberate outcome of removing
+# the non-tenure suppression in round 6: as a whole-write test it was a kill switch that one
+# occurrence of `source` could defeat, and no proximity window separates `communes:` before the
+# match from `source` in a docblock just as close. §1 detection does not pay for noise reduction, so
+# a communes block costs the author one glance and an explanation. Asserted rather than left
+# undocumented, so that a future session narrowing pattern 2 sees the cost was chosen.
+expect_fire "a communes block in criteria.yaml (accepted noise, see pattern 2)" \
   'communes:
   included: [Cergy, Nanterre]
   excluded: []' \
   "$repo/config/criteria.yaml"
-expect_silence "a non-tenure denylist in criteria.yaml" \
+expect_fire "a non-tenure denylist in criteria.yaml (accepted noise, see pattern 2)" \
   'blocked_landlords: null' \
   "$repo/config/criteria.yaml"
+# …and the detection that suppression was costing, which is why it went.
+expect_fire "an emptied excluded-set accessor whose docblock mentions a source" \
+  '/** Hard disqualifiers applied to every listing from every source. */
+public static function excluded(): array { return []; }' \
+  "$repo/src/php/Core/Criteria.php"
+expect_fire "an emptied per-source excluded list in sources.yaml" \
+  'sources:
+  cdc_habitat:
+    excluded: []' \
+  "$repo/config/sources.yaml"
 expect_silence "a notify module restating the routing rule" \
   '/** UNKNOWN never reaches the notify channel — it goes to the digest instead. */' \
   "$repo/src/php/Core/Notify/Formatter.php"

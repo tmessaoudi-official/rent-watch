@@ -417,6 +417,35 @@ final readonly class TenureClassifier
 
         foreach ($listing->fields as $name => $value) {
             if (!in_array(Text::fieldKey((string) $name), self::TENURE_FIELDS, true)) {
+                // NOT A TENURE FIELD — but an excluded label sitting in one is still §1 evidence,
+                // and skipping outright made `TENURE_FIELDS` a closed list standing between a
+                // spelled-out `PLAI` and a notification. `typeFinancement` is in the list and
+                // `financementType` is not, so one word order rejected at 97 and the other matched
+                // at 50; so did `gamme`, `programme` and `nature`. Fields are not part of
+                // `RawListing::text()`, so there was no prose fallback either. That is the same
+                // closed-list failure this class has now been bitten by three times — in the
+                // COLLOCATION nouns twice, and here in the field NAMES.
+                //
+                // A DOUBT rather than the tenure itself, deliberately. The field name is unknown, so
+                // the value may be prose rather than a financing declaration — `commentaire: "pas de
+                // PLAI ici"` must not become a silent REJECT. Digesting says what was seen and lets
+                // a human settle it, which is the fail-closed direction without the over-rejection.
+                $unknownFieldDoubt = $this->excludedLabelInUnknownField($value);
+
+                if ($unknownFieldDoubt !== null) {
+                    $out[] = new TenureSignal(
+                        tier: 1,
+                        tenure: Tenure::UNKNOWN,
+                        reason: sprintf(
+                            'champ « %s » (non reconnu comme champ de financement) contient « %s » '
+                            . '— à vérifier',
+                            (string) $name,
+                            $unknownFieldDoubt,
+                        ),
+                        evidence: $unknownFieldDoubt . '?',
+                    );
+                }
+
                 continue;
             }
 
@@ -459,10 +488,10 @@ final readonly class TenureClassifier
                         ? sprintf(
                             'champ structuré %s = « %s » : « %s » y est indécidable — à vérifier',
                             (string) $name,
-                            trim($raw),
+                            self::oneLine($raw),
                             $hit['literal'],
                         )
-                        : sprintf('champ structuré %s = « %s »', (string) $name, trim($raw)),
+                        : sprintf('champ structuré %s = « %s »', (string) $name, self::oneLine($raw)),
                     evidence: $hit['literal'],
                     position: $position,
                 );
@@ -480,13 +509,25 @@ final readonly class TenureClassifier
         $out = [];
 
         foreach ($this->matchLabels($folded) as $position => $hit) {
+            $matched = $hit['matched'] ?? $hit['literal'];
+
+            // Same asymmetry as the procedural tells: an ELIGIBLE label may not be assembled across
+            // a phrase boundary, because that manufactures eligibility from two unrelated
+            // fragments — a title ending `… - Loyer` and a description opening `intermediaire, …`
+            // is not a listing that says `loyer intermediaire`. An EXCLUDED label spanning one is
+            // kept, because failing to match it is the §1 fail-open and a line-wrapped
+            // `logement social` in a `text/plain` alert body is the primary ingestion path.
+            if ($hit['tenure']->isEligible() && str_contains($matched, "\n")) {
+                continue;
+            }
+
             $out[] = new TenureSignal(
                 tier: 2,
                 tenure: $hit['tenure'],
-                reason: sprintf('mention explicite « %s » dans le texte', $hit['matched'] ?? $hit['literal']),
+                reason: sprintf('mention explicite « %s » dans le texte', self::oneLine($matched)),
                 evidence: $hit['literal'],
                 position: $position,
-                length: strlen($hit['matched'] ?? $hit['literal']),
+                length: strlen($matched),
             );
         }
 
@@ -494,6 +535,37 @@ final readonly class TenureClassifier
             $hit = $this->financingAcronymPosition($cased, $acronym);
 
             if ($hit === null) {
+                // THE SAME DOUBT FLOOR THE FIELDS GOT, on the surface that was left behind.
+                //
+                // Round 5 gave structured fields a floor because the COLLOCATION noun list is
+                // closed and `financement: "Prêt PLUS"` was therefore notified at confidence 50 with
+                // `reasons[]` saying "aucun signal dans l'annonce". Round 6 pointed out that the
+                // list is just as closed in prose, and every value named in that fix —
+                // `Logements financés en PLUS`, `Programme agréé PLUS`, `Gamme PLUS` — MATCHED when
+                // written in the description instead. `financé en PLS` rejected while
+                // `financé en PLUS` matched, on the same sentence.
+                //
+                // CASE-SENSITIVE here, unlike the field path. In a field, capitalisation is the
+                // feed's house style and carries nothing. In prose it is real evidence: `plus de 3
+                // chambres` is the adverb and nothing else, and a case-insensitive floor would
+                // digest a large fraction of the Paris market. Only a SHOUTED `PLUS` that no
+                // comparative explains becomes a doubt.
+                $doubtAt = $this->firstNonComparativeOccurrence($cased, $acronym, caseInsensitive: false);
+
+                if ($doubtAt !== null) {
+                    $out[] = new TenureSignal(
+                        tier: 2,
+                        tenure: Tenure::UNKNOWN,
+                        reason: sprintf(
+                            '« %s » en majuscules dans le texte, sans contexte de financement '
+                            . 'reconnu ni comparatif : indécidable — à vérifier',
+                            $acronym,
+                        ),
+                        evidence: $acronym . '?',
+                        position: $doubtAt,
+                    );
+                }
+
                 continue;
             }
 
@@ -620,10 +692,32 @@ final readonly class TenureClassifier
         ));
     }
 
-    /** @return list<TenureSignal> */
+    /**
+     * Tier 3 over the free text AND over every structured field value.
+     *
+     * FIELDS ARE INCLUDED, and their omission was a §1 hole. `proceduralSignals()` read only
+     * `RawListing::text()`, and fields are not part of it — so `dispositif: "Attribution par
+     * commission d'attribution"` produced no signal at all and the listing matched on the source
+     * default, while the identical phrase in the description rejected at 80. None of the five
+     * social procedural literals is also in `LABELS`, so the tier-1 field scan could not see them
+     * either: the surface was blind to every one of them at once.
+     *
+     * The field values are appended after a NEWLINE, which is a phrase boundary everywhere else in
+     * this class — so an inflection or a `sans` negation cannot straddle the join between a
+     * description and a field, or between two fields.
+     *
+     * @return list<TenureSignal>
+     */
     private function proceduralSignals(RawListing $listing): array
     {
         $folded = Text::fold($listing->text());
+
+        foreach ($listing->fields as $value) {
+            if (is_scalar($value) || $value instanceof \Stringable) {
+                $folded .= "\n" . Text::fold((string) $value);
+            }
+        }
+
         $out = [];
 
         foreach (self::PROCEDURAL as $literal => $tenure) {
@@ -641,10 +735,25 @@ final readonly class TenureClassifier
                 continue;
             }
 
+            // An ELIGIBLE tell may not be assembled across a phrase boundary. `Text::
+            // inflectedTokenPosition()` joins a multi-word literal with `\s*` so that an inflected
+            // or line-wrapped phrase still matches — which is right for an EXCLUDED literal, where
+            // failing to match is the §1 fail-open, and wrong for an eligible one, where matching
+            // manufactures eligibility out of two unrelated fragments. A title ending `T3 Cergy
+            // sans` and a description opening `Commission d'attribution le 12 mars` assembled into
+            // the intermediate tell `sans commission d'attribution` and matched at 80.
+            //
+            // Asymmetric on purpose, exactly like the conflict rule: a wrapped `logement social`
+            // must still be caught, so the restriction applies only in the direction that costs a
+            // wasted application.
+            if ($tenure->isEligible() && str_contains($matched, "\n")) {
+                continue;
+            }
+
             $out[] = new TenureSignal(
                 tier: 3,
                 tenure: $tenure,
-                reason: sprintf('indice de procédure « %s »', $matched),
+                reason: sprintf('indice de procédure « %s »', self::oneLine($matched)),
                 evidence: $literal,
                 position: $position,
             );
@@ -653,9 +762,17 @@ final readonly class TenureClassifier
         return $out;
     }
 
+    /**
+     * `sans` must be on the SAME LINE — `\s` would let it reach across a phrase boundary.
+     *
+     * With `\s+`, a title ending in the word `sans` negated a procedural tell opening the
+     * description: `T3 Cergy sans` + `Commission d'attribution le 12 mars` read as the intermediate
+     * `sans commission d'attribution` and matched at 80. `\z` rather than `$` for the same reason
+     * the adjacency rule needs it — PCRE's `$` also matches before a final newline.
+     */
     private function isPrecededBySans(string $folded, int $position): bool
     {
-        return $this->matches('/\bsans\s+$/u', substr($folded, 0, $position));
+        return $this->matches('/\bsans[^\S\n]+\z/u', substr($folded, 0, $position));
     }
 
     /**
@@ -731,6 +848,52 @@ final readonly class TenureClassifier
         }
 
         return $hits;
+    }
+
+    /**
+     * Collapse a quoted fragment of the listing onto one line for `reasons[]`.
+     *
+     * `reasons[]` is the product's only user-facing output (`spec/PROJECT_BRIEF.md` §5) and it is
+     * built from the text that ACTUALLY matched. Since folding began preserving newlines — so the
+     * title/description boundary could act as a phrase break — that matched text can contain one:
+     * `Text::inflectedTokenPosition()` joins a multi-word literal with `\s*`, so a label straddling
+     * the join produced « logement\nintermediaire » in a notification. A hard-wrapped `text/plain`
+     * IMAP alert body, which `CLAUDE.md` hard rule 4 makes the PRIMARY ingestion path, does it in
+     * the middle of a sentence. Fixed at the formatting site rather than in the fold, because the
+     * newline is load-bearing for the matching and inert for the rendering.
+     */
+    private static function oneLine(string $fragment): string
+    {
+        return trim((string) preg_replace('/\s+/u', ' ', $fragment));
+    }
+
+    /**
+     * The first excluded-tenure literal named by a field this class does not recognise, or null.
+     *
+     * Deliberately narrower than {@see matchLabels()}: only literals whose tenure is EXCLUDED count,
+     * so an unknown field saying `LLI` or `loyer libre` stays silent rather than manufacturing
+     * evidence for eligibility out of an unrecognised key. The result is only ever used to raise a
+     * doubt, never to decide a tenure.
+     */
+    private function excludedLabelInUnknownField(mixed $value): ?string
+    {
+        if (!is_scalar($value) && !$value instanceof \Stringable) {
+            return null;
+        }
+
+        $folded = Text::fold((string) $value);
+
+        if ($folded === '') {
+            return null;
+        }
+
+        foreach ($this->matchLabels($folded) as $hit) {
+            if ($hit['tenure']->isExcluded()) {
+                return $hit['literal'];
+            }
+        }
+
+        return null;
     }
 
     /**
@@ -826,10 +989,20 @@ final readonly class TenureClassifier
      * word is provably not a scheme, and it is a closed set because the tail is the adverb's own
      * grammar rather than the open set of nouns a scheme name can follow.
      */
-    private function firstNonComparativeOccurrence(string $cased, string $acronym): ?int
-    {
+    private function firstNonComparativeOccurrence(
+        string $cased,
+        string $acronym,
+        bool $caseInsensitive = true,
+    ): ?int {
+        // Case matters on one surface and not the other. In a structured field, capitalisation is
+        // the feed's house style — `financement: plus` is the scheme — so the search is
+        // case-insensitive. In prose it is evidence, and `plus de 3 chambres` is the commonest
+        // phrase in French rental copy, so only a shouted `PLUS` may reach the doubt floor.
+        $literal = preg_quote($acronym, '/');
+        $pattern = $caseInsensitive ? '(?i:' . $literal . ')' : $literal;
+
         $found = preg_match_all(
-            '/(?<![A-Za-z0-9])(?i:' . preg_quote($acronym, '/') . ')(?![A-Za-z0-9])/u',
+            '/(?<![A-Za-z0-9])' . $pattern . '(?![A-Za-z0-9])/u',
             $cased,
             $matches,
             PREG_OFFSET_CAPTURE,
@@ -843,7 +1016,9 @@ final readonly class TenureClassifier
         foreach ($matches[0] as [$literal, $offset]) {
             $after = substr($cased, $offset + strlen($literal));
 
-            if (!$this->matches('/^\s*(?i:' . self::COMPARATIVE_TAIL . ')(?![A-Za-z0-9])/u', $after)) {
+            // Same-line only, for the same reason as the phrase-end rule: a comparative on the far
+            // side of a title/description boundary is not modifying this occurrence.
+            if (!$this->matches('/^[^\S\n]*(?i:' . self::COMPARATIVE_TAIL . ')(?![A-Za-z0-9])/u', $after)) {
                 return $offset;
             }
         }
@@ -990,12 +1165,28 @@ final readonly class TenureClassifier
             // A financing label ENDS a noun phrase: `Logement PLUS.`, `Logement PLUS - …`,
             // `Logement PLUS, …`, `PLUS / PLAI`, `PLS ou PLUS`. That is a small closed set, unlike
             // the set of French adjectives an adverbial `PLUS` could modify.
-            if ($this->matches('/^\s*$|^\s*[,;:.!?)\]\/\-–—]|^\s*(?:(?i:ou|et)\s+)?(?:' . $acros . ')(?![A-Za-z0-9])/u', $after)) {
+            //
+            // A NEWLINE ENDS IT TOO, and adding that is half of a §1 fix. `Text::foldPreserveCase()`
+            // keeps the newline `RawListing::text()` puts between title and description precisely
+            // because it is a phrase break — but this rule was written before that and only the
+            // `conventionné` adjacency rule was updated when it landed. So a title ending
+            // `LOGEMENT PLUS` did not end its phrase here; the comparative test below then read the
+            // FIRST WORD OF THE DESCRIPTION and dropped the label whenever it happened to be one of
+            // the 44 in the tail. `Grand`, `Proche`, `Calme` and `Des` all notified; `Bel` digested.
+            // Identical facts, different word order — the failure class the class docblock claims to
+            // have retired for the doubt/label race, alive in the adverb race.
+            if ($this->matches('/^[^\S\n]*(\n|$)|^[^\S\n]*[,;:.!?)\]\/\-–—]|^[^\S\n]*(?:(?i:ou|et)[^\S\n]+)?(?:' . $acros . ')(?![A-Za-z0-9])/u', $after)) {
                 return [$offset, true];
             }
 
             // A word follows. If it is a comparative we know it was the adverb, so drop it.
-            if ($this->matches('/^\s*(?i:' . self::COMPARATIVE_TAIL . ')(?![A-Za-z0-9])/u', $after)) {
+            //
+            // `[^\S\n]*`, not `\s*`: the comparative must be on the SAME LINE. Dropping a
+            // determinate label is the one thing this method does that biases toward notifying, so
+            // it is the one place a boundary must not be crossed. The phrase-end test above has
+            // already returned for the newline case, so this is belt and braces — deliberately,
+            // because whichever of the two is edited first should not be able to reopen the hole.
+            if ($this->matches('/^[^\S\n]*(?i:' . self::COMPARATIVE_TAIL . ')(?![A-Za-z0-9])/u', $after)) {
                 continue;
             }
 

@@ -132,7 +132,7 @@ run_sabotage "comparative suppression removed ('LOGEMENT PLUS GRAND' reads as fi
 # notification quote a phrase the listing does not contain, left the whole suite green.
 run_sabotage "tier-2 reason quotes the table literal instead of the matched text" \
   src/php/Core/TenureClassifier.php \
-  "s|reason: sprintf('mention explicite « %s » dans le texte', \$hit\['matched'\] ?? \$hit\['literal'\])|reason: sprintf('mention explicite « %s » dans le texte', \$hit['literal'])|"
+  "s|self::oneLine(\$matched)|\$hit['literal']|"
 
 # The doubt FLOOR in a structured tenure field. Round 5 found the prose branch answering silence when
 # no COLLOCATION noun sat beside the acronym — a §1 breach on the strongest rung of the ladder.
@@ -155,6 +155,48 @@ run_sabotage "folding flattens the title/description newline again" \
 run_sabotage "conventionne adjacency anchor reverts to \$ (which matches before a final newline)" \
   src/php/Core/TenureClassifier.php \
   's|\*\\z/u|*$/u|'
+
+# ROUND 6: the doubt floor on the PROSE surface, and the four consumers of the boundary rule.
+run_sabotage "prose branch goes silent again (no collocation noun => no signal, no doubt)" \
+  src/php/Core/TenureClassifier.php \
+  '/\$hit = \$this->financingAcronymPosition/,$ s|\$doubtAt = \$this->firstNonComparativeOccurrence(\$cased, \$acronym, caseInsensitive: false);|$doubtAt = null;|'
+
+run_sabotage "prose doubt floor goes case-INsensitive (digests the adverb too)" \
+  src/php/Core/TenureClassifier.php \
+  's|caseInsensitive: false|caseInsensitive: true|'
+
+run_sabotage "a newline stops ending the financing phrase" \
+  src/php/Core/TenureClassifier.php \
+  's@\^\[^\\S\\n\]\*(\\n|\$)@^[^\\S\\n]*($)@'
+
+# NOTE: there is no sabotage for the comparative escape's own `[^\S\n]*`. Reverting it to `\s*` is
+# provably inert: the phrase-end test above it returns determinate for any `$after` that starts with
+# a newline, so the comparative never sees one. It is kept as belt and braces — whichever of the two
+# is edited first must not be able to reopen the hole — and belt-and-braces cannot be sabotage-tested
+# one change at a time. The boundary behaviour is covered by the phrase-end sabotage and regress-037.
+run_sabotage "sans negates across the title/description boundary again" \
+  src/php/Core/TenureClassifier.php \
+  "s|'/\\\\bsans\[^\\\\S\\\\n\]+\\\\z/u'|'/\\\\bsans\\\\s+\$/u'|"
+
+run_sabotage "procedural tells stop reading structured fields" \
+  src/php/Core/TenureClassifier.php \
+  's|\$folded .= "\\n" . Text::fold((string) \$value);|;|'
+
+run_sabotage "an excluded label in an unrecognised field is ignored again" \
+  src/php/Core/TenureClassifier.php \
+  's|\$unknownFieldDoubt = \$this->excludedLabelInUnknownField(\$value);|$unknownFieldDoubt = null;|'
+
+run_sabotage "an eligible tell may be assembled across a phrase boundary" \
+  src/php/Core/TenureClassifier.php \
+  's|if (\$tenure->isEligible() \&\& str_contains(\$matched, "\\n")) {|if (false) {|'
+
+run_sabotage "an eligible LABEL may be assembled across a phrase boundary" \
+  src/php/Core/TenureClassifier.php \
+  "s|\$hit\['tenure'\]->isEligible() && str_contains|false \&\& str_contains|"
+
+run_sabotage "reasons[] stop being collapsed to one line" \
+  src/php/Core/TenureClassifier.php \
+  's|return trim((string) preg_replace(./\\s+/u., . ., \$fragment));|return $fragment;|'
 
 # The two folded surfaces must stay byte-aligned: label positions come from fold(), the ambiguous
 # acronym's from foldPreserveCase(), and the resolver compares them directly. mb_strtolower breaks

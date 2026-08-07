@@ -47,7 +47,10 @@ parts = [
 ]
 for e in (i.get("edits") or []):
     parts.append(e.get("new_string") or "")
-blob = " ".join(parts).replace("\n", " ").replace("\t", " ")
+# Newlines are carried through as \x01 rather than flattened away. `read -r` needs one line, but
+# a SUPPRESSION is a statement about one line of code, not about the whole write — and judging
+# them on a flattened blob let a comment on line 1 silence a real breach on line 3.
+blob = " ".join(parts).replace("\n", "\x01").replace("\t", " ")
 print(f"{fp}\t{blob}")
 ' <<<"$payload" 2>/dev/null
 )" || true
@@ -72,10 +75,28 @@ esac
 
 case "$file_path" in
   */config/*|*/src/*|*/tests/*|*config/*|*src/*|*tests/*) ;;
+  # phpunit.xml lives at the repo ROOT and matched none of the above, so the guard exited before any
+  # pattern ran — and ONE `<exclude>` line there drops the 93-case §1 corpus from the suite. A review
+  # measured it: 193 tests became 90, and drift-scan still reported P0=0 P1=0 P2=0. Only
+  # sabotage-check.sh noticed, and CLAUDE.md scopes that to changes under src/php/Core/Tenure*,
+  # which a runner-config edit is not.
+  */phpunit.xml|phpunit.xml|*/phpunit.xml.dist|phpunit.xml.dist) ;;
   *) exit 0 ;;
 esac
 
-blob="$(printf '%s' "${new_text:-}" | tr '[:upper:]' '[:lower:]')"
+# TWO VIEWS OF THE SAME WRITE, and which one a rule uses is a correctness question.
+#
+#   $blob  — newlines flattened to spaces. DETECTION patterns use this, because a real construct
+#            spans lines: `function excluded(): array` and its `return [];` are three lines apart.
+#   $lines — newlines preserved, so `grep` works line by line. Every SUPPRESSION uses this.
+#
+# Round 6 found all three suppressions added in round 5 were whole-blob: the exempting docblock a
+# notify module carries silenced a genuine `UNKNOWN → notify` three lines below it; a leading
+# comment in a YAML file hid a real toggle; and one occurrence of the word `source` anywhere in a
+# file disarmed the excluded-set pattern entirely. Each was the same shape as the bug the round-5
+# commit narrated catching elsewhere.
+blob="$(printf '%s' "${new_text:-}" | tr '\001' ' ' | tr '[:upper:]' '[:lower:]')"
+lines="$(printf '%s' "${new_text:-}" | tr '\001' '\n' | tr '[:upper:]' '[:lower:]')"
 [[ -z "$blob" ]] && exit 0
 
 hits=()
@@ -108,26 +129,28 @@ fi
 # written in, and PHP's `array()`. That inversion was a standing gap, not a regression from the
 # narrowing: the pre-narrowing pattern missed them too.
 #
-# SUPPRESSED ONLY FOR THIS REPO'S OWN NON-TENURE CONFIG SUBJECTS, and the shape of that exemption
-# matters. `exclude|blocked|never` are ordinary words in ordinary config: `blocked_landlords: null`
-# and a `communes:` block with `excluded: []` — the single most likely line config/criteria.yaml
-# will ever contain — both fired. The guard read as silent on the whole tree only because the tree
-# is five files with no config/ yet; six plausible next-milestone files produced six false positives.
+# NO SUPPRESSION, AND THAT IS THE ROUND-6 FINDING rather than a regression.
 #
-# The obvious narrowing — "require a tenure token nearby" — was tried and REJECTED: it silenced
-# `public static function excluded(): array { return []; }`, which is precisely how you would empty
-# an excluded-set accessor in the language this repo uses and which names no tenure at all. §1
-# detection must not pay for noise reduction.
+# One existed from 2026-08-06 to 2026-08-07: pattern 2 was silenced whenever a known non-tenure
+# subject (commune, landlord, source, postcode…) appeared and no tenure token did, so that a
+# `communes:` block with `excluded: []` would not fire. It was a KILL SWITCH, not a filter — the
+# test ran over the whole write, so ONE occurrence of `source` anywhere disarmed the pattern for the
+# entire file. The counter-example the round-5 commit itself led with,
+# `public static function excluded(): array { return []; }`, went silent by adding one word of
+# docblock above it, and `config/sources.yaml` was permanently exempt because its own content
+# guarantees the token.
 #
-# So the suppression is a closed list of subjects that are demonstrably NOT tenure — commune,
-# landlord, source, postcode — drawn from this repo's own criteria/sources schema, and it applies
-# only when NO tenure token appears anywhere in the write. Forgetting an entry costs a false
-# positive, never a missed detection, which is the direction a §1 tripwire must fail in.
-_empty='(remove|delete|drop|pop|clear|[^!=<>] *= *\[\]|=> *\[\]|return *\[\]|= *none|= *null|= *array\(\)|= *\(\)|: *\[\]|: *\{\}|: *null|: *~)'
-_tenure='(plai|plus|pls|logement social|conventionn|anru|anah|hlm|tenure)'
-_not_tenure='(commune|landlord|bailleur|source|postcode|code postal|quartier|ville|departement|arrondissement|keyword|portal)'
-if grep -Eq "(exclude|excluded|denied|blocked|forbidden|never)[^.]{0,80}$_empty" <<<"$blob" \
-&& { grep -Eq "$_tenure" <<<"$blob" || ! grep -Eq "$_not_tenure" <<<"$blob"; }; then
+# Narrowing it to the matched span does not rescue it either: `communes:` sits just before the match
+# and `source` in a docblock sits just as close, so no proximity window separates them. The
+# suppression was wrong in KIND. `CLAUDE.md` and pattern 3 below both say §1 detection must not pay
+# for noise reduction, and a tripwire one word can defeat is worse than one that occasionally fires
+# on a communes block.
+#
+# So it fires there, deliberately, and `tests/test-tenure-guard.sh` asserts both the noise and the
+# detection it buys. The author reads it, says "this is communes, not tenure", and moves on — which
+# is the workflow this file's header describes.
+_empty='(remove|delete|drop|pop|clear|[^!=<>] *= *\[\]|=> *\[\]|return *\[\]|[^!=<>] *= *none|[^!=<>] *= *null|[^!=<>] *= *array\(\)|[^!=<>] *= *\(\)|: *\[\]|: *\{\}|: *null|: *~)'
+if grep -Eq "(exclude|excluded|denied|blocked|forbidden|never)[^.]{0,80}$_empty" <<<"$blob"; then
   hits+=("the excluded-tenure set looks like it is being emptied or shrunk")
 fi
 
@@ -180,8 +203,13 @@ fi
 # 4. UNKNOWN being treated as notifiable.
 # `never|not|pas|jamais|instead of` in between means the text is RESTATING the rule, not breaking
 # it — `/** UNKNOWN never reaches the notify channel */` is the comment any notify module will carry.
-if grep -Eq 'unknown[^.]{0,60}(notify|match|emit|send|alert)' <<<"$blob" \
-&& ! grep -Eq 'unknown[^.]{0,60}(never|not |n.t |pas |jamais|instead of|rather than|au lieu)[^.]{0,60}(notify|match|emit|send|alert)' <<<"$blob"; then
+# PER LINE. As a whole-blob test the exempting docblock silenced a real breach beside it: a notify
+# module carrying `/** UNKNOWN never reaches the notify channel */` could route UNKNOWN to
+# notification three lines below and stay silent — and that co-occurrence is the likeliest one in
+# the repo, because the docblock is the one this guard's own test uses as its exempt case.
+if grep -Eq 'unknown[^.]{0,60}(notify|match|emit|send|alert)' <<<"$lines" \
+&& grep -E 'unknown[^.]{0,60}(notify|match|emit|send|alert)' <<<"$lines" \
+   | grep -qvE '(never|not |n.t |pas |jamais|instead of|rather than|au lieu)'; then
   hits+=("UNKNOWN tenure looks like it is being routed to notification instead of the \"à vérifier\" digest")
 fi
 
@@ -189,7 +217,13 @@ fi
 # `no` dropped from the verb list: `a source with no tenure hint`, `no tenure signal` and `no
 # tenure classifier` are all ordinary prose ABOUT the rule, and CLAUDE.md § Gotchas already records
 # this firing on the repo's own comments. A real bypass is spelled skip/bypass/disable/without.
-if grep -Eq '(skip|bypass|disable|without|sans)[_ -]?(tenure|classif)' <<<"$blob"; then
+# `no` is back, but only with a SEPARATOR — `no_tenure_check`, `--no-tenure`, `$noClassifier` are
+# ordinary ways to spell a kill switch in the config and CLI that are coming, and dropping the verb
+# outright to silence prose lost all of them. Space-separated prose (`no tenure hint`, `no tenure
+# signal`) stays silent because it has no separator, which is the distinction that actually matters.
+if grep -Eq '(skip|bypass|disable|without|sans)[_ -]?(tenure|classif)' <<<"$blob" \
+|| grep -Eq '(^|[^a-z])no[_-](tenure|classif)' <<<"$blob" \
+|| grep -Eq '(^|[^a-z])no(tenure|classif)' <<<"$blob"; then
   hits+=("the tenure classifier looks like it is being skipped or disabled")
 fi
 
@@ -197,8 +231,12 @@ fi
 # A leading `#` or `//` means the line is a COMMENT describing the source, not a key enabling it:
 # `# config: CDC Habitat publishes PLUS and PLAI alongside LLI` is exactly the note config/sources.yaml
 # will carry about a mixed-tenure landlord, and firing on it teaches the reader to ignore the guard.
-if grep -Eq '(config|option|setting|toggle|flag|param)[^.]{0,60}(plai|plus|pls|logement social|allow_social|include_social)' <<<"$blob" \
-&& ! grep -Eq '^ *(#|//|\*)[^\n]{0,120}(config|option|setting|toggle|flag|param)[^.]{0,60}(plai|plus|pls|logement social)' <<<"$blob"; then
+# PER LINE, and the previous form was broken in BOTH directions by the flattening: `^ *(#|//|\*)`
+# could only ever anchor at the start of the whole write, so a leading comment line hid every toggle
+# below it, while the same comment indented on line 3 — where it will actually live in a YAML block
+# — still fired. Now each line is judged on its own: a comment is exempt, code is not.
+if grep -E '(config|option|setting|toggle|flag|param)[^.]{0,60}(plai|plus|pls|logement social|allow_social|include_social)' <<<"$lines" \
+   | grep -qvE '^[[:space:]]*(#|//|\*|--)'; then
   hits+=("social tenure looks like it is becoming a config toggle — CLAUDE.md forbids this")
 fi
 
@@ -210,14 +248,21 @@ fi
 # against the only two files where a skipped classifier test can happen. CLAUDE.md §1 rates that P0.
 lc_path="$(printf '%s' "$file_path" | tr '[:upper:]' '[:lower:]')"
 case "$lc_path" in
-  *tests*tenure*|*tenure*test*|*tests/fixtures*)
+  # phpunit.xml is included because the runner CONFIG is a way to disable the corpus suite without
+  # touching a test file at all.
+  *tests*tenure*|*tenure*test*|*tests/fixtures*|*phpunit.xml|*phpunit.xml.dist)
     # ACTUAL SKIP CONSTRUCTS, not the WORD "skip". The bare-word version only became reachable when
     # the case above learned to match CamelCase paths — and it immediately fired on both real
     # classifier test files, on prose: one docblock explaining a deleted `→ skip` branch, and one
     # QUOTING CLAUDE.md's own "a skipped, xfailed, deleted or relabelled fixture is P0". A tripwire
     # that fires on the file's own statement of the rule it enforces is noise on every single edit
     # to the two files it most needs to be believed about.
-    if grep -Eq '(marktestskipped|marktestincomplete|pytest\.mark\.(skip|xfail)|unittest\.skip|@expectedfailure|@skip|\.skip\(|xit\(|xdescribe|#\[ignore\]|(^|[^a-z])(todo|fixme):|# *disabled)' <<<"$blob"; then
+    # PHPUnit's `#[Requires*]` attribute family skips a test with the runner exiting 0 — verified on
+    # 13.2.6: `#[RequiresPhpExtension('nope')]` yields "OK, but some tests were skipped!" and exit 0.
+    # A construct list that stopped at `markTestSkipped` missed the whole family, and missing a
+    # construct is how narrowing a pattern loses detection. `<exclude>`/`<testsuite>` cover the
+    # runner-config route, which is why phpunit.xml is now inside the path filter above.
+    if grep -Eq '(marktestskipped|marktestincomplete|pytest\.mark\.(skip|xfail)|unittest\.skip|@expectedfailure|@skip|\.skip\(|xit\(|xdescribe|#\[ignore\]|#\[requires|#\[group|@group|(^|[^a-z])(todo|fixme):|# *disabled|<exclude>|excludetestsuite|--exclude-group)' <<<"$blob"; then
       hits+=("a tenure test looks like it is being skipped or marked xfail — fix the classifier, not the test")
     fi
     ;;

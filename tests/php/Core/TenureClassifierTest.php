@@ -412,7 +412,7 @@ final class TenureClassifierTest extends TestCase
      * `reasons[]` is the product's only user-facing output (`spec/PROJECT_BRIEF.md` §5) and the
      * whole suite asserted exactly two things about it: that it is non-empty, and that no entry is
      * blank. Reverting `reason:` to `$hit['literal']` — so an inflected match reports a phrase the
-     * listing does not contain — left all 183 tests green. A notification that says
+     * listing does not contain — left the whole suite green (183 tests at the time). A notification that says
      * « logement locatif intermediaire » for a listing reading *"logements locatifs intermédiaires
      * conventionnés"* is not wrong enough to fail a test and is exactly wrong enough to erode trust.
      */

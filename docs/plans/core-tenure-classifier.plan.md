@@ -80,6 +80,50 @@ store, no notify.
   correctly blocked the same exception. Note the second half, which is easy to miss: PCRE's `$`
   matches before a final newline, so narrowing the adjacency character class changed nothing until
   the anchor became `\z`.
+- [2026-08-07 07:58] AGREED: **Every value object in `src/php/Core/` is `final readonly`**, and the
+  test that pins it sweeps the namespace by reflection rather than naming one class. `TenureSignal`
+  lost the keyword when `$length` gained a computed default, silently making the §1 evidence trail
+  writable; the fix was pinned by a test naming `TenureSignal` alone, while the argument for it was
+  about `Classification`. Round 6 showed all five other core classes could lose it with the suite
+  green. Recorded here on 2026-08-07 after round 6 pointed out it was the one ruling of that batch
+  living only in commit prose.
+- [2026-08-07 11:40] AGREED: **The prose surface gets the same doubt floor as the fields, but
+  CASE-SENSITIVELY.** Round 5's floor was scoped to structured fields, so `Logements financés en
+  PLUS` still MATCHED at confidence 50 on a pure source while the identical sentence with `PLS`
+  rejected. The COLLOCATION noun list is exactly as closed in prose as in a field. Case is the one
+  thing that differs between the surfaces and it is kept: in a field capitalisation is the feed's
+  house style, in prose it is evidence, and a case-insensitive floor would digest most of the Paris
+  market on `plus de 3 chambres`. Cost: `trap-005b` (`PLUS UN BUREAU`, shouted) relabelled to DIGEST;
+  `trap-010` is its lowercase sibling and stops the rule being widened.
+- [2026-08-07 11:40] AGREED: **A newline is a phrase boundary in ALL FOUR rules that consume
+  whitespace adjacency, not just the one round 5 updated.** The ruling was made and applied to the
+  `conventionné` adjacency rule alone; the phrase-end test, the comparative escape and
+  `isPrecededBySans()` still read it as ordinary space. The comparative one deleted determinate
+  labels: the FIRST WORD OF THE DESCRIPTION decided whether a shouted `LOGEMENT PLUS` title was a
+  rejection or a notification. A newline now ENDS a financing phrase, and neither the comparative
+  escape nor the `sans` negation may cross one.
+- [2026-08-07 11:40] AGREED: **Multi-word literals may be assembled across a phrase boundary only
+  when the tenure is EXCLUDED.** `Text::inflectedTokenPosition()` joins words with `\s*` so a
+  line-wrapped phrase still matches — necessary for `logement social` in a `text/plain` alert body,
+  which hard rule 4 makes the primary ingestion path, and wrong for an eligible one, where it
+  manufactures eligibility from two unrelated fragments (`T3 Cergy sans` + `Commission
+  d'attribution…` assembled into the intermediate tell). Asymmetric exactly like the conflict rule.
+- [2026-08-07 11:40] AGREED: **Procedural tells are evaluated over structured field values, and an
+  excluded label in an UNRECOGNISED field raises a doubt.** Both were closed-list failures of the
+  same shape the COLLOCATION nouns produced twice: `proceduralSignals()` read only
+  `RawListing::text()`, so `dispositif: "commission d'attribution"` was invisible; and
+  `TENURE_FIELDS` is exact-match, so `typeFinancement` rejected a `PLAI` at 97 while
+  `financementType` notified at 50. The unknown-field case is a DOUBT rather than the tenure itself,
+  because such a field may be prose and `commentaire: "pas de PLAI ici"` must not become a silent
+  REJECT.
+- [2026-08-07 11:40] AGREED: **A §1 tripwire suppression is judged per line or per matched span,
+  never over the whole write — and pattern 2 has none at all.** All three suppressions added in
+  round 5 were whole-blob, because the hook flattens newlines before grepping: an exempting docblock
+  silenced a real breach three lines below it, and one occurrence of the word `source` anywhere
+  disarmed the excluded-set pattern entirely. The hook now carries both a flattened and a
+  line-preserving view. Pattern 2's non-tenure suppression was removed rather than narrowed: no
+  proximity window separates `communes:` before a match from `source` in a docblock just as close,
+  so it fires on a communes block and that noise is asserted as the accepted cost.
 
 ---
 
@@ -244,7 +288,7 @@ that would otherwise have shipped looking fine.
   catch a regression. Wired as `tests/sabotage-check.sh`, documented in `CLAUDE.md` § Common
   workflows, and it must be run after any change to the classifier, `Text.php` or the corpus.
 - [2026-08-06 23:20] AGREED: **the corpus declares its own provenance and the suite checks it.** The
-  spec asks for real listing texts; all 93 are synthetic until a payload can be captured. Making that
+  spec asks for real listing texts; all 100 are synthetic until a payload can be captured. Making that
   machine-checked keeps the gap visible instead of letting it decay into a stale comment.
 
 ---

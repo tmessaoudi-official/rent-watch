@@ -22,7 +22,7 @@
     ],
     "version": 1,
     "declared_counts": {
-        "synthetic": 93,
+        "synthetic": 100,
         "captured": 0
     },
     "sources": {
@@ -543,11 +543,10 @@
             "description": "TROIS CHAMBRES, PLUS UN BUREAU FERME ET UNE BUANDERIE.",
             "fields": [],
             "expect": {
-                "tenure": "LIBRE",
-                "outcome": "MATCH",
-                "max_confidence": 59
+                "tenure": "UNKNOWN",
+                "outcome": "DIGEST"
             },
-            "why": "FOUND BY SABOTAGE-CHECK, 2026-08-06, and it took two attempts to write correctly. Every other 'plus' trap here is followed by a comparative ('plus de', 'plus tard', 'plus lumineux'), so the comparative suppression alone caught all of them and the collocation test could be deleted with the suite staying green. This one has no comparative to fall back on — 'PLUS' is followed by 'UN'. It must also be SHOUTED: uppercase is enforced by the acronym pattern itself, so a lowercase 'plus' never reaches the collocation test at all, and a lowercase version of this fixture proves nothing. An all-caps portal title with 'PLUS UN BUREAU' is ordinary, and only the collocation test stands between it and a social-housing classification."
+            "why": "RELABELLED 2026-08-07 after review round 6, evidence here and in the commit message as CLAUDE.md requires. Round 6 found the round-5 doubt floor was scoped to structured FIELDS only, so the identical fail-open was still live in prose: 'Logements finances en PLUS' reached MATCH at confidence 50 on In'li, while the same sentence with PLS rejected. Extending the floor to prose is what closes it -- and this fixture is the one case in the corpus that pays for it. A SHOUTED 'PLUS' that no comparative explains is now a doubt wherever it appears, so this all-caps title digests instead of matching. That is the accepted cost, and it is the small side of the trade: one glance in the digest for a listing whose title happens to shout, against a wasted application for a social listing that reads as ordinary French. ORIGINAL LABEL, for the record: LIBRE / MATCH / max_confidence 59. Its ORIGINAL RATIONALE still holds and is why the fixture is kept rather than deleted: FOUND BY SABOTAGE-CHECK, 2026-08-06, and it took two attempts to write correctly. Every other 'plus' trap here is followed by a comparative ('plus de', 'plus tard', 'plus lumineux'), so the comparative suppression alone caught all of them and the collocation test could be deleted with the suite staying green. This one has no comparative to fall back on — 'PLUS' is followed by 'UN'. It must also be SHOUTED: uppercase is enforced by the acronym pattern itself, so a lowercase 'plus' never reaches the collocation test at all, and a lowercase version of this fixture proves nothing. An all-caps portal title with 'PLUS UN BUREAU' is ordinary, and only the collocation test stands between it and a social-housing classification."
         },
         {
             "id": "trap-006-cuisine-meublee-is-not-tenure",
@@ -1372,6 +1371,105 @@
                 "outcome": "DIGEST"
             },
             "why": "P1 (review round 5, 2026-08-07). RawListing::text() joins title and description with a newline and folding collapsed it to one ordinary space, so the adjacency rule could not tell a FIELD BOUNDARY from an intra-phrase space: the title's 'Logement intermédiaire' excused the description's opening 'Conventionné' and the listing MATCHED with the word absent from reasons[]. A comma blocked the same exception -- backwards, since a boundary is the stronger phrase break. Folding now preserves newlines and the adjacency class excludes them. Note the anchor: PCRE's '$' matches before a final newline too, so narrowing the character class alone changed nothing until it became '\\z'."
+        },
+        {
+            "id": "regress-036-prose-financing-noun-outside-the-list",
+            "provenance": "synthetic",
+            "source": "inli",
+            "title": "T3 Cergy",
+            "description": "Logements finances en PLUS, proche RER A.",
+            "fields": {},
+            "expect": {
+                "tenure": "UNKNOWN",
+                "outcome": "DIGEST"
+            },
+            "why": "P0 §1 BREACH GUARD (review round 6, 2026-08-07). Round 5 gave STRUCTURED FIELDS a doubt floor because the COLLOCATION noun list is closed; round 6 found the list is just as closed in prose, and every value named in that fix -- 'Prêt PLUS', 'Financé PLUS', 'Agréé PLUS', 'Gamme PLUS' -- still MATCHED when written in the description instead. On In'li, a PURE source, this listing was notified at confidence 50 with reasons[] reading 'aucun signal dans l'annonce'. The identical sentence with PLS rejected, because PLS was promoted to a plain label in round 4. The floor now applies to prose too, but CASE-SENSITIVELY: in a field, capitalisation is the feed's house style; in prose it is evidence, and a case-insensitive floor would digest most of the Paris market on 'plus de 3 chambres'."
+        },
+        {
+            "id": "regress-037-shouted-label-then-comparative-across-the-boundary",
+            "provenance": "synthetic",
+            "source": "inli",
+            "title": "LOGEMENT PLUS",
+            "description": "Grand sejour, proche RER A.",
+            "fields": {},
+            "expect": {
+                "tenure": "PLUS",
+                "outcome": "REJECT",
+                "min_confidence": 85
+            },
+            "why": "P0 §1 BREACH GUARD (review round 6, 2026-08-07). Round 5 ruled that a newline is a phrase boundary and wired that into the conventionne adjacency rule ONLY. Three other rules still read it as ordinary whitespace, and one of them deleted a determinate label: the comparative escape matched the FIRST WORD OF THE DESCRIPTION, so an identical title notified or digested depending on it -- 'Grand', 'Proche', 'Calme' and 'Des' all notified, 'Bel' digested, and both halves in the description rejected at 90. That is the 'identical facts, different word order' failure the class docblock claims to have retired for the doubt/label race. A newline now ENDS the phrase, which makes this a determinate label, and the comparative escape is same-line only."
+        },
+        {
+            "id": "regress-038-procedural-tell-in-a-structured-field",
+            "provenance": "synthetic",
+            "source": "inli",
+            "title": "T3 Sarcelles",
+            "description": "Appartement renove.",
+            "fields": {
+                "dispositif": "Attribution par commission d'attribution"
+            },
+            "expect": {
+                "tenure": "SOCIAL",
+                "outcome": "REJECT",
+                "min_confidence": 75
+            },
+            "why": "P0 §1 BREACH GUARD (review round 6, 2026-08-07). proceduralSignals() read only RawListing::text(), and fields are not part of it -- so this value produced NO signal at all and the listing matched on the source default, while the identical phrase in the description rejected at 80. None of the five social procedural literals is also in LABELS, so the tier-1 field scan could not see them either: the surface was blind to all of them at once. Round 5's widening of the §1 listing-level invariant added exactly these literals -- on the surface that was already safe."
+        },
+        {
+            "id": "regress-039-excluded-label-in-an-unrecognised-field",
+            "provenance": "synthetic",
+            "source": "inli",
+            "title": "T2 Massy",
+            "description": "Residence calme.",
+            "fields": {
+                "financementType": "PLAI"
+            },
+            "expect": {
+                "tenure": "UNKNOWN",
+                "outcome": "DIGEST"
+            },
+            "why": "P1 (review round 6, 2026-08-07). TENURE_FIELDS is a closed list: 'typeFinancement' is in it and 'financementType' is not, so one word order rejected at 97 and the other notified at 50; so did 'gamme', 'programme' and 'nature'. Fields are not part of RawListing::text(), so there was no prose fallback -- the strongest rung went blind on a spelled-out PLAI. Same closed-list failure this class has now been bitten by three times, here in the field NAMES. An excluded label in an UNRECOGNISED field is now a DOUBT rather than the tenure itself: the field may be prose, and 'commentaire: pas de PLAI ici' must not become a silent REJECT."
+        },
+        {
+            "id": "regress-040-sans-does-not-negate-across-the-boundary",
+            "provenance": "synthetic",
+            "source": "cdc_habitat",
+            "title": "T3 Cergy sans",
+            "description": "Commission d'attribution le 12 mars, dossier complet exige.",
+            "fields": {},
+            "expect": {
+                "tenure": "SOCIAL",
+                "outcome": "REJECT",
+                "min_confidence": 75
+            },
+            "why": "The fourth consumer of the boundary rule. isPrecededBySans() used '\\\\bsans\\\\s+$', so a title ending in the word 'sans' negated a procedural tell opening the description -- reading as the intermediate 'sans commission d'attribution' and matching at 80. Same class as regress-037: one ruling, four rules that consume whitespace adjacency, and only one updated when it landed. Note the anchor as well as the class: PCRE's '$' matches before a final newline, so '\\\\z' is required for the narrowing to bite at all."
+        },
+        {
+            "id": "trap-010-lowercase-plus-with-no-comparative",
+            "provenance": "synthetic",
+            "source": "seloger",
+            "title": "T4 Croissy-sur-Seine",
+            "description": "Trois chambres, plus un bureau ferme et une buanderie.",
+            "fields": {},
+            "expect": {
+                "tenure": "LIBRE",
+                "outcome": "MATCH",
+                "max_confidence": 59
+            },
+            "why": "The case half of the prose doubt floor, and the fixture that stops it being widened. Round 6 gave prose the same doubt floor fields got, but CASE-SENSITIVELY: in a field, capitalisation is the feed's house style and carries nothing; in prose it is real evidence. This sentence is ordinary French with a lowercase 'plus' that no comparative follows ('un' is not in the tail), so a case-INsensitive floor would digest it -- and with it a large fraction of the Paris market, since 'plus un', 'plus une', 'plus deux chambres' are everyday listing copy. Its SHOUTED sibling trap-005b digests, and the difference between them is the whole rule."
+        },
+        {
+            "id": "regress-041-eligible-label-assembled-across-the-boundary",
+            "provenance": "synthetic",
+            "source": "cdc_habitat",
+            "title": "T3 Cergy 92 m2 - Loyer",
+            "description": "intermediaire, charges comprises 1 450 EUR.",
+            "fields": {},
+            "expect": {
+                "tenure": "UNKNOWN",
+                "outcome": "DIGEST"
+            },
+            "why": "An ELIGIBLE label may not be assembled across a phrase boundary. Text::inflectedTokenPosition joins a multi-word literal with '\\\\s*' so an inflected or line-wrapped phrase still matches -- right for an EXCLUDED literal, where failing to match is the §1 fail-open and a wrapped 'logement social' in a text/plain alert body is the primary ingestion path (hard rule 4), and wrong for an eligible one, where it manufactures eligibility out of two unrelated fragments. A title ending '- Loyer' and a description opening 'intermediaire,' is not a listing that says 'loyer intermediaire'. Asymmetric on purpose, exactly like the conflict rule: the restriction applies only in the direction that costs a wasted application. See regress-040 for the same asymmetry on a procedural tell."
         }
     ]
 }

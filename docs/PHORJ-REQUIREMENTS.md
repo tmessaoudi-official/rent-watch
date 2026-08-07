@@ -262,7 +262,7 @@ the classifier touches must stay in the transpilable tier.
 ## The classifier's cross-implementation contract
 
 Added 2026-08-07, after a review found this recorded only in a PHP docblock. "Byte-identical
-differential testing" above is a promise, and these are the four properties it actually rests on. A
+differential testing" above is a promise, and these are the six properties it actually rests on. A
 phorj port that gets any of them wrong will disagree with PHP on real fixtures while looking correct.
 
 **1. Confidence is an integer 0–100, divided by 100 only at the boundary.** Float arithmetic is not
@@ -289,5 +289,27 @@ is the title/description boundary, and the `conventionné` adjacency rule treats
 a title ending in an intermediate label must not qualify a `conventionné` opening the description.
 The only whitespace bytes a folded string may contain are `U+0020` and `U+000A`.
 
-`tests/fixtures/tenure/corpus.json` is the shared oracle for all four: same file, same expected
+**5. A newline is a PHRASE BOUNDARY, and every rule that consumes whitespace adjacency must honour
+it.** There are four in the PHP implementation: the financing phrase-end test (a newline ENDS the
+phrase), the comparative-adverb escape (same line only), the `sans` negation lookbehind (same line
+only), and the `conventionné` adjacency span (a newline does not qualify). Getting one of them wrong
+is not cosmetic — with the comparative escape reading across the boundary, the first word of the
+description decided whether a shouted `LOGEMENT PLUS` title rejected or notified.
+
+Two traps worth stating outright, because both cost a round here:
+  - PCRE's `$` matches before a FINAL NEWLINE as well as at end of subject. Narrowing a character
+    class to exclude `\n` does nothing until the anchor is `\z` too.
+  - a multi-word literal joined with `\s*` will happily span a newline. That is REQUIRED for an
+    excluded literal — a line-wrapped `logement social` in a `text/plain` alert body must still
+    match — and forbidden for an eligible one, where it manufactures eligibility out of two
+    unrelated fragments. The asymmetry is deliberate and mirrors the conflict rule.
+
+**6. A signal the guard cannot place is a DOUBT, never silence.** Both in a structured tenure field
+and in prose. The collocation noun list is closed, so "no context recognised" is not an answer — it
+is an admission, and it must reach the digest rather than vanish. In a FIELD the search is
+case-insensitive (capitalisation is the feed's house style); in PROSE it is case-sensitive (`plus de
+3 chambres` is the commonest phrase in French rental copy). Both surfaces still let a known
+comparative suppress the occurrence outright, because that is provably the adverb.
+
+`tests/fixtures/tenure/corpus.json` is the shared oracle for all six: same file, same expected
 verdicts, both implementations.

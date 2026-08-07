@@ -116,12 +116,18 @@ final class TenureCorpusTest extends TestCase
             'trap-002-au-plus-tard' => ['plus' => 'the adverb in "au plus tard" and "plus lumineux"'],
             'trap-003-plus-tier-uppercase-boundary' => ['plus' => 'a SHOUTED title, "PLUS DE 70 M2"'],
             'trap-003b-shouted-logement-plus-grand' => ['plus' => 'a SHOUTED "LOGEMENT PLUS GRAND"'],
+            'trap-010-lowercase-plus-with-no-comparative' => [
+                'plus' => 'the LOWERCASE adverb in "plus un bureau" — the prose doubt floor is '
+                    . 'case-sensitive, and this fixture is what stops it being widened',
+            ],
             // NOTE: `trap-005-surplus-not-plus` is deliberately NOT here. It was, until the
             // earned-exemption test above rejected it: `inflectedTokenPosition` is word-bounded, so
             // the `plus` inside `surplus` never matched and the exemption never excused anything.
             // A no-op exemption is worth deleting — it reads as evidence that a real hole was
             // considered and waved through.
-            'trap-005b-plus-with-no-comparative-and-no-collocation' => ['plus' => '"PLUS UN BUREAU"'],
+            // NOTE: `trap-005b` was exempted here until review round 6. A shouted `PLUS` that no
+            // comparative explains is now a doubt in prose as well as in fields, so it digests
+            // rather than matching and the exemption would be dead.
             // NOTE: `regress-027` and `regress-028` were exempted here until review round 5. They
             // no longer reach MATCH — a `PLUS` in a tenure field that the guard cannot place is now
             // a doubt rather than silence — so an exemption for them would be dead, and
@@ -172,8 +178,8 @@ final class TenureCorpusTest extends TestCase
 
         // PROCEDURAL is included, and that was a gap: `numero unique d'enregistrement`,
         // `systeme national d'enregistrement`, `sne`, `demande de logement social` and
-        // `commission d'attribution` are five more phrases from which the classifier concludes an
-        // excluded tenure, and none of them was inside the one invariant that checks §1 against the
+        // `commission d'attribution` and its no-apostrophe variant are SIX more phrases from which
+        // the classifier concludes an excluded tenure, and none of them was inside the one invariant that checks §1 against the
         // LISTING rather than against the verdict. No live breach ran through them — every tier-3
         // SOCIAL signal reaches `reasons[]` and the conflict rule catches it — but "no breach today"
         // is what an untested guarantee always looks like.
@@ -213,6 +219,12 @@ final class TenureCorpusTest extends TestCase
         $tokens = self::excludedTokens();
 
         foreach (self::exclusionExemptions() as $id => $byToken) {
+            // An exemption with NO tokens skips the loop below entirely, so it would be unchecked —
+            // and an unchecked exemption entry is exactly the dead weight this test exists to
+            // reject. Found by leaving a placeholder behind during the round-6 fix: the suite
+            // stayed green with a fixture id in the table that does not exist in the corpus.
+            self::assertNotSame([], $byToken, sprintf('exemption for %s names no token', $id));
+
             foreach ($byToken as $token => $reason) {
                 self::assertContains(
                     $token,
@@ -365,6 +377,77 @@ final class TenureCorpusTest extends TestCase
                 self::assertNotSame('', trim($reason), sprintf('fixture %s produced an empty reason', $id));
             }
         }
+    }
+
+    /**
+     * No reason ever contains a raw newline — `reasons[]` is rendered on a phone lock screen.
+     *
+     * Folding began preserving newlines so the title/description boundary could act as a phrase
+     * break, and the reason strings quote the text that ACTUALLY matched. A multi-word label
+     * straddling that join therefore rendered as « logement\nintermediaire » in a notification, and
+     * a hard-wrapped `text/plain` IMAP alert body — the PRIMARY ingestion path per `CLAUDE.md` hard
+     * rule 4 — does it mid-sentence. Asserted over the whole corpus rather than case by case,
+     * because the next surface to acquire a quoted fragment will not think to add its own test.
+     */
+    public function testNoReasonEverContainsARawNewline(): void
+    {
+        $classifier = new TenureClassifier();
+
+        foreach (Corpus::provider() as $id => [$listing, $source]) {
+            foreach ($classifier->classify($listing, $source)->reasons() as $reason) {
+                self::assertDoesNotMatchRegularExpression(
+                    '/\s\s|[\r\n\t]/u',
+                    $reason,
+                    sprintf('fixture %s produced a multi-line or double-spaced reason: %s', $id, json_encode($reason)),
+                );
+            }
+        }
+    }
+
+    /**
+     * Every value object in the core is immutable, not just the one a review happened to name.
+     *
+     * `TenureSignal` silently lost `final readonly` when `$length` gained a computed default, and
+     * the fix that restored it was pinned by a test naming that class alone — while the argument
+     * for the fix was that *"a caller holding a `Classification` could rewrite the `reasons[]` a
+     * notification is built from"*. `Classification` had no such test, and neither did the other
+     * four: all five could lose the keyword with the suite green. Reflection over the namespace
+     * closes the whole class of regression at once, including for classes not yet written.
+     */
+    public function testEveryCoreValueObjectIsImmutable(): void
+    {
+        $mutable = [];
+
+        foreach (glob(__DIR__ . '/../../../src/php/Core/*.php') ?: [] as $file) {
+            $class = 'RentWatch\\Core\\' . basename($file, '.php');
+
+            if (!class_exists($class)) {
+                continue;                          // enums and interfaces have no mutable state
+            }
+
+            $reflection = new \ReflectionClass($class);
+
+            if ($reflection->isAbstract() || $reflection->isEnum() || is_a($class, \Throwable::class, true)) {
+                // Enums have no writable state by construction; exceptions inherit mutable state
+                // from `Exception` and cannot be readonly at all.
+                continue;
+            }
+
+            if ($reflection->getProperties(\ReflectionProperty::IS_PUBLIC | \ReflectionProperty::IS_PROTECTED | \ReflectionProperty::IS_PRIVATE) === []) {
+                continue;                          // a static-only utility (`Text`) holds nothing
+            }
+
+            if (!$reflection->isReadOnly()) {
+                $mutable[] = $reflection->getShortName();
+            }
+        }
+
+        self::assertSame(
+            [],
+            $mutable,
+            'these core classes are not readonly, so a caller can rewrite a verdict after the fact: '
+            . implode(', ', $mutable),
+        );
     }
 
     /** The differential-test contract: the same input always yields the same bytes. */
