@@ -262,7 +262,7 @@ the classifier touches must stay in the transpilable tier.
 ## The classifier's cross-implementation contract
 
 Added 2026-08-07, after a review found this recorded only in a PHP docblock. "Byte-identical
-differential testing" above is a promise, and these are the six properties it actually rests on. A
+differential testing" above is a promise, and these are the eleven properties it actually rests on. A
 phorj port that gets any of them wrong will disagree with PHP on real fixtures while looking correct.
 
 **1. Confidence is an integer 0–100, divided by 100 only at the boundary.** Float arithmetic is not
@@ -315,5 +315,42 @@ case-insensitive (capitalisation is the feed's house style); in PROSE it is case
 3 chambres` is the commonest phrase in French rental copy). Both surfaces still let a known
 comparative suppress the occurrence outright, because that is provably the adverb.
 
-`tests/fixtures/tenure/corpus.json` is the shared oracle for all six: same file, same expected
-verdicts, both implementations.
+**7. TWO FOLDING MODES, and which surface gets which is load-bearing.** The strict fold REFUSES an
+undecoded HTML entity or malformed UTF-8, and guards the title, the description and declared tenure
+fields — an entity inside a multi-word label deletes that label and leaves the others standing, so
+classifying around it is worse than refusing. Incidental surfaces (unrecognised field values, field
+names, `url`, `commune`, `postcode`, `externalId`) use a TOLERANT fold that DECODES instead: entities
+are decoded repeatedly and boundedly, and the existing machinery then handles the result — `&shy;`
+and `&#8203;` decode to characters the invisible-strip removes, `&nbsp;` to a space the collapse
+folds, `&#39;` to an apostrophe the normaliser handles. A port that folds everything strictly digests
+every listing with an `&amp;` in a URL; one that folds everything tolerantly weakens the gate where
+it matters. Substituting a space for each entity — which looks equivalent — is NOT: `PL&shy;AI`
+becomes `pl ai` and matches nothing, because the `\s*` in a literal joins its WORDS, not the
+characters inside one.
+
+**8. Unreadable is not empty.** The tolerant fold returns a distinguishable "could not read this"
+rather than an empty string, and the caller raises a doubt for it. Collapsing the two makes an
+unreadable field a silent one, which is `CLAUDE.md` hard rule 3 exactly.
+
+**9. Every surface is scanned, including the ones that are not prose.** Field NAMES carry evidence —
+`numeroUnique` and `demandeLogementSocial` are ordinary bailleur-social JSON keys and both are
+procedural literals — as do `url` (`/logement-social/plai/t3-cergy` is the ordinary slug shape of a
+landlord portal), `commune`, `postcode` and `externalId`. Identifiers need two matching passes: split
+at case and separator transitions (`typePlai` → `type Plai`), and separator-free containment for
+MULTI-WORD literals only (`demandelogementsocial` contains `logementsocial`). Restricting the second
+pass to multi-word literals is not an optimisation — comparing a bare `plai` as a substring matches
+inside *plaisir*.
+
+**10. The vocabulary is everything NOT ELIGIBLE, not everything excluded.** `numero unique` maps to
+UNKNOWN — a deliberate doubt rather than a verdict — and a filter on "is excluded" skips it. §1 is
+about a listing whose tenure never resolved reaching a notification, not only about an excluded
+verdict.
+
+**11. Procedural surfaces are scanned SEPARATELY, never concatenated**, so two fragments in two
+surfaces cannot be assembled into one literal. And an ELIGIBLE literal may not be assembled across a
+phrase boundary at all, at any of the three `matchLabels()` call sites; an EXCLUDED one may, because
+failing to match it is the §1 fail-open.
+
+`tests/fixtures/tenure/corpus.json` is the shared oracle, and
+`tests/php/Core/SurfaceMatrixTest.php` is the enumeration: the cross product of this vocabulary and
+every surface, asserted to reach no notification. A port should reproduce both.

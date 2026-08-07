@@ -32,10 +32,11 @@ final class TenureCorpusTest extends TestCase
         SourceProfile $source,
         array $expect,
         string $why,
+        string $id = '?',
     ): void {
         $result = (new TenureClassifier())->classify($listing, $source);
 
-        $context = sprintf("fixture %s\nwhy: %s\ngot: %s", $listing->externalId, $why, json_encode($result->toArray(), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
+        $context = sprintf("fixture %s\nwhy: %s\ngot: %s", $id, $why, json_encode($result->toArray(), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
 
         self::assertSame(Tenure::from((string) $expect['tenure']), $result->tenure, $context);
         self::assertSame(Outcome::from((string) $expect['outcome']), $result->outcome, $context);

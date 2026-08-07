@@ -203,9 +203,43 @@ run_sabotage "procedural surfaces are concatenated again (literals assemble acro
   src/php/Core/TenureClassifier.php \
   's|$surfaces\[\] = $folded;|$surfaces[0] .= "\\n" . $folded;|'
 
-run_sabotage "incidental surfaces refuse instead of repairing (one entity kills the listing)" \
+run_sabotage "incidental surfaces refuse instead of decoding (one entity kills the listing)" \
   src/php/Core/Text.php \
-  's|return self::fold($repaired);|return self::fold($raw);|'
+  's|return self::fold(self::decodeEntities($raw));|return self::fold($raw);|'
+
+# The §1 direction of the tolerant fold: decoding must RESTORE a token an entity split, not paper
+# over it. The first implementation substituted a space and `PL&shy;AI` folded to `pl ai` — no
+# match, no doubt, NOTIFIED. All three reviewers reproduced it independently.
+run_sabotage "the tolerant fold substitutes a space instead of decoding (an entity hides PLAI)" \
+  src/php/Core/Text.php \
+  "s|\$next = html_entity_decode(\$decoded, ENT_QUOTES \| ENT_HTML5, 'UTF-8');|\$next = (string) preg_replace('/\&[a-zA-Z0-9#]{1,10};/', ' ', \$decoded);|"
+
+# The identifier split must run on the INVISIBLE-STRIPPED form. On the merely-decoded string a soft
+# hyphen reads as a separator, so `plai<U+00AD>sir` splits into the word `plai` and invents a match
+# inside *plaisir* — the silent drop Text::hasToken() exists to prevent.
+run_sabotage "the identifier split runs before invisibles are stripped (plaisir becomes plai)" \
+  src/php/Core/TenureClassifier.php \
+  's|$cased = Text::foldTolerantPreserveCase((string) $value);|$cased = Text::decodeEntities((string) $value);|'
+
+run_sabotage "the vocabulary filters to isExcluded() again (numero unique goes blind)" \
+  src/php/Core/TenureClassifier.php \
+  '/private static function vocabularyKeys/,$ s|if ($tenure->isEligible()) {|if (!$tenure->isExcluded()) {|'
+
+run_sabotage "identifier spellings stop being split (demandeLogementSocial goes blind)" \
+  src/php/Core/TenureClassifier.php \
+  "s|foreach (\[\$folded, \$split\] as \$haystack) {|foreach ([\$folded] as \$haystack) {|"
+
+run_sabotage "separator-free key containment removed (numeroUnique goes blind)" \
+  src/php/Core/TenureClassifier.php \
+  's|foreach (self::vocabularyKeys() as $normalised => $literal) {|foreach ([] as $normalised => $literal) {|'
+
+run_sabotage "the listing url/commune/postcode/externalId stop being read" \
+  src/php/Core/TenureClassifier.php \
+  "s|'postcode' => \$listing->postcode, 'externalId' => \$listing->externalId\] as \$what => \$text) {|'postcode' => null, 'externalId' => null] as \$what => \$text) {|"
+
+run_sabotage "an unreadable surface is read as empty again (breakage becomes absence)" \
+  src/php/Core/TenureClassifier.php \
+  's|if ($folded === null) {|if (false) {|'
 run_sabotage "sans negates across the title/description boundary again" \
   src/php/Core/TenureClassifier.php \
   "s|'/\\\\bsans\[^\\\\S\\\\n\]+\\\\z/u'|'/\\\\bsans\\\\s+\$/u'|"

@@ -179,6 +179,31 @@ expect_fire "a breach on line 1 followed by 80 KB of exempt lines" \
 ' "$i"; done)" \
   "$repo/config/sources.yaml"
 
+# ROUND 8. Pattern 5's narrowing (to silence `mixed_tenure: false`) put `_` in the left boundary,
+# which blocked a match starting at `classifier` — and the suffix group had no `classifier` either,
+# so nothing could match at `tenure`. `tenure_classifier: false` is the natural YAML spelling.
+expect_fire "the compound kill switch in YAML" \
+  'tenure_classifier: false' \
+  "$repo/config/sources.yaml"
+expect_fire "the compound kill switch as an env var" \
+  'TENURE_CLASSIFIER_ENABLED=0' \
+  "$repo/config/sources.yaml"
+expect_fire "the classifier disabled in JSON" \
+  '"tenure": false' \
+  "$repo/config/criteria.yaml"
+expect_fire "the classifier disabled by a classification flag" \
+  'tenure_classification: false' \
+  "$repo/config/criteria.yaml"
+# A `<directory>` ATTRIBUTE narrows the suite to nothing while the runner still prints a green OK and
+# exits 0: `suffix="ClassifierTest.php"` drops the 108-case §1 corpus AND the surface matrix, and
+# drift-scan stays clean. No new element is needed, so the element-name list could not see it.
+expect_fire "the suite narrowed by a <directory> suffix attribute" \
+  '<directory suffix="ClassifierTest.php">tests/php</directory>' \
+  "$repo/phpunit.xml"
+expect_fire "the suite narrowed by a <directory> phpVersion attribute" \
+  '<directory phpVersion="99.0">tests/php</directory>' \
+  "$repo/phpunit.xml"
+
 expect_fire "UNKNOWN routed to notification" \
   'if unknown: notify(listing)'
 expect_fire "classifier bypassed" \

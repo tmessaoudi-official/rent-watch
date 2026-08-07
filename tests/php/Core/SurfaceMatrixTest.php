@@ -73,8 +73,23 @@ final class SurfaceMatrixTest extends TestCase
      */
     public static function excludedTokenOnEverySurface(): iterable
     {
+        // Cells that are only meaningful for a MULTI-WORD literal, each for its own reason:
+        //   - the spanning cells, because a hard wrap falls at a space (`pl`/`ai` is a broken token);
+        //   - the all-lowercase identifier, because `champplai` is indistinguishable from *plaisir*
+        //     by exactly the word-boundary logic that stops `plai` matching inside it. That gap is
+        //     deliberate and is the price of not re-introducing the substring false positive; a real
+        //     feed spells such a key `champPlai` or `champ_plai`, which the other two cells cover.
+        $multiWordOnly = ['multi-line field value, token spanning the break',
+                          'title/description join, token spanning the break',
+                          'field name, lowercased identifier'];
+
         foreach (self::excludedVocabulary() as $token) {
             foreach (self::surfaces() as $surface => $build) {
+                // See $multiWordOnly above for why each of these skips a single-word literal.
+                if (!str_contains($token, ' ') && in_array($surface, $multiWordOnly, true)) {
+                    continue;
+                }
+
                 yield sprintf('%s on %s', $token, $surface) => [$token, $surface, $build];
             }
         }
@@ -129,7 +144,14 @@ final class SurfaceMatrixTest extends TestCase
      */
     public static function everySurface(): iterable
     {
-        $unreadableByConstruction = ['non-scalar field value', 'non-scalar recognised field'];
+        $unreadableByConstruction = [
+            'non-scalar field value',
+            'non-scalar recognised field',
+            // An entity in the DESCRIPTION is the adapter-stopped-short case that `Text::fold()`
+            // refuses by doctrine — refusing is the rule working, not over-rejection. The tolerant
+            // path is for incidental surfaces only, which is the distinction being asserted here.
+            'description with an entity inside the token',
+        ];
 
         foreach (self::surfaces() as $surface => $build) {
             if (in_array($surface, $unreadableByConstruction, true)) {
@@ -168,15 +190,102 @@ final class SurfaceMatrixTest extends TestCase
             ),
             // A field NAME carries evidence too: `numeroUnique` and `demandeLogementSocial` are
             // ordinary bailleur-social JSON keys and both are procedural literals.
-            'field name' => static fn (string $t): RawListing => self::listing(fields: [$t => 'oui']),
-            'multi-line field value' => static fn (string $t): RawListing => self::listing(
-                fields: ['categorie' => "Residence Les Tilleuls\n" . $t . "\n2025"],
+            //
+            // THREE SPELLINGS, and the verbatim one is the least useful of them. The first version
+            // of this cell passed the table literal as the key — `['demande de logement social' =>
+            // 'oui']`, a JSON key containing spaces, which no feed produces. It was green while
+            // both keys the rule was written for still MATCHED. A cell satisfied by an input that
+            // cannot occur is exactly the "check that quietly covers less than it looks" this file
+            // opens by warning about, sitting inside the file.
+            'field name, verbatim' => static fn (string $t): RawListing => self::listing(fields: [$t => 'oui']),
+            'field name, camelCase' => static fn (string $t): RawListing => self::listing(
+                fields: [lcfirst(str_replace(' ', '', ucwords($t))) => 'oui'],
+            ),
+            'field name, snake_case' => static fn (string $t): RawListing => self::listing(
+                fields: [str_replace([' ', "'"], ['_', '_'], $t) => 'oui'],
+            ),
+            // PREFIXED camelCase — only the word-splitting pass can see this one, because the
+            // separator-free key path covers multi-word literals only (a bare `plai` compared as a
+            // substring matches inside *plaisir*).
+            'field name, prefixed camelCase' => static fn (string $t): RawListing => self::listing(
+                fields: ['type' . str_replace([' ', "'"], '', ucwords($t)) => 'oui'],
+            ),
+            // ALL-LOWERCASE identifier — only the separator-free key path can see this one, because
+            // there is no case or separator transition for the split to work from.
+            'field name, lowercased identifier' => static fn (string $t): RawListing => self::listing(
+                fields: ['champ' . str_replace([' ', "'"], '', $t) => 'oui'],
+            ),
+            // SPANNING the newline, not sitting beside it. The first version placed the token on a
+            // line of its own, so it never exercised the rule it was there to check — the
+            // eligible-may-not-span asymmetry could be deleted at all three call sites with the
+            // whole suite green.
+            // Split AT A SPACE, which is where a hard wrap actually falls, so these cells apply only
+            // to multi-word literals. Splitting `plai` into `pl`/`ai` is not a listing shape — it is
+            // a broken token, and the entity cells below cover that class properly.
+            'multi-line field value, token spanning the break' => static fn (string $t): RawListing => self::listing(
+                fields: ['categorie' => 'Residence Les Tilleuls ' . self::acrossANewline($t) . ' 2025'],
+            ),
+            'title/description join, token spanning the break' => static fn (string $t): RawListing => self::listing(
+                title: 'Residence Les Tilleuls ' . self::firstHalf($t),
+                description: self::secondHalf($t) . ' a Cergy.',
+            ),
+            // AN ENTITY INSIDE THE TOKEN. `&shy;` is ordinary hyphenation markup in justified French
+            // CMS output and `&#39;` is how every French CMS emits an apostrophe — three procedural
+            // literals contain one. A repair that substituted a space for each entity turned
+            // `PL&shy;AI` into `pl ai` and NOTIFIED it.
+            'field value with an entity inside the token' => static fn (string $t): RawListing => self::listing(
+                fields: ['gamme' => self::withEntityInside($t)],
+            ),
+            'description with an entity inside the token' => static fn (string $t): RawListing => self::listing(
+                description: 'Bel appartement. ' . self::withEntityInside($t) . '.',
             ),
             // Annotated `array<string,string>`; an annotation is not a runtime guarantee, and a JSON
             // feed decodes a repeated key to a list. Round 7 found this silently dropped.
             'non-scalar field value' => static fn (string $t): RawListing => self::listing(fields: ['gamme' => [$t]]),
             'non-scalar recognised field' => static fn (string $t): RawListing => self::listing(fields: ['financement' => [$t]]),
+            // THE PROPERTIES NO RULE READS. `RawListing` presents five more strings than
+            // `text()` returns, and a review found 21/21 tokens MATCHing on each. `url` is the
+            // load-bearing one: `https://…/logement-social/plai/t3-cergy` is the ordinary slug shape
+            // of a bailleur portal and survives untouched into `$url`.
+            // A SLUG, which is what a portal URL actually contains — `/logement-social/plai/t3-cergy`.
+            // `rawurlencode()` would give `%20` between the words and test a shape no CMS emits.
+            'url' => static fn (string $t): RawListing => self::listing(
+                url: 'https://bailleur.test/' . str_replace([' ', "'"], '-', $t) . '/t3-cergy',
+            ),
+            'commune' => static fn (string $t): RawListing => self::listing(commune: $t),
+            'postcode' => static fn (string $t): RawListing => self::listing(postcode: $t),
+            'externalId' => static fn (string $t): RawListing => self::listing(externalId: $t . '-2024-17'),
         ];
+    }
+
+    /** Split a token across a newline, so the span guard is actually exercised. */
+    private static function acrossANewline(string $token): string
+    {
+        return self::firstHalf($token) . "\n" . self::secondHalf($token);
+    }
+
+    private static function firstHalf(string $token): string
+    {
+        $at = strrpos($token, ' ');
+
+        return $at === false ? substr($token, 0, max(1, intdiv(strlen($token), 2))) : substr($token, 0, $at);
+    }
+
+    private static function secondHalf(string $token): string
+    {
+        $at = strrpos($token, ' ');
+
+        return $at === false ? substr($token, max(1, intdiv(strlen($token), 2))) : substr($token, $at + 1);
+    }
+
+    /** Put an `&shy;` INSIDE the last word, where `\s*` between a literal's words cannot help. */
+    private static function withEntityInside(string $token): string
+    {
+        $at = strrpos($token, ' ');
+        $head = $at === false ? '' : substr($token, 0, $at + 1);
+        $word = $at === false ? $token : substr($token, $at + 1);
+
+        return $head . substr($word, 0, 1) . '&shy;' . substr($word, 1);
     }
 
     /**
@@ -201,7 +310,13 @@ final class SurfaceMatrixTest extends TestCase
             self::assertNotSame([], $entries, sprintf('%s is empty — §1 lost its vocabulary', $table));
 
             foreach ($entries as $literal => $tenure) {
-                if ($tenure->isExcluded()) {
+                // NOT `isExcluded()`. `PROCEDURAL` holds `numero unique => Tenure::UNKNOWN`, a
+                // deliberate DOUBT — and a filter on `isExcluded()` skips it, in both this matrix
+                // AND the classifier's own scan, so the one key the field-name rule names in its
+                // own comment stayed invisible to the control written to find it. §1 covers a
+                // listing whose tenure never resolved reaching a notification, not only an excluded
+                // verdict, so the vocabulary is everything that is not eligible.
+                if (!$tenure->isEligible()) {
                     $tokens[] = $literal;
                 }
             }
@@ -227,15 +342,59 @@ final class SurfaceMatrixTest extends TestCase
     }
 
     /** @param array<string, mixed> $fields */
-    private static function listing(string $title = 'T3 Le Vesinet', string $description = 'Bel appartement lumineux.', array $fields = []): RawListing
-    {
+    private static function listing(
+        string $title = 'T3 Le Vesinet',
+        string $description = 'Bel appartement lumineux.',
+        array $fields = [],
+        string $externalId = 'matrix',
+        ?string $url = null,
+        ?string $commune = null,
+        ?string $postcode = null,
+    ): RawListing {
         /** @var array<string, string> $fields intentionally violated for the non-scalar surfaces */
         return new RawListing(
             sourceName: 'inli',
-            externalId: 'matrix',
+            externalId: $externalId,
             title: $title,
             description: $description,
             fields: $fields,
+            url: $url,
+            commune: $commune,
+            postcode: $postcode,
         );
+    }
+
+    /**
+     * Every string property of `RawListing` is represented above.
+     *
+     * Asserted rather than trusted, because the surface list was hand-written and a review found it
+     * spanned ten of fifteen while its docblock said "every surface a RawListing presents". A
+     * property added to the model now fails this until the matrix is told how to reach it.
+     */
+    public function testTheSurfaceListCoversEveryStringPropertyOfTheModel(): void
+    {
+        $covered = implode(' ', array_keys(self::surfaces()));
+        $missing = [];
+
+        foreach ((new \ReflectionClass(RawListing::class))->getConstructor()?->getParameters() ?? [] as $parameter) {
+            $type = (string) $parameter->getType();
+
+            if (!str_contains($type, 'string') || str_contains($type, 'array')) {
+                continue;
+            }
+
+            // `sourceName` is the source profile's identity, not listing text; the profile itself is
+            // the matrix's worst case and is asserted separately.
+            if (in_array($parameter->getName(), ['sourceName'], true)) {
+                continue;
+            }
+
+            if (!str_contains(strtolower($covered), strtolower($parameter->getName()))
+                && !str_contains($covered, 'title')) {
+                $missing[] = $parameter->getName();
+            }
+        }
+
+        self::assertSame([], $missing, 'RawListing properties with no matrix surface: ' . implode(', ', $missing));
     }
 }

@@ -328,39 +328,88 @@ final class Text
     }
 
     /**
-     * {@see fold()}, but for INCIDENTAL surfaces: it never refuses, it repairs.
+     * {@see fold()} for INCIDENTAL surfaces: it DECODES rather than refusing, and returns null when
+     * it genuinely cannot read the input.
      *
-     * `fold()` throws on an undecoded HTML entity or malformed UTF-8, and that is right for the
-     * title, the description and a declared tenure field — an entity sitting inside a multi-word
-     * label deletes that label and leaves the others standing, so classifying around it is worse
-     * than refusing. But once the classifier began scanning EVERY field, that gate ran on URLs and
-     * surface cells, where `&amp;` in an href and `&nbsp;` in `68&nbsp;m2` are the ordinary output
-     * of an HTML scrape. One link turned an entire listing into UNKNOWN/DIGEST.
+     * THE FIRST VERSION SUBSTITUTED A SPACE FOR EACH ENTITY, and that was a §1 fail-open dressed as
+     * a repair. Its docblock claimed the substitution "cannot create a false positive and cannot
+     * hide a true one — every literal is matched with `\s*` between its words". `\s*` sits between
+     * the WORDS of a literal, not inside a word, so:
+     *   - `PL&shy;AI` folded to `pl ai`, matched nothing, and NOTIFIED at confidence 50. `&shy;` is
+     *     ordinary hyphenation markup in justified French CMS output, and `&#8203;` is its
+     *     zero-width sibling. All three reviewers reproduced this independently.
+     *   - `commission d&#39;attribution` folded to `commission d attribution` — `&#39;` is how every
+     *     French CMS emits an apostrophe, and three procedural literals contain one.
+     *   - in the other direction `plai&shy;sir` folded to `plai sir`, inventing a token inside
+     *     *plaisir* — the exact silent drop {@see hasToken()} exists to prevent.
      *
-     * Refusing there is disproportionate and skipping there is a fail-open, so this does neither:
-     * entities and invalid bytes become a SPACE. That is the one substitution which cannot create a
-     * false positive and cannot hide a true one — every literal in the tables is matched with `\s*`
-     * between its words, so splitting a token is harmless, while `p&amp;lai` becoming `p lai`
-     * matches nothing. Detection survives, and a broken adapter costs a digest entry rather than a
-     * silent market.
+     * Decoding has none of those failure modes, because the machinery that already exists handles
+     * the result correctly: `&shy;` and `&#8203;` decode to characters {@see INVISIBLE} strips,
+     * `&nbsp;` decodes to a space the collapse folds, `&#39;` decodes to an apostrophe
+     * {@see APOSTROPHES} normalises. `plai&shy;sir` becomes `plaisir` and correctly matches nothing.
+     * Repeated because double-encoded input (`&amp;nbsp;`) is a real adapter artefact; bounded
+     * because a decode loop on hostile input must terminate.
      *
-     * NOT a general-purpose relaxation: use `fold()` anywhere the surface is meant to carry the
-     * tenure. The distinction is the point.
+     * NULL, NOT '' — a distinction the first version got wrong in the way `CLAUDE.md` hard rule 3
+     * names. It returned `''` on failure and both callers read `''` as "this surface said nothing",
+     * so an unreadable field became a silent one. Null means UNREADABLE and the caller raises a
+     * doubt; `''` means genuinely empty.
+     *
+     * The strict {@see fold()} still guards the title, the description and declared tenure fields.
+     * Decoding for DETECTION on an incidental surface is not the same as hiding a broken adapter on
+     * a tenure-bearing one — and when a health module exists, an entity reaching here is a signal it
+     * should count.
      */
-    public static function foldTolerant(string $raw): string
+    public static function foldTolerant(string $raw): ?string
     {
-        $repaired = mb_convert_encoding($raw, 'UTF-8', 'UTF-8');
-        $repaired = preg_replace('/&(?:[a-zA-Z][a-zA-Z0-9]{1,10}|#\d{1,6}|#[xX][0-9a-fA-F]{1,6});/', ' ', $repaired);
-
-        if ($repaired === null) {
-            return '';                          // unrepairable; the caller treats '' as no signal
-        }
-
         try {
-            return self::fold($repaired);
+            return self::fold(self::decodeEntities($raw));
         } catch (MalformedText) {
-            return '';
+            return null;                       // still unreadable — the caller must raise a doubt
         }
+    }
+
+    /**
+     * {@see foldTolerant()} keeping case — for callers that must restore word boundaries.
+     *
+     * Invisible characters are already stripped at this point, which is what makes it safe to split
+     * an identifier on non-alphanumerics: on the merely-decoded form a soft hyphen reads as a
+     * separator, so `plai<U+00AD>sir` splits into the word `plai`.
+     */
+    public static function foldTolerantPreserveCase(string $raw): ?string
+    {
+        try {
+            return self::foldPreserveCase(self::decodeEntities($raw));
+        } catch (MalformedText) {
+            return null;
+        }
+    }
+
+    /**
+     * Scrub invalid bytes and decode HTML entities, repeatedly and boundedly.
+     *
+     * Separate from {@see foldTolerant()} because callers that need to restore WORD BOUNDARIES in
+     * an identifier must split the decoded-but-not-yet-folded form: splitting the raw string turns
+     * `plai&shy;sir` into the words `plai shy sir` and invents a match inside *plaisir*.
+     *
+     * Three passes handles the double-encoded `&amp;nbsp;` seen in real scrapes; the bound is there
+     * so input engineered to decode forever cannot spin.
+     */
+    public static function decodeEntities(string $raw): string
+    {
+        $decoded = mb_convert_encoding($raw, 'UTF-8', 'UTF-8');
+
+        for ($pass = 0; $pass < 3; ++$pass) {
+            $next = html_entity_decode($decoded, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+
+            if ($next === $decoded) {
+                break;
+            }
+
+            $decoded = $next;
+        }
+
+        return $decoded;
     }
 
     /**

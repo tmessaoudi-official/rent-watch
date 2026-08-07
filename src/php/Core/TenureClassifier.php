@@ -38,6 +38,14 @@ namespace RentWatch\Core;
  */
 final readonly class TenureClassifier
 {
+    /**
+     * Returned by {@see excludedVocabularyIn()} when a surface could not be read at all.
+     *
+     * A distinct value rather than `null`, because `null` there means "read it, found nothing" and
+     * conflating the two turned an unreadable field into a silent one.
+     */
+    private const string UNREADABLE = "\x00unreadable";
+
     /** The fail-closed floor: `CLAUDE.md` §1's 0.6, in whole points. */
     public const int FLOOR_BP = 60;
 
@@ -410,10 +418,39 @@ final readonly class TenureClassifier
         return $tierSignals[0];
     }
 
-    /** @return list<TenureSignal> */
+    /**
+     * Tier 1 over the structured fields, AND over the listing strings no rule used to read.
+     *
+     * @return list<TenureSignal>
+     */
     private function structuredFieldSignals(RawListing $listing): array
     {
         $out = [];
+
+        // THE PROPERTIES `text()` DOES NOT RETURN. `RawListing` presents `url`, `commune`,
+        // `postcode` and `externalId` besides its title and description, and no rule read any of
+        // them — a review found all 21 excluded literals reaching MATCH on each. `url` is the one
+        // that matters: `https://bailleur.test/logement-social/plai/t3-cergy` is the ordinary slug
+        // shape of a landlord portal and arrives verbatim. A DOUBT rather than a verdict, for the
+        // same reason as an unrecognised field: a slug is not a declaration, and `commune` could
+        // legitimately be a place whose name collides.
+        foreach (['url' => $listing->url, 'commune' => $listing->commune,
+                  'postcode' => $listing->postcode, 'externalId' => $listing->externalId] as $what => $text) {
+            if ($text === null || $text === '') {
+                continue;
+            }
+
+            $found = $this->excludedVocabularyIn($text);
+
+            if ($found !== null && $found !== self::UNREADABLE) {
+                $out[] = new TenureSignal(
+                    tier: 1,
+                    tenure: Tenure::UNKNOWN,
+                    reason: sprintf('%s de l\'annonce contient « %s » — à vérifier', $what, $found),
+                    evidence: $found . '?',
+                );
+            }
+        }
 
         foreach ($listing->fields as $name => $value) {
             // ── Checks that apply to EVERY field, before the recognised/unrecognised split ──────
@@ -466,6 +503,10 @@ final readonly class TenureClassifier
             // listing is still classified. Hard rule 3 without the collateral.
             $nameSignal = $this->excludedVocabularyIn((string) $name);
 
+            if ($nameSignal === self::UNREADABLE) {
+                $nameSignal = null;            // an unreadable NAME is reported by the value branch
+            }
+
             if ($nameSignal !== null) {
                 $out[] = new TenureSignal(
                     tier: 1,
@@ -495,14 +536,26 @@ final readonly class TenureClassifier
                 // a human settle it, which is the fail-closed direction without the over-rejection.
                 $unknownFieldDoubt = $this->excludedVocabularyIn($value);
 
-                if ($unknownFieldDoubt !== null) {
+                if ($unknownFieldDoubt === self::UNREADABLE) {
+                    // Decoding could not repair it, so this surface was never scanned. Silence here
+                    // would be the breakage-as-absence hard rule 3 forbids.
+                    $out[] = new TenureSignal(
+                        tier: 1,
+                        tenure: Tenure::UNKNOWN,
+                        reason: sprintf(
+                            'champ « %s » illisible même après décodage — à vérifier',
+                            self::oneLine((string) $name),
+                        ),
+                        evidence: '?',
+                    );
+                } elseif ($unknownFieldDoubt !== null) {
                     $out[] = new TenureSignal(
                         tier: 1,
                         tenure: Tenure::UNKNOWN,
                         reason: sprintf(
                             'champ « %s » (non reconnu comme champ de financement) contient « %s » '
                             . '— à vérifier',
-                            (string) $name,
+                            self::oneLine((string) $name),
                             $unknownFieldDoubt,
                         ),
                         evidence: $unknownFieldDoubt . '?',
@@ -809,7 +862,9 @@ final readonly class TenureClassifier
             // every other field, nor kill the listing. See `Text::foldTolerant()`.
             $folded = Text::foldTolerant((string) $value);
 
-            if ($folded !== '') {
+            // `null` is UNREADABLE, not empty — `structuredFieldSignals()` raises the doubt for it,
+            // so skipping here loses no evidence. `''` is genuinely empty and equally skippable.
+            if ($folded !== null && $folded !== '') {
                 $surfaces[] = $folded;
             }
         }
@@ -998,44 +1053,163 @@ final readonly class TenureClassifier
             return null;                       // callers raise the unreadable doubt themselves
         }
 
-        // TOLERANT, not refusing. This method is called on field NAMES and on the values of fields
-        // nobody declared as carrying tenure — incidental surfaces where an undecoded `&amp;` is
-        // ordinary scrape output. `Text::fold()` would throw, and catching that per field made
-        // every listing with an encoded URL digest. See `Text::foldTolerant()` for why substituting
-        // a space is the one repair that neither invents nor hides a match.
+        // Case-PRESERVING and invisible-STRIPPED, which is the only form the identifier split can
+        // safely run on. Splitting on `[^A-Za-z0-9]+` treats a soft hyphen as a separator, so
+        // splitting the merely-decoded `plai<U+00AD>sir` yields the word `plai` and invents the
+        // match this method spent two attempts learning not to invent.
+        $cased = Text::foldTolerantPreserveCase((string) $value);
         $folded = Text::foldTolerant((string) $value);
+
+        if ($folded === null) {
+            // UNREADABLE, not empty. `Text::foldTolerant()` returns null only when decoding could
+            // not repair the input, and reading that as "said nothing" is hard rule 3's exact
+            // shape. The sentinel is distinguishable so the caller can raise a doubt.
+            return self::UNREADABLE;
+        }
 
         if ($folded === '') {
             return null;
         }
 
-        foreach ($this->matchLabels($folded) as $hit) {
-            if ($hit['tenure']->isExcluded()) {
-                return self::oneLine($hit['matched'] ?? $hit['literal']);
-            }
-        }
+        // TWO HAYSTACKS, because this surface carries IDENTIFIERS as well as prose.
+        //
+        //   $folded — the value as written. Catches `logement social`, `PLAI`, prose in a field.
+        //   $split  — the same value with word boundaries restored at case and separator
+        //             transitions, so `typePlai` becomes `type Plai` and `numeroSNE` becomes
+        //             `numero SNE`. Built from the DECODED value, never the raw one: splitting
+        //             `plai&shy;sir` on non-alphanumerics yields the word `plai` and invents a match
+        //             inside *plaisir*, which is the silent drop `Text::hasToken()` exists to stop.
+        $split = $cased === null ? '' : Text::fold((string) preg_replace(
+            ['/([a-z0-9])([A-Z])/u', '/[^A-Za-z0-9]+/u'],
+            ['$1 $2', ' '],
+            $cased,
+        ));
 
-        foreach (self::PROCEDURAL as $literal => $tenure) {
-            if (!$tenure->isExcluded()) {
+        foreach ([$folded, $split] as $haystack) {
+            if ($haystack === '') {
                 continue;
             }
 
-            $hit = Text::inflectedTokenPosition($folded, $literal);
+            foreach ($this->matchLabels($haystack) as $hit) {
+                if (!$hit['tenure']->isEligible()) {
+                    return self::oneLine($hit['matched'] ?? $hit['literal']);
+                }
+            }
 
-            if ($hit !== null) {
+            foreach (self::PROCEDURAL as $literal => $tenure) {
+                if ($tenure->isEligible()) {
+                    continue;
+                }
+
+                $hit = Text::inflectedTokenPosition($haystack, $literal);
+
+                if ($hit === null) {
+                    continue;
+                }
+
+                // The `sans` negation applies here too. Without it, `commentaire: "Attribution sans
+                // commission d'attribution"` — the brief's canonical INTERMEDIATE tell — digested,
+                // while the identical sentence in the description matched at 80. Silent
+                // over-rejection (hard rule 8), and the digest reason compounded it by reporting the
+                // field "contient « commission d'attribution »" when the field says the negated form.
+                if (in_array($literal, self::NEGATED_BY_SANS, true)
+                    && $this->isPrecededBySans($haystack, $hit[0])) {
+                    continue;
+                }
+
                 return self::oneLine($hit[1]);
+            }
+
+            // The ambiguous acronym, case-insensitively — `AMBIGUOUS_LABELS` is keyed UPPERCASE
+            // because case is evidence in prose, and neither of these haystacks is prose.
+            foreach (array_keys(self::AMBIGUOUS_LABELS) as $acronym) {
+                if ($this->matches('/(?<![A-Za-z0-9])(?i:' . preg_quote($acronym, '/') . ')(?![A-Za-z0-9])/u', $haystack)) {
+                    return $acronym;
+                }
             }
         }
 
-        // The ambiguous acronym last, and case-insensitively — `AMBIGUOUS_LABELS` is keyed
-        // UPPERCASE because case is evidence in prose, and this surface is not prose.
-        foreach (array_keys(self::AMBIGUOUS_LABELS) as $acronym) {
-            if ($this->matches('/(?<![A-Za-z0-9])(?i:' . preg_quote($acronym, '/') . ')(?![A-Za-z0-9])/u', $folded)) {
-                return $acronym;
+        // SEPARATOR-FREE containment, for MULTI-WORD literals only. `demandeLogementSocial` folds to
+        // `demandelogementsocial`, which contains `logementsocial` — and neither haystack above sees
+        // it, because the literal's connectives are simply absent from the identifier. This is the
+        // pass that catches the two keys the field-name rule was written for and did not detect.
+        $key = preg_replace('/[^a-z0-9]/u', '', $folded) ?? '';
+
+        if ($key !== '') {
+            foreach (self::vocabularyKeys() as $normalised => $literal) {
+                if (!str_contains($key, $normalised)) {
+                    continue;
+                }
+
+                // The `sans` negation, in the one form this pass can express it. Positions are gone
+                // once separators are stripped, so the check is containment of the NEGATED key
+                // rather than a lookbehind: `attributionsanscommissiondattribution` contains
+                // `sanscommissiondattribution`. Without it, `commentaire: "Attribution sans
+                // commission d'attribution"` — the brief's canonical INTERMEDIATE tell — digested
+                // while the identical sentence in the description matched, and the digest reason
+                // quoted the un-negated form back at a reader who had written the negated one.
+                if (in_array($literal, self::NEGATED_BY_SANS, true)
+                    && str_contains($key, 'sans' . $normalised)) {
+                    continue;
+                }
+
+                return $literal;
             }
         }
 
         return null;
+    }
+
+    /**
+     * Every excluded-or-undetermined literal, keyed by its separator-free form.
+     *
+     * Built from the same three tables the rest of this class uses, so a literal added tomorrow is
+     * covered without anyone remembering to add it here.
+     *
+     * NOT FILTERED TO `isExcluded()`. `PROCEDURAL` holds `numero unique => Tenure::UNKNOWN`, a
+     * deliberate DOUBT rather than a verdict — and a filter on `isExcluded()` skips it, so the
+     * one key the field-name rule names in its own comment stayed invisible. §1 is about a listing
+     * whose tenure never resolved reaching a notification, not only about an excluded verdict, so
+     * the vocabulary is "everything that is not eligible".
+     *
+     * @return array<string, string>
+     */
+    private static function vocabularyKeys(): array
+    {
+        static $keys = null;
+
+        if ($keys !== null) {
+            return $keys;
+        }
+
+        $keys = [];
+
+        foreach ([self::LABELS, self::AMBIGUOUS_LABELS, self::PROCEDURAL] as $table) {
+            foreach ($table as $literal => $tenure) {
+                if ($tenure->isEligible()) {
+                    continue;
+                }
+
+                // MULTI-WORD ONLY. A single-word literal compared as a substring matches inside a
+                // longer French word — `plai` inside *plaisir* — and pass (a) above already covers
+                // single words with proper boundaries.
+                if (!str_contains((string) $literal, ' ')) {
+                    continue;
+                }
+
+                $normalised = preg_replace('/[^a-z0-9]/u', '', Text::fold((string) $literal)) ?? '';
+
+                if (strlen($normalised) >= 8) {
+                    $keys[$normalised] = (string) $literal;
+                }
+            }
+        }
+
+        // Longest first, so `demande de logement social` is reported rather than the `logement
+        // social` inside it — the more specific literal is the more useful digest entry.
+        uksort($keys, static fn (string $a, string $b): int => strlen($b) <=> strlen($a));
+
+        return $keys;
     }
 
     /**

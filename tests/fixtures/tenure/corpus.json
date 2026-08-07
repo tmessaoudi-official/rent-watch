@@ -22,7 +22,7 @@
     ],
     "version": 1,
     "declared_counts": {
-        "synthetic": 105,
+        "synthetic": 108,
         "captured": 0
     },
     "sources": {
@@ -1546,6 +1546,52 @@
                 "outcome": "DIGEST"
             },
             "why": "The other half of regress-045, and the reason the tolerant fold substitutes a SPACE rather than deleting. An entity sitting inside a multi-word label is exactly the asymmetric failure Text::INVISIBLE exists for -- it deletes that label and leaves every other one standing. Replacing it with a space keeps the label matchable, because inflectedTokenPosition joins a literal's words with '\\\\s*'. Deleting it instead would make this listing silent, which is the §1 fail-open wearing a repair as a disguise."
+        },
+        {
+            "id": "trap-011-entity-inside-an-innocent-word",
+            "provenance": "synthetic",
+            "source": "inli",
+            "title": "T3 Le Vesinet",
+            "description": "Bel appartement lumineux.",
+            "fields": {
+                "commentaire": "Un vrai plai&shy;sir de vivre"
+            },
+            "expect": {
+                "tenure": "LLI",
+                "outcome": "MATCH",
+                "min_confidence": 40
+            },
+            "why": "THE OVER-REJECTION DIRECTION of the tolerant fold, and the fixture that stops the repair being written the easy way. An incidental surface is DECODED, not space-substituted: '&shy;' decodes to U+00AD, which Text::INVISIBLE strips, so 'plai&shy;sir' becomes 'plaisir' and correctly matches nothing. The first implementation substituted a space, which produced 'plai sir' and invented a token inside *plaisir* -- the silent drop Text::hasToken() exists to prevent, reintroduced through the repair. It also matters WHERE the split happens: splitting an identifier on non-alphanumerics before invisibles are stripped puts the boundary back, so the split runs on the invisible-stripped form. See regress-047 for the same fold in the §1 direction."
+        },
+        {
+            "id": "regress-047-entity-inside-an-excluded-token",
+            "provenance": "synthetic",
+            "source": "inli",
+            "title": "T2 Cergy",
+            "description": "Residence recente.",
+            "fields": {
+                "gamme": "PL&shy;AI"
+            },
+            "expect": {
+                "tenure": "UNKNOWN",
+                "outcome": "DIGEST"
+            },
+            "why": "P0 §1 BREACH GUARD (review round 8, 2026-08-07). All three reviewers reproduced this independently. The tolerant fold introduced in round 7 substituted a SPACE for each entity, and its docblock claimed that 'cannot hide a true match, since every literal is matched with \\\\s* between its words'. False: \\\\s* joins the WORDS of a literal, not characters within one. 'PL&shy;AI' folded to 'pl ai', matched nothing, and was NOTIFIED at confidence 50 with reasons[] reading 'aucun signal dans l'annonce' -- byte-identical to a listing with no field at all. '&shy;' is ordinary hyphenation markup in justified French CMS output and '&#8203;' is its zero-width sibling, so the trigger is a real adapter artefact. Decoding has neither failure mode, because the machinery that already exists handles the result: the decoded character is stripped by INVISIBLE and the token is restored."
+        },
+        {
+            "id": "regress-048-a-surface-that-decoding-cannot-repair-is-a-doubt",
+            "provenance": "synthetic",
+            "source": "inli",
+            "title": "T3 Massy",
+            "description": "Appartement renove.",
+            "fields": {
+                "gamme": "caract\\u00e8re \\ud83d\\ude00 &notanentity; \\u0000"
+            },
+            "expect": {
+                "tenure": "UNKNOWN",
+                "outcome": "DIGEST"
+            },
+            "why": "UNREADABLE is not EMPTY, and conflating them is CLAUDE.md hard rule 3 in its literal form. Text::foldTolerant() returns null when decoding cannot repair the input; the first version returned '' and both callers read '' as 'this surface said nothing', so an unreadable field became a silent one. Null now means unreadable and the caller raises a doubt -- the listing digests and reasons[] says which field could not be read, rather than the surface simply vanishing."
         }
     ]
 }

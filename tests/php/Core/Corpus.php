@@ -38,25 +38,31 @@ final class Corpus
      * One PHPUnit data-provider row per case, keyed by fixture id so a failure names the fixture
      * rather than an index.
      *
-     * @return iterable<string, array{RawListing, SourceProfile, array<string,mixed>, string}>
+     * @return iterable<string, array{RawListing, SourceProfile, array<string,mixed>, string, string}>
      */
     public static function provider(): iterable
     {
         $corpus = self::load();
 
-        foreach ($corpus['cases'] as $case) {
+        foreach ($corpus['cases'] as $index => $case) {
             /** @var array{id:string, source:string, title:string, description:string, fields:array<string,string>, expect:array<string,mixed>, why:string} $case */
             $profile = self::profile($corpus['sources'][$case['source']]);
 
+            // AN OPAQUE EXTERNAL ID, not the descriptive fixture id. `externalId` is the source's
+            // own key — `ANN-2024-00017` shaped — and the classifier now scans it, because a review
+            // found all 21 excluded literals reaching MATCH through it. Feeding it a fixture id
+            // like `trap-001-plus-de-chambres` made a dozen fixtures fail on their own NAMES, which
+            // is a property of the test data and not of any listing a source will ever emit. The
+            // descriptive id stays the provider key, so failures still name it.
             $listing = new RawListing(
                 sourceName: $profile->name,
-                externalId: $case['id'],
+                externalId: sprintf('ANN-2024-%06d', $index),
                 title: $case['title'],
                 description: $case['description'],
                 fields: $case['fields'],
             );
 
-            yield $case['id'] => [$listing, $profile, $case['expect'], $case['why']];
+            yield $case['id'] => [$listing, $profile, $case['expect'], $case['why'], $case['id']];
         }
     }
 

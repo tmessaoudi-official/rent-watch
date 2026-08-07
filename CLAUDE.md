@@ -16,7 +16,7 @@ for the product, and **every constraint in it is a ruling**, not a draft to be i
 before touching anything under `src/`.
 
 Status: **the pure core exists; nothing else does.** As of 2026-08-06 there is a PHP 8.5
-implementation of `models` + `tenure` under `src/php/Core/`, a 105-case language-neutral classifier
+implementation of `models` + `tenure` under `src/php/Core/`, a 108-case language-neutral classifier
 corpus at `tests/fixtures/tenure/corpus.json`, and a PHPUnit suite. There is still **no**
 `config/`, no adapter, no store, no notification channel, no CLI and no CI. `src/phorj/` is not
 written yet — it waits on the three phorj builds in `docs/PHORJ-REQUIREMENTS.md`.
@@ -352,14 +352,25 @@ Required coverage, per spec §11 — non-negotiable once `src/` exists:
   Offline. No network in CI. A parser test that reaches the network is a monitoring check, not a test.
 - **Classifier tests.** ≥30 hand-labelled listing texts covering pure-LLI In'li, mixed CDC Habitat,
   an explicit PLAI, an explicit PLS, and an ambiguous case. The suite must go red if the classifier
-  regresses. **Done** — `tests/fixtures/tenure/corpus.json`, 105 cases, and the suite asserts all five
-  shapes are present so "30 easy ones" cannot satisfy it. The corpus is **still 105/105 synthetic**:
+  regresses. **Done** — `tests/fixtures/tenure/corpus.json`, 108 cases, and the suite asserts all five
+  shapes are present so "30 easy ones" cannot satisfy it. The corpus is **still 108/108 synthetic**:
   the spec asks for *real* texts and those need a captured payload (blocked on the DevTools cURL
   captures). Every case declares its `provenance` and a test asserts the declared counts, so the gap
   is visible as data. Replace them with captured texts as sources come online — append, never
   renumber.
 - **Sabotage-verification is part of the classifier's test contract**, not an extra. See
   `tests/sabotage-check.sh` and § "Common workflows" above for why a green suite is insufficient here.
+- **The surface matrix is the other half of that contract.** `tests/php/Core/SurfaceMatrixTest.php`
+  takes the cross product of the classifier's own excluded-or-undetermined vocabulary — read from
+  `LABELS`, `AMBIGUOUS_LABELS` and `PROCEDURAL` by reflection — and EVERY surface a listing presents,
+  and asserts no cell reaches a notification. It exists because eight review rounds each found a P0
+  of one shape: a correct rule applied to a subset of the surfaces it belongs on. A per-fixture
+  corpus cannot find those; it only covers the cells someone thought to write.
+  **Do not narrow the matrix to make a change pass** — an empty cell is a §1 hole, and the failure
+  message says which surface. Two rules for editing it: a new surface is added to `surfaces()` and
+  is opted INTO the counterweight by default, and a cell must be fed an input a real feed could
+  emit. Both were violated on its first outing — the field-name cell was fed a JSON key containing
+  spaces, so it passed while the two keys it was written for still matched.
 - **Criteria tests.** Table-driven, covering every hard disqualifier and every score component.
 - **Dedup tests.** Including the cross-portal fuzzy case, attacked from both sides (over-merge hides a
   flat, under-merge triple-notifies one).

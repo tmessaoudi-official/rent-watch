@@ -131,7 +131,7 @@ store, no notify.
   inert for rendering. Recorded 2026-08-07 after round 7 found it living only in commit prose.
 - [2026-08-07 11:40] AGREED: **The runner config is a §1 surface.** `phpunit.xml` is inside the
   tripwire's path filter, because one `<exclude>` or `<file>` line there drops the whole corpus
-  suite with every other automated control still reporting green — measured at 202 tests → 90, exit
+  suite with every other automated control still reporting green — measured at 193 tests → 90, exit
   0, drift-scan clean. A `bootstrap=` retarget is deliberately NOT covered: it appears in every
   valid config and a grep cannot tell the real one from a stub.
 - [2026-08-07 14:10] AGREED: **The surface matrix is a TEST, not a discipline.** Seven consecutive
@@ -148,7 +148,11 @@ store, no notify.
   30.1% → 28.0%, with every relabel running MATCH→DIGEST and none ever the other way. A
   one-directional suite makes moving a fixture to DIGEST the cheapest way to pass any change.
   `testAnOrdinaryEligibleListingStillMatchesOnEverySurface()` is the assertion that points the
-  other way.
+  other way. CORRECTION (round 8): the commit that added it credited it with catching the `$sep`
+  over-rejection. It did not — `regress-042` did. It is load-bearing for BLANKET over-rejection
+  (forcing every route to DIGEST fails it on every surface) and blind to the one-rule-over-reaching
+  kind, which is the shape that has actually occurred. Its payload is one benign string; widening
+  that is open work, not a solved problem.
 - [2026-08-07 14:10] AGREED: **Incidental surfaces are folded TOLERANTLY, tenure-bearing ones
   strictly.** Reading every field ran `Text::fold()`'s entity gate on URLs and surface cells, so one
   `&amp;` in an href — ordinary scrape output — digested the whole listing and even softened a
@@ -160,6 +164,38 @@ store, no notify.
   a description ending `aucune commission` and a field opening `Attribution directe` became the
   social `commission attribution` and hard-REJECTED, silently. Scanning per surface removes the
   class rather than choosing a better separator.
+- [2026-08-07 17:30] AGREED: **Incidental surfaces are DECODED, not space-substituted and not
+  refused.** Round 7's tolerant fold replaced each entity with a space, and its docblock claimed that
+  could neither hide nor invent a match "since every literal is matched with `\s*` between its
+  words". `\s*` joins the WORDS of a literal, not characters within one: `PL&shy;AI` folded to
+  `pl ai` and was NOTIFIED, and `plai&shy;sir` folded to `plai sir` and invented a token inside
+  *plaisir*. All three reviewers reproduced the first independently. Decoding has neither failure
+  mode because the existing machinery handles the result — the decoded soft hyphen is stripped by
+  `INVISIBLE`, `&nbsp;` collapses, `&#39;` normalises. The strict fold still guards the title, the
+  description and declared tenure fields.
+- [2026-08-07 17:30] AGREED: **Unreadable is a distinguishable answer, not an empty string.** The
+  first tolerant fold returned `''` on failure and both callers read `''` as "said nothing", so an
+  unreadable field became a silent one — hard rule 3 in its literal form. `null` now means
+  unreadable and the caller raises a doubt.
+- [2026-08-07 17:30] AGREED: **The listing's `url`, `commune`, `postcode` and `externalId` are
+  scanned surfaces.** No rule read any of them and all 21 excluded literals reached MATCH through
+  each; `/logement-social/plai/t3-cergy` is the ordinary slug shape of a landlord portal. A DOUBT
+  rather than a verdict, because a slug is not a declaration. The corpus reader now gives fixtures an
+  OPAQUE `externalId` (`ANN-2024-000017`) — feeding it the descriptive fixture id made a dozen
+  fixtures fail on their own names, which is a property of the test data and of no real listing.
+- [2026-08-07 17:30] AGREED: **Identifier spellings need two passes, and the vocabulary is
+  everything NOT ELIGIBLE.** `demandeLogementSocial` and `numeroUnique` — the two keys the
+  field-name rule was written for — matched NEITHER, because folding leaves the connectives out and
+  the scan filtered on `isExcluded()` while `numero unique` maps to UNKNOWN. Splitting at case and
+  separator transitions covers `typePlai`; separator-free containment covers
+  `demandelogementsocial`; the second is restricted to multi-word literals because a bare `plai`
+  compared as a substring matches inside *plaisir*.
+- [2026-08-07 17:30] AGREED: **A test derived from the same mental model as the code inherits its
+  blind spots.** The surface matrix shipped with the same `isExcluded()` filter and the same
+  hand-written surface list as the code it polices, so it reproduced both gaps faithfully — its
+  field-name cell was fed a JSON key containing spaces and passed while the two keys that rule was
+  written for still matched. The matrix now derives its surface coverage from `RawListing`'s own
+  constructor by reflection, and asserts that coverage in a test of its own.
 
 ---
 
@@ -324,7 +360,7 @@ that would otherwise have shipped looking fine.
   catch a regression. Wired as `tests/sabotage-check.sh`, documented in `CLAUDE.md` § Common
   workflows, and it must be run after any change to the classifier, `Text.php` or the corpus.
 - [2026-08-06 23:20] AGREED: **the corpus declares its own provenance and the suite checks it.** The
-  spec asks for real listing texts; all 105 are synthetic until a payload can be captured. Making that
+  spec asks for real listing texts; all 108 are synthetic until a payload can be captured. Making that
   machine-checked keeps the gap visible instead of letting it decay into a stale comment.
 
 ---

@@ -233,7 +233,9 @@ fi
 if grep -Eq '(skip|bypass|disable|without|sans)[_ -]?(tenure|classif)' <<<"$blob" \
 || grep -Eq '(^|[^a-z])no[_-](tenure|classif)' <<<"$blob" \
 || grep -Eq '(^|[^a-z])no(tenure|classif)' <<<"$blob" \
-|| grep -Eq '(^|[^a-z_])(tenure|classifier)(_?(check|enabled|active))? *[:=] *(false|0|off|disabled)' <<<"$blob" \
+|| grep -Eq '(^|[^a-z_])(tenure|classifier)(_?(check|enabled|active|classifier|classification|gate))? *[:=] *(false|0|off|no|disabled)' <<<"$blob" \
+|| grep -Eq '(^|[^a-z_])tenure[a-z_.]* *[:=] *(false|0|off|no|disabled)' <<<"$blob" \
+|| grep -Eq '(^|[^a-z_])"?tenure"? *: *(false|0)' <<<"$blob" \
 || grep -Eq '(^|[^a-z_])(enable|use|run|activate)[_ -]?(tenure|classif)[a-z_]{0,12} *[:=] *(false|0|off)' <<<"$blob"; then
   hits+=("the tenure classifier looks like it is being skipped or disabled")
 fi
@@ -277,7 +279,7 @@ case "$lc_path" in
     # A construct list that stopped at `markTestSkipped` missed the whole family, and missing a
     # construct is how narrowing a pattern loses detection. `<exclude>`/`<testsuite>` cover the
     # runner-config route, which is why phpunit.xml is now inside the path filter above.
-    if grep -Eq '(marktestskipped|marktestincomplete|pytest\.mark\.(skip|xfail)|unittest\.skip|@expectedfailure|@skip|\.skip\(|xit\(|xdescribe|#\[ignore\]|#\[requires|#\[group|@group|(^|[^a-z])(todo|fixme):|# *disabled|<exclude>|excludetestsuite|--exclude-group|<file>|defaulttestsuite|failonrisky *= *.false|failonwarning *= *.false)' <<<"$blob"; then
+    if grep -Eq '(marktestskipped|marktestincomplete|pytest\.mark\.(skip|xfail)|unittest\.skip|@expectedfailure|@skip|\.skip\(|xit\(|xdescribe|#\[ignore\]|#\[requires|#\[group|@group|(^|[^a-z])(todo|fixme):|# *disabled|<exclude>|excludetestsuite|--exclude-group|<file>|defaulttestsuite|failonrisky *= *.false|failonwarning *= *.false|<directory +[a-z]+ *=|suffix *= *.[^"]|phpversion *=)' <<<"$blob"; then
       hits+=("a tenure test looks like it is being skipped or marked xfail — fix the classifier, not the test")
     fi
     ;;
