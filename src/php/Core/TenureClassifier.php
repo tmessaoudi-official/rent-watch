@@ -92,6 +92,19 @@ final readonly class TenureClassifier
         'loyer libre' => Tenure::LIBRE,
         'pret locatif intermediaire' => Tenure::LLI,
         'conventionne anah' => Tenure::ANAH,
+        // ANAH's MARKETING names, added 2026-08-07. `conventionne anah` above only catches an ad
+        // that spells out the administrative term, and almost none do — the scheme is advertised
+        // under its brand. This matters more than it looks: ANAH conventionnement (Loc'Avantages,
+        // formerly Louer abordable) is signed by PRIVATE INDIVIDUAL LANDLORDS, so it appears on
+        // Leboncoin and SeLoger, which are exactly the sources declared `mixed_tenure: false`.
+        // A review ran the payload and got `LIBRE / 50 / MATCH` with reasons[] reading "aucun
+        // signal dans l'annonce" — an excluded tenure reaching a notification. Tier 2 beats the
+        // tier-5 source default, so these close it without touching the flag.
+        "loc'avantages" => Tenure::ANAH,
+        'loc avantages' => Tenure::ANAH,
+        'locavantages' => Tenure::ANAH,
+        'louer abordable' => Tenure::ANAH,
+        'convention anah' => Tenure::ANAH,
         'conventionne anru' => Tenure::ANRU,
         'pret locatif a usage social' => Tenure::PLUS,
         "pret locatif aide d'integration" => Tenure::PLAI,
@@ -171,6 +184,23 @@ final readonly class TenureClassifier
         // listing surfaces in the "à vérifier" digest where a human settles it in three seconds.
         // The discriminating form, with `d'enregistrement`, stays determinate above.
         'numero unique' => Tenure::UNKNOWN,
+        // Rent-cap vocabulary: a DOUBT, never a verdict, and deliberately not `plafond de
+        // ressources`. Added 2026-08-07 alongside the ANAH labels above, for the ad that carries
+        // the scheme's economics without naming the scheme.
+        //
+        // The line is drawn where the vocabulary stops being SHARED WITH LLI, and it was drawn in
+        // the wrong place first. `plafond de ressources` was rejected on that reasoning up front —
+        // LLI has income ceilings too. `loyer plafonne` was added anyway and the corpus immediately
+        // failed three fixtures: LLI is BY DEFINITION a capped rent, so `loyer plafonné` is the
+        // primary target describing itself, and as a doubt it digested `lli-004`, `lli-011` and
+        // `regress-030`. Both are out. What is left is vocabulary conventionné ads use and LLI ads
+        // do not.
+        //
+        // These withhold rather than reject because both phrases are also ordinary market copy: a
+        // verdict either way would be wrong about half the time, and withholding costs one glance
+        // at the digest while a REJECT costs a flat, silently.
+        'loyer maitrise' => Tenure::UNKNOWN,
+        'loyer abordable' => Tenure::UNKNOWN,
         "systeme national d'enregistrement" => Tenure::SOCIAL,
         'sne' => Tenure::SOCIAL,
         'demande de logement social' => Tenure::SOCIAL,

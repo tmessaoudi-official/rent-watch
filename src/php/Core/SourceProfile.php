@@ -14,7 +14,7 @@ namespace RentWatch\Core;
 final readonly class SourceProfile
 {
     /**
-     * @param string       $name          matches the key in `config/sources.yaml`
+     * @param string       $name          matches the key in `config/sources.json`
      * @param 'institutional'|'private' $family
      * @param Tenure|null  $defaultTenure a HINT, the lowest-priority signal there is. The classifier
      *                                    still runs, and consults this only when nothing else fires.

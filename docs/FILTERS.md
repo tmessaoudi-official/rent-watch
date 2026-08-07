@@ -3,7 +3,12 @@
 > Requested 2026-08-06: *"i should be able to filter with everything — so i want you to enumerate all
 > possible filters we can use"*.
 >
-> **This is the menu, not the order.** Nothing here is decided. Each row says what the filter is, whether
+> **SETTLED 2026-08-07.** Rows F1–F9 and S1–S8 are now RULINGS — see `docs/OPEN-QUESTIONS.md`
+> Part 1, and `config/criteria.json`, which is their implementation and the authority on any
+> disagreement. This file stays the *menu* of what could be filtered, and the rows below that are
+> not in `criteria.json` are candidates rather than behaviour.
+>
+> **This is the menu, not the order.** Nothing in the un-ruled rows is decided. Each row says what the filter is, whether
 > it works as a **hard disqualifier** (reject, log only) or a **score component** (rank, never reject),
 > and — the column that actually matters — **how often the data is even present in a listing**.
 >
@@ -43,7 +48,7 @@ expectations from how listing sites are structured, not counts.
 | G1 | **Commune** allow-list | **Hard** | A | Must match a structured field, **not** a substring over the whole blob — the prototype's bug. |
 | G2 | Commune **preference rank** | Score | A | Needs an ordered list, not today's flat set. |
 | G3 | Postcode / CP prefix | **Hard** | A | Compare as a **string** — `"09xxx"` loses its leading zero as an int. |
-| G4 | Département | **Hard** | A | 78 / 95 / 92 today. |
+| G4 | Département | **Hard** | A | **78 / 95** — ruled 2026-08-07 (F3). `92` was removed: every commune in the filter is in 78 or 95, verified against `geo.api.gouv.fr`, so `92` could never admit anything the commune filter also admitted. The prefix's real job is rejecting a same-named commune elsewhere in France. |
 | G5 | INSEE code | **Hard** (canonical) | B | More reliable than the name; needs `enrich/geo`. |
 | G6 | Quartier | Score | C | High local value, low availability. |
 | G7 | Radius from a point (lat/lon + km) | **Hard** or score | B | More natural than a commune list for "20 min from home". Needs geocoding. |

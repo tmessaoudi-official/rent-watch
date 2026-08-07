@@ -113,7 +113,7 @@ Beyond agents A–J, always run **agent K** on this repo:
 > **(5) Dedup ↔ notification divergence** — a cluster key computed one way when storing and another
 > when looking up, so the same flat re-notifies forever or a genuine second flat is swallowed; a price
 > history that records a drop the notifier never surfaces, or vice versa.
-> **(6) Config ↔ code divergence** — a `config/sources.json` or `criteria.yaml` key read under one
+> **(6) Config ↔ code divergence** — a `config/sources.json` or `criteria.json` key read under one
 > name and documented under another, a field map referencing a path the fixture does not contain, a
 > `.env` var consumed in code but absent from `.env.example`. A config key that silently does nothing
 > is indistinguishable from one that works.

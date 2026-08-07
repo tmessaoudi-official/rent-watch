@@ -28,7 +28,7 @@ adapter, no notification channel and no CLI yet.
 | [`docs/OPEN-QUESTIONS.md`](docs/OPEN-QUESTIONS.md) | **Start here.** Every filter enumerated, and the decisions still owed |
 | `src/php/Core/` | The tenure classifier, the models it works on, and the source-health verdict |
 | `src/php/Store/` | The SQLite seen-set, price history and run log. Deleting the database re-notifies the entire market on the next run, and the price history cannot be reconstructed — a listing only ever shows its *current* rent |
-| `tests/fixtures/tenure/corpus.json` | 108 hand-labelled listing texts — the classifier's ground truth, and language-neutral so the phorj port reads the same file. **All 108 are synthetic**: `spec/PROJECT_BRIEF.md` §4 asks for *real* texts, and capturing those needs a source endpoint that does not exist yet. Every case declares its `provenance` and a test asserts the counts, so the gap is data rather than a promise |
+| `tests/fixtures/tenure/corpus.json` | 114 hand-labelled listing texts — the classifier's ground truth, and language-neutral so the phorj port reads the same file. **All 114 are synthetic**: `spec/PROJECT_BRIEF.md` §4 asks for *real* texts, and capturing those needs a source endpoint that does not exist yet. Every case declares its `provenance` and a test asserts the counts, so the gap is data rather than a promise |
 | `prototype/` | A pre-existing single-file prototype, kept as reference. **Not** the shipping implementation — it has no tenure classifier at all |
 | [`CLAUDE.md`](CLAUDE.md) | How code gets delivered here: rules, gates, the eligibility boundary |
 | `.claude/` · `scripts/claude-bootstrap/` | Claude Code configuration ([details](scripts/claude-bootstrap/README.md)) |
@@ -90,7 +90,7 @@ is blocked on a mailbox, an endpoint capture or a phorj module that does not exi
 
 1. **Core skeleton** — models ✅, SQLite store ✅ (seen-set, price history, run log, source health),
    config loading, CLI, one notification channel. Proven end-to-end with a fake source.
-2. **Tenure classifier + tests.** ✅ **Done in PHP**, against a 108-case synthetic corpus — spec §4's
+2. **Tenure classifier + tests.** ✅ **Done in PHP**, against a 114-case synthetic corpus — spec §4's
    *real* listing texts are still outstanding and are blocked on capturing a payload. The phorj port
    waits on `Core.Imap`, an HTML parser and `sleep` (see `docs/PHORJ-REQUIREMENTS.md`). Before any
    real source; everything depends on it.
@@ -122,7 +122,7 @@ mode makes two processes contend instead of share.
 
 ## Adding a source
 
-Adding a source is **config-only** in the common case — a block in `config/sources.yaml`, no code. The
+Adding a source is **config-only** in the common case — a block in `config/sources.json`, no code. The
 [`/add-source`](.claude/skills/add-source/SKILL.md) skill walks the whole workflow: live-endpoint
 discovery, field-map building with `scout dump`, fixture capture, tenure labelling, and the health
 baseline.
@@ -150,6 +150,14 @@ IMAP credentials, the notification token, the IDFM/PRIM API key and the RFR inco
 `.env`, which is gitignored. `.env.example` is the committed template. Never commit personal financial
 data; never log credentials; scrub any fixture captured from a live payload before committing it.
 
-⚠️ **This repo is currently public.** `config/criteria.yaml` will carry target communes, budget and
-household composition — personal, though not credentials. See `docs/OPEN-QUESTIONS.md` Q11; making it
-private before that file lands is recommended.
+⚠️ **This repo is currently public**, and `config/criteria.json` is now committed. Making the repo
+private is still recommended and is the developer's action; the mitigation that makes it survivable
+either way ships regardless (Q11, ruled 2026-08-07):
+
+- The committed `config/criteria.json` carries **only values that were already public** in
+  `prototype/sources.yaml` — the ten communes, the 78/95 prefixes, `min_rooms: 4`,
+  `min_surface_m2: 75`, `max_rent_cc: 1800`. No name, no employer, no income figure, no address.
+- **`config/criteria.local.json` is gitignored** and overrides the committed file field by field, so
+  real budget and real preferences never have to enter git. That claim was written in four documents
+  before anything enforced it; `/config/*.local.json` is now in `.gitignore`, and
+  `git check-ignore -v config/criteria.local.json` is how to confirm it rather than believe it.

@@ -171,12 +171,12 @@ Both are the same defect, recalling instead of running.
 
 Once `config/` and `tests/fixtures/` exist:
 
-- every `map:` path in a `sources.yaml` block must exist in that source's committed fixture — a
+- every `map:` path in a `sources.json` block must exist in that source's committed fixture — a
   mapping no fixture exercises fails at runtime, not in a test
 - every source with `enabled: true` must have a URL that is not `REMPLACER` (hard rule 1)
 - every key read from `.env` in code must appear in `.env.example`, and vice versa. **Never read the
   real `.env`** — it is permission-denied and gitignored on purpose
-- every `criteria.yaml` key must be read somewhere, and every key read must be documented
+- every `criteria.json` key must be read somewhere, and every key read must be documented
 
 If those directories do not exist, print one line saying so and move on. **Do not report an empty
 `config/` as drift** — it is the documented target and has not been built yet. Note that

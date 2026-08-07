@@ -1,0 +1,99 @@
+{
+  "_comment": "rent-watch criteria. JSON, not YAML — ruled 2026-08-07 (docs/OPEN-QUESTIONS.md Q22). JSON has no comments, so any key beginning with an underscore is ignored by the loader; EVERY other unrecognised key is a hard error, which is what stops this convention from swallowing a typo. Values here were already public in prototype/sources.yaml — nothing personal is added. For private tuning, copy this to config/criteria.local.json (gitignored); it overrides field by field.",
+
+  "_communes": "Hard filter, ruled 2026-08-07 (Q1). Boucle de Seine. Matched on the listing's COMMUNE FIELD only, never as a substring of the description — the prototype searched the description too, so a Paris listing saying 'proche Chatou' passed. Adding a neighbour is one line here plus one line in commune_rank.",
+  "communes": [
+    "Sartrouville",
+    "Houilles",
+    "Maisons-Laffitte",
+    "Bezons",
+    "Cormeilles-en-Parisis",
+    "Argenteuil",
+    "Le Vésinet",
+    "Chatou",
+    "Carrières-sur-Seine",
+    "Montesson"
+  ],
+
+  "_postcode_prefixes": "AND with `communes`, not OR. Every commune above is in 78 or 95, so this can never admit anything the commune list does not — its job is to reject a same-named commune elsewhere in France. Prefix 92 was REMOVED on 2026-08-07: it could not match anything, so it read as intent it did not have. A listing with no postcode is NOT disqualified — unknown is not wrong (hard rule 9).",
+  "postcode_prefixes": ["78", "95"],
+
+  "_min_rooms": "Pièces, not chambres. T4, ruled 2026-08-07 (Q3). An UNKNOWN room count does not disqualify — that is the prototype's `(l.rooms or 0) < min_rooms` bug, which rejects every listing that did not state a room count.",
+  "min_rooms": 4,
+  "min_surface_m2": 75,
+
+  "_max_rent_cc": "CHARGES COMPRISES, hard cutoff, ruled 2026-08-07 (Q2). Every source is normalised to CC before comparison; a source that reports hors charges must declare `charges_included: false` in sources.json so the charges can be added. A listing whose CC rent cannot be determined is not disqualified — it loses the rent-headroom score component instead, and says so in its reasons.",
+  "max_rent_cc": 1800,
+
+  "_exclude_patterns": "Property KIND and letting KIND, never tenure. Tenure exclusion lives in Tenure::isExcluded() and is deliberately absent from config: a user-editable regex duplicating CLAUDE.md §1 would be a second, weaker copy of the one guarantee that must not be config-overridable. Patterns are PCRE fragments matched case-insensitively against ACCENT-FOLDED text, so write `meuble`, not `meublé` — the loader refuses an accented pattern rather than letting it silently never match. Matched against title AND description.",
+  "exclude_patterns": [
+    "\\bcolocation\\b",
+    "\\bcoloc\\b",
+    "\\b(?:location|louer|loue|appartement|logement|studio|bien|t[1-9])\\s+meuble",
+    "\\bmeuble\\s+de\\s+tourisme\\b",
+    "\\bbail\\s+mobilite\\b",
+    "\\bresidence\\s+(?:etudiante|etudiant|senior|seniors|services|service|autonomie|intergenerationnelle|geree)\\b",
+    "\\bviager\\b",
+    "\\blmnp\\b",
+    "\\bsaisonnier\\b",
+    "\\bsaisonniere\\b",
+    "\\bsous[-\\s]location\\b",
+    "\\bfoyer\\s+(?:de\\s+)?(?:jeunes|travailleurs)\\b",
+    "\\bresidence\\s+foyer\\b",
+    "\\behpad\\b",
+    "\\blocal\\s+commercial\\b",
+    "\\blocal\\s+professionnel\\b",
+    "\\bfonds\\s+de\\s+commerce\\b",
+    "\\bmurs\\s+commerciaux\\b"
+  ],
+
+  "_exclude_title_patterns": "Matched against the TITLE ONLY, and that is the point. `parking`, `box`, `garage`, `cave` and `bureau` are property types in a title and ordinary amenities in a description — 'T4 avec parking' is wanted, 'Parking en sous-sol' is not. Matching these against the description would drop every flat that has a parking space; not matching them at all would let a parking ad through, because a parking ad states no rooms and no surface and an unknown measurement is never a disqualification. Anchored at the start of the title, which is where a property type sits.",
+  "exclude_title_patterns": [
+    "^\\s*(?:location\\s+)?(?:de\\s+)?(?:parking|box|garage|cave|cellier|local|bureau|bureaux|entrepot|terrain|hangar|emplacement)\\b"
+  ],
+
+  "_commune_rank": "1 = most wanted. Drives score component S1 only; it never filters. Every ranked commune must also appear in `communes`, and the loader refuses a rank for one that does not — a rank on a filtered-out commune is dead config.",
+  "commune_rank": {
+    "Sartrouville": 1,
+    "Houilles": 1,
+    "Maisons-Laffitte": 1,
+    "Le Vésinet": 2,
+    "Chatou": 2,
+    "Carrières-sur-Seine": 2,
+    "Montesson": 2,
+    "Bezons": 3,
+    "Cormeilles-en-Parisis": 3,
+    "Argenteuil": 3
+  },
+
+  "_weights": "spec/PROJECT_BRIEF.md §5, weights ruled 2026-08-07. Normalised, so a disabled component does not silently depress every score by its share. `high_floor_no_lift` is the one weight that must be negative, and it is excluded from the normalising total: a penalty is subtracted from what a listing earned, not part of what it could earn.",
+  "weights": {
+    "commune": 25,
+    "commute": 0,
+    "rent_headroom": 15,
+    "surface": 10,
+    "lift": 15,
+    "high_floor_no_lift": -20,
+    "freshness": 10
+  },
+
+  "_commute": "Off until an IDFM/PRIM key exists (Q1). The loader refuses `enabled: true` with a commute weight of 0, and refuses a non-zero weight while disabled — either way the score would misreport. Turning it on means: set enabled, name the station, set max_minutes, and give weights.commute a value.",
+  "commute": {
+    "enabled": false,
+    "station": null,
+    "max_minutes": null
+  },
+
+  "_freshness_minutes": "A listing first seen within this window earns the full freshness bonus (S7). The brief notes good LLI units go within hours.",
+  "freshness_minutes": 60,
+
+  "_notify": "Routing, ruled 2026-08-07. Nothing is batched: the premise of the whole tool is that good stock goes within hours. `channels` ships as console only, because a channel needing a credential cannot be the default in a repo whose .env is not filled in — enabling ntfy or email without its credential is a startup refusal, never a silent no-op.",
+  "notify": {
+    "channels": ["console"],
+    "high_priority_score": 70,
+    "rent_drop_min_eur": 20,
+    "rent_drop_min_pct": 2.0,
+    "source_broken_cooldown_hours": 24,
+    "digest_hour": 8
+  }
+}

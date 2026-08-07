@@ -177,7 +177,7 @@ Run a Phase 6 Second Sweep on current uncommitted changes. **Never auto-applies 
    **All files**:
    - **Bug hunt**: logic errors, off-by-one, null/nil/undefined deref, unchecked error returns, unhandled edge cases
    - **Security**: credentials/secrets in code, injection risks (SQL, shell, template), missing input validation at system boundaries
-   - **Contracts**: changed function signatures, changed CLI flags, changed `config/*.yaml` keys, changed SQLite schema or `Source` interface methods — flag every one as a potential breaking change. For a `sources.yaml` key, say whether existing source blocks keep parsing; for a schema change, say what happens to an existing `seen`/listings database
+   - **Contracts**: changed function signatures, changed CLI flags, changed `config/*.json` keys, changed SQLite schema or `Source` interface methods — flag every one as a potential breaking change. For a `sources.json` key, say whether existing source blocks keep parsing; for a schema change, say what happens to an existing `seen`/listings database
    - **Tests**: new behavior without a test? Modified behavior without updated tests? Derive the runner from the dependency manifest once one exists — do **not** name `pytest`, `ruff` or any command from memory. As of 2026-08-06 the runner is `php tools/phpunit.phar` and the manifest is `composer.json`; run the suite rather than assuming there is none. "No runner present yet" is NOT an available answer for a PHP change; it remains the honest one only for a dimension with no subject in this tree at all
    - **Docs**: changed public interface without updated documentation?
 

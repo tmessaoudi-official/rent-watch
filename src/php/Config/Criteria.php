@@ -1,0 +1,172 @@
+<?php
+
+declare(strict_types=1);
+
+namespace RentWatch\Config;
+
+use RentWatch\Core\Text;
+
+/**
+ * The developer's criteria: hard disqualifiers, score weights and notification routing.
+ *
+ * **Hard disqualifiers and score are two different mechanisms** (`CLAUDE.md` hard rule 8) and this
+ * object keeps them apart by construction: the disqualifier fields are scalars compared once, the
+ * weights live in their own object, and nothing here can turn a weight into a rejection.
+ *
+ * TWO KEYS THE PROTOTYPE HAD ARE DELIBERATELY ABSENT, and their absence is the fix:
+ *
+ * - **`max_floor`** and **`require_elevator`** (ruled 2026-08-07, Q5). The prototype hard-rejected on
+ *   floor, which silently drops a third-floor flat *with* a lift whenever the listing forgets to
+ *   mention the lift — and listings forget constantly. Floor and lift are score components now. There
+ *   is no config key, so the behaviour cannot be reintroduced by editing a file.
+ * - **Tenure.** `Tenure::isExcluded()` is hard-coded. §1 is not user-overridable, so putting a tenure
+ *   list here would create a second, weaker copy of the project's one guarantee, living in a file a
+ *   config edit can change.
+ *
+ * `null` on any of the three measurement limits means *no limit configured*. That is distinct from a
+ * listing whose measurement is unknown, which is never a disqualification (hard rule 9).
+ */
+final readonly class Criteria
+{
+    /**
+     * @param list<string>         $communes         canonical commune keys, see {@see communeKey()}
+     * @param array<string,string> $communeLabels    canonical key → the label as written, for `reasons[]`
+     * @param list<string>         $postcodePrefixes e.g. `['78', '95']`
+     * @param list<string>         $excludePatterns      PCRE fragments, matched against folded title+description
+     * @param list<string>         $excludeTitlePatterns PCRE fragments, matched against the folded TITLE only
+     * @param array<string,int>    $communeRank      canonical key → rank, 1 is best
+     */
+    public function __construct(
+        public array $communes,
+        public array $communeLabels,
+        public array $postcodePrefixes,
+        public ?int $minRooms,
+        public ?float $minSurfaceM2,
+        public ?int $maxRentCc,
+        public array $excludePatterns,
+        public array $excludeTitlePatterns,
+        public array $communeRank,
+        public Weights $weights,
+        public NotifyPolicy $notify,
+        public int $freshnessMinutes,
+        public bool $commuteEnabled,
+        public ?string $commuteStation,
+        public ?int $commuteMaxMinutes,
+    ) {}
+
+    /**
+     * Canonical form of a commune name.
+     *
+     * Folded, then every run of non-alphanumeric bytes collapsed to one space. So `Maisons-Laffitte`,
+     * `MAISONS LAFFITTE` and `maisons–laffitte` (en dash) all key the same, while `Le Vésinet` and
+     * `Levesinet` stay distinct — the separator is normalised, not deleted.
+     *
+     * Returns `''` for a name with no alphanumeric content at all; callers must treat that as *no
+     * commune*, never as a key that could match. {@see matchesCommune()} does.
+     */
+    public static function communeKey(string $raw): string
+    {
+        $folded = Text::fold($raw);
+        $spaced = preg_replace('~[^a-z0-9]+~', ' ', $folded);
+
+        return trim($spaced ?? '');
+    }
+
+    /**
+     * Does this listing's location pass the commune filter?
+     *
+     * The prototype searched `commune + cp + title + raw_text` as one substring haystack, so a Paris
+     * listing whose description said "proche Chatou" passed. This looks at the **commune field
+     * only**, and matches whole canonical names.
+     *
+     * The postcode prefix is an AND, not an OR, and its job is narrow: every configured commune is in
+     * 78 or 95, so the prefix cannot admit anything the commune list does not — what it does is
+     * reject a same-named commune elsewhere in France. It is checked only when the listing states a
+     * postcode; an unknown postcode is not a disqualification (hard rule 9).
+     */
+    public function matchesCommune(?string $commune, ?string $postcode): bool
+    {
+        if ($commune === null) {
+            return false;
+        }
+
+        $key = self::communeKey($commune);
+        if ($key === '' || !in_array($key, $this->communes, true)) {
+            return false;
+        }
+
+        if ($postcode === null || $this->postcodePrefixes === []) {
+            return true;
+        }
+
+        $digits = preg_replace('~\D+~', '', $postcode) ?? '';
+        if ($digits === '') {
+            // A postcode field that carries no digits told us nothing. Unknown, not wrong.
+            return true;
+        }
+
+        foreach ($this->postcodePrefixes as $prefix) {
+            if (str_starts_with($digits, $prefix)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * The exclusion pattern that fired, or `null` if the listing is not an excluded KIND of property.
+     *
+     * TWO LISTS, AND THE SPLIT IS THE WHOLE POINT. `parking`, `box`, `garage`, `cave` and `bureau`
+     * are property types in a TITLE and perfectly ordinary amenities in a DESCRIPTION — "T4 avec
+     * parking" is a listing the developer wants, and "Parking en sous-sol" is not. One list matched
+     * against the joined text cannot tell those apart, and whichever way it is tuned it is wrong for
+     * half the corpus: match the description and every flat with a parking space is dropped, skip it
+     * and a parking ad with no stated rooms or surface sails through — because an unknown room count
+     * is not a disqualification (hard rule 9), so the size filters do NOT catch it.
+     *
+     * This is the same defect class as the prototype's `meubl`, which excluded a flat whose kitchen
+     * was fitted (`cuisine équipée et meublée`), and it deserved the same fix rather than a tighter
+     * regex: match the term where it means what you think it means.
+     *
+     * Both lists are matched case-insensitively against {@see Text::fold()}ed text, which is why
+     * {@see \RentWatch\Config\ConfigLoader} refuses a pattern containing an accent.
+     */
+    public function excludedBy(string $title, string $description): ?string
+    {
+        $foldedTitle = Text::fold($title);
+        foreach ($this->excludeTitlePatterns as $pattern) {
+            if (preg_match('~' . $pattern . '~i', $foldedTitle) === 1) {
+                return $pattern;
+            }
+        }
+
+        $foldedAll = Text::fold($title . "\n" . $description);
+        foreach ($this->excludePatterns as $pattern) {
+            if (preg_match('~' . $pattern . '~i', $foldedAll) === 1) {
+                return $pattern;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Rank of a commune, 1 = most wanted. `null` when the commune is unranked — which scores as the
+     * bottom of the ranked list rather than as zero, because every configured commune is wanted.
+     */
+    public function rankOf(?string $commune): ?int
+    {
+        if ($commune === null) {
+            return null;
+        }
+
+        return $this->communeRank[self::communeKey($commune)] ?? null;
+    }
+
+    /** Highest rank number in use, for normalising S1. At least 1, so it is never a zero divisor. */
+    public function worstRank(): int
+    {
+        return max(1, $this->communeRank === [] ? 1 : max($this->communeRank));
+    }
+}

@@ -24,7 +24,7 @@ namespace RentWatch\Core;
 final readonly class RawListing
 {
     /**
-     * @param string                $sourceName   key in `config/sources.yaml`
+     * @param string                $sourceName   key in `config/sources.json`
      * @param string                $externalId   the source's own id — the basis of within-source dedup
      * @param array<string, string> $fields       structured fields exactly as the adapter found them.
      *                                            Field names are NOT normalised here on purpose: the

@@ -137,10 +137,10 @@ Run `git diff --staged --stat` and `git diff --staged --name-only`. For each sta
 - Lines changed summary
 
 Classify each file:
-- **Public interface** — CLI verbs and flags (`scout doctor|dump|run|test-notify|replay`), env vars, public functions, **the `Source` adapter interface**, **`config/*.yaml` key names**, **the SQLite schema**, the notification payload shape, hook behaviour, SKILL.md
+- **Public interface** — CLI verbs and flags (`scout doctor|dump|run|test-notify|replay`), env vars, public functions, **the `Source` adapter interface**, **`config/*.json` key names**, **the SQLite schema**, the notification payload shape, hook behaviour, SKILL.md
 - **Internal implementation** — logic, business rules, private helpers
 - **Tests** — test files, fixtures, test helpers
-- **Config/infra** — Dockerfiles, compose files, Makefile, shell scripts, `config/*.yaml`, `.env.example`, **SQLite schema migrations**
+- **Config/infra** — Dockerfiles, compose files, Makefile, shell scripts, `config/*.json`, `.env.example`, **SQLite schema migrations**
 - **Docs** — CLAUDE.md, README, `docs/plans/<topic>.plan.md`, agent definitions
 
 Three rent-watch classifications that outrank the rest when they apply:

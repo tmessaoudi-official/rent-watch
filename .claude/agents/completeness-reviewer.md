@@ -76,7 +76,7 @@ the fixture. Your job is to check whether they did.
    migration needs an answer to: what happens to already-stored listings, their tenure verdicts and
    their price history? A migration that re-marks stored listings as unseen re-notifies everything —
    if the diff does that and does not say so, that omission is the finding.
-7. **Config and env coverage.** A new config key must appear in `config/*.yaml` **and** be read by
+7. **Config and env coverage.** A new config key must appear in `config/*.json` **and** be read by
    code **and** be documented. A new env var must appear in `.env.example`. Grep both directions: a
    key read but never documented is a silent startup failure; a key documented but never read is rot.
    Never read the real `.env` — audit `.env.example` only.

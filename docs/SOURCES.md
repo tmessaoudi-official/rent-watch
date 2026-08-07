@@ -7,7 +7,7 @@
 >
 > **A `200` here means "the site exists and answered".** It does **not** mean an endpoint has been
 > found. No search/XHR endpoint has been reverse-engineered yet — that is per-source work, done with
-> `/add-source`, and every `url:` in `config/sources.yaml` stays `REMPLACER` until it is confirmed live.
+> `/add-source`, and every `url:` in `config/sources.json` stays `REMPLACER` until it is confirmed live.
 >
 > Scope, settled 2026-08-06 (`docs/OPEN-QUESTIONS.md` Q4): **LLI + LIBRE in scope. PLAI, PLUS, PLS,
 > ANRU, ANAH out — no social housing.** Every mixed-tenure source therefore carries a real risk of
@@ -67,7 +67,7 @@ So "all Action Logement" resolves to a much cleaner answer than a 42-entity list
 - **For other regions** ("eventually any region"): In'li has regional arms — **In'li Aura** is confirmed
   (Auvergne-Rhône-Alpes, Annecy). *[Unverified: the full list of In'li regional entities.]* The design
   consequence is the useful part — region must be **config, not code**, so a new region is a
-  `config/sources.yaml` block plus a commune list, never a code change.
+  `config/sources.json` block plus a commune list, never a code change.
 
 ## Tier A — Track 1: institutional, intermediate / LLI. **Where this project earns its keep**
 

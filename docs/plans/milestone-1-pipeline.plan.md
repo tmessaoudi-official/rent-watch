@@ -13,23 +13,38 @@ failures are silent, and they are cheapest to get right before anything depends 
 | `Redact` — masks credentials in adapter error text | **done**, `src/php/Core/Redact.php` |
 | Cross-portal dedup (spec §7: price history per *logical* listing) | **not started** — the store keys per source; clustering the same flat across two portals is a separate problem with a separate failure profile |
 | Tenure verdict persistence, `doctor` timing | **deferred to schema v3** — Q24, Q25. v2 is spent: it carries `listings.seen_epoch` |
-| Config loading (`config/criteria.yaml`, `config/sources.yaml`) | **blocked** — see the open decision below |
+| Config loading (`config/criteria.json`, `config/sources.json`) | **done** — `src/php/Config/`, ruled JSON 2026-08-07 (Q22) |
+| `ConfigTest::testEveryCorpusSourceAgreesWithConfig()` — the `mixed_tenure` drift guard | **done**, `tests/php/Config/ConfigTest.php` |
 | `Source` adapter contract + first adapter | not started |
 | `criteria` (score + hard disqualifiers) | not started |
 | Notification formatter + one channel | not started |
 | `scout` CLI (`doctor`, `dump <source>`, `run --once`) | not started |
 
-## Open decision — the config file format
+## Settled — the config file format
 
-`spec/PROJECT_BRIEF.md` §9 and `CLAUDE.md`'s architecture table both specify `config/criteria.yaml`
-and `config/sources.yaml`. **This container has no `ext-yaml`** and Composer cannot install anything
-(the egress policy returns 403 on `codeload.github.com`, see `CLAUDE.md` § Gotchas), so a `.yaml`
-file has nothing to parse it. The decision is recorded in `docs/OPEN-QUESTIONS.md`; it is a product
-decision because it changes a file the developer edits by hand.
+**JSON**, ruled 2026-08-07 (Q22). `config/criteria.json` + `config/sources.json`, parsed by
+`ext-json`. This container has no `ext-yaml` and Composer cannot install a parser (the egress policy
+returns 403 on `codeload.github.com`), so `.yaml` files would have sat unread.
 
-The reason it cannot be resolved by writing a small YAML parser without asking: `sources.yaml`
-carries `mixed_tenure`, the flag that arms the §1 fail-closed rule. A subset-parser that
-mis-reads one boolean disarms the one non-negotiable guarantee in the project, silently.
+The option that was rejected is worth keeping written down: a hand-rolled YAML-subset parser would
+have matched the spec exactly and read best of the three, and it was refused because `sources.*`
+carries `mixed_tenure` — the flag that arms §1's fail-closed rule. A subset parser that mis-reads one
+boolean disarms the project's one non-negotiable guarantee, silently, and that is not a thing to
+trust to code written in an afternoon. `ext-json` is the language's own parser, so there is nothing
+between the file and that boolean.
+
+What the ruling cost, and how each cost is paid:
+
+- **JSON has no comments.** A free-standing note uses `_comment` / `_why` / `_source` /
+  `_verified_at`; a note about one key uses `_<key>`, and the loader accepts it **only while `<key>`
+  is present**. Every other unrecognised key is a hard error, so the convention cannot swallow a
+  typo — and renaming `mixed_tenure` to `_mixed_tenure` produces two loud errors rather than silence.
+- **Every `config/*.yaml` reference in the tree had to move**, including four inside `.claude/`
+  reviewer charters and twelve inside the tenure-guard's own test.
+- **The tripwire had to learn JSON.** It fired on the `_comment` note every mixed-tenure source is
+  now required to carry, and it stayed *silent* on `"tenure_classifier": false` — a JSON key carries
+  a closing quote between the name and the colon, which pattern 5 did not allow for. Both fixed with
+  matching test cases.
 
 ## Decisions Log
 

@@ -233,12 +233,19 @@ fi
 if grep -Eq '(skip|bypass|disable|without|sans)[_ -]?(tenure|classif)' <<<"$blob" \
 || grep -Eq '(^|[^a-z])no[_-](tenure|classif)' <<<"$blob" \
 || grep -Eq '(^|[^a-z])no(tenure|classif)' <<<"$blob" \
-|| grep -Eq '(^|[^a-z_])(tenure|classifier)(_?(check|enabled|active|classifier|classification|gate))? *[:=] *(false|0|off|no|disabled)' <<<"$blob" \
-|| grep -Eq '(^|[^a-z_])tenure[a-z_.]* *[:=] *(false|0|off|no|disabled)' <<<"$blob" \
+|| grep -Eq '(^|[^a-z_])(tenure|classifier)(_?(check|enabled|active|classifier|classification|gate))?"? *[:=] *(false|0|off|no|disabled)' <<<"$blob" \
+|| grep -Eq '(^|[^a-z_])tenure[a-z_.]*"? *[:=] *(false|0|off|no|disabled)' <<<"$blob" \
 || grep -Eq '(^|[^a-z_])"?tenure"? *: *(false|0)' <<<"$blob" \
-|| grep -Eq '(^|[^a-z_])(enable|use|run|activate)[_ -]?(tenure|classif)[a-z_]{0,12} *[:=] *(false|0|off)' <<<"$blob"; then
+|| grep -Eq '(^|[^a-z_])(enable|use|run|activate)[_ -]?(tenure|classif)[a-z_]{0,12}"? *[:=] *(false|0|off)' <<<"$blob"; then
   hits+=("the tenure classifier looks like it is being skipped or disabled")
 fi
+
+# ROUND 2026-08-07: every alternation above gained an optional `"?` before the separator. Config is
+# JSON now (Q22), and a JSON key carries a CLOSING QUOTE between the name and the colon — so
+# `"tenure_classifier": false`, the natural spelling of the kill switch in the file this project
+# actually ships, sat in the gap between `tenure_classifier` and ` *[:=]` and the tripwire stayed
+# silent. The `"tenure": false` case had covered the shape by accident, because its key has no
+# suffix. tests/test-tenure-guard.sh pins the compound form in both spellings.
 
 # 6. Making the hard exclusions configurable.
 # A leading `#` or `//` means the line is a COMMENT describing the source, not a key enabling it:
@@ -251,9 +258,18 @@ fi
 # The comment alternation covers `/**` and `/*` as well as `#`, `//`, ` *` and `--`. It did not, so
 # a PHP docblock opening `/** config: CDC Habitat publishes PLUS and PLAI … */` fired while the
 # byte-identical YAML spelling was exempt — and the guard's own test only asserted the `#` form.
+#
+# IT ALSO KNEW NO JSON COMMENT, and the 2026-08-07 ruling that config is JSON (Q22) created one.
+# JSON has no comment syntax, so the convention is a `"_comment"` / `"_why"` key — none of which
+# `#`, `//`, `/*`, `*` or `--` matches. The exact sentence this pattern's own header quotes as the
+# thing it must stay silent on, respelled as `"_comment": "config: CDC Habitat publishes PLUS and
+# PLAI alongside LLI"`, fired. So the guard fired on the note the ruling requires every mixed-tenure
+# source to carry — the precise "teaches the reader to ignore the guard" outcome written above.
+# `tests/test-tenure-guard.sh` has a must-stay-silent case for the JSON spelling; never widen this
+# alternation without one.
 # Captured to a variable for the same SIGPIPE reason as pattern 4.
 _p6="$(grep -E '(config|option|setting|toggle|flag|param)[^.]{0,60}(plai|plus|pls|logement social|allow_social|include_social)' <<<"$lines")"
-if [[ -n "$_p6" ]] && grep -qvE '^[[:space:]]*(#|//|/\*|\*|--)' <<<"$_p6"; then
+if [[ -n "$_p6" ]] && grep -qvE '^[[:space:]]*(#|//|/\*|\*|--|"_[a-z_]+"[[:space:]]*:)' <<<"$_p6"; then
   hits+=("social tenure looks like it is becoming a config toggle — CLAUDE.md forbids this")
 fi
 

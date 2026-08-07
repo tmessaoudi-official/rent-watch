@@ -16,7 +16,7 @@ for the product, and **every constraint in it is a ruling**, not a draft to be i
 before touching anything under `src/`.
 
 Status: **the pure core and the store exist; nothing else does.** As of 2026-08-07 there is a PHP 8.5
-implementation of `models` + `tenure` under `src/php/Core/`, a 108-case language-neutral classifier
+implementation of `models` + `tenure` under `src/php/Core/`, a 114-case language-neutral classifier
 corpus at `tests/fixtures/tenure/corpus.json`, the seen-set / price-history / run-log store under
 `src/php/Store/` with `SourceHealth` + `SourceStatus` in `Core/`, and a PHPUnit suite. There is still
 **no** `config/`, no adapter, no notification channel, no CLI and no CI. `src/phorj/` is not written
@@ -26,9 +26,15 @@ Anything below describing `criteria`, `dedup`, the adapters or `enrich` is the *
 present. Do not report findings against files that do not exist yet, and do not name `pytest` as
 though it were wired — the PHP suite is the only test runner here.
 
-**Twenty-one decisions are still open** and several of them change the architecture — see
-[`docs/OPEN-QUESTIONS.md`](docs/OPEN-QUESTIONS.md). Milestone 1 should not start until the blocking ones
-are answered.
+**Every question is closed as of 2026-08-07** — see [`docs/OPEN-QUESTIONS.md`](docs/OPEN-QUESTIONS.md).
+All 25 were resolved in one pass by applying each question's own documented default, on the
+developer's instruction. **Nothing is blocking; milestone 1 proceeds.** A default applied is not a
+preference expressed: every entry names the one line that reverses it.
+
+Four things are still outstanding, and they are **inputs rather than decisions** — no default can
+supply them: the DevTools cURL captures for the first sources (hard rule 1 forbids writing an
+endpoint from memory), IMAP credentials for the alert mailbox, one real portal alert email to shape
+the parser against, and the `plafonds de ressources` figures for classifier tier 4.
 
 ---
 
@@ -367,8 +373,8 @@ Required coverage, per spec §11 — non-negotiable once `src/` exists:
   Offline. No network in CI. A parser test that reaches the network is a monitoring check, not a test.
 - **Classifier tests.** ≥30 hand-labelled listing texts covering pure-LLI In'li, mixed CDC Habitat,
   an explicit PLAI, an explicit PLS, and an ambiguous case. The suite must go red if the classifier
-  regresses. **Done** — `tests/fixtures/tenure/corpus.json`, 108 cases, and the suite asserts all five
-  shapes are present so "30 easy ones" cannot satisfy it. The corpus is **still 108/108 synthetic**:
+  regresses. **Done** — `tests/fixtures/tenure/corpus.json`, 114 cases, and the suite asserts all five
+  shapes are present so "30 easy ones" cannot satisfy it. The corpus is **still 114/114 synthetic**:
   the spec asks for *real* texts and those need a captured payload (blocked on the DevTools cURL
   captures). Every case declares its `provenance` and a test asserts the declared counts, so the gap
   is visible as data. Replace them with captured texts as sources come online — append, never
@@ -424,7 +430,7 @@ Required coverage, per spec §11 — non-negotiable once `src/` exists:
 spec/PROJECT_BRIEF.md       Full specification — the source of truth, and a ruling set
 state/                      The SQLite seen-set, price history and run log. Gitignored, NOT scratch
 prototype/                  Pre-existing single-file prototype. Reference only; do not extend in place
-docs/OPEN-QUESTIONS.md      Decisions still pending, with the default if unanswered
+docs/OPEN-QUESTIONS.md      All 25 questions, each closed 2026-08-07 with the default applied
 docs/plans/                 <topic>.plan.md, each with its own ## Decisions Log
 config/                     criteria.json + sources.json (committed) — JSON, ruled 2026-08-07 (Q22)
 src/php/Core/               PHP 8.5 pure core — models + tenure classifier + source health
@@ -453,8 +459,12 @@ scripts/claude-bootstrap/   Reinstalls ~/.claude/ at SessionStart (cloud contain
 - The prototype's `(l.rooms or 0) < self.min_rooms` **disqualifies an unknown room count**. Same for
   surface. That is the `None`-is-not-zero bug (hard rule 9) in its natural habitat.
 - The prototype swallows every per-source exception and `continue`s — hard rule 3.
-- The prototype's `max_floor` is a hard reject; the spec wants floor/elevator to be a **large score
-  penalty** unless the developer rules otherwise. See `docs/OPEN-QUESTIONS.md` Q5.
+- The prototype's `max_floor` is a hard reject. **Ruled 2026-08-07 (Q5): floor and lift are score
+  components only**, and more strongly than the spec asked — `max_floor` and `require_elevator` do
+  not exist as config keys at all, so the prototype's behaviour cannot be reintroduced by editing a
+  file. The high-floor penalty additionally requires the lift to be **explicitly absent**, never
+  merely unmentioned: `null` is not `false` (hard rule 9), which is why it is its own score
+  component rather than the negation of the bonus.
 - `prototype/sources.yaml` mixes criteria, notification config and sources in one file. The target
   layout splits criteria and sources into two files under `config/`.
 - **`allow` rules in `.claude/settings.json` are inert in cloud sessions.** They need an accepted

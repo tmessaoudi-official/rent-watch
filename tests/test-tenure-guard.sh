@@ -157,15 +157,14 @@ expect_fire "the corpus suite retargeted via <file> rather than <exclude>" \
 # narrowing. Recorded so a future reader knows the gap was measured, not missed.
 expect_fire "the classifier disabled by the inverse spelling" \
   'tenure_check: false' \
-  "$repo/config/criteria.yaml"
+  "$repo/config/criteria.json"
 expect_fire "the classifier disabled by an enable flag" \
   'enable_tenure: false' \
-  "$repo/config/criteria.yaml"
+  "$repo/config/criteria.json"
 # A PHP docblock is a comment too — the byte-identical YAML spelling was already exempt.
 expect_silence "a source declaring itself pure with mixed_tenure: false" \
-  'cdc_habitat:
-  mixed_tenure: false' \
-  "$repo/config/sources.yaml"
+  '"cdc_habitat": { "mixed_tenure": false }' \
+  "$repo/config/sources.json"
 expect_silence "a PHP constructor call passing mixedTenure: false" \
   'new SourceProfile(name: "inli", defaultTenure: Tenure::LLI, mixedTenure: false);'
 expect_silence "a PHP docblock describing a mixed-tenure landlord" \
@@ -177,23 +176,23 @@ expect_fire "a breach on line 1 followed by 80 KB of exempt lines" \
   "$(printf 'config toggle for plus: true
 '; for i in $(seq 1 2000); do printf '# config toggle plus note %d
 ' "$i"; done)" \
-  "$repo/config/sources.yaml"
+  "$repo/config/sources.json"
 
 # ROUND 8. Pattern 5's narrowing (to silence `mixed_tenure: false`) put `_` in the left boundary,
 # which blocked a match starting at `classifier` — and the suffix group had no `classifier` either,
 # so nothing could match at `tenure`. `tenure_classifier: false` is the natural YAML spelling.
-expect_fire "the compound kill switch in YAML" \
-  'tenure_classifier: false' \
-  "$repo/config/sources.yaml"
+expect_fire "the compound kill switch in JSON" \
+  '"tenure_classifier": false' \
+  "$repo/config/sources.json"
 expect_fire "the compound kill switch as an env var" \
   'TENURE_CLASSIFIER_ENABLED=0' \
-  "$repo/config/sources.yaml"
+  "$repo/config/sources.json"
 expect_fire "the classifier disabled in JSON" \
   '"tenure": false' \
-  "$repo/config/criteria.yaml"
+  "$repo/config/criteria.json"
 expect_fire "the classifier disabled by a classification flag" \
   'tenure_classification: false' \
-  "$repo/config/criteria.yaml"
+  "$repo/config/criteria.json"
 # A `<directory>` ATTRIBUTE narrows the suite to nothing while the runner still prints a green OK and
 # exits 0: `suffix="ClassifierTest.php"` drops the 108-case §1 corpus AND the surface matrix, and
 # drift-scan stays clean. No new element is needed, so the element-name list could not see it.
@@ -245,24 +244,20 @@ expect_silence "routing UNKNOWN to the digest, which is the rule" \
 # match from `source` in a docblock just as close. §1 detection does not pay for noise reduction, so
 # a communes block costs the author one glance and an explanation. Asserted rather than left
 # undocumented, so that a future session narrowing pattern 2 sees the cost was chosen.
-expect_fire "a communes block in criteria.yaml (accepted noise, see pattern 2)" \
-  'communes:
-  included: [Cergy, Nanterre]
-  excluded: []' \
-  "$repo/config/criteria.yaml"
-expect_fire "a non-tenure denylist in criteria.yaml (accepted noise, see pattern 2)" \
-  'blocked_landlords: null' \
-  "$repo/config/criteria.yaml"
+expect_fire "a communes block in criteria.json (accepted noise, see pattern 2)" \
+  '"communes": { "included": ["Cergy", "Nanterre"], "excluded": [] }' \
+  "$repo/config/criteria.json"
+expect_fire "a non-tenure denylist in criteria.json (accepted noise, see pattern 2)" \
+  '"blocked_landlords": null' \
+  "$repo/config/criteria.json"
 # …and the detection that suppression was costing, which is why it went.
 expect_fire "an emptied excluded-set accessor whose docblock mentions a source" \
   '/** Hard disqualifiers applied to every listing from every source. */
 public static function excluded(): array { return []; }' \
   "$repo/src/php/Core/Criteria.php"
-expect_fire "an emptied per-source excluded list in sources.yaml" \
-  'sources:
-  cdc_habitat:
-    excluded: []' \
-  "$repo/config/sources.yaml"
+expect_fire "an emptied per-source excluded list in sources.json" \
+  '"sources": { "cdc_habitat": { "excluded": [] } }' \
+  "$repo/config/sources.json"
 expect_silence "a notify module restating the routing rule" \
   '/** UNKNOWN never reaches the notify channel — it goes to the digest instead. */' \
   "$repo/src/php/Core/Notify/Formatter.php"
@@ -274,7 +269,17 @@ expect_silence "an adapter docblock mentioning an absent tenure hint" \
   "$repo/src/php/Adapters/HttpJson.php"
 expect_silence "a sources.yaml comment describing a mixed-tenure landlord" \
   '# config: CDC Habitat publishes PLUS and PLAI alongside LLI' \
-  "$repo/config/sources.yaml"
+  "$repo/prototype/sources.yaml"
+
+# The SAME sentence in the JSON spelling the Q22 ruling requires. It fired: none of `#`, `//`,
+# `/*`, `*` or `--` matches a `"_comment"` key, so the guard flagged the very note every
+# mixed-tenure source is now told to carry. Pattern 6's comment alternation learned the shape.
+expect_silence "a sources.json _comment describing a mixed-tenure landlord" \
+  '  "_comment": "config: CDC Habitat publishes PLUS and PLAI alongside LLI"' \
+  "$repo/config/sources.json"
+expect_silence "a criteria.json _why key describing the excluded set" \
+  '  "_why": "config note: PLAI and PLUS are excluded by the classifier, not by this file"' \
+  "$repo/config/criteria.json"
 
 # Pattern 7 must not fire on PROSE ABOUT skipping — both of these are real lines from the two
 # classifier test files, and the second is that file's own docblock quoting CLAUDE.md's rule.

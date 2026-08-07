@@ -259,7 +259,23 @@ Measured, not assumed. If CDC Habitat's listing endpoint sits under that path, p
 inside the `Disallow`, CDC Habitat moves to the email-alert route like a private portal. **Never work
 around it.**
 
-### Ⓑ Q16 — Implementation language: phorj, or Python? — raised 2026-08-06
+### Ⓐ Q16 — ANSWERED 2026-08-06 by the developer; closed here 2026-08-07
+
+**This was still marked Ⓑ BLOCKING with no resolution while the banner above claimed nothing was
+blocking.** A review caught it. The developer answered it on 2026-08-06 and the Decisions Log records
+the answer; only the heading was never updated.
+
+**What holds:** **PHP 8.5 is the implementation.** phorj takes the *pure core* — `models`, `tenure`,
+`criteria`, `dedup` — via `phg transpile` once its two missing modules land, so the classifier runs
+byte-identically on three legs and the differential test means something. Everything touching IMAP,
+HTTP, SQLite or SMTP stays PHP-only, because `phg` refuses those domains by design.
+
+**The "Default if unanswered" written below is SUPERSEDED and must not be applied.** It says *"Track 1
+in phorj now… with no Python written in the meantime"*, which contradicts both the developer's answer
+and the 1000-test PHP core that exists. A session applying it literally would rewrite the classifier.
+It is kept for the record only.
+
+### ~~Ⓑ Q16 — original wording~~ (kept for the record)
 
 *"i think i want to do it with this language! - it is WIP! but i think it can do it!!"* — referring to
 [phorj](https://github.com/tmessaoudi-official/phorj), the developer's own language.
@@ -323,7 +339,19 @@ not a supporting detail: this repo cannot read that file, a future session here 
 rent-watch's own `CLAUDE.md` is the only authority that governs rent-watch. Removed 2026-08-06 on the
 developer's challenge — the same dangling-cross-reference class that `/repair` § S2 exists to catch.)*
 
-### Ⓑ Q17 — CLI, web app, or both? — raised 2026-08-06
+### Ⓐ Q17 — ANSWERED 2026-08-06 by the developer; closed here 2026-08-07
+
+**Also still marked Ⓑ, and this one mattered more.** The developer answered *"both in parallel yes"*.
+The "Default if unanswered" written below says *"CLI first, **then** a read-only local web digest…
+later"* — so applying the default would have **overridden an explicit answer with my own guess**,
+which is exactly what this file's own caveat warns against. It was caught by a review, not by me.
+
+**What holds:** **the CLI and the read-only web digest are built in PARALLEL**, from the start. This
+amends `spec/PROJECT_BRIEF.md` §12, which rules a web UI a non-goal. Constraints kept in full:
+**read-only, localhost, no auth, no multi-user.** Write actions or remote access would be a NEW
+decision, not an extension of this one.
+
+### ~~Ⓑ Q17 — original wording~~ (kept for the record)
 
 The brief rules a web UI a **non-goal** (`spec/PROJECT_BRIEF.md` §12: *"No web UI. CLI plus push
 notifications. A read-only HTML digest is acceptable later."*). The question reopens it, so it needs a
@@ -633,9 +661,19 @@ this is a genuine enhancement rather than a gap.
 
 **ANSWERED 2026-08-07 — the default applies (option 1).** `icf_novedis` keeps `mixed_tenure: true`
 until a real Novedis payload can be inspected. The binding check this section asked for is now
-implemented: `ConfigTest::testEveryCorpusSourceAgreesWithConfig()` fails if a `mixed_tenure` in
-`config/sources.json` disagrees with the same source in `tests/fixtures/tenure/corpus.json`, so the two
-cannot drift apart silently.
+implemented: `ConfigTest::testEveryCorpusSourceAgreesWithConfig()` fails if a `mixed_tenure`,
+`family` or `default_tenure` in `config/sources.json` disagrees with the same source in
+`tests/fixtures/tenure/corpus.json`, so the two cannot drift apart silently. It also asserts that at
+least five sources appear in both files, because a rename on either side would otherwise make the
+comparison vacuous rather than red.
+
+**Correction, and it is the reason this paragraph is worth reading twice.** When this answer was
+first committed the sentence above was written in the present tense and the test did not exist —
+neither did `config/`. Three independent reviewers found it, and they were right to treat it as the
+most serious finding in the batch: Q20 *closes* the question that asked for a drift guard on the one
+flag that disarms §1's fail-closed rule, so a future session reading it had no reason to build the
+guard. The test and the config landed in the very next commit, which is what makes the paragraph true
+now — but it was false when written, and that is recorded rather than quietly repaired.
 
 
 `mixed_tenure` is the single flag that disarms the fail-closed rule: when it is `false`, a listing
@@ -704,7 +742,12 @@ this re-opens automatically the day the digest ships, not before.
 
 ---
 
-## The Action Logement wrinkle — flagged 2026-08-06, needs a ruling
+## Ⓐ The Action Logement wrinkle — RULED 2026-08-07
+
+**Ruling: Action Logement is a SOURCE, not a tenure.** Its landlords are in scope, and every one of
+them — AL'in, Seqens, Immobilière 3F, 1001 Vies Habitat, Antin Résidences — ships
+`mixed_tenure: true`, because they publish social and intermediate stock on the same pages. Nothing
+special is needed beyond what §1 already mandates. The section below is the reasoning, unchanged.
 
 "Action Logement" is an **organisation**, not a tenure. It distributes housing reserved for employees of
 contributing companies, and that reserved stock spans BOTH families:
@@ -719,6 +762,187 @@ contributing companies, and that reserved stock spans BOTH families:
 resolves to: **yes to the source, with the classifier doing its job on each listing.** Every one of them
 gets `mixed_tenure: true`. Nothing special is needed beyond what §1 already mandates — but it is worth
 recording that "action logement" was named as a wanted *source*, not as a wanted *tenure*.
+
+## Part 2e — Corrections forced by the review of 2026-08-07
+
+The developer asked for the answered defaults to be reviewed for flaws. Three adversarial reviewers
+found 56 findings between them. The ones that **change a ruling** are recorded here as rulings in
+their own right, so that a session building the notify or CLI layer builds the corrected version
+rather than the one the original answers described.
+
+### Ⓐ Q26 — the `legal_risk` refusal, which the first pass never actually decided
+
+Three refusals were designed on 2026-08-07 — `browser` (Q10), unknown config keys (Q22), missing
+credentials (Q9) — and the one `CLAUDE.md` hard rule 4 and `spec/PROJECT_BRIEF.md` §7 actually
+*mandate* got no decision at all, in a pass that announced *"nothing is blocking"*.
+
+**RULED:** a source block with `legal_risk: true` is refused at config load unless
+`--i-accept-legal-risk` is passed on that invocation. The flag is **never persisted in config**, so
+starting a scrape is a deliberate act each time rather than a boolean somebody flipped once. In
+addition, `SourceDefinition::requiresScrapingOptIn()` returns true for any `family: private` source
+of type `json` or `html` — polling a private portal is the gated case; email-alert ingestion is the
+sanctioned path and is never gated.
+
+CDC Habitat's protection was a `_comment`, which the loader discards before anything can act on it —
+so `enabled: true` required deleting nothing. That is now backed by code: an enabled source whose URL
+still contains `REMPLACER` is refused at load.
+
+### Ⓐ Q27 — the tool's own silence is undetectable, and four rulings created total-stop modes
+
+The single best finding of the round, and it applies this project's own reasoning one level up.
+Source health exists because *"a source returns zero forever and the user concludes the market is
+quiet."* Under Q8 the process is unattended on a VPS; under Q9/Q10/Q22 a stale credential, a stray
+comma in `criteria.json` or a leftover `type: browser` **stops the whole process** — and the only
+channel that could report it is the one that refused. Zero notifications is also the normal output on
+a quiet evening, so a dead watcher and a quiet market emit byte-identical output.
+
+**RULED:** `scout run --watch` emits a **heartbeat** at low priority every `HEARTBEAT_HOURS` (default
+24) stating runs completed, sources OK and matches sent — **whether or not anything matched**. Silence
+from rent-watch for longer than that is then itself a signal. A startup refusal exits non-zero *and*
+writes its reason to `state/last-refusal.txt` on the mounted volume, so the next successful start can
+report what happened while it was down.
+
+### Ⓐ Q28 — refusals are scoped, not global
+
+**RULED**, amending Q9 and Q22:
+
+- A validation error in **`criteria.json`** is a startup refusal. The criteria govern what is
+  filtered, and a wrong filter is invisible — the user sees plausible results forever.
+- A validation error confined to **one block in `sources.json`** disables that source and reports it
+  as a health status, like any other broken source. A typo in a Tier-B selector must not stop In'li.
+- A channel enabled without its credential is a startup refusal **only when it is the only enabled
+  channel**. Otherwise the process starts, that channel is disabled for the run, and an alert about
+  it goes out through a working one. `console` alone does not count as usable under Q8's Docker
+  deployment — a container log is not a notification channel.
+- A **send failure at runtime** leaves `notified_at` NULL so the next run retries. Q9 covered only
+  startup, which left the hole where a failed delivery silently marks a listing as notified.
+
+### Ⓐ Q29 — health routing covers every alerting status, not `SOURCE_BROKEN` alone
+
+`SourceStatus::isAlerting()` is true for six members. The 1c table routed one. An implementer building
+from it would derive `NEVER_PRODUCED` (the wrong-field-map detector, added *because* it hid behind OK)
+and `STALE` (the schedule-stopped detector), store them, and never send them.
+
+**RULED:** every status where `isAlerting()` is true is routed. Same channel, de-duplicated per
+**`(source, status)`** per 24 h — keyed on the status too, so an escalation from `WARN_DROP` to
+`BROKEN` is not swallowed by the earlier alert. Re-alert at 24 h, then 72 h, then weekly, at rising
+priority, so a source broken for three weeks is not as quiet on day 20 as on day 2. A transition back
+to `OK` sends one recovery notice and clears the key. The daily digest additionally carries a one-line
+summary of every source not currently `OK`, so a suppressed alert is still visible without a push.
+
+The cooldown is **persisted**, in a `source_alerts` table added by schema v3 — in process memory a
+crash-looping container re-alerts on every restart and a manual `scout doctor` shares no state with
+the running `--watch`.
+
+### Ⓐ Q30 — `item_count` is what the ADAPTER PARSED, before any filtering
+
+Undecided, and the two readings contradict each other: Q23 defended a threshold with *market*
+emptiness (a post-filter count) while `Store::health()` reports the same condition as *"mapping de
+champs à vérifier"* (only meaningful for a raw count).
+
+**RULED:** `item_count` is the number of listings the adapter parsed, before criteria are applied. A
+source is healthy when it is producing listings, whether or not any match. Matched counts get their
+own column and **no health verdict reads it** — otherwise the health subsystem measures the
+Île-de-France rental market rather than the adapter, and a broken selector on a source whose matches
+are usually zero becomes undetectable, which is the exact failure §8 exists for.
+
+### Ⓐ Q31 — confidence is a routing gate and a tiebreaker, NOT a score multiplier
+
+S8 as a multiplier, combined with 1c's *"score ≥ 70 is high priority"*, makes high priority
+**arithmetically unreachable** for most matches. Realised confidences are ≈{0.50, 0.80, 0.90, 0.97},
+so at 0.50 a listing would need a normalised 140 to clear 70. Measured against the corpus: **16 of 31
+expected MATCH cases can never reach high priority**, and the entire LIBRE track is barred — private
+portals carry no tenure vocabulary, so they sit at tier 5 and cap at 50. Q4 made LIBRE first-class
+*because* it goes fast, and Q9 chose a push channel for the same reason; the multiplier then silences
+the urgency signal for exactly that track. It also inverts ranking below zero, because multiplying a
+negative score by a confidence in (0,1) moves it *toward* zero and the less-trustworthy verdict wins.
+
+**RULED:** priority is decided on the **unmultiplied** normalised score, clamped to `[0, 100]`. A
+MATCH whose confidence is below 0.80 is **capped at normal priority** however it scores, and
+confidence breaks ties in the ordering. That delivers what S8 was asked for — a 0.65 LLI must not rank
+with a 0.98 LLI — without making the threshold unreachable. `UNKNOWN` still never reaches scoring.
+
+### Ⓐ Q32 — an unknown commune, and an unknown rent basis
+
+F4, F5 and F6 each say explicitly what an unknown measurement does. F2/F3 said nothing, and both
+readings are wrong: reject-on-unknown silently drops every listing from a source whose commune
+selector drifted (health does not fire — the fetch succeeded and the count is non-zero), while
+pass-on-unknown stops filtering geography entirely, and Leboncoin is a national portal.
+
+**RULED:** a listing with **neither** a commune nor a postcode is rejected — it carries no location
+evidence at all, and location is the one criterion with no score fallback. With one of the two
+present it is judged on that one, and notified with a `reasons[]` entry naming the missing field.
+Three consecutive runs in which a source yields ≥1 item and **zero** parseable communes raises
+`SOURCE_BROKEN`: a location field map that has drifted is a source breakage, not a quiet market.
+
+**And on rent (amending Q2):** CC is `rent_cc` when present, **else `rent_hc + charges` when both are
+present**. Only when neither holds is the CC rent unknown. Treating a derivable CC as unknown throws
+away a hard filter; treating an HC-only rent as CC notifies a ~1900 € flat against an 1800 € ceiling.
+The unknown case is not disqualified, scores 0 on S3, and says so.
+
+### Ⓐ Q33 — a rent drop that crosses a disqualifier boundary always notifies
+
+The thresholds were written for a known match getting cheaper. A listing seen at 1810 € CC is
+hard-disqualified and never notified; re-seen at 1795 € it is a full match — but the drop is 15 €
+and 0.83%, so both thresholds fail and nothing is sent. The whole band just above the ceiling is
+exposed.
+
+**RULED:** a drop notifies at ≥ 20 € **or** ≥ 2% — whichever fires first — **or whenever it crosses a
+hard-disqualifier boundary in either direction, whatever its size.** A listing that was disqualified
+and now qualifies is a **new match**, not a price event, and is notified at the priority its score
+earns. (The original wording said *"whichever is smaller in absolute terms"*, which is redundant at
+best and the opposite of the intent if read as an `and`. Removed.)
+
+### Ⓐ Q34 — the digest cannot wait a day, and it must survive a failed send
+
+33% of the corpus routes to DIGEST, the digest is the fail-closed rule's only landing zone, and Q21
+knowingly put an ordinary shouted title for a good flat in it. A once-a-day emission turns *"one
+glance"* into *"gone"* — and Q21's cost argument was made before the cadence was chosen, then never
+revisited.
+
+**RULED:** emitted on demand via `scout digest`, **and at the end of any run that produced new digest
+entries**, as one low-priority rollup naming only what is new since the last successful emission.
+Entries are marked emitted **only after the channel confirms delivery**; an unsent digest is retried
+next run. The daily emission stays as a floor for days with nothing new, at the timezone named in
+`TZ` — which defaults to `Europe/Paris` in `.env.example`, because a Docker container without it runs
+UTC and *"08:00 local"* silently becomes 10:00 Paris in summer. `scout doctor` prints the resolved
+local time next to the digest schedule.
+
+### Ⓐ Q35 — a stored verdict must be revisable, not merely auditable
+
+Q24 stated the problem — *"a listing stored under an old classifier cannot be re-evaluated"* — and
+answered only the storage half. Combined with the seen-set's *"new exactly once"* guarantee, a
+listing digested as `UNKNOWN` under a classifier that is later improved is a **permanent silent
+miss**. Q18 (PLI) and Q21 (shouted `PLUS`) both deliberately route there, so the bin will not be small.
+
+**RULED:** `scout reclassify [--since]` re-runs the classifier over stored listings using the
+persisted raw fields; any row whose `Outcome` improves from `DIGEST` to `MATCH` is notified as a new
+match. The classifier version is stored with the verdict so the command can select only stale rows.
+
+### Ⓐ Q36 — a missing volume must not look like a fresh install
+
+Q8 rules out GitHub Actions *because* no persistent disk means re-notifying everything, then adopts a
+deployment with the identical failure mode and no guard: `Store::open()` creates the file, so a typo
+in `-v` produces a valid, empty, migrated database indistinguishable from a healthy one — and with
+nothing batched, every historic listing pushes at once.
+
+**RULED:** `Store::open()` reports whether it **created** the database. On a fresh one `scout run`
+refuses to notify and exits saying so, offering `--seed` to populate the seen-set without notifying.
+The mount is additionally asserted by a marker file written in `RENT_WATCH_DB`'s directory at first
+successful start.
+
+### Ⓐ Q37 — `--watch` pacing, which was ruled as the word "jitter" and no number
+
+15 Tier-A sources polled from one VPS IP, with the obvious implementation being a tight loop, is 15
+near-simultaneous requests per interval. That is what a scraper looks like and it is how the
+developer's own IP gets banned — while `CLAUDE.md` hard rule 5 requires low rates with jitter.
+
+**RULED:** poll every 15 minutes ± 5 minutes of jitter. Within a pass: at least 5 s between requests
+to distinct hosts, at least 60 s between two requests to the same host, and the source order is
+**shuffled each pass** so no site is always first. A pass finishing in under 60 s does not immediately
+start another.
+
+---
 
 ## Decisions Log
 
@@ -830,3 +1054,51 @@ recording that "action logement" was named as a wanted *source*, not as a wanted
 - [2026-08-07] AGREED (Q20): the `mixed_tenure` drift check this file asked for is **implemented** —
   a test binds every source's flag in `config/sources.json` to the same source in the classifier
   corpus, so the two cannot diverge silently.
+- [2026-08-07 18:30] AGREED (review round): the developer asked for every applied default to be
+  reviewed for flaws. Three adversarial reviewers returned **56 findings**. Twelve changed a ruling
+  and are recorded as Q26–Q37 above; the rest were doc drift, fixed in the same change.
+- [2026-08-07 18:30] AGREED (§1 breach, the most serious finding): **ANAH conventionné is signed by
+  PRIVATE INDIVIDUAL landlords** and advertised on Leboncoin and SeLoger — the two sources declared
+  `mixed_tenure: false`. A reviewer ran the payload and got `LIBRE / 50 / MATCH` with `reasons[]`
+  reading *"aucun signal dans l'annonce"*: an excluded tenure reaching a notification. Closed by
+  adding the scheme's MARKETING names to the classifier (`loc'avantages`, `loc avantages`,
+  `locavantages`, `louer abordable`, `convention anah`) as tier-2 labels, which beat the tier-5
+  source default — **not** by flipping the flag, which would have turned 13 corpus MATCHes into
+  DIGEST and gutted the LIBRE track Q4 made first-class. Six corpus fixtures pin it.
+- [2026-08-07 18:30] REJECTED, by the corpus: `loyer plafonne` was added alongside those as a doubt
+  and immediately digested `lli-004`, `lli-011` and `regress-030`. **LLI is by definition a capped
+  rent**, so that phrase is the primary target describing itself. Removed, and `lli-012` now pins the
+  reason so it cannot be re-added against a green suite. `plafond de ressources` was rejected up
+  front for the same reason. What survives is `loyer maitrise` and `loyer abordable` — conventionné
+  vocabulary that LLI ads do not use — and both withhold rather than reject.
+- [2026-08-07 18:30] AGREED (Q11 mitigation had no teeth): `config/criteria.local.json` was
+  documented as gitignored in **four** places and was not ignored by anything. `git check-ignore`
+  confirmed it. `/config/*.local.json` added — the whole privacy argument for accepting a public repo
+  rested on a rule nobody had written.
+- [2026-08-07 18:30] AGREED (comment convention, corrected): "any key beginning with `_` is ignored"
+  was unbounded — renaming `mixed_tenure` to `_mixed_tenure` would have silently disarmed §1. The
+  rule is now: a free-standing note must be one of `_comment`, `_why`, `_source`, `_verified_at`, and
+  a `_x` note is accepted **only while `x` is present in the same object**. The same edit now
+  produces two loud errors instead of silence, and per-key notes — the ones actually read — survive.
+- [2026-08-07 18:30] AGREED (F3 rationale verified, not assumed): a reviewer checked all ten communes
+  against `geo.api.gouv.fr`. Nine matched the claim; the tenth exposed that the prototype's bare
+  `cormeilles` names **no commune in 78 or 95** — it is Cormeilles-en-Parisis (95240), and bare
+  `cormeilles` would either match nothing under exact comparison or also match
+  Montigny-lès-Cormeilles under substring. `config/criteria.json` ships the full name, and matching
+  is exact on the folded commune field.
+- [2026-08-07 18:30] AGREED (the tripwire had two JSON-shaped blind spots, both created by Q22):
+  pattern 6 fired on the `"_comment"` note every mixed-tenure source is now required to carry — the
+  exact sentence its own header quotes as the thing it must stay silent on. And pattern 5 stayed
+  **silent** on `"tenure_classifier": false`, because a JSON key carries a closing quote between the
+  name and the colon. Both fixed, with a must-fire and a must-stay-silent case for each.
+- [2026-08-07 18:30] AGREED (Q23 partially overturned): `MIN_SPAN_FOR_NEVER_PRODUCED` raised from
+  1 day to 7. Q23 had written down that a day false-accuses a legitimately quiet source and kept the
+  day anyway; a reviewer demonstrated the flip at exactly the 24-hour mark on a source doing nothing
+  wrong. The trade is stated: a broken field map on a brand-new source now goes unremarked for a
+  week, which is acceptable only because `EMPTY_RUNS_BEFORE_BROKEN` still catches the far commoner
+  shape — a source that used to work and stopped — in three runs.
+- [2026-08-07 18:30] AGREED (schema keys restored): `base_url`, `params` and `body` were dropped in
+  the YAML→JSON translation of the source schema. Under the new "unknown keys are a hard error" rule
+  that left every source publishing relative hrefs with no documented key **and** a documented hard
+  failure. Restored, with `item_selector` added for `type: html`.
+

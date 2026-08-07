@@ -100,7 +100,7 @@ final class TenureClassifierTest extends TestCase
     /**
      * A source declared without saying whether it mixes stock must behave as though it does.
      *
-     * This is the config-omission case: someone adds a landlord to `config/sources.yaml`, forgets
+     * This is the config-omission case: someone adds a landlord to `config/sources.json`, forgets
      * the flag, and the §1 protection must engage anyway.
      */
     public function testAnUndeclaredSourceFailsClosed(): void

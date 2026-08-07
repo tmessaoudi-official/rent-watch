@@ -441,6 +441,7 @@ final class TenureCorpusTest extends TestCase
     public function testEveryCoreValueObjectIsImmutable(): void
     {
         $mutable = [];
+        $exempt = [];
 
         // RECURSIVE. `glob('*.php')` does not cross a directory separator, and this method's own
         // docblock claimed it closed the class "including for classes not yet written" — while
@@ -478,6 +479,14 @@ final class TenureCorpusTest extends TestCase
                 continue;                          // a static-only utility (`Text`) holds nothing
             }
 
+            if (is_a($class, \RentWatch\Core\MutableByDesign::class, true)) {
+                // Declared at the class, not listed here — see that interface's docblock for why an
+                // exemption living inside this test would rot. Every implementor is still pinned by
+                // the assertion below, so adding one is a visible change to this file.
+                $exempt[] = $reflection->getShortName();
+                continue;
+            }
+
             if (!$reflection->isReadOnly()) {
                 $mutable[] = $reflection->getShortName();
             }
@@ -488,6 +497,14 @@ final class TenureCorpusTest extends TestCase
             $mutable,
             'these core classes are not readonly, so a caller can rewrite a verdict after the fact: '
             . implode(', ', $mutable),
+        );
+
+        sort($exempt);
+        self::assertSame(
+            ['Reader'],
+            $exempt,
+            'the MutableByDesign set changed. Every entry must be a non-value-object whose mutation '
+            . 'IS its mechanism and which is never handed to a caller as a result — argue it here',
         );
     }
 

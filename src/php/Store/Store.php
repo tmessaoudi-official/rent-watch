@@ -86,8 +86,22 @@ final readonly class Store
      * Without it, three successful empty polls at a 15-minute interval told a source onboarded
      * forty-five minutes ago that its field map was probably wrong. In'li LLI stock in one commune
      * is legitimately empty for days.
+     *
+     * RAISED FROM ONE DAY TO SEVEN on 2026-08-07, after a review demonstrated the one-day value
+     * false-accusing a source doing nothing wrong: a new source answering HTTP 200 with zero items,
+     * polled every 15 minutes, flipped to `NEVER_PRODUCED` at the 24-hour mark and stayed there. The
+     * question that adopted one day (`docs/OPEN-QUESTIONS.md` Q23) had already written down that
+     * *"In'li LLI stock in one commune is legitimately empty for days, so the honest floor could be
+     * a week"* — and then kept the day anyway. Seven days now matches {@see ROLLING_WINDOW_DAYS},
+     * which is the same judgement about how long this market takes to say anything.
+     *
+     * The trade is stated rather than hidden: a genuinely broken field map on a new source now goes
+     * unremarked for a week. That is acceptable only because it is not the ONLY detector — a source
+     * that used to produce items and stops is caught in three runs by {@see EMPTY_RUNS_BEFORE_BROKEN},
+     * which is the far commoner shape. This one covers the source that never worked at all, where a
+     * week of patience costs nothing and a false accusation costs the alert's credibility.
      */
-    public const int MIN_SPAN_FOR_NEVER_PRODUCED = 86400;
+    public const int MIN_SPAN_FOR_NEVER_PRODUCED = 604800;
 
     private function __construct(private \PDO $pdo, private string $journalModeInUse) {}
 

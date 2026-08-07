@@ -274,13 +274,26 @@ Requirements:
 Required CLI:
 
 ```
-scout doctor                  # health-check every source
+scout doctor                  # health-check every source; prints status, timing, item counts,
+                              #   the store's journal mode and the resolved digest schedule
 scout dump <source>           # raw payload of first item — for building field maps
 scout run --once [-v]         # single pass
-scout run --watch             # loop with jitter
+scout run --watch             # loop with jitter (15 min ± 5, paced per host — Q37)
+scout run --seed              # populate the seen-set without notifying (fresh database — Q36)
+scout digest                  # emit the "à vérifier" digest on demand — added 2026-08-07 (1c)
+scout reclassify [--since]    # re-run the classifier over stored listings — added 2026-08-07 (Q35)
 scout test-notify             # verify the notification channel
 scout replay <fixture>        # re-run parsing against a saved fixture
 ```
+
+**Amended 2026-08-07.** `digest`, `reclassify` and `run --seed` were added by the rulings of that
+date and each closes a silent-miss hole: without `digest` the fail-closed rule's only landing zone is
+emptied once a day at best; without `reclassify` a listing digested under an old classifier is a
+permanent miss, because the seen-set guarantees it is new exactly once; without `--seed` a database
+created by a missing volume mount re-notifies the entire market at once.
+
+`--i-accept-legal-risk` is a global flag, never persisted in config, and is required before any
+source carrying `legal_risk: true` will run (Q26, `CLAUDE.md` hard rule 4).
 
 `scout dump` is what makes onboarding a new source take five minutes instead of an hour.
 Build it early.

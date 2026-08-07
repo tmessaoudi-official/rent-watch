@@ -150,7 +150,7 @@ sidestep that reasoning.**
 **read** it, in two places:
 
 - **`type: html` source adapters.** Not every landlord exposes JSON; the fallback is CSS selectors over
-  server-rendered HTML. `config/sources.yaml` is designed around
+  server-rendered HTML. `config/sources.json` is designed around
   `item_selector: "article.annonce-card"` + `select: {title: "h3.card-title", url: "a.card-link@href"}`.
 - **Portal alert emails.** Even with item ①, each alert body **is** an HTML document that must be parsed
   into listings. So this blocks Track 2 too — item ① delivers the emails and this reads them.
@@ -168,7 +168,7 @@ for (Node card in cards) {
 1. **Lenient parsing.** Real listing pages and marketing emails are full of unclosed tags. A strict XML
    parser is unusable. (phorj's tree already references a planned **W4-10 HTML5 parser** — that is this.)
 2. **Selectors: tag, `.class`, `#id`, descendant, attribute presence.** Covers every shape
-   `config/sources.yaml` needs. Full CSS4 not required.
+   `config/sources.json` needs. Full CSS4 not required.
 3. **Scoped queries** — select within a `Node`, not only from the document root.
 4. **`string?` for a missing attribute**, never `""`. rent-watch's hard rule 9: absent ≠ empty, and an
    empty string that should have been `null` becomes a silent wrong filter decision.
@@ -220,12 +220,16 @@ fixed-and-wrong timeout makes a `--watch` loop unreliable.
 **Q3 — Cookies / session reuse?** `Http.Cookie` exists on the server side. The client side matters for
 **AL'in** only (A4), which likely needs an authenticated session. Not a blocker — AL'in can be last.
 
-**Q4 — Config format.** rent-watch's design has `config/criteria.yaml` + `config/sources.yaml`. There is
-no `Core.Yaml`. Three ways, and my preference is first:
-1. **Use `Core.Config`** if it handles a nested tree — config format is *our* detail, not a reason to grow
-   the language.
-2. **JSON**, since `Core.Json` is already default. Zero new surface; less pleasant to hand-edit, no comments.
-3. Add `Core.Yaml` — YAML is a famously large spec; not worth it for one consumer.
+**Q4 — Config format. ANSWERED 2026-08-07 on our side — nothing is asked of you.** rent-watch's
+config is `config/criteria.json` + `config/sources.json`, plain JSON. `Core.Json` is already a
+default feature, so the phorj port reads the same files the PHP one does with no new module, and the
+shared-file property that makes the two implementations comparable is preserved.
+
+**This removes a request that was in an earlier version of this document**: it listed *"add
+`Core.Yaml`"* as one of three options. Do not build it for us — YAML is a famously large spec and we
+have no consumer for it. The deciding factor was not preference: this container has no `ext-yaml` and
+cannot install a parser, and a hand-rolled YAML subset would have been the thing parsing
+`mixed_tenure`, the boolean that arms our one non-negotiable guarantee.
 
 ---
 
