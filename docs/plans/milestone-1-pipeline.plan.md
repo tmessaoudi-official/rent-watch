@@ -12,7 +12,7 @@ failures are silent, and they are cheapest to get right before anything depends 
 | `SourceHealth` / `SourceStatus` | **done**, `src/php/Core/` |
 | `Redact` — masks credentials in adapter error text | **done**, `src/php/Core/Redact.php` |
 | Cross-portal dedup (spec §7: price history per *logical* listing) | **not started** — the store keys per source; clustering the same flat across two portals is a separate problem with a separate failure profile |
-| Tenure verdict persistence, `doctor` timing | **deferred to schema v2** — Q24, Q25 |
+| Tenure verdict persistence, `doctor` timing | **deferred to schema v3** — Q24, Q25. v2 is spent: it carries `listings.seen_epoch` |
 | Config loading (`config/criteria.yaml`, `config/sources.yaml`) | **blocked** — see the open decision below |
 | `Source` adapter contract + first adapter | not started |
 | `criteria` (score + hard disqualifiers) | not started |
@@ -164,3 +164,50 @@ consecutive clean rounds are required rather than one.
 - [2026-08-07 20:40] AGREED: WAL and a 5-second busy timeout. `--watch` alongside a manual
   `scout doctor` is the spec's own target usage, and the default journal mode failed instantly with
   "database is locked" instead of waiting.
+
+### Round 11 — 35 findings, four P0, and a process failure that was mine
+
+**The process failure first, because it invalidates the round's score.** The tree was NOT frozen
+while the panel ran: I was editing `Store.php` as the reviewers read it. One reviewer caught this,
+discarded its first pass and re-ran everything in a pinned worktree. `CLAUDE.md` § "Certification
+ladder" already says *"freeze first, because a round run on a moving tree cannot count toward the
+two-clean requirement"* — I ran the panel and then kept working. Every subsequent round is frozen
+at a commit before the panel is spawned.
+
+- [2026-08-07 23:30] AGREED: **which run is "the last one" cannot be answered without a clock, and
+  that is what `$nowIso` is for.** By TIMESTAMP, one forward-skewed row sorts last forever and hides
+  every later run — permanently. By INSERTION, a run committed late but stamped earlier wins, so one
+  success logged after three failures erased a `BROKEN` verdict — `--watch` alongside a manual
+  `doctor` makes two writers routine, so this is designed behaviour, not an edge case. With a clock,
+  a row stamped after `now` is provably wrong and is dropped, and the greatest remaining timestamp is
+  genuinely the most recent. Without one we fall back to insertion order, because its failure lasts
+  one run and the other's lasts forever. `CLAUDE.md` now records that the CLI MUST pass `$nowIso`.
+- [2026-08-07 23:30] AGREED: the changes-only history and the price delta have **two different
+  baselines**, and collapsing them has now caused a defect in each direction. The delta is measured
+  against what we currently believe; the history against the chronological neighbour. Using the
+  chronological one for both swallowed a real drop (round 10); using the stored one for both put a
+  duplicate 900 into a history that cannot be cleaned up (round 11).
+- [2026-08-07 23:30] AGREED: a database whose `schema_meta` exists but carries no version row is
+  UPGRADED, not stamped. That is the state a crash between the DDL and the version INSERT leaves —
+  two separate autocommit statements — and stamping it current meant the first sighting threw a raw
+  `no such column`. Verbatim the failure `SCHEMA_VERSION` exists to prevent.
+- [2026-08-07 23:30] AGREED: an undateable `last_seen_at` is treated as epoch 0 rather than refusing
+  to open the database. One hand-edited or merged row otherwise bricks the store permanently, with
+  no repair path, on the data set that cannot be rebuilt.
+- [2026-08-07 23:30] AGREED: `''` is missing, not present. `COALESCE(:url, url)` only guards `null`,
+  so a DOM attribute miss erased the link — and the stale-fill branch could not repair it because it
+  treated `''` as present too.
+- [2026-08-07 23:30] AGREED: `Redact` names carry affixes. `_` is a word character, so
+  `\bpassword\b` cannot match inside `IMAP_PASSWORD` — **five of the six credentials in the
+  `.env.example` this project committed defeated the masker**, while the class docblock claimed the
+  IDFM key was covered. Also: single-quoted values matched nothing at all (`var_export()` emits
+  exactly that shape), the bare-Telegram-token pattern was dead because the `bot` prefix exists only
+  in the API path, unpadded SASL base64 had no pattern, and the verb pattern ate `PASS command
+  issued in wrong state`, `Pass Navigo` and `pass 2 sur 3` because "contains a non-letter" counts an
+  accent. It is now case-sensitive and requires a digit or a symbol.
+- [2026-08-07 23:30] AGREED: `journal_mode` is read back rather than assumed — it is a QUERY pragma
+  and SQLite does not raise when it refuses, so a network mount silently stays in rollback mode.
+  `Store::journalMode()` exposes what actually took effect, and `scout doctor` prints it.
+- [2026-08-07 23:30] AGREED: the WAL sidecars (`*-wal`, `*-shm`) are gitignored for `.sqlite` and
+  `.sqlite3`, not only `.db`. They exist between a write and a clean close — i.e. after a crash or a
+  reclaimed container, which is exactly when someone runs `git add .` to salvage work.

@@ -341,14 +341,24 @@ closing them needed thresholds the spec does not supply:
 |---|---|---|
 | `Store::FLAKY_FAILURE_RATIO` | `0.3` | more than 30% of runs failing in the 7-day window ⇒ `WARN_FLAKY` |
 | `Store::MIN_RUNS_FOR_FLAKY` | `3` | below this many runs in the window, a failure *rate* means nothing |
+| `Store::MIN_SPAN_FOR_NEVER_PRODUCED` | `86400` (1 day) | how long a source must have been trying before "never produced an item" is read as a broken field map |
+| STALE's silence bound | `ROLLING_WINDOW_DAYS` (7 days) | no run in this long ⇒ the schedule itself has stopped |
+| `Store::BUSY_TIMEOUT_MS` | `5000` | how long a second writer waits before giving up |
 
-The shape being caught: a source erroring on half its fetches missed half the market every day and
-was indistinguishable from a healthy one, because the streak counter resets on any success and the
-BROKEN rule reads only the last run.
+The shapes being caught, all four the same class — a source that is not working and does not fail:
+one erroring on half its fetches (the streak counter resets on any success, and the BROKEN rule
+reads only the last run); one that answers HTTP 200 and parses zero items forever; one whose
+schedule stopped; and two processes contending for the database instead of waiting.
 
-**Options:** 1. leave both as they are *(recommended — they can only be tuned against run history
-that does not exist yet)*; 2. raise the ratio if `scout doctor` turns out noisy on a flaky host;
-3. drop `WARN_FLAKY` entirely and rely on the daily digest; 4. none of these / challenge the premise.
+None of the five numbers is derived. `MIN_SPAN_FOR_NEVER_PRODUCED` in particular is justified by an
+anecdote — three empty polls at a fifteen-minute interval was accusing a source of a bad field map
+forty-five minutes after onboarding — and In'li LLI stock in one commune is legitimately empty for
+days, so the honest floor could be a week rather than a day.
+
+**Options:** 1. leave them as they are *(recommended — they can only be tuned against run history
+that does not exist yet)*; 2. raise `MIN_SPAN_FOR_NEVER_PRODUCED` to a week, which trades a slower
+bad-field-map alert for no false accusation of a genuinely quiet source; 3. raise the flaky ratio if
+`scout doctor` turns out noisy on a flaky host; 4. none of these / challenge the premise.
 
 **Default if unanswered:** option 1.
 
@@ -362,11 +372,12 @@ table keeps none of it — a listing stored under an old classifier cannot be re
 without re-fetching it, and the source may have removed the ad by then.
 
 Not done now because it is a schema change and the criteria layer that would consume it does not
-exist. It is recorded here rather than in a code comment because adding columns later means writing
-the migration path `Store::migrate()` deliberately does not have yet.
+exist. **Amended 2026-08-07:** `Store::migrate()` now HAS an upgrade path (`upgradeFrom()`), and
+schema **v2 is already spent** — it was consumed by `listings.seen_epoch`. So this is a v3, and the
+mechanism to carry it exists and is tested; only the decision is outstanding.
 
 **Options:** 1. add `tenure`, `confidence` and `signals_json` at the same time as the criteria layer,
-in one schema v2 with its migration *(recommended)*; 2. add them now, ahead of a consumer; 3. accept
+in one schema v3 with its migration *(recommended)*; 2. add them now, ahead of a consumer; 3. accept
 that verdicts are not auditable and drop the reviewer-agent clause; 4. none of these.
 
 **Default if unanswered:** option 1.
@@ -380,7 +391,7 @@ counts."* Status and item counts are implemented; `source_runs` has no duration 
 Deferred rather than guessed at because only the CLI can measure a fetch, and the CLI does not exist.
 Like Q24 it is a schema change, so the two should probably land together.
 
-**Options:** 1. add `duration_ms` in the same schema v2 as Q24, when the CLI lands *(recommended)*;
+**Options:** 1. add `duration_ms` in the same schema v3 as Q24, when the CLI lands *(recommended)*;
 2. add it now; 3. drop timing from `doctor`, amending spec §8; 4. none of these.
 
 **Default if unanswered:** option 1.

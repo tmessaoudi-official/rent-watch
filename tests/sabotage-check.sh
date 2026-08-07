@@ -418,7 +418,7 @@ run_sabotage "last known rent erased when a source stops publishing it" \
 
 run_sabotage "price history records unchanged rents (no longer changes-only)" \
   src/php/Store/Store.php \
-  's%$rentCc !== null && $rentCc !== $previousRentCc%$rentCc !== null%'
+  's%$rentCc !== null && $rentCc !== $chronoBefore%$rentCc !== null%'
 
 run_sabotage "seen-set stops persisting (every run re-notifies everything)" \
   src/php/Store/Store.php \
@@ -518,7 +518,7 @@ run_sabotage "a stale sighting overwrites the current state" \
 
 run_sabotage "a partial re-parse erases the stored URL" \
   src/php/Store/Store.php \
-  's%url          = COALESCE(:url, url),%url          = :url,%'
+  's%url          = COALESCE(NULLIF(:url, ....), url),%url          = :url,%'
 
 run_sabotage "a partial re-parse erases the stored title" \
   src/php/Store/Store.php \
@@ -586,7 +586,7 @@ run_sabotage "the upgrade forgets to re-stamp the version (every open re-migrate
 
 run_sabotage "seen_epoch backfilled to zero (every stored listing reads as older than anything)" \
   src/php/Store/Store.php \
-  "s%'epoch' => self::epoch((string) \$row\['last_seen_at'\]),%'epoch' => 0,%"
+  's%$epoch = self::epoch((string) $row\[.last_seen_at.\]);%$epoch = 0;%'
 
 run_sabotage "baseline falls back to the last SUCCESSFUL run again (one quiet day zeroes it)" \
   src/php/Store/Store.php \
@@ -610,11 +610,11 @@ run_sabotage "the rent comparison reads the changes-only history again (a real d
 
 run_sabotage "a stale sighting can no longer fill a missing URL" \
   src/php/Store/Store.php \
-  's%url     = COALESCE(url, :url),%url     = url,%'
+  's%SET url     = COALESCE(NULLIF(url, ....), NULLIF(:url, ....), url),%SET url     = url,%'
 
 run_sabotage "a stale sighting overwrites the URL instead of filling it" \
   src/php/Store/Store.php \
-  's%url     = COALESCE(url, :url),%url     = COALESCE(:url, url),%'
+  's%SET url     = COALESCE(NULLIF(url, ....), NULLIF(:url, ....), url),%SET url     = :url,%'
 
 run_sabotage "the rollback is unguarded again (disk-full reports 'no active transaction')" \
   src/php/Store/Store.php \
@@ -630,11 +630,11 @@ run_sabotage "NEVER_PRODUCED loses its time floor (a source is accused 45 minute
 
 run_sabotage "millisecond timestamps refused again (what every JSON API emits)" \
   src/php/Store/Store.php \
-  's%.Y-m-d.TH:i:s.vP., %%'
+  's%str_pad($m\[1\], 6, .0.)%$m[1]%'
 
 run_sabotage "IMAP LOGIN / POP3 PASS credentials pass through unmasked" \
   src/php/Core/Redact.php \
-  's%(LOGIN|AUTHENTICATE|PASS)%(zzz-no-such-verb)%'
+  's%(LOGIN|PASS)%(zzz-no-such-verb)%'
 
 run_sabotage "the Telegram bot token in a URL path passes through" \
   src/php/Core/Redact.php \
@@ -659,6 +659,82 @@ run_sabotage "a URL value is masked as if it were a secret (the failing endpoint
 run_sabotage "ambiguous names accept ':' again ('Erreur auth: <url>' eats the url)" \
   src/php/Core/Redact.php \
   "s%'signature', 'token',%'signature', 'token', 'auth', 'key',%"
+
+
+# ── The store, round four ─────────────────────────────────────────────────────────────────────────
+#
+# Round 11's panel returned 35 findings against round 10's fixes, four P0 — and one of them, again,
+# was a repair that made things worse (the monotonic run log). It also caught something process-level
+# that no sabotage can: the tree was NOT frozen while the panel ran, so three findings were being
+# repaired concurrently and the round could not be scored. Freeze first.
+
+run_sabotage "the changes-only guard reads the delta baseline again (duplicate rents)" \
+  src/php/Store/Store.php \
+  's%$rentCc !== $chronoBefore%$rentCc !== $previousRentCc%'
+
+run_sabotage "recency ignores the clock (a late-committed run erases BROKEN)" \
+  src/php/Store/Store.php \
+  's%if ($nowIso !== null) {%if (false) {%'
+
+run_sabotage "a future-stamped run is trusted even when a clock is available" \
+  src/php/Store/Store.php \
+  's%(int) $run\[.at_epoch.\] <= $now%true%'
+
+run_sabotage "credible runs are not re-sorted by time (insertion order wins again)" \
+  src/php/Store/Store.php \
+  's%usort($credible, static fn (array $a, array $b): int%$noop = (static fn (array $a, array $b): int%'
+
+run_sabotage "an unstamped legacy database is stamped current instead of upgraded" \
+  src/php/Store/Store.php \
+  's%$recorded = 1;%return;%'
+
+run_sabotage "an undateable row brings the whole upgrade down again" \
+  src/php/Store/Store.php \
+  's%} catch (\\InvalidArgumentException) {%} catch (\\RangeException) {%'
+
+run_sabotage "an empty-string URL is written over a known one" \
+  src/php/Store/Store.php \
+  's%url          = COALESCE(NULLIF(:url, ....), url),%url          = COALESCE(:url, url),%'
+
+run_sabotage "WAL is never requested (two processes contend instead of sharing)" \
+  src/php/Store/Store.php \
+  "s%PRAGMA journal_mode = WAL%PRAGMA journal_mode = delete%"
+
+run_sabotage "the busy timeout is dropped (a second writer fails instantly)" \
+  src/php/Store/Store.php \
+  "s%PRAGMA busy_timeout = %PRAGMA cache_size = %"
+
+run_sabotage "fractional seconds narrow again (a Go feed's .1Z is refused)" \
+  src/php/Store/Store.php \
+  's%str_pad($m\[1\], 6, .0.)%$m[1]%'
+
+run_sabotage "secret names stop matching inside an env-var (IMAP_PASSWORD leaks)" \
+  src/php/Core/Redact.php \
+  "s%\$affix = .\[A-Za-z0-9_..-\]\*.;%\$affix = 'zzz-no-such-affix';%"
+
+run_sabotage "a single-quoted secret value stops being masked" \
+  src/php/Core/Redact.php \
+  "s%\$quoted = .*;%\$quoted = '\"[^\"]*\"';%"
+
+run_sabotage "the mask can be re-masked (orphan brackets accumulate)" \
+  src/php/Core/Redact.php \
+  "s%(?!' . preg_quote(self::MASK, '~') . ')%%"
+
+run_sabotage "the bare Telegram token pattern is removed" \
+  src/php/Core/Redact.php \
+  's%\\b.d{8,12}:\[A-Za-z0-9_\\-\]{30,}%zzz-no-such-token%'
+
+run_sabotage "SASL AUTH PLAIN base64 passes through" \
+  src/php/Core/Redact.php \
+  's%(AUTH|AUTHENTICATE)%(zzz-no-such-verb)%'
+
+run_sabotage "the padded-base64 blob pattern is removed" \
+  src/php/Core/Redact.php \
+  's%\\b\[A-Za-z0-9+/\]{24,}={1,2}%zzz-no-such-blob%'
+
+run_sabotage "the credential verb pattern goes case-insensitive (French prose is eaten)" \
+  src/php/Core/Redact.php \
+  's%|.S+))?)~u.%|\\S+))?)~ui\x27%'
 
 printf '\n  %d sabotage(s) detected, %d undetected\n\n' "$pass" "$fail"
 

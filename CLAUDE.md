@@ -383,20 +383,28 @@ Required coverage, per spec §11 — non-negotiable once `src/` exists:
   25 defects in its first cut — so its contract is written down rather than left to judgement. Every
   test must exist in a named category: **identity** (nothing collapses onto a shared key: blank and
   Unicode-whitespace ids, the no-information floor, URL and title normalisation, source scoping);
-  **order** (a stale sighting manufactures no price drop and does not overwrite current state; the
-  run log refuses an out-of-order write); **time** (a trailing `Z` is UTC on any host timezone, a
-  non-existent date is refused, the DST gap is an instant); **health** (every `SourceStatus` member
-  reachable and asserted, every `SourceHealth` field asserted — five of them were replaceable with
-  constants while the suite stayed green); **persistence** (the seen-set and price history survive
-  reopening, and every schema-version mismatch is refused); **secrets** (`Redact` masks before
-  anything is persisted or shown). A new store behaviour without a category is a behaviour nobody
-  decided to guarantee.
+  **order** (a stale sighting manufactures no price drop, does not overwrite current state, and does
+  not corrupt the changes-only history; every run is logged whatever its timestamp says); **time**
+  (a trailing `Z` is UTC on any host timezone, fractional seconds of any width parse, a non-existent
+  date is refused, the DST gap is an instant); **health** (every `SourceStatus` member reachable and
+  asserted, every `SourceHealth` field asserted — five of them were once replaceable with constants
+  while the suite stayed green); **persistence** (the seen-set and price history survive reopening;
+  an older schema is upgraded and a newer one refused); **concurrency** (WAL and the busy timeout
+  take effect — two processes are designed behaviour here, not an edge case); **secrets** (`Redact`
+  masks before anything is persisted or shown, and does not eat the diagnostic). A new store
+  behaviour without a category is a behaviour nobody decided to guarantee.
+
+  **`scout doctor` and the run loop MUST pass `$nowIso` to `Store::health()`.** Without it the store
+  has no clock, and two verdicts become underivable: `STALE` never fires at all, and a run stamped
+  in the future cannot be disqualified — so recency falls back to insertion order, where a run
+  committed late but stamped early can erase a `BROKEN`. Both failures are silent.
 
 ## File layout quick reference
 
 ```
 .env.example                Committed template for every secret and path. `.env` itself is gitignored
 spec/PROJECT_BRIEF.md       Full specification — the source of truth, and a ruling set
+state/                      The SQLite seen-set, price history and run log. Gitignored, NOT scratch
 prototype/                  Pre-existing single-file prototype. Reference only; do not extend in place
 docs/OPEN-QUESTIONS.md      Decisions still pending, with the default if unanswered
 docs/plans/                 <topic>.plan.md, each with its own ## Decisions Log

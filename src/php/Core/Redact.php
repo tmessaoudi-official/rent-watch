@@ -45,7 +45,7 @@ final readonly class Redact
      * and accepting `key:` ate a word out of a YAML error — the reverse failure, where the breakage
      * report survives but is undiagnosable, which is how a masker gets deleted.
      */
-    private const array AMBIGUOUS_NAMES = ['auth', 'key', 'session', 'sig'];
+    private const array AMBIGUOUS_NAMES = ['auth', 'key', 'session', 'sig', 'topic'];
 
     public static function text(?string $message): ?string
     {
@@ -56,9 +56,35 @@ final readonly class Redact
         $names = implode('|', array_map(preg_quote(...), self::SECRET_NAMES));
         $ambiguous = implode('|', array_map(preg_quote(...), self::AMBIGUOUS_NAMES));
 
+        // A name may carry an affix, because `_` is a word character and `\bpassword\b` therefore
+        // does NOT match inside `IMAP_PASSWORD`. Every credential variable in `.env.example`
+        // defeated the masker on exactly that: `IMAP_PASSWORD=`, `SMTP_PASSWORD=`,
+        // `TELEGRAM_BOT_TOKEN=`, `IDFM_API_KEY=` and `NTFY_TOPIC=` all went through untouched,
+        // while the docblock claimed the IDFM key was covered.
+        $affix = '[A-Za-z0-9_.\-]*';
+
         // A value that is itself a URL is never the secret — the secret is INSIDE it, and the
         // query-parameter branch reaches that on its own pass.
-        $value = '(?!https?://)(?:Bearer\s+|Basic\s+)?[^\s&"\'\)\],;]+';
+        //
+        // The quoted alternatives are not decoration: the unquoted class excludes `'`, so
+        // `password='hunter2'` matched nothing at all and was passed through in full. `var_export()`
+        // emits exactly that shape, and it is the likeliest way a config array reaches an exception
+        // message in this language. Quoting also lets a passphrase CONTAINING SPACES be masked
+        // whole, which the unquoted form cannot: there, only the first word goes, because nothing
+        // marks where an unquoted value ends. That residue is a known floor, not an oversight.
+        $quoted = '"[^"\n]{0,400}"|\'[^\'\n]{0,400}\'';
+        // The negative lookahead stops a later pattern from masking an EARLIER pattern's output:
+        // `IDFM_API_KEY=<secret>` was matched by the `api_key` rule and then again by the `key`
+        // rule, which consumed `[masqué` and left a stray `]` behind.
+        $value = '(?!https?://)(?!' . preg_quote(self::MASK, '~') . ')'
+            . '(?:Bearer\s+|Basic\s+)?(?:' . $quoted . '|[^\s&"\'\)\],;]+)';
+
+        // `name` `=>` `value` is PHP's own array syntax, and `var_export()` on a config array is the
+        // likeliest way a credential reaches an exception message in this language.
+        // NO trailing quote here: it would consume the opening quote of the value and stop the
+        // quoted alternative below from matching, which is how a quoted passphrase kept leaking all
+        // but its first word.
+        $delimiter = '["\']?\s*(?:=>|[:=])\s*';
 
         $patterns = [
             // URL userinfo: https://user:hunter2@host/… The `?` exclusions stop a query-borne `@`
@@ -70,20 +96,34 @@ final readonly class Redact
             // through untouched: every Telegram API error carries the full bot token, and
             // docs/OPEN-QUESTIONS.md calls the ntfy topic a secret in as many words.
             '~(api\.telegram\.org/bot)[^/\s]+~i' => '$1' . self::MASK,
-            '~\b(bot\d{6,}:)[A-Za-z0-9_\-]{10,}~' => '$1' . self::MASK,
+            // A Telegram token is `<bot_id>:<hash>`; the literal `bot` prefix exists ONLY in the
+            // API path above, so a pattern anchored on `bot\d+:` was dead for a token in a POST
+            // body or a bare error string. The digit:hash shape is specific enough on its own.
+            '~\b\d{8,12}:[A-Za-z0-9_\-]{30,}~' => self::MASK,
             '~(ntfy\.[A-Za-z0-9.\-]+/)[^/\s?]+~i' => '$1' . self::MASK,
-            // IMAP `A01 LOGIN <user> <pass>` and POP3 `PASS <pass>` — space-separated, no
-            // delimiter at all, and on the primary ingestion path. The mailbox was masked and the
-            // password beside it was not.
+            // SASL: `AUTH PLAIN <base64>` decodes to \0user\0password. The mechanism name is kept
+            // because WHICH mechanism the server rejected is the entire diagnostic.
+            '~\b(AUTH|AUTHENTICATE)\s+([A-Za-z0-9\-]{3,20})\s+[A-Za-z0-9+/=]{12,}~' => '$1 $2 ' . self::MASK,
+            // A padded base64 blob standing alone. The `=` padding is what makes this narrow enough
+            // to use: ordinary prose does not produce it.
+            '~\b[A-Za-z0-9+/]{24,}={1,2}~' => self::MASK,
+            // IMAP `A01 LOGIN <user> <pass>` and POP3 `PASS <pass>` — space-separated, no delimiter
+            // at all, and on the primary ingestion path.
             //
-            // The lookahead is not decoration: `imap_open(): Login failed for user=…` is the
-            // commonest message this pattern will ever meet, and without it the mask ate the words
-            // that say what went wrong.
-            '~\b(LOGIN|AUTHENTICATE|PASS)\s+(?!failed\b|error\b|incorrect\b|refused\b|denied\b)\S+(\s+\S+)?~i'
+            // CASE-SENSITIVE, and the argument must be quoted or contain a non-letter. Both rules
+            // are load-bearing, and an earlier five-word negative lookahead was not enough: the
+            // pattern ate `PASS command issued in wrong state` (RFC 1939), `LOGIN please use the
+            // referral server` (RFC 2221), *"un formulaire de login au lieu des annonces"*, *"does
+            // not pass validation"*, and `Pass Navigo` — the literal name of the Paris transit card,
+            // in the IDFM enrichment domain this project has. A credential contains a digit or a
+            // symbol; an English or French word does not.
+            '~\b(LOGIN|PASS)\s+((?:' . $quoted . '|\S*[\d@:!#$%^&*+=/\\\\|?]\S*)(?:\s+(?:' . $quoted . '|\S+))?)~u'
                 => '$1 ' . self::MASK,
             // key=…, token: …, "client_secret": "…", Authorization: Bearer …
-            '~\b(' . $names . ')\b"?\s*[:=]\s*"?' . $value . '~i' => '$1=' . self::MASK,
-            '~\b(' . $ambiguous . ')\b"?\s*=\s*"?' . $value . '~i' => '$1=' . self::MASK,
+            '~\b(' . $affix . '(?:' . $names . ')' . $affix . ')\b' . $delimiter . $value . '~i'
+                => '$1=' . self::MASK,
+            '~\b(' . $affix . '(?:' . $ambiguous . ')' . $affix . ')\b["\']?\s*(?:=>|=)\s*' . $value . '~i'
+                => '$1=' . self::MASK,
             // The RFR income figure. `CLAUDE.md` hard rule 7 names it in the same breath as the
             // IMAP password, and the eligibility comparison of Q6 is exactly the code that would
             // put it in an exception message. It had no pattern at all.

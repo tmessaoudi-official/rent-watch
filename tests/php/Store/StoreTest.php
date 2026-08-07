@@ -487,6 +487,57 @@ final class StoreTest extends TestCase
         self::assertSame('2026-08-07T09:00:00+00:00', $snapshot->firstSeenAt);
     }
 
+    /**
+     * The changes-only invariant holds when the delta's baseline and the chronological one differ.
+     *
+     * They differ exactly when a sighting arrives out of order, which the email path makes routine.
+     * The append guard was reading the DELTA's baseline — the stored current rent — so the final
+     * 900 compared against 1000 and appended a second 900 the history already held. `price_history`
+     * is one of the data sets that cannot be rebuilt, so a phantom change in it is permanent.
+     */
+    public function testPriceHistoryStaysChangesOnlyWhenTheTwoBaselinesDiverge(): void
+    {
+        $listing = $this->listing(externalId: 'ANN-1');
+
+        $this->store->record($listing, 1000, '2026-08-07T10:00:00+00:00');
+        $this->store->record($listing, 1000, '2026-08-07T12:00:00+00:00');
+        $this->store->record($listing, 900, '2026-08-07T11:00:00+00:00');   // delayed, superseded
+        $this->store->record($listing, 900, '2026-08-07T13:00:00+00:00');
+
+        self::assertSame([1000, 900], $this->store->priceHistory($this->store->dedupKey($listing)));
+    }
+
+    /**
+     * An adapter that returns an EMPTY url must not erase a known one.
+     *
+     * `COALESCE(:url, url)` only protects against `null`. A DOM attribute miss or a trimmed empty
+     * `href` yields `''`, which sailed straight through and overwrote the link — and the stale-fill
+     * branch beside it could not repair it, because that branch treated `''` as present too. The
+     * title clause already used empty-as-missing; the url clause did not.
+     */
+    public function testAnEmptyUrlNeverOverwritesAKnownOne(): void
+    {
+        $good = $this->listing(externalId: 'ANN-1', url: 'https://inli.test/a/1', title: 'T3 Cergy');
+        $blank = $this->listing(externalId: 'ANN-1', url: '', title: '');
+
+        $this->store->record($good, 1000, '2026-08-07T09:00:00+00:00');
+        $this->store->record($blank, 1000, '2026-08-08T09:00:00+00:00');
+
+        self::assertSame('https://inli.test/a/1', $this->store->snapshot($this->store->dedupKey($good))?->url);
+    }
+
+    /** …and a delayed sighting can repair a URL that was lost before the guard existed. */
+    public function testAStaleSightingRepairsAnEmptyUrl(): void
+    {
+        $blank = $this->listing(externalId: 'ANN-1', url: '', title: 'T3 Cergy');
+        $good = $this->listing(externalId: 'ANN-1', url: 'https://inli.test/a/1', title: 'T3 Cergy');
+
+        $this->store->record($blank, 1000, '2026-08-08T09:00:00+00:00');
+        $this->store->record($good, 1000, '2026-08-07T09:00:00+00:00');   // delayed, but richer
+
+        self::assertSame('https://inli.test/a/1', $this->store->snapshot($this->store->dedupKey($blank))?->url);
+    }
+
     /** The changes-only invariant survives an insertion between two equal rents. */
     public function testPriceHistoryStaysChangesOnlyUnderOutOfOrderSightings(): void
     {
@@ -815,15 +866,145 @@ final class StoreTest extends TestCase
         self::assertFalse($pdo->inTransaction());
     }
 
-    /** Running the upgrade twice is not an error — a migration that died half-way must be re-runnable. */
+    /**
+     * Running the upgrade twice is not an error — a migration that died half-way must be re-runnable.
+     *
+     * The first version of this test opened a store already at `SCHEMA_VERSION`, so `migrate()`
+     * returned before `upgradeFrom()` was ever reached and the guard it was named for was free:
+     * forcing `ALTER TABLE ADD COLUMN seen_epoch` to run unconditionally left the suite green.
+     * It now starts from a real v1 database, so the upgrade path is actually entered.
+     */
     public function testTheUpgradeIsIdempotent(): void
     {
         $path = $this->temporaryDatabase();
+        $this->writeVersionOneDatabase($path);
+
         $store = Store::open($path);
         $store->migrate();
         $store->migrate();
 
         self::assertSame(Store::SCHEMA_VERSION, $store->schemaVersion());
+        self::assertNotNull($store->snapshot('inli:id:ANN-1'));
+    }
+
+    /**
+     * A legacy database whose `schema_meta` carries NO version row is upgraded, not stamped.
+     *
+     * That is the state a crash between the DDL and the version INSERT leaves — they are two
+     * separate autocommit statements — and it is indistinguishable from a v1 database. Stamping it
+     * with the current version and returning meant `CREATE TABLE IF NOT EXISTS` skipped the
+     * existing table, `schemaVersion()` answered 2, and the first sighting threw a raw
+     * `no such column`. Verbatim the failure the constant exists to prevent.
+     */
+    public function testALegacyDatabaseWithNoVersionRowIsUpgraded(): void
+    {
+        $path = $this->temporaryDatabase();
+        $this->writeVersionOneDatabase($path, stampVersion: false);
+
+        $store = Store::open($path);
+
+        self::assertSame(Store::SCHEMA_VERSION, $store->schemaVersion());
+        self::assertNotNull($store->snapshot('inli:id:ANN-1'));
+        self::assertFalse($store->record($this->listing(externalId: 'ANN-1'), 940, '2026-08-09T09:00:00+00:00')->isNew);
+    }
+
+    /**
+     * A row whose timestamp cannot be parsed must not brick the database permanently.
+     *
+     * One hand-edited, restored or merged row made `Store::open()` throw forever, with no repair
+     * path, on the one data set that cannot be rebuilt. Treating it as the oldest thing on record
+     * costs one redundant overwrite; refusing to open costs the seen-set.
+     */
+    public function testAnUndateableRowDoesNotBrickTheUpgrade(): void
+    {
+        $path = $this->temporaryDatabase();
+        $this->writeVersionOneDatabase($path, lastSeenAt: '2026-08-07 09:00:00');   // not ISO-8601
+
+        $store = Store::open($path);
+
+        self::assertSame(Store::SCHEMA_VERSION, $store->schemaVersion());
+        self::assertNotNull($store->snapshot('inli:id:ANN-1'));
+    }
+
+    /** `Store::open()` creates a missing parent directory rather than failing. */
+    public function testTheDatabaseDirectoryIsCreatedWhenAbsent(): void
+    {
+        $base = $this->temporaryDatabase();
+        unlink($base);
+        $nested = $base . '.d/state/rent-watch.sqlite3';
+
+        $store = Store::open($nested);
+
+        self::assertSame(Store::SCHEMA_VERSION, $store->schemaVersion());
+        self::assertFileExists($nested);
+
+        foreach ([$nested, $nested . '-wal', $nested . '-shm'] as $file) {
+            if (is_file($file)) {
+                unlink($file);
+            }
+        }
+
+        rmdir(\dirname($nested));
+        rmdir(\dirname($nested, 2));
+    }
+
+    /** Both PRAGMAs actually take effect — `journal_mode` in particular is a QUERY pragma. */
+    public function testTheConcurrencyPragmasAreApplied(): void
+    {
+        $store = Store::open($this->temporaryDatabase());
+        $pdo = (new \ReflectionProperty(Store::class, 'pdo'))->getValue($store);
+
+        self::assertInstanceOf(\PDO::class, $pdo);
+        self::assertSame('wal', $store->journalMode());
+        self::assertSame('wal', $pdo->query('PRAGMA journal_mode')->fetchColumn());
+        self::assertSame(Store::BUSY_TIMEOUT_MS, (int) $pdo->query('PRAGMA busy_timeout')->fetchColumn());
+    }
+
+    /**
+     * Write a database with the EXACT v1 schema — no `seen_epoch` — so the migration is real.
+     *
+     * Written out literally rather than fetched from git: if this ever drifts to match the current
+     * schema, every test above silently stops testing a migration.
+     */
+    private function writeVersionOneDatabase(
+        string $path,
+        bool $stampVersion = true,
+        string $lastSeenAt = '2026-08-05T09:00:00+00:00',
+    ): void {
+        $raw = new \PDO('sqlite:' . $path, options: [\PDO::ATTR_ERRMODE => \PDO::ERRMODE_EXCEPTION]);
+        $raw->exec(
+            <<<'SQL'
+            CREATE TABLE schema_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+            CREATE TABLE listings (
+                dedup_key TEXT PRIMARY KEY, source TEXT NOT NULL, external_id TEXT NOT NULL,
+                url TEXT, title TEXT NOT NULL, rent_cc INTEGER,
+                first_seen_at TEXT NOT NULL, last_seen_at TEXT NOT NULL, notified_at TEXT
+            );
+            CREATE TABLE price_history (
+                id INTEGER PRIMARY KEY AUTOINCREMENT, dedup_key TEXT NOT NULL,
+                rent_cc INTEGER NOT NULL, at TEXT NOT NULL, at_epoch INTEGER NOT NULL
+            );
+            CREATE TABLE source_runs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT, source TEXT NOT NULL, item_count INTEGER NOT NULL,
+                ok INTEGER NOT NULL, error TEXT, at TEXT NOT NULL, at_epoch INTEGER NOT NULL
+            );
+            SQL
+        );
+
+        if ($stampVersion) {
+            $raw->exec("INSERT INTO schema_meta VALUES ('schema_version', '1')");
+        }
+
+        $raw->prepare(
+            'INSERT INTO listings VALUES (:k, :s, :e, :u, :t, :r, :f, :l, NULL)',
+        )->execute([
+            'k' => 'inli:id:ANN-1', 's' => 'inli', 'e' => 'ANN-1', 'u' => 'https://a.test/1',
+            't' => 'T3 Cergy', 'r' => 1000, 'f' => '2026-08-01T09:00:00+00:00', 'l' => $lastSeenAt,
+        ]);
+        $raw->exec(
+            "INSERT INTO price_history (dedup_key, rent_cc, at, at_epoch)
+             VALUES ('inli:id:ANN-1', 1000, '2026-08-01T09:00:00+00:00', 1785315600)",
+        );
     }
 
     /** A database path whose parent is a regular file fails with this class's own message. */
@@ -841,8 +1022,13 @@ final class StoreTest extends TestCase
     protected function tearDown(): void
     {
         foreach ($this->temporaryPaths as $path) {
-            if (is_file($path)) {
-                unlink($path);
+            // WAL leaves `-wal` and `-shm` sidecars beside the database. They are real files, they
+            // hold un-checkpointed pages including `source_runs.error` text, and forgetting them
+            // here is the same forgetting that left them out of `.gitignore`.
+            foreach ([$path, $path . '-wal', $path . '-shm'] as $file) {
+                if (is_file($file)) {
+                    unlink($file);
+                }
             }
         }
 
@@ -1086,6 +1272,73 @@ final class StoreTest extends TestCase
         }
 
         self::assertNotSame(SourceStatus::NEVER_PRODUCED, $this->store->health('newsource')->status);
+    }
+
+    /**
+     * A run committed late but stamped earlier must not erase a BROKEN verdict.
+     *
+     * `--watch` alongside a manual `doctor` is the spec's own target usage, so two processes writing
+     * the same source is designed behaviour — and then insertion order and timestamp order disagree.
+     * Reading recency purely from insertion order let one success logged after three failures, but
+     * stamped a minute before the last of them, report `OK` with `isAlerting()` false. Reading it
+     * purely from the timestamp is the round-10 P0 in the other direction. A clock settles it, which
+     * is what `$nowIso` is for.
+     */
+    public function testALateCommittedRunDoesNotEraseABrokenVerdict(): void
+    {
+        foreach (range(1, 7) as $day) {
+            $this->store->recordRun('inli', 25, true, null, sprintf('2026-08-%02dT09:00:00+00:00', $day));
+        }
+
+        foreach ([8, 9, 10] as $day) {
+            $this->store->recordRun('inli', 0, false, 'HTTP 502', sprintf('2026-08-%02dT09:00:00+00:00', $day));
+        }
+
+        self::assertSame(SourceStatus::BROKEN, $this->store->health('inli', '2026-08-10T10:00:00+00:00')->status);
+
+        // Committed last, but it happened BEFORE the final failure and says so.
+        $this->store->recordRun('inli', 25, true, null, '2026-08-10T08:59:00+00:00');
+
+        $health = $this->store->health('inli', '2026-08-10T10:00:00+00:00');
+
+        self::assertSame(SourceStatus::BROKEN, $health->status);
+        self::assertTrue($health->status->isAlerting());
+    }
+
+    /**
+     * With a clock, a run stamped in the future is provably wrong and is dropped.
+     *
+     * Without one there is no way to tell a skewed row from a correct one, so the fallback is
+     * insertion order — whose failure lasts exactly one run, where the timestamp-order failure
+     * lasts forever.
+     */
+    public function testAClockDisqualifiesARunStampedInTheFuture(): void
+    {
+        foreach (range(1, 7) as $day) {
+            $this->store->recordRun('inli', 25, true, null, sprintf('2026-08-%02dT09:00:00+00:00', $day));
+        }
+
+        $this->store->recordRun('inli', 25, true, null, '2036-01-01T09:00:00+00:00');   // skewed
+
+        foreach ([8, 9, 10] as $day) {
+            $this->store->recordRun('inli', 0, false, 'HTTP 502', sprintf('2026-08-%02dT09:00:00+00:00', $day));
+        }
+
+        $health = $this->store->health('inli', '2026-08-10T10:00:00+00:00');
+
+        self::assertSame(SourceStatus::BROKEN, $health->status);
+        self::assertSame('2026-08-10T09:00:00+00:00', $health->lastFailureAt);
+    }
+
+    /** A log where EVERY run is in the future is a clock problem, and says so. */
+    public function testALogEntirelyInTheFutureIsReportedAsAClockProblem(): void
+    {
+        $this->store->recordRun('inli', 25, true, null, '2036-01-01T09:00:00+00:00');
+
+        $health = $this->store->health('inli', '2026-08-10T10:00:00+00:00');
+
+        self::assertSame(SourceStatus::STALE, $health->status);
+        self::assertStringContainsString('horloge', $health->detail);
     }
 
     /**

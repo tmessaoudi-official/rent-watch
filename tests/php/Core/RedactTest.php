@@ -73,6 +73,63 @@ final class RedactTest extends TestCase
         ];
 
         yield 'RFR income figure, env-var spelling' => ['RFR_N2=41250 dépasse le plafond', ['41250']];
+
+        // EVERY credential variable in the committed `.env.example` defeated the masker, because
+        // `_` is a word character and `\bpassword\b` therefore cannot match inside `IMAP_PASSWORD`.
+        // Five of six went through untouched while the class docblock claimed the IDFM key was
+        // covered. This block is the template read back against the code that is supposed to guard
+        // it — if a key is added there, add it here.
+
+        yield 'IMAP_PASSWORD' => ['ligne invalide dans .env : IMAP_PASSWORD=hunter2', ['hunter2']];
+        yield 'SMTP_PASSWORD' => ['SMTP_PASSWORD=hunter2 rejeté', ['hunter2']];
+        yield 'TELEGRAM_BOT_TOKEN' => ['TELEGRAM_BOT_TOKEN=7488291044:AAH9xQkL2mNp0RtVuWxYz1234 invalide', ['AAH9xQkL2mNp0RtVuWxYz1234']];
+        yield 'IDFM_API_KEY' => ['IDFM_API_KEY=Zx9QpLm4Nn2Kk8Jj refusé (401)', ['Zx9QpLm4Nn2Kk8Jj']];
+        yield 'NTFY_TOPIC' => ['NTFY_TOPIC=rw-a8f3k2p9qz introuvable', ['rw-a8f3k2p9qz']];
+
+        // A single-quoted value matched NOTHING: the unquoted class excludes `'`, so the pattern
+        // failed outright. `var_export()` on a config array is the likeliest way a credential
+        // reaches an exception message in PHP.
+        yield 'single-quoted value' => ["password='hunter2' refusé", ['hunter2']];
+        yield 'var_export of a config array' => [
+            "PDO DSN: array ( 'user' => 'rw', 'password' => 'hunter2', )",
+            ['hunter2'],
+        ];
+        yield 'quoted passphrase with spaces' => ['password="correct horse battery staple"', ['battery staple']];
+
+        // A Telegram token is `<bot_id>:<hash>`; the literal `bot` prefix exists only in the API
+        // URL path, so the pattern anchored on `bot\d+:` was dead for a token anywhere else.
+        yield 'bare Telegram token' => [
+            'Telegram a répondu 401 pour 7488291044:AAH9xQ_kL2mNp0RtVuWxYz1234567890a',
+            ['AAH9xQ_kL2mNp0RtVuWxYz1234567890a'],
+        ];
+
+        // SMTP AUTH PLAIN decodes to \0user\0password. `AUTH LOGIN` was masked by accident of the
+        // LOGIN verb; `AUTH PLAIN` was not, so the coverage was arbitrary rather than designed.
+        yield 'SMTP AUTH PLAIN' => [
+            'sent: AUTH PLAIN AHJ3QGV4Lm9yZwBTM2NyM3RQYXNzdzByZCE=',
+            ['AHJ3QGV4Lm9yZwBTM2NyM3RQYXNzdzByZCE='],
+        ];
+        // UNPADDED base64 — the length is a multiple of 4, so there is no `=` and the standalone
+        // blob pattern cannot see it. This is what makes the AUTH verb pattern load-bearing rather
+        // than redundant with it.
+        yield 'SASL AUTH PLAIN, unpadded base64' => [
+            'sent: AUTH PLAIN AHJ3QGV4Lm9yZwBTM2NyM3RQYXNzdzByZA',
+            ['AHJ3QGV4Lm9yZwBTM2NyM3RQYXNzdzByZA'],
+        ];
+
+        yield 'bare base64 credential blob' => [
+            '535 5.7.8 Error: authentication failed: AHJ3QGV4Lm9yZwBTM2NyM3RQYXNzdzByZCE=',
+            ['AHJ3QGV4Lm9yZwBTM2NyM3RQYXNzdzByZCE='],
+        ];
+
+        // The masking half of the ambiguous-name split. It was narrowed to `=`-only in one round
+        // and only the DIAGNOSTIC half was tested — the half being relied on was not.
+        yield 'auth= is still masked' => ['auth=s3cr3tvalue refusé', ['s3cr3tvalue']];
+        yield 'session= is still masked' => ['session=abc123def456 expirée', ['abc123def456']];
+
+        // The French spellings, which a French-language IMAP or SMTP error would actually carry.
+        yield 'mot de passe' => ['mot de passe: hunter2 incorrect', ['hunter2']];
+        yield 'motdepasse' => ['motdepasse=hunter2', ['hunter2']];
     }
 
     /**
@@ -112,6 +169,41 @@ final class RedactTest extends TestCase
             // its own pass. Masking the whole value destroys the endpoint instead.
             'callback refused: key=https://callback.test/hook?apikey=abc123XYZ',
             ['https://callback.test/hook'],
+        ];
+
+        // Real protocol text and real French prose. The verb pattern is case-SENSITIVE and requires
+        // its argument to contain a digit or a symbol precisely because of these: an English or
+        // French word does not, and an accented one is still a word.
+        yield 'RFC 1939 POP3 state error' => [
+            '-ERR PASS command issued in wrong state',
+            ['PASS command issued'],
+        ];
+
+        yield 'French failure word after an uppercase verb' => [
+            'LOGIN refusé par le serveur imap.example.net',
+            ['refusé', 'imap.example.net'],
+        ];
+
+        yield 'the host after a lowercase Login' => [
+            'Login to imap.example.net:993 failed',
+            ['imap.example.net:993'],
+        ];
+
+        yield 'Pass Navigo is a transit card, not a credential' => [
+            'abonnement Pass Navigo non reconnu par PRIM',
+            ['Pass Navigo'],
+        ];
+
+        // The count is what a case-INSENSITIVE verb pattern eats first: `pass 2` looks exactly like
+        // a credential to it, because `2` is a digit.
+        yield 'an item count is not a credential' => [
+            'pass 2 sur 3 : 27 annonces',
+            ['pass 2 sur 3', '27 annonces'],
+        ];
+
+        yield 'the SASL mechanism name is the diagnostic' => [
+            'AUTHENTICATE XOAUTH2 rejected, server requires PLAIN over TLS',
+            ['XOAUTH2'],
         ];
 
         yield 'rents and counts are not secrets' => [
@@ -171,6 +263,20 @@ final class RedactTest extends TestCase
         $plain = 'HTTP 503 Service Unavailable after 3 attempts (selector .listing-card matched 0 nodes)';
 
         self::assertSame($plain, Redact::text($plain));
+    }
+
+    /**
+     * Masking twice must not corrupt the mask.
+     *
+     * Two patterns could both match one name — `X-Api-Key` fires on `api-key` and then on `key` —
+     * and the second consumed `[masqué` from the first, leaving an orphan `]`. Repeated calls
+     * accumulated brackets.
+     */
+    public function testMaskingIsIdempotent(): void
+    {
+        $once = Redact::text('X-Api-Key: abcdefgh12345');
+        self::assertSame('X-Api-Key=' . Redact::MASK, $once);
+        self::assertSame($once, Redact::text((string) $once));
     }
 
     public function testNullAndEmptyPassThrough(): void

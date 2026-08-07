@@ -30,7 +30,10 @@ use RentWatch\Core\Text;
  * Timestamps are passed in as ISO-8601 strings rather than read from the clock. That is not
  * ceremony: health is a function of run history over time, and a store that reads `now()` internally
  * can only be tested by waiting. The cost of that choice is that a caller can supply nonsense, so
- * every timestamp entering this class is parsed strictly and the run log is kept monotonic.
+ * every timestamp entering this class is parsed strictly — and {@see health()} takes an optional
+ * clock, which is the only thing that can tell a skewed timestamp from a correct one. The run log
+ * itself refuses nothing: an earlier version kept it monotonic, and that deleted the runs it
+ * rejected rather than fixing anything.
  */
 final readonly class Store
 {
@@ -66,6 +69,18 @@ final readonly class Store
     public const int MIN_RUNS_FOR_FLAKY = 3;
 
     /**
+     * How long a second writer waits before giving up, in milliseconds.
+     *
+     * `scout run --watch` alongside a manual `scout doctor` is the spec's own target usage, and in
+     * the default rollback-journal mode with no timeout the second process fails INSTANTLY with
+     * `SQLSTATE[HY000]: General error: 5 database is locked` rather than waiting — reproduced by a
+     * reviewer on 2026-08-07, and pinned by {@see StoreTest::testASecondWriterWaitsRatherThanFailing}.
+     * The root cause is not "SQLite is flaky": it is that two processes are a designed part of the
+     * product, so waiting is the correct behaviour rather than a retry papered over a race.
+     */
+    public const int BUSY_TIMEOUT_MS = 5000;
+
+    /**
      * A source must have been trying for at least this long before "never produced" means anything.
      *
      * Without it, three successful empty polls at a 15-minute interval told a source onboarded
@@ -74,7 +89,17 @@ final readonly class Store
      */
     public const int MIN_SPAN_FOR_NEVER_PRODUCED = 86400;
 
-    private function __construct(private \PDO $pdo) {}
+    private function __construct(private \PDO $pdo, private string $journalModeInUse) {}
+
+    /**
+     * The journal mode SQLite actually gave us — `wal` on a normal filesystem, `memory` for
+     * `:memory:`, `delete` where WAL was refused. Anything but `wal` on a file database means two
+     * processes will contend rather than share, so `scout doctor` prints it.
+     */
+    public function journalMode(): string
+    {
+        return $this->journalModeInUse;
+    }
 
     /**
      * Open (and create, if needed) the database at `$path`. Pass `:memory:` for a throwaway one.
@@ -110,13 +135,19 @@ final readonly class Store
         ]);
 
         $pdo->exec('PRAGMA foreign_keys = ON');
-        // `scout run --watch` alongside a manual `scout doctor` is the spec's own target usage, and
-        // in the default rollback-journal mode with no timeout the second process fails instantly
-        // with "database is locked" rather than waiting. Demonstrated, not assumed.
-        $pdo->exec('PRAGMA journal_mode = WAL');
-        $pdo->exec('PRAGMA busy_timeout = 5000');
+        $pdo->exec('PRAGMA busy_timeout = ' . self::BUSY_TIMEOUT_MS);
+        // `journal_mode` is a QUERY pragma: it returns the mode that actually took effect, and
+        // SQLite does not raise when it refuses. A network mount without shared-memory support
+        // silently stays in rollback mode, and `exec()` discards the answer — so the mode is read
+        // back and kept, rather than assumed. It is not fatal (`:memory:` legitimately answers
+        // `memory`), but it must be visible: `scout doctor` reports it.
+        $mode = $pdo->query('PRAGMA journal_mode = WAL');
+        $journalMode = $mode === false ? 'unknown' : (string) $mode->fetchColumn();
+        // An unconsumed result set counts as a statement in progress and makes the FIRST COMMIT of
+        // the migration below fail with "cannot commit transaction - SQL statements in progress".
+        $mode?->closeCursor();
 
-        $store = new self($pdo);
+        $store = new self($pdo, $journalMode);
         $store->migrate();
 
         return $store;
@@ -186,9 +217,16 @@ final readonly class Store
 
         if ($recorded === null) {
             $statement = $this->pdo->prepare('INSERT INTO schema_meta (key, value) VALUES (:key, :value)');
-            $statement->execute(['key' => 'schema_version', 'value' => (string) self::SCHEMA_VERSION]);
+            $statement->execute(['key' => 'schema_version', 'value' => (string) '1']);
 
-            return;
+            // Deliberately stamped 1 and then upgraded, rather than stamped 2 and trusted. A
+            // database whose `schema_meta` exists but carries no version row is the state a crash
+            // between the DDL and the INSERT leaves — those are two separate autocommit statements
+            // — and it is indistinguishable from a legacy v1 database. Stamping it 2 and returning
+            // meant `CREATE TABLE IF NOT EXISTS` skipped the existing table, `schemaVersion()`
+            // answered 2, and the first sighting threw a raw `no such column`. `upgradeFrom()` is
+            // re-runnable by construction, so running it on a genuinely new database costs nothing.
+            $recorded = 1;
         }
 
         if ($recorded === self::SCHEMA_VERSION) {
@@ -232,10 +270,19 @@ final readonly class Store
                 $update = $this->pdo->prepare('UPDATE listings SET seen_epoch = :epoch WHERE dedup_key = :key');
 
                 foreach ($rows === false ? [] : $rows->fetchAll() as $row) {
-                    $update->execute([
-                        'epoch' => self::epoch((string) $row['last_seen_at']),
-                        'key' => (string) $row['dedup_key'],
-                    ]);
+                    try {
+                        $epoch = self::epoch((string) $row['last_seen_at']);
+                    } catch (\InvalidArgumentException) {
+                        // Treat an undateable row as the OLDEST thing on record rather than
+                        // refusing to open the database at all. This is not a swallowed error: the
+                        // failure mode was demonstrated — one hand-edited or merged row made
+                        // `Store::open()` throw permanently, with no repair path, on the one data
+                        // set `CLAUDE.md` says cannot be rebuilt. Epoch 0 costs one redundant
+                        // overwrite on the next sighting; the alternative costs the seen-set.
+                        $epoch = 0;
+                    }
+
+                    $update->execute(['epoch' => $epoch, 'key' => (string) $row['dedup_key']]);
                 }
             }
 
@@ -315,10 +362,14 @@ final readonly class Store
      *
      * **Out-of-order sightings are expected, not exceptional.** Email-alert ingestion is the primary
      * path (hard rule 4) and delivers out of publication order routinely — an initial backfill, a
-     * provider-delayed alert. So the comparison is against the chronologically PRECEDING recorded
-     * rent, not against whatever was written last, and a stale sighting never overwrites the
-     * current state. Reading `listings.rent_cc` instead manufactured a price-drop notification for
-     * a rent that had never moved.
+     * provider-delayed alert. A stale sighting therefore never overwrites the current state, and it
+     * is never a price drop.
+     *
+     * Two baselines, and they are not interchangeable — see the comment in the body. The DELTA is
+     * measured against what we currently believe; the changes-only HISTORY is measured against the
+     * chronological neighbour. An earlier version of this docblock argued for using the
+     * chronological one for both, and doing that swallowed a real drop; using the stored one for
+     * both put a duplicate into a history that cannot be cleaned up. Neither collapse survives.
      *
      * @param string $atIso ISO-8601 timestamp of this sighting
      */
@@ -345,9 +396,17 @@ final readonly class Store
             // record of observations and cannot answer the first question. Reading the history for
             // a current sighting made 1000 → (late 900) → 900 report no drop at all, because the
             // backfilled 900 had become the predecessor of the real one.
+            // THREE values, and collapsing any two of them has already caused a defect:
+            //   $chronoBefore  — the rent recorded immediately BEFORE this instant. Governs the
+            //                    changes-only invariant, and nothing else.
+            //   $previousRentCc — what we believed the rent was. Governs the delta and the drop.
+            // They differ exactly when a sighting arrives out of order, which the email path makes
+            // routine. Using the delta's baseline for the append guard put a duplicate 900 into a
+            // changes-only history that cannot be cleaned up afterwards.
+            $chronoBefore = $this->rentBefore($key, $epoch);
             $previousRentCc = $isCurrent
                 ? ($isNew || $row['rent_cc'] === null ? null : (int) $row['rent_cc'])
-                : $this->rentBefore($key, $epoch);
+                : $chronoBefore;
 
             if ($isNew) {
                 $insert = $this->pdo->prepare(
@@ -375,7 +434,7 @@ final readonly class Store
                 // the listing, which is what a seen-set is for, not when it was published.
                 $fill = $this->pdo->prepare(
                     'UPDATE listings
-                        SET url     = COALESCE(url, :url),
+                        SET url     = COALESCE(NULLIF(url, \'\'), NULLIF(:url, \'\'), url),
                             title   = CASE WHEN title = \'\' THEN :title ELSE title END,
                             rent_cc = COALESCE(rent_cc, :rent)
                       WHERE dedup_key = :key',
@@ -396,7 +455,7 @@ final readonly class Store
                     'UPDATE listings
                         SET last_seen_at = :at,
                             seen_epoch   = :epoch,
-                            url          = COALESCE(:url, url),
+                            url          = COALESCE(NULLIF(:url, \'\'), url),
                             title        = COALESCE(NULLIF(:title, \'\'), title),
                             rent_cc      = COALESCE(:rent, rent_cc)
                       WHERE dedup_key = :key',
@@ -415,7 +474,7 @@ final readonly class Store
             // before it, and not made redundant by the one recorded after it. The second half only
             // matters for out-of-order inserts, and without it the changes-only invariant breaks
             // silently: `priceHistory()` starts returning consecutive identical values.
-            if ($rentCc !== null && $rentCc !== $previousRentCc && $rentCc !== $this->rentAfter($key, $epoch)) {
+            if ($rentCc !== null && $rentCc !== $chronoBefore && $rentCc !== $this->rentAfter($key, $epoch)) {
                 $history = $this->pdo->prepare(
                     'INSERT INTO price_history (dedup_key, rent_cc, at, at_epoch) VALUES (:key, :rent, :at, :epoch)',
                 );
@@ -574,12 +633,8 @@ final readonly class Store
     public function health(string $sourceName, ?string $nowIso = null): SourceHealth
     {
         $statement = $this->pdo->prepare(
-            // ORDER BY id — the log's own order, which is the order the runs actually happened in.
-            // Ordering by the caller-supplied timestamp let ONE forward-skewed row (NTP not yet
-            // synced after a resume, a VM restored from a snapshot) sort last forever and hide every
-            // later run: twenty consecutive failures reported as OK. `at_epoch` still governs the
-            // rolling WINDOW below, which is a different question from "what happened most recently".
-            'SELECT item_count, ok, error, at, at_epoch FROM source_runs
+            // Insertion order. See below for why it is not the final word.
+            'SELECT id, item_count, ok, error, at, at_epoch FROM source_runs
               WHERE source = :source ORDER BY id ASC',
         );
         $statement->execute(['source' => $sourceName]);
@@ -595,6 +650,39 @@ final readonly class Store
                 status: SourceStatus::NEVER_RUN,
                 detail: 'aucun run enregistré pour cette source',
             );
+        }
+
+        // WHICH RUN IS "THE LAST ONE" — and neither obvious answer is right on its own.
+        //
+        // By TIMESTAMP: one forward-skewed row (NTP not synced after a resume, a VM restored from a
+        // snapshot) sorts last forever and hides every later run — twenty consecutive failures
+        // reported as OK, permanently.
+        // By INSERTION: a run committed late but stamped earlier wins — two processes writing the
+        // same source, which `--watch` alongside a manual `doctor` makes routine — so one success
+        // logged after three failures erases a BROKEN verdict. Self-healing, but wrong meanwhile.
+        //
+        // A CLOCK settles it, and that is the whole reason `$nowIso` exists: a row stamped after
+        // `now` is provably wrong and is dropped, and among what remains the greatest timestamp is
+        // genuinely the most recent observation. Without a clock we fall back to insertion order,
+        // because its failure lasts one run and the other's lasts forever. The CLI is required to
+        // pass `$nowIso` — see `CLAUDE.md` § "Testing & verification".
+        if ($nowIso !== null) {
+            $now = self::epoch($nowIso);
+            $credible = array_values(array_filter($runs, static fn (array $run): bool => (int) $run['at_epoch'] <= $now));
+
+            if ($credible === []) {
+                return new SourceHealth(
+                    sourceName: $sourceName,
+                    status: SourceStatus::STALE,
+                    detail: 'tous les runs sont horodatés dans le futur — vérifiez l\'horloge de la machine',
+                    totalRuns: \count($runs),
+                );
+            }
+
+            usort($credible, static fn (array $a, array $b): int
+                => [(int) $a['at_epoch'], (int) $a['id']] <=> [(int) $b['at_epoch'], (int) $b['id']]);
+
+            $runs = $credible;
         }
 
         $last = $runs[array_key_last($runs)];
@@ -616,6 +704,7 @@ final readonly class Store
             }
         }
 
+        $epochs = array_map(static fn (array $run): int => (int) $run['at_epoch'], $runs);
         $emptyStreak = self::trailingEmptyRuns($runs);
         $rollingMean = self::rollingMeanBefore($runs, \count($runs) - 1);
         [$runsInWindow, $failedInWindow] = self::windowCounts($runs);
@@ -666,6 +755,8 @@ final readonly class Store
         }
 
         if ($nowIso !== null) {
+            // `$runs` has already been filtered to credible rows and sorted by timestamp above,
+            // so the last one IS the newest real observation.
             $silentFor = self::epoch($nowIso) - (int) $last['at_epoch'];
 
             if ($silentFor > self::ROLLING_WINDOW_DAYS * 86400) {
@@ -676,7 +767,12 @@ final readonly class Store
             }
         }
 
-        $span = (int) $last['at_epoch'] - (int) $runs[0]['at_epoch'];
+        // max − min over the WHOLE log, not last − first. The rows are in insertion order and
+        // `recordRun()` accepts any timestamp, so `last − first` goes NEGATIVE when the first row is
+        // forward-skewed — and a negative span can never satisfy the floor below, disabling the
+        // wrong-field-map detector permanently. One poisoned row hiding an unbounded number of later
+        // ones is the exact shape the rest of this class was rewritten to remove.
+        $span = max($epochs) - min($epochs);
 
         if (!$everProduced && $successfulRuns >= self::EMPTY_RUNS_BEFORE_BROKEN
             && $span >= self::MIN_SPAN_FOR_NEVER_PRODUCED) {
@@ -841,6 +937,14 @@ final readonly class Store
      */
     private static function windowCounts(array $runs): array
     {
+        // Anchored on the LAST-INSERTED row, deliberately, and NOT on `max(at_epoch)`.
+        //
+        // Both choices lose the window when a row is forward-skewed, and they lose it for different
+        // lengths of time. Anchoring on the last row loses it for exactly one run — the next real
+        // run becomes the anchor and everything recovers. Anchoring on the maximum loses it FOREVER,
+        // because the skewed row stays the maximum and every real row sits outside its window. A
+        // self-healing degradation beats a permanent one, so this reads the log's own order for the
+        // same reason `health()` does.
         $reference = (int) $runs[array_key_last($runs)]['at_epoch'];
         $cutoff = $reference - self::ROLLING_WINDOW_DAYS * 86400;
         $total = 0;
@@ -877,9 +981,10 @@ final readonly class Store
         try {
             $pdo->rollBack();
         } catch (\Throwable) {
-            // The engine already rolled back — verified: under WAL, SQLITE_FULL leaves
-            // `inTransaction()` false and `rollBack()` throws. The caller's exception is the one
-            // that matters, and this catch is what lets it survive.
+            // The engine already rolled back — verified in BOTH journal modes: SQLITE_FULL leaves
+            // `inTransaction()` false and `rollBack()` throws. (An earlier version of this comment
+            // said "under WAL", a claim conditioned on a pragma nothing verified had taken effect.)
+            // The caller's exception is the one that matters, and this catch is what lets it survive.
             //
             // There is no `if ($pdo->inTransaction())` fast path here on purpose: it was written,
             // and it turned out to be unreachable-as-a-guarantee — the catch already covers every
@@ -914,9 +1019,16 @@ final readonly class Store
             $normalised = substr($normalised, 0, -6) . '+00:00';
         }
 
-        // `.v` is three-digit milliseconds — what every JSON API and `Date.toISOString()` emits, and
-        // what the six-digit `.u` round-trip rejected.
-        foreach ([\DateTimeInterface::ATOM, 'Y-m-d\TH:i:s.vP', 'Y-m-d\TH:i:s.uP'] as $format) {
+        // RFC 3339 `time-secfrac` is `"." 1*DIGIT` — ANY number of digits — and Go's RFC3339Nano
+        // trims trailing zeros, so a Go-backed JSON feed emits `.1Z` for `.100`. Padding to the six
+        // digits PHP round-trips accepts every width instead of the two that happened to be tried.
+        $normalised = preg_replace_callback(
+            '~\.(\d{1,6})(?=[+\-]\d{2}:\d{2}$)~',
+            static fn (array $m): string => '.' . str_pad($m[1], 6, '0'),
+            $normalised,
+        ) ?? $normalised;
+
+        foreach ([\DateTimeInterface::ATOM, 'Y-m-d\TH:i:s.uP'] as $format) {
             $parsed = \DateTimeImmutable::createFromFormat($format, $normalised);
 
             // The round-trip is what makes this strict rather than merely parseable:
