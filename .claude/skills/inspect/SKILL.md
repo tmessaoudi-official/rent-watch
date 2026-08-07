@@ -49,11 +49,13 @@ disallowed-tools: AskUserQuestion
      application code), `prototype/scout.py` + `prototype/sources.yaml` (a pre-existing single-file
      prototype, reference material only), `CLAUDE.md`, `README.md`, `docs/OPEN-QUESTIONS.md`,
      `.claude/` and `scripts/claude-bootstrap/`.
-     **PRESENT since 2026-08-06: `src/php/Core/` (models + the tenure classifier), `tests/php/`,
-     `tests/fixtures/tenure/corpus.json`, `composer.json`, and a WORKING TEST RUNNER —
+     **PRESENT since 2026-08-06: `src/php/Core/` (models + the tenure classifier + `SourceHealth`/
+     `SourceStatus`), `src/php/Store/` (the SQLite seen-set, price history and run log, added
+     2026-08-07), `tests/php/`, `tests/fixtures/tenure/corpus.json`, `composer.json`, and a
+     WORKING TEST RUNNER —
      `php tools/phpunit.phar`. Tests can be executed here, so Rule 7's "tests MUST be executed"
      applies in full and "no test runner in the tree" is NOT an available answer.
-     STILL ABSENT: `config/`, every adapter, the store, the notify channels, the CLI, a linter, CI.**
+     STILL ABSENT: `config/`, every adapter, the notify channels, the CLI, a linter, CI.**
      Verify with `git ls-files src/ config/ tests/` rather than trusting this paragraph — it has been
      stale before, in both directions. Never hardcode a build or lint command, and never report a
      finding about `src/core/tenure.*` (a path that has never existed here; the classifier is
@@ -150,9 +152,9 @@ for M in pyproject.toml requirements.txt setup.cfg package.json; do find "$TARGE
 [[ -f "$TARGET/.claude/settings.json" ]] && cat "$TARGET/.claude/settings.json"
 ```
 
-Summarize the tech stack in one sentence and **name what is actually present**: a specification (`spec/`), a single-file prototype (`prototype/`), the PHP pure core (`src/php/Core/`) with its PHPUnit suite, and — once they exist — `config/`, the adapters and SQLite persistence. Pass this to each agent as `PROJECT_TYPE`. Where a manifest exists, read it for the real script names instead of assuming them; where none exists, say so rather than naming `pytest` or `ruff` from memory.
+Summarize the tech stack in one sentence and **name what is actually present**: a specification (`spec/`), a single-file prototype (`prototype/`), the PHP pure core (`src/php/Core/`) and the SQLite store (`src/php/Store/`) with their PHPUnit suite, and — once they exist — `config/`, the adapters and the CLI. Pass this to each agent as `PROJECT_TYPE`. Where a manifest exists, read it for the real script names instead of assuming them; where none exists, say so rather than naming `pytest` or `ruff` from memory.
 
-**Partial-greenfield degradation — still the common case.** As of 2026-08-06 rent-watch HAS `src/php/Core/` (models + the tenure classifier), `tests/php/`, `composer.json` and a PHPUnit runner; it still has no `config/`, no adapter and no CI. Confirm with `git ls-files src/ config/ tests/` before asserting anything is missing — this paragraph claimed the opposite for a while. What DOES exist and is fair game: `spec/PROJECT_BRIEF.md` (the specification — a gap between spec and reality is a legitimate finding, and right now it is most of them), `prototype/scout.py` and `prototype/sources.yaml` (real, runnable code with real defects — notably no tenure classifier at all, a substring commune match, and `REMPLACER` placeholder endpoints), `CLAUDE.md`, `.claude/**` and `scripts/claude-bootstrap/**` (shell and markdown, reviewable as such). So a legitimate `/inspect` run reports on those and states plainly what does not exist — it must NOT report an empty tree, and it must NOT invent findings about `src/core/tenure.py`, a path that has never existed here — the classifier is `src/php/Core/TenureClassifier.php` and it is real, so findings about IT are fair game.
+**Partial-greenfield degradation — still the common case.** As of 2026-08-07 rent-watch HAS `src/php/Core/` (models + the tenure classifier + source health), `src/php/Store/` (the SQLite seen-set, price history and run log), `tests/php/`, `composer.json` and a PHPUnit runner; it still has no `config/`, no adapter and no CI. Confirm with `git ls-files src/ config/ tests/` before asserting anything is missing — this paragraph claimed the opposite for a while. What DOES exist and is fair game: `spec/PROJECT_BRIEF.md` (the specification — a gap between spec and reality is a legitimate finding, and right now it is most of them), `prototype/scout.py` and `prototype/sources.yaml` (real, runnable code with real defects — notably no tenure classifier at all, a substring commune match, and `REMPLACER` placeholder endpoints), `CLAUDE.md`, `.claude/**` and `scripts/claude-bootstrap/**` (shell and markdown, reviewable as such). So a legitimate `/inspect` run reports on those and states plainly what does not exist — it must NOT report an empty tree, and it must NOT invent findings about `src/core/tenure.py`, a path that has never existed here — the classifier is `src/php/Core/TenureClassifier.php` and it is real, so findings about IT are fair game.
 
 ## Step 2: Spawn Analysis Agents
 

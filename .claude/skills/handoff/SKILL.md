@@ -49,11 +49,13 @@ disallowed-tools: AskUserQuestion
      application code), `prototype/scout.py` + `prototype/sources.yaml` (a pre-existing single-file
      prototype, reference material only), `CLAUDE.md`, `README.md`, `docs/OPEN-QUESTIONS.md`,
      `.claude/` and `scripts/claude-bootstrap/`.
-     **PRESENT since 2026-08-06: `src/php/Core/` (models + the tenure classifier), `tests/php/`,
-     `tests/fixtures/tenure/corpus.json`, `composer.json`, and a WORKING TEST RUNNER —
+     **PRESENT since 2026-08-06: `src/php/Core/` (models + the tenure classifier + `SourceHealth`/
+     `SourceStatus`), `src/php/Store/` (the SQLite seen-set, price history and run log, added
+     2026-08-07), `tests/php/`, `tests/fixtures/tenure/corpus.json`, `composer.json`, and a
+     WORKING TEST RUNNER —
      `php tools/phpunit.phar`. Tests can be executed here, so Rule 7's "tests MUST be executed"
      applies in full and "no test runner in the tree" is NOT an available answer.
-     STILL ABSENT: `config/`, every adapter, the store, the notify channels, the CLI, a linter, CI.**
+     STILL ABSENT: `config/`, every adapter, the notify channels, the CLI, a linter, CI.**
      Verify with `git ls-files src/ config/ tests/` rather than trusting this paragraph — it has been
      stale before, in both directions. Never hardcode a build or lint command, and never report a
      finding about `src/core/tenure.*` (a path that has never existed here; the classifier is

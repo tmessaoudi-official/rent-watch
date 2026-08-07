@@ -11,18 +11,25 @@ namespace RentWatch\Core;
  * for last-success, last-count and a rolling mean to be persisted; carrying them here means
  * `scout doctor` can show WHY a source is `BROKEN` instead of asserting it, and a false alarm is
  * diagnosable without opening the database.
+ *
+ * The failure fields were added after a reviewer pointed out the obvious: a source failing half its
+ * fetches has no way to say so, because `status` reads only the LAST run and the streak resets on
+ * any success. Data that cannot reach the verdict object cannot reach the user either.
  */
 final readonly class SourceHealth
 {
     /**
-     * @param string      $sourceName          key in `config/sources.yaml`
-     * @param string      $detail              human-readable justification, in French, for the status
+     * @param string      $sourceName           key in the sources config
+     * @param string      $detail               human-readable justification, in French, for the status
      * @param int         $consecutiveEmptyRuns trailing runs that succeeded and returned nothing
-     * @param string|null $lastSuccessAt       ISO-8601 timestamp of the last run that succeeded
-     * @param int|null    $lastCount           items returned by the most recent run
-     * @param float|null  $rollingMean         mean item count over the rolling window, excluding the
-     *                                         most recent run; null when there is nothing to average
-     * @param int         $totalRuns           runs on record, successful or not
+     * @param string|null $lastSuccessAt        ISO-8601 timestamp of the last run that succeeded
+     * @param string|null $lastFailureAt        ISO-8601 timestamp of the last run that failed
+     * @param int|null    $lastCount            items returned by the most recent run
+     * @param float|null  $rollingMean          mean item count over the rolling window, excluding the
+     *                                          most recent run; null when there is nothing to average
+     * @param int         $runsInWindow         runs recorded within the rolling window, inclusive
+     * @param int         $failedRunsInWindow   how many of those failed
+     * @param int         $totalRuns            runs on record, successful or not
      */
     public function __construct(
         public string $sourceName,
@@ -30,8 +37,17 @@ final readonly class SourceHealth
         public string $detail = '',
         public int $consecutiveEmptyRuns = 0,
         public ?string $lastSuccessAt = null,
+        public ?string $lastFailureAt = null,
         public ?int $lastCount = null,
         public ?float $rollingMean = null,
+        public int $runsInWindow = 0,
+        public int $failedRunsInWindow = 0,
         public int $totalRuns = 0,
     ) {}
+
+    /** Share of the runs in the rolling window that failed, or null when the window is empty. */
+    public function failureRate(): ?float
+    {
+        return $this->runsInWindow === 0 ? null : $this->failedRunsInWindow / $this->runsInWindow;
+    }
 }

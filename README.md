@@ -14,17 +14,20 @@ Single language, single user, single machine. CLI plus push notifications — **
 
 ## Status
 
-**The pure core is built. Nothing else is.**
+**The pure core and the store are built. Nothing else is.**
 
 `src/php/Core/` holds a PHP 8.5 implementation of the domain models and the tenure classifier —
 the part that needs no mailbox, no reverse-engineered endpoint and no credential, and the part
-everything else depends on. There is no adapter, no store, no notification channel and no CLI yet.
+everything else depends on. `src/php/Store/` holds the SQLite seen-set, price history and run log,
+which is what makes "notify once" and "tell me when a rent drops" possible at all. There is no
+adapter, no notification channel and no CLI yet.
 
 | Path | What it is |
 |---|---|
 | [`spec/PROJECT_BRIEF.md`](spec/PROJECT_BRIEF.md) | The full specification — the source of truth |
 | [`docs/OPEN-QUESTIONS.md`](docs/OPEN-QUESTIONS.md) | **Start here.** Every filter enumerated, and the decisions still owed |
-| `src/php/Core/` | The tenure classifier and the models it works on |
+| `src/php/Core/` | The tenure classifier, the models it works on, and the source-health verdict |
+| `src/php/Store/` | The SQLite seen-set, price history and run log. Deleting the database re-notifies the entire market on the next run, and the price history cannot be reconstructed — a listing only ever shows its *current* rent |
 | `tests/fixtures/tenure/corpus.json` | 108 hand-labelled listing texts — the classifier's ground truth, and language-neutral so the phorj port reads the same file. **All 108 are synthetic**: `spec/PROJECT_BRIEF.md` §4 asks for *real* texts, and capturing those needs a source endpoint that does not exist yet. Every case declares its `provenance` and a test asserts the counts, so the gap is data rather than a promise |
 | `prototype/` | A pre-existing single-file prototype, kept as reference. **Not** the shipping implementation — it has no tenure classifier at all |
 | [`CLAUDE.md`](CLAUDE.md) | How code gets delivered here: rules, gates, the eligibility boundary |

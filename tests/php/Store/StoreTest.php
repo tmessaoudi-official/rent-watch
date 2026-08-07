@@ -345,6 +345,186 @@ final class StoreTest extends TestCase
         self::assertSame(SourceStatus::OK, $this->store->health('inli')->status);
     }
 
+    // ── Identity: nothing may collapse onto a shared key ──────────────────────────────────────────
+
+    /**
+     * `trim()` strips seven ASCII bytes and nothing else.
+     *
+     * U+00A0 — what a decoded `&nbsp;` produces, and what `Text` itself calls a real adapter
+     * artefact — survives it. An `externalId` of one no-break space therefore passed the "does this
+     * source publish an id?" test, and EVERY listing in the run collapsed onto `:id:%C2%A0`. The
+     * second flat is never notified, and the miss is indistinguishable from a quiet market.
+     */
+    public function testAnExternalIdOfOnlyUnicodeWhitespaceIsNoIdAtAll(): void
+    {
+        foreach (["\u{00A0}", "\u{2007}", "\u{202F}", "\u{3000}", "\u{200B}", "\u{FEFF}", " \t "] as $blank) {
+            $a = $this->listing(externalId: $blank, url: 'https://a.test/1', title: 'T2 Nanterre');
+            $b = $this->listing(externalId: $blank, url: 'https://a.test/2', title: 'T4 Meudon');
+
+            self::assertNotSame(
+                $this->store->dedupKey($a),
+                $this->store->dedupKey($b),
+                sprintf('two distinct flats collided on a blank id (U+%04X)', mb_ord($blank) ?: 0),
+            );
+        }
+    }
+
+    /** A padded id is the same id — otherwise the flat looks new every run. */
+    public function testAPaddedExternalIdIsTheSameId(): void
+    {
+        self::assertSame(
+            $this->store->dedupKey($this->listing(externalId: 'ANN-42')),
+            $this->store->dedupKey($this->listing(externalId: "\u{00A0}ANN-42 ")),
+        );
+    }
+
+    /**
+     * A listing with no id, no URL and no title is refused, loudly.
+     *
+     * The fallback would otherwise hash `"\n"` — a plausible-looking key that every such listing
+     * shares, so the second one silently vanishes and the price history of the first interleaves
+     * two flats' rents. It is the shape a broken title selector plus a broken link selector takes,
+     * and the item count stays non-zero so `health()` reports OK throughout.
+     */
+    public function testAListingWithNothingIdentifyingIsRefused(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+
+        $this->store->dedupKey($this->listing(externalId: '', url: '', title: ''));
+    }
+
+    // ── Out-of-order sightings, which the IMAP path makes routine ─────────────────────────────────
+
+    /**
+     * A replayed older sighting must not manufacture a price drop.
+     *
+     * Email-alert ingestion is the primary path (`CLAUDE.md` hard rule 4) and delivers out of
+     * publication order routinely — an initial backfill, a provider-delayed alert. Comparing
+     * against whatever was written LAST rather than against the chronologically preceding rent
+     * fired a drop notification for a rent that had never moved.
+     */
+    public function testAStaleSightingManufacturesNoPriceDrop(): void
+    {
+        $listing = $this->listing(externalId: 'ANN-1');
+
+        $this->store->record($listing, 1000, '2026-08-06T09:00:00+00:00');
+        $this->store->record($listing, 1000, '2026-08-07T09:00:00+00:00');
+        $this->store->record($listing, 1200, '2026-08-01T09:00:00+00:00');   // an archived run, replayed
+        $latest = $this->store->record($listing, 1000, '2026-08-08T09:00:00+00:00');
+
+        self::assertFalse($latest->isPriceDrop);
+        self::assertSame(0, $latest->rentDeltaCc, 'the rent never moved, so the change is zero — not a 200-euro cut');
+        self::assertSame([1200, 1000], $this->store->priceHistory($this->store->dedupKey($listing)));
+    }
+
+    /** The changes-only invariant survives an insertion between two equal rents. */
+    public function testPriceHistoryStaysChangesOnlyUnderOutOfOrderSightings(): void
+    {
+        $listing = $this->listing(externalId: 'ANN-1');
+
+        $this->store->record($listing, 1000, '2026-08-06T09:00:00+00:00');
+        $this->store->record($listing, 1000, '2026-08-01T09:00:00+00:00');
+
+        self::assertSame([1000], $this->store->priceHistory($this->store->dedupKey($listing)));
+    }
+
+    /** A stale sighting does not roll the current state backwards. */
+    public function testAStaleSightingDoesNotOverwriteTheCurrentState(): void
+    {
+        $listing = $this->listing(externalId: 'ANN-1', title: 'T3 Cergy', url: 'https://a.test/new');
+        $stale = $this->listing(externalId: 'ANN-1', title: 'ANCIEN TITRE', url: 'https://a.test/old');
+
+        $this->store->record($listing, 940, '2026-08-08T09:00:00+00:00');
+        $this->store->record($stale, 1200, '2026-08-01T09:00:00+00:00');
+
+        $snapshot = $this->store->snapshot($this->store->dedupKey($listing));
+
+        self::assertNotNull($snapshot);
+        self::assertSame('T3 Cergy', $snapshot->title);
+        self::assertSame('https://a.test/new', $snapshot->url);
+        self::assertSame(940, $snapshot->rentCc);
+    }
+
+    /**
+     * A run whose field map partially broke must not erase what we already knew.
+     *
+     * The rent case was defended in the commit that introduced it; the URL and title were the same
+     * bug, unnoticed. Markup drift is the premise of the whole health module, so one sighting with
+     * a missed link selector is the expected case — and it left the seen-set holding a listing
+     * with no link and no title, which is exactly the pair a notification needs to be actionable.
+     */
+    public function testAPartialReParseDoesNotEraseTheUrlOrTitle(): void
+    {
+        $full = $this->listing(externalId: 'ANN-1', url: 'https://a.test/annonce/1', title: 'T3 Cergy 68 m²');
+        $partial = new RawListing(sourceName: 'inli', externalId: 'ANN-1');   // url null, title ''
+
+        $this->store->record($full, 1450, '2026-08-07T09:00:00+00:00');
+        $this->store->record($partial, null, '2026-08-08T09:00:00+00:00');
+
+        $snapshot = $this->store->snapshot($this->store->dedupKey($full));
+
+        self::assertNotNull($snapshot);
+        self::assertSame('https://a.test/annonce/1', $snapshot->url);
+        self::assertSame('T3 Cergy 68 m²', $snapshot->title);
+        self::assertSame(1450, $snapshot->rentCc);
+    }
+
+    // ── Timestamps ────────────────────────────────────────────────────────────────────────────────
+
+    /**
+     * A trailing `Z` is the UTC instant, whatever the host timezone.
+     *
+     * `\Z` in a `createFromFormat` pattern is decoration: the instant is built in the DEFAULT
+     * timezone and the Z discarded. On `Europe/Paris` — the natural deployment for an
+     * Île-de-France tool — `…T10:30:00Z` therefore landed at 08:30 UTC, sorting BEFORE a 09:00 UTC
+     * sibling written with an offset and inverting the price history, so a rise read as a drop.
+     */
+    public function testATrailingZIsTheUtcInstantWhateverTheHostTimezone(): void
+    {
+        $original = date_default_timezone_get();
+        date_default_timezone_set('Europe/Paris');
+
+        try {
+            $listing = $this->listing(externalId: 'ANN-1');
+
+            $this->store->record($listing, 1000, '2026-07-01T10:30:00Z');            // 10:30 UTC
+            $this->store->record($listing, 1200, '2026-07-01T11:00:00+02:00');       // 09:00 UTC — earlier
+
+            self::assertSame([1200, 1000], $this->store->priceHistory($this->store->dedupKey($listing)));
+        } finally {
+            date_default_timezone_set($original);
+        }
+    }
+
+    /** A valid UTC instant inside the spring DST gap is an instant, not an error. */
+    public function testAnInstantInsideTheSpringDstGapIsAccepted(): void
+    {
+        $original = date_default_timezone_get();
+        date_default_timezone_set('Europe/Paris');
+
+        try {
+            $this->store->recordRun('inli', 4, true, null, '2026-03-29T02:30:00Z');
+
+            self::assertSame(4, $this->store->health('inli')->lastCount);
+        } finally {
+            date_default_timezone_set($original);
+        }
+    }
+
+    /**
+     * A date that does not exist is refused rather than rolled forward.
+     *
+     * `createFromFormat` silently normalises `2026-02-30` to 2 March. The round-trip check is what
+     * makes the parse strict, and `'hier matin'` — which `createFromFormat` rejects outright —
+     * never exercised it.
+     */
+    public function testADateThatDoesNotExistIsRefused(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+
+        $this->store->recordRun('inli', 3, true, null, '2026-02-30T09:00:00+00:00');
+    }
+
     // ── Persistence, which is the entire point ────────────────────────────────────────────────────
 
     /**
@@ -390,6 +570,36 @@ final class StoreTest extends TestCase
         Store::open($path);
     }
 
+    /**
+     * An OLDER database is refused too, and that direction was the real gap.
+     *
+     * `CREATE TABLE IF NOT EXISTS` adds no columns to a table that already exists, and nothing
+     * re-stamped `schema_meta` — so the day `SCHEMA_VERSION` becomes 2, every existing user
+     * database would have opened silently as v1 forever, with `schemaVersion()` reporting 1 and
+     * nothing downstream able to detect the mismatch.
+     */
+    public function testADatabaseFromAnOlderSchemaIsRefused(): void
+    {
+        $path = $this->temporaryDatabase();
+        Store::open($path);
+
+        $raw = new \PDO('sqlite:' . $path, options: [\PDO::ATTR_ERRMODE => \PDO::ERRMODE_EXCEPTION]);
+        $raw->exec("UPDATE schema_meta SET value = '0' WHERE key = 'schema_version'");
+        unset($raw);
+
+        $this->expectException(\RuntimeException::class);
+        Store::open($path);
+    }
+
+    /** A database path whose parent is a regular file fails with this class's own message. */
+    public function testADatabasePathThatTraversesAFileIsRefused(): void
+    {
+        $file = $this->temporaryDatabase();
+
+        $this->expectException(\RuntimeException::class);
+        Store::open($file . '/store.db');
+    }
+
     /** @var list<string> */
     private array $temporaryPaths = [];
 
@@ -415,6 +625,170 @@ final class StoreTest extends TestCase
         $this->temporaryPaths[] = $path;
 
         return $path;
+    }
+
+    // ── Source health: the two ways a dead source reported OK ─────────────────────────────────────
+
+    /**
+     * A source that breaks after a GAP longer than the rolling window is still broken.
+     *
+     * `rollingMeanBefore()` anchors its window on the first empty run of the streak, so any gap
+     * longer than the window — a holiday, a reclaimed container, a temporarily disabled source —
+     * left it with nothing to average and returned null. Null is "I do not know what normal looks
+     * like for this source", and it shared a branch with "normal is zero": ten consecutive empty
+     * runs against a documented 25-listing history reported `OK`, detail *"0 annonces au dernier
+     * run"*. The identical sequence WITHOUT the gap alerted correctly, which is what made it
+     * invisible — it works in the test and fails in the field.
+     */
+    public function testASourceThatBreaksAfterALongGapIsStillReportedBroken(): void
+    {
+        foreach (range(1, 14) as $day) {
+            $this->store->recordRun('inli', 25, true, null, sprintf('2026-08-%02dT09:00:00+00:00', $day));
+        }
+
+        // Nine days off — longer than ROLLING_WINDOW_DAYS. The site redesigns meanwhile.
+        foreach (['2026-08-23', '2026-08-24', '2026-08-25'] as $day) {
+            $this->store->recordRun('inli', 0, true, null, $day . 'T09:00:00+00:00');
+        }
+
+        $health = $this->store->health('inli');
+
+        self::assertSame(SourceStatus::BROKEN, $health->status);
+        self::assertStringContainsString('25', $health->detail);
+    }
+
+    /**
+     * The run log is monotonic per source, and an out-of-order write is refused loudly.
+     *
+     * Timestamps are caller-supplied and never checked against a clock — a deliberate choice, since
+     * health can only be tested if time is an argument. The cost is that ONE run stamped from a
+     * skewed clock (NTP not yet synced after a resume, a VM restored from a snapshot, a caller
+     * passing the listing's published date instead of the run time) sorts last forever and makes
+     * every later run invisible to `health()`: twenty consecutive outright failures reported `OK`,
+     * detail cheerfully naming the 25 listings of the skewed run. Refusing the write converts that
+     * silent freeze into a diagnosable one. Unlike a sighting, a run has no legitimate
+     * out-of-order case — it is logged when it happens.
+     */
+    public function testARunMayNotBeLoggedBeforeOneAlreadyRecorded(): void
+    {
+        $this->store->recordRun('inli', 25, true, null, '2027-01-01T09:00:00+00:00');   // skewed clock
+
+        $this->expectException(\InvalidArgumentException::class);
+
+        $this->store->recordRun('inli', 0, false, 'HTTP 503', '2026-08-07T09:00:00+00:00');
+    }
+
+    /**
+     * A source that succeeds and never once produces an item is not healthy.
+     *
+     * The twin of NEVER_RUN. A source onboarded with a wrong field map answers HTTP 200 and parses
+     * zero items, forever: it never fails so nothing alerts, and its baseline really is zero so the
+     * empty-run rule correctly declines to fire. Thirty days of `OK` for a source that has never
+     * worked.
+     */
+    public function testASourceThatNeverProducesAnythingIsNotReportedHealthy(): void
+    {
+        foreach (range(1, 30) as $day) {
+            $this->store->recordRun('newsource', 0, true, null, sprintf('2026-08-%02dT09:00:00+00:00', $day));
+        }
+
+        $health = $this->store->health('newsource');
+
+        self::assertSame(SourceStatus::NEVER_PRODUCED, $health->status);
+        self::assertTrue($health->status->isAlerting());
+    }
+
+    /**
+     * A source failing half its fetches is not healthy either.
+     *
+     * `trailingEmptyRuns()` resets on any success and the BROKEN rule reads only the last run, so
+     * half the market missed every day was indistinguishable from a working source.
+     */
+    public function testASourceFailingHalfItsRunsIsFlagged(): void
+    {
+        foreach ([[1, true], [2, false], [3, true], [4, false], [5, true], [6, false], [7, true]] as [$day, $ok]) {
+            $this->store->recordRun(
+                'inli',
+                $ok ? 12 : 0,
+                $ok,
+                $ok ? null : 'HTTP 503',
+                sprintf('2026-08-%02dT09:00:00+00:00', $day),
+            );
+        }
+
+        $health = $this->store->health('inli');
+
+        self::assertSame(SourceStatus::WARN_FLAKY, $health->status);
+        self::assertSame(3, $health->failedRunsInWindow);
+        self::assertSame(7, $health->runsInWindow);
+    }
+
+    /**
+     * Every field of the verdict carries evidence, and every one is asserted.
+     *
+     * Five of `SourceHealth`'s fields could be replaced with constants and the whole suite stayed
+     * green — including `lastSuccessAt`, `lastCount` and `rollingMean`, the three `CLAUDE.md` hard
+     * rule 2 names by name. An unasserted field is a field that can silently become wrong, and the
+     * class exists so a verdict can be argued with.
+     */
+    public function testHealthCarriesTheEvidenceForItsVerdict(): void
+    {
+        $this->store->recordRun('inli', 20, true, null, '2026-08-01T09:00:00+00:00');
+        $this->store->recordRun('inli', 0, false, 'HTTP 503', '2026-08-02T09:00:00+00:00');
+        $this->store->recordRun('inli', 18, true, null, '2026-08-03T09:00:00+00:00');
+        $this->store->recordRun('inli', 19, true, null, '2026-08-04T09:00:00+00:00');
+
+        $health = $this->store->health('inli');
+
+        self::assertSame(SourceStatus::OK, $health->status);
+        self::assertSame('inli', $health->sourceName);
+        self::assertSame('2026-08-04T09:00:00+00:00', $health->lastSuccessAt);
+        self::assertSame('2026-08-02T09:00:00+00:00', $health->lastFailureAt);
+        self::assertSame(19, $health->lastCount);
+        self::assertSame(19.0, $health->rollingMean);          // mean of 20 and 18, before the last run
+        self::assertSame(4, $health->runsInWindow);
+        self::assertSame(1, $health->failedRunsInWindow);
+        self::assertSame(4, $health->totalRuns);
+        self::assertSame(0.25, $health->failureRate());
+        self::assertSame(0, $health->consecutiveEmptyRuns);
+    }
+
+    /** Exactly one status means "nothing to tell the user". */
+    public function testEveryStatusExceptOkAlerts(): void
+    {
+        foreach (SourceStatus::cases() as $status) {
+            self::assertSame(
+                $status !== SourceStatus::OK,
+                $status->isAlerting(),
+                sprintf('%s alerts when it should not, or vice versa', $status->value),
+            );
+        }
+    }
+
+    /**
+     * An adapter's error text is masked before it is persisted or shown.
+     *
+     * `recordRun()` stores it, `health()` interpolates it into the detail, and `isAlerting()` says
+     * that detail should reach the user — so a cURL error carrying the IDFM key, or an IMAP failure
+     * carrying the mailbox, would put a credential into the database and into a push notification
+     * through a channel nobody would think to grep (`CLAUDE.md` hard rule 7). The store is the
+     * single funnel every adapter passes through, so the guard belongs here.
+     */
+    public function testCredentialsInAnAdapterErrorAreMaskedBeforeTheyReachTheUser(): void
+    {
+        $this->store->recordRun(
+            'transit',
+            0,
+            false,
+            'GET https://prim.iledefrance-mobilites.fr/marketplace/v2?apikey=SECRET123456 failed for jean.dupont@example.com',
+            '2026-08-07T09:00:00+00:00',
+        );
+
+        $detail = $this->store->health('transit')->detail;
+
+        self::assertStringNotContainsString('SECRET123456', $detail);
+        self::assertStringNotContainsString('jean.dupont@example.com', $detail);
+        self::assertStringContainsString('prim.iledefrance-mobilites.fr', $detail);   // still diagnosable
     }
 
     /** @param array<string,string> $fields */

@@ -26,7 +26,7 @@ Anything below describing `criteria`, `dedup`, the adapters or `enrich` is the *
 present. Do not report findings against files that do not exist yet, and do not name `pytest` as
 though it were wired — the PHP suite is the only test runner here.
 
-**Eighteen decisions are still open** and several of them change the architecture — see
+**Twenty-one decisions are still open** and several of them change the architecture — see
 [`docs/OPEN-QUESTIONS.md`](docs/OPEN-QUESTIONS.md). Milestone 1 should not start until the blocking ones
 are answered.
 
@@ -330,10 +330,13 @@ python3 prototype/scout.py --help       # the superseded prototype, reference on
 
 **`tests/sabotage-check.sh` is not optional ceremony.** Every failure mode in the tenure module is
 silent — a classifier that over-rejects looks exactly like a quiet rental market, and one that
-under-rejects looks productive until an application is wasted. A green suite proves the code passes
-the tests; only the sabotage run proves the tests would notice if it stopped working. Run it after
-any change to `src/php/Core/Tenure*`, `Text.php`, or the corpus. It already found three undetected
-regressions and one piece of dead safety code on the day it was written.
+under-rejects looks productive until an application is wasted. The store is the same shape: a
+seen-set that stops persisting, a price history that stops recording, a run log that reports a dead
+source as calm. A green suite proves the code passes the tests; only the sabotage run proves the
+tests would notice if it stopped working. **Run it after any change to `src/php/Core/Tenure*`,
+`Text.php`, the corpus, or anything under `src/php/Store/`.** It already found three undetected
+regressions and one piece of dead safety code on the day it was written, and two more holes in the
+store's own suite the day that was added.
 
 <!-- ADAPT: fill from the manifest / Makefile once milestone 1 lands. There is no CLI today.
      Target CLI surface, per spec §10:
@@ -376,6 +379,18 @@ Required coverage, per spec §11 — non-negotiable once `src/` exists:
 - **Criteria tests.** Table-driven, covering every hard disqualifier and every score component.
 - **Dedup tests.** Including the cross-portal fuzzy case, attacked from both sides (over-merge hides a
   flat, under-merge triple-notifies one).
+- **Store tests.** The store has the most silent failure modes in the tree, and a review panel found
+  25 defects in its first cut — so its contract is written down rather than left to judgement. Every
+  test must exist in a named category: **identity** (nothing collapses onto a shared key: blank and
+  Unicode-whitespace ids, the no-information floor, URL and title normalisation, source scoping);
+  **order** (a stale sighting manufactures no price drop and does not overwrite current state; the
+  run log refuses an out-of-order write); **time** (a trailing `Z` is UTC on any host timezone, a
+  non-existent date is refused, the DST gap is an instant); **health** (every `SourceStatus` member
+  reachable and asserted, every `SourceHealth` field asserted — five of them were replaceable with
+  constants while the suite stayed green); **persistence** (the seen-set and price history survive
+  reopening, and every schema-version mismatch is refused); **secrets** (`Redact` masks before
+  anything is persisted or shown). A new store behaviour without a category is a behaviour nobody
+  decided to guarantee.
 
 ## File layout quick reference
 
@@ -458,14 +473,22 @@ scripts/claude-bootstrap/   Reinstalls ~/.claude/ at SessionStart (cloud contain
 
 ## Credentials & stateful data
 
-<!-- ADAPT: fill once .env.example exists. Expected keys: IMAP host/user/pass for the dedicated alert
-     mailbox, the notification channel token (ntfy topic / Telegram / SMTP), the IDFM/PRIM API key,
-     and RFR N-2 if income-eligibility checking is enabled (Q6). -->
+`.env.example` is the committed template and lists every key: the dedicated alert mailbox's IMAP
+host/user/password, the notification channel token (ntfy / Telegram / SMTP), the IDFM/PRIM API key,
+`RFR_N2` if income-eligibility checking is enabled (Q6), and `RENT_WATCH_DB`. Keep the two in sync —
+a key added to `.env` and not to the template is invisible to the next deployment.
 
-Stateful data that must never be casually deleted — see
+**Adapter error text is a secrets channel, and the guard is already in place.** An exception from an
+HTTP or IMAP adapter naturally carries the request URL (the IDFM key is a query parameter) or the
+mailbox it failed on. `Store::recordRun()` persists that text and `Store::health()` interpolates it
+into a user-facing detail, so `RentWatch\Core\Redact` masks it at that single funnel. Do not bypass
+`Redact::text()` when adding an adapter, and do not add a second, per-adapter copy of it.
+
+Stateful data that must not be casually deleted — see
 [`scripts/claude-bootstrap/BLAST-RADIUS.md`](scripts/claude-bootstrap/BLAST-RADIUS.md):
 
-- the seen-set / listings DB — deleting it makes the next run **re-notify everything**
+- the seen-set / listings DB (`RENT_WATCH_DB`, default `var/rent-watch.sqlite3`) — deleting it makes
+  the next run **re-notify everything**
 - price history — a rent drop is a notification-worthy event; the history is not reconstructible
 - `tests/fixtures/**` — the frozen payload IS the test's ground truth
 - the classifier corpus labels — relabelling one can make a false positive "correct"

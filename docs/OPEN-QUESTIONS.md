@@ -328,6 +328,63 @@ inli:
 **Default if unanswered:** option 1, and `spec/PROJECT_BRIEF.md` §9 plus `CLAUDE.md`'s architecture
 table are amended to say `.json`.
 
+### Ⓞ Q23 — Two health thresholds I chose rather than derived
+
+**Not blocking** — both have working defaults and both alert in the safe direction. Raised so they
+are tuned against real run history instead of defended as if they had been measured.
+
+Spec §8 names two numbers (3 consecutive empty runs, a >70% drop below the rolling mean) and those
+are implemented as written. A review panel found two more failure shapes it does not name, and
+closing them needed thresholds the spec does not supply:
+
+| Constant | Value | What it decides |
+|---|---|---|
+| `Store::FLAKY_FAILURE_RATIO` | `0.3` | more than 30% of runs failing in the 7-day window ⇒ `WARN_FLAKY` |
+| `Store::MIN_RUNS_FOR_FLAKY` | `3` | below this many runs in the window, a failure *rate* means nothing |
+
+The shape being caught: a source erroring on half its fetches missed half the market every day and
+was indistinguishable from a healthy one, because the streak counter resets on any success and the
+BROKEN rule reads only the last run.
+
+**Options:** 1. leave both as they are *(recommended — they can only be tuned against run history
+that does not exist yet)*; 2. raise the ratio if `scout doctor` turns out noisy on a flaky host;
+3. drop `WARN_FLAKY` entirely and rely on the daily digest; 4. none of these / challenge the premise.
+
+**Default if unanswered:** option 1.
+
+### Ⓞ Q24 — Should the store keep the tenure verdict, so a past decision can be audited?
+
+**Not blocking milestone 1**, but it gets more expensive with every stored listing.
+
+`.claude/agents/tenure-correctness-reviewer.md` is committed policy and asks that a stored row keep
+the confidence and the signals, *"so a past verdict can be audited after a change"*. The `listings`
+table keeps none of it — a listing stored under an old classifier cannot be re-evaluated or explained
+without re-fetching it, and the source may have removed the ad by then.
+
+Not done now because it is a schema change and the criteria layer that would consume it does not
+exist. It is recorded here rather than in a code comment because adding columns later means writing
+the migration path `Store::migrate()` deliberately does not have yet.
+
+**Options:** 1. add `tenure`, `confidence` and `signals_json` at the same time as the criteria layer,
+in one schema v2 with its migration *(recommended)*; 2. add them now, ahead of a consumer; 3. accept
+that verdicts are not auditable and drop the reviewer-agent clause; 4. none of these.
+
+**Default if unanswered:** option 1.
+
+### Ⓞ Q25 — `scout doctor` is specified to report timing; nothing measures it
+
+Spec §8: *"`scout doctor` command: run every source once, report status, **timing**, and item
+counts."* Status and item counts are implemented; `source_runs` has no duration column and
+`SourceHealth` has no timing field, so three of the four are done and the fourth is not.
+
+Deferred rather than guessed at because only the CLI can measure a fetch, and the CLI does not exist.
+Like Q24 it is a schema change, so the two should probably land together.
+
+**Options:** 1. add `duration_ms` in the same schema v2 as Q24, when the CLI lands *(recommended)*;
+2. add it now; 3. drop timing from `doctor`, amending spec §8; 4. none of these.
+
+**Default if unanswered:** option 1.
+
 ## Part 2b — Raised by building the tenure classifier (2026-08-06)
 
 Both of these were found by writing the code rather than by planning it, and both are currently
