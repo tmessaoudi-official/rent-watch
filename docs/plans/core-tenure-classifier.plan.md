@@ -153,6 +153,20 @@ store, no notify.
   (forcing every route to DIGEST fails it on every surface) and blind to the one-rule-over-reaching
   kind, which is the shape that has actually occurred. Its payload is one benign string; widening
   that is open work, not a solved problem.
+
+  The metric itself, measured at each commit in the sequence — this is the durable record, because
+  commit `457446e` states the last figure as 29.6% and that is wrong:
+
+  | commit | MATCH | cases | share |
+  |---|---|---|---|
+  | `906dfcc` | 30 | 90 | 33.3% |
+  | `c1cf5c3` | 28 | 93 | 30.1% |
+  | `9c40b8c` | 28 | 100 | 28.0% |
+  | `021d60b` | 30 | 105 | 28.6% |
+  | `457446e` | 31 | 108 | **28.7%** |
+
+  Arrested rather than reversed: absolute MATCH has risen 28 → 31 across the last three commits and
+  the share is flat, which is what "no longer sliding" looks like. No relabels since `9c40b8c`.
 - [2026-08-07 14:10] AGREED: **Incidental surfaces are folded TOLERANTLY, tenure-bearing ones
   strictly.** Reading every field ran `Text::fold()`'s entity gate on URLs and surface cells, so one
   `&amp;` in an href — ordinary scrape output — digested the whole listing and even softened a
