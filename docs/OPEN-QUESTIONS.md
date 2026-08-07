@@ -279,6 +279,55 @@ that `plus de 3 chambres` does not digest half the market (`trap-010` pins that)
 
 **Default if unanswered:** option 1. Nothing changes.
 
+## Part 2d — Raised by starting milestone 1 (2026-08-07)
+
+### Ⓑ Q22 — `config/*.yaml` cannot be parsed here. What format do the two config files take?
+
+**BLOCKING.** Nothing in milestone 1 above the store can be built until this is settled: the adapter
+contract, the criteria engine and the CLI all read config, and the file format decides what you edit
+by hand for the rest of the project's life.
+
+`spec/PROJECT_BRIEF.md` §9 and `CLAUDE.md`'s architecture table both name `config/criteria.yaml` and
+`config/sources.yaml`. **This container has no `ext-yaml`** — `php -m` does not list it — and
+Composer cannot install `symfony/yaml` or any other parser, because the egress policy returns 403 on
+`codeload.github.com` (`CLAUDE.md` § Gotchas: this is why the project has zero Composer
+dependencies). So `.yaml` files would sit there unread.
+
+Concretely, this is the smallest thing that has to load:
+
+```yaml
+inli:
+  family: institutional
+  default_tenure: LLI
+  mixed_tenure: false        # ← this boolean arms the §1 fail-closed rule
+  enabled: true
+```
+
+**Options:**
+
+1. **JSON — `config/criteria.json` + `config/sources.json`** *(recommended)*. `ext-json` is already a
+   hard requirement in `composer.json` and is always present. The parser is the language's, so there
+   is no bespoke code between your file and `mixed_tenure`. The cost is real and worth stating: JSON
+   has no comments, and the source definitions are exactly the kind of file that wants a comment
+   explaining why a selector is what it is. Mitigation is a `"_comment"` key convention, which is
+   ugly but honest.
+2. **PHP array files — `config/criteria.php` returning an array.** Comments, trailing commas, no
+   parser at all, and an editor that already understands the syntax. The cost is that a config file
+   becomes executable code: a typo can be a fatal error rather than a validation message, and it
+   closes the door on the phorj side ever reading the same file — which matters, because the shared
+   corpus is the whole reason this project is written twice.
+3. **Hand-rolled YAML-subset parser, keeping the `.yaml` files as specified.** Matches the spec
+   exactly and reads best of the three. I recommend against it: a subset parser that mis-reads one
+   boolean silently disarms `mixed_tenure`, and `CLAUDE.md` §1 is the one guarantee in this project
+   that must not depend on code I wrote in an afternoon. If you want this, it needs its own test
+   suite and its own sabotage cases before any config depends on it.
+4. **None of these / challenge the premise** — e.g. if the real deployment host has `ext-yaml` and
+   only this container does not, say so and option 3 becomes unnecessary rather than risky. That is
+   a genuine possibility I cannot check from here.
+
+**Default if unanswered:** option 1, and `spec/PROJECT_BRIEF.md` §9 plus `CLAUDE.md`'s architecture
+table are amended to say `.json`.
+
 ## Part 2b — Raised by building the tenure classifier (2026-08-06)
 
 Both of these were found by writing the code rather than by planning it, and both are currently

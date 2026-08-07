@@ -1,11 +1,13 @@
 #!/usr/bin/env bash
-# sabotage-check.sh — does the classifier suite actually CATCH a regression?
+# sabotage-check.sh — does the suite actually CATCH a regression?
 #
 # A green test run proves the code passes the tests. It does not prove the tests would notice if the
-# code stopped working — and for this module that distinction is the whole ballgame, because every
+# code stopped working — and for these modules that distinction is the whole ballgame, because every
 # failure mode here is SILENT. A classifier that quietly rejects everything looks exactly like a
 # quiet rental market, and a classifier that quietly admits social housing looks exactly like a
-# productive one until an application is wasted.
+# productive one until an application is wasted. The store is the same shape: a seen-set that stops
+# persisting, a price history that stops recording, a run log that reports a dead source as calm —
+# none of them raise anything, and all of them are indistinguishable from working.
 #
 # So: break each guarantee on a scratch copy, one at a time, and require the suite to go red. A
 # sabotage that leaves the suite green is a hole in the corpus, reported as FAIL.
@@ -94,7 +96,7 @@ run_sabotage() {
   fi
 }
 
-printf '\n== sabotage-check: can the suite detect a broken classifier? ==\n\n'
+printf '\n== sabotage-check: can the suite detect a broken classifier or store? ==\n\n'
 
 # BASELINE FIRST, and this is not ceremony. Every sabotage below asserts "the suite went red". If
 # the suite is ALREADY red — a missing autoloader, a syntax error, a half-applied edit — then every
@@ -394,6 +396,85 @@ run_sabotage "'sans' negation lookbehind removed" \
 run_sabotage "conventionne exception removed entirely (genuine LLI stock digests)" \
   src/php/Core/TenureClassifier.php \
   's/if ($s->tenure !== Tenure::CONVENTIONNE || $s->evidence !== .conventionne.) {/if (true) {/'
+
+# ── The store ─────────────────────────────────────────────────────────────────────────────────────
+#
+# Same argument, different subsystem. The store's failure modes are silent in the direction that
+# hurts most: a seen-set that stops persisting re-notifies the entire market at once, a price history
+# that stops recording loses evidence that cannot be reconstructed (a listing only ever shows its
+# CURRENT rent), and a run log that mis-derives health reports a broken selector as a quiet market —
+# `CLAUDE.md` hard rule 2, the defect this whole project is shaped around.
+#
+# None of those raise an exception. Every one of them leaves the suite green unless a test is
+# actually looking, so "the store suite passes" proves nothing on its own.
+
+run_sabotage "unknown rent reads as a drop to zero (null treated as 0)" \
+  src/php/Store/Store.php \
+  's%($rentCc !== null && $previousRentCc !== null) ? $rentCc - $previousRentCc : null%($rentCc ?? 0) - ($previousRentCc ?? 0)%'
+
+run_sabotage "last known rent erased when a source stops publishing it" \
+  src/php/Store/Store.php \
+  's%COALESCE(:rent, rent_cc)%:rent%'
+
+run_sabotage "price history records unchanged rents (no longer changes-only)" \
+  src/php/Store/Store.php \
+  's%$rentCc !== null && $rentCc !== $previousRentCc%$rentCc !== null%'
+
+run_sabotage "seen-set stops persisting (every run re-notifies everything)" \
+  src/php/Store/Store.php \
+  "s%'sqlite:' . \$path%'sqlite::memory:'%"
+
+run_sabotage "notified flag never read (a digested listing counts as notified)" \
+  src/php/Store/Store.php \
+  "s%\$row !== false && \$row\['notified_at'\] !== null%true%"
+
+run_sabotage "marking an unknown listing notified is a silent no-op" \
+  src/php/Store/Store.php \
+  's%if ($statement->rowCount() === 0) {%if (false) {%'
+
+run_sabotage "dedup key no longer scoped to the source (two feeds collide on id 17)" \
+  src/php/Store/Store.php \
+  "s%return \$source . ':id:' . rawurlencode(\$externalId);%return ':id:' . rawurlencode(\$externalId);%"
+
+run_sabotage "URL normalisation bypassed (a #fragment forks the identity)" \
+  src/php/Store/Store.php \
+  's%if ($parts === false || !isset($parts\[.host.\])) {%if (true) {%'
+
+run_sabotage "URL path folded with the host (two distinct listings over-merge)" \
+  src/php/Store/Store.php \
+  's%return $rebuilt;%return strtolower($rebuilt);%'
+
+run_sabotage "unparseable timestamp silently becomes the epoch" \
+  src/php/Store/Store.php \
+  's@throw new .InvalidArgumentException(sprintf(.horodatage ISO-8601 illisible : %s., $iso));@return 0;@'
+
+run_sabotage "a database from a newer schema is operated on anyway" \
+  src/php/Store/Store.php \
+  's%if ($recorded > self::SCHEMA_VERSION) {%if (false) {%'
+
+run_sabotage "a source that never ran is reported healthy" \
+  src/php/Store/Store.php \
+  's%status: SourceStatus::NEVER_RUN,%status: SourceStatus::OK,%'
+
+run_sabotage "a failed last run no longer reports BROKEN" \
+  src/php/Store/Store.php \
+  's%if (!$lastOk) {%if (false) {%'
+
+run_sabotage "a failed run extends the empty streak (failure read as 'nothing found')" \
+  src/php/Store/Store.php \
+  "s%(int) \$run\['ok'\] !== 1 || %%"
+
+run_sabotage "empty-run threshold raised out of reach (a dead source stays OK)" \
+  src/php/Store/Store.php \
+  's%self::EMPTY_RUNS_BEFORE_BROKEN%99%'
+
+run_sabotage "zero-baseline check removed (a genuinely quiet source is cried wolf on)" \
+  src/php/Store/Store.php \
+  's%if ($baseline !== null && $baseline > 0.0) {%if (true) {%'
+
+run_sabotage "drop-below-mean warning threshold neutralised" \
+  src/php/Store/Store.php \
+  's%$rollingMean \* self::DROP_WARNING_RATIO%0.0%'
 
 printf '\n  %d sabotage(s) detected, %d undetected\n\n' "$pass" "$fail"
 

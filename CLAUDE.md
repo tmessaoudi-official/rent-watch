@@ -15,17 +15,18 @@ The full specification is [`spec/PROJECT_BRIEF.md`](spec/PROJECT_BRIEF.md). It i
 for the product, and **every constraint in it is a ruling**, not a draft to be improved on. Read it
 before touching anything under `src/`.
 
-Status: **the pure core exists; nothing else does.** As of 2026-08-06 there is a PHP 8.5
+Status: **the pure core and the store exist; nothing else does.** As of 2026-08-07 there is a PHP 8.5
 implementation of `models` + `tenure` under `src/php/Core/`, a 108-case language-neutral classifier
-corpus at `tests/fixtures/tenure/corpus.json`, and a PHPUnit suite. There is still **no**
-`config/`, no adapter, no store, no notification channel, no CLI and no CI. `src/phorj/` is not
-written yet — it waits on the three phorj builds in `docs/PHORJ-REQUIREMENTS.md`.
+corpus at `tests/fixtures/tenure/corpus.json`, the seen-set / price-history / run-log store under
+`src/php/Store/` with `SourceHealth` + `SourceStatus` in `Core/`, and a PHPUnit suite. There is still
+**no** `config/`, no adapter, no notification channel, no CLI and no CI. `src/phorj/` is not written
+yet — it waits on the three phorj builds in `docs/PHORJ-REQUIREMENTS.md`.
 
-Anything below describing `criteria`, `dedup`, `store`, `health`, the adapters or `enrich` is the
-**target**, not the present. Do not report findings against files that do not exist yet, and do not
-name `pytest` as though it were wired — the PHP suite is the only test runner here.
+Anything below describing `criteria`, `dedup`, the adapters or `enrich` is the **target**, not the
+present. Do not report findings against files that do not exist yet, and do not name `pytest` as
+though it were wired — the PHP suite is the only test runner here.
 
-**Seventeen decisions are still open** and several of them change the architecture — see
+**Eighteen decisions are still open** and several of them change the architecture — see
 [`docs/OPEN-QUESTIONS.md`](docs/OPEN-QUESTIONS.md). Milestone 1 should not start until the blocking ones
 are answered.
 
@@ -148,7 +149,8 @@ impossible by design rather than by omission (`docs/PHORJ-REQUIREMENTS.md`).
 
 | Layer | Path | Responsibility |
 |---|---|---|
-| Core | `src/php/Core/` · later `src/phorj/core/` | `models`, `tenure` (the classifier), `criteria` (score + hard disqualifiers), `dedup`, `store` (SQLite + price history), `health` |
+| Core | `src/php/Core/` · later `src/phorj/core/` | `models`, `tenure` (the classifier), `criteria` (score + hard disqualifiers), `dedup`, `health` (`SourceHealth` + `SourceStatus`) |
+| Store | `src/php/Store/` | SQLite seen-set, price history and run log. **PHP-only** — it touches a database, so phorj will not transpile it. |
 | Notify | `src/php/Core/Notify/` | One module per channel. Every notification carries `score` + human-readable `reasons[]`. |
 | Adapters | `src/php/Adapters/` | `base` (the `Source` interface), `http_json`, `html`, `email_alert` (IMAP), `browser` (Playwright, opt-in), `sites/` for per-site overrides |
 | Enrich | `src/php/Enrich/` | `transit` (IDFM / PRIM door-to-door commute), `geo` (commune → INSEE code, coords) |
@@ -383,7 +385,8 @@ prototype/                  Pre-existing single-file prototype. Reference only; 
 docs/OPEN-QUESTIONS.md      Decisions still pending, with the default if unanswered
 docs/plans/                 <topic>.plan.md, each with its own ## Decisions Log
 config/                     criteria.yaml + sources.yaml (committed)          [not yet created]
-src/php/Core/               PHP 8.5 pure core — models + tenure classifier
+src/php/Core/               PHP 8.5 pure core — models + tenure classifier + source health
+src/php/Store/              SQLite seen-set, price history and run log
 src/phorj/                  phorj port of the same pure core                  [waits on phorj]
 tests/php/                  PHPUnit suites
 tests/fixtures/tenure/      corpus.json — the language-neutral classifier corpus
