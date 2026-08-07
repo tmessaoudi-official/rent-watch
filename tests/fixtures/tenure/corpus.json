@@ -22,7 +22,7 @@
     ],
     "version": 1,
     "declared_counts": {
-        "synthetic": 82,
+        "synthetic": 90,
         "captured": 0
     },
     "sources": {
@@ -910,11 +910,10 @@
                 "financement": "LLI"
             },
             "expect": {
-                "tenure": "LLI",
-                "outcome": "MATCH",
-                "min_confidence": 90
+                "tenure": "UNKNOWN",
+                "outcome": "DIGEST"
             },
-            "why": "Found by review 2026-08-06. The conventionne exception looked at tier-2 labels only, so LLI declared through a STRUCTURED FIELD — the strongest evidence the ladder has — did not count as 'explicitly labelled intermediate', while the weaker text label did. Genuine LLI stock digested when its evidence arrived through the best channel. Fail-closed, so not a breach, but inconsistent with the ladder it claims to implement."
+            "why": "RELABELLED 2026-08-06 after review round 4, with the evidence here and in the commit message as CLAUDE.md requires. Round 3 made a tier-1 LLI field qualify a 'conventionne' ANYWHERE in the text, on the ladder argument that a structured field is the strongest evidence there is. Round 4 showed what that buys: a description reading '40 logements conventionnes reserves aux menages sous plafond de ressources, et 12 logements en location' MATCHED on the strength of one field, with the word 'conventionne' absent from reasons[]. The exemption was removed outright rather than bounded again -- two attempts at bounding it both leaked, and every leak was in the notify direction. The listing now digests, and its reasons[] name the 'conventionne' explicitly, so a human sees exactly what the classifier saw. A genuine LLI whose text also says 'conventionne' costs one glance; the alternative costs an application. ORIGINAL LABEL, for the record: LLI / MATCH / min_confidence 90, added in round 3 because the conventionne exception looked at tier-2 labels only, so LLI declared through a STRUCTURED FIELD — the strongest evidence the ladder has — did not count as 'explicitly labelled intermediate', while the weaker text label did. Genuine LLI stock digested when its evidence arrived through the best channel. Fail-closed, so not a breach, but inconsistent with the ladder it claims to implement."
         },
         {
             "id": "regress-003b-conventionne-with-LIBRE-is-still-excluded",
@@ -1213,6 +1212,125 @@
                 "outcome": "DIGEST"
             },
             "why": "THE FAIL-CLOSED RULE APPLIED TO THE TENURE, not merely to the routing. spec §4 requires the verdict itself to become UNKNOWN below the floor on a mixed source; the code changed only the Outcome, leaving tenure LLI, so the two halves of the object disagreed and the next module written would have believed the eligible half. No fixture exercised the branch until this one, because every mixed source in the corpus declared no default. See also the ICF ruling in this file's source table."
+        },
+        {
+            "id": "regress-025-lowercase-financing-code-in-a-field",
+            "provenance": "synthetic",
+            "source": "cdc_habitat",
+            "title": "T3 Cergy",
+            "description": "Appartement renove, proche RER A.",
+            "fields": {
+                "financement": "plus"
+            },
+            "expect": {
+                "tenure": "PLUS",
+                "outcome": "REJECT",
+                "min_confidence": 90
+            },
+            "why": "P0 REGRESSION GUARD (review round 4, 2026-08-06). The field-acronym rule used CASE as its whole discriminator: uppercase meant a financing code, lowercase meant the French adverb. A feed that lowercases its own field values therefore produced NO signal and NO doubt on an explicitly social code, and the listing matched on its description instead. Case is a house style, not evidence. The rule now reads the SHAPE of the value -- a value made only of acronyms and short uppercase fragments is a code list whatever its case."
+        },
+        {
+            "id": "regress-026-code-with-a-modifier-is-still-a-code",
+            "provenance": "synthetic",
+            "source": "seqens",
+            "title": "T2 Ermont",
+            "description": "Residence recente avec ascenseur.",
+            "fields": {
+                "financement": "PLUS CD"
+            },
+            "expect": {
+                "tenure": "PLUS",
+                "outcome": "REJECT",
+                "min_confidence": 90
+            },
+            "why": "P0 REGRESSION GUARD (review round 4, 2026-08-06). An intermediate version of the field rule required the WHOLE value to be financing tokens, and 'PLUS CD' -- a real financing code -- matched nothing at all. Fields are not part of RawListing::text(), so there was no prose fallback either: the strongest rung of the ladder was blinder than the weakest. A short uppercase fragment beside an acronym keeps the value a code list."
+        },
+        {
+            "id": "regress-027-scheme-name-in-a-field-is-not-the-scheme",
+            "provenance": "synthetic",
+            "source": "cdc_habitat",
+            "title": "T3 Bezons - loyer intermediaire",
+            "description": "Programme neuf livre en 2025.",
+            "fields": {
+                "categorie": "Pinel Plus"
+            },
+            "expect": {
+                "tenure": "LLI",
+                "outcome": "MATCH",
+                "min_confidence": 90
+            },
+            "why": "The other direction of the same round-4 finding, and the reason the fix is a shape test rather than a third case rule. 'Pinel Plus' is a real 2023 scheme name and is routinely shouted in a categorie field; under the case rule 'PINEL PLUS' became tenure PLUS at confidence 97 and a silent REJECT of a listing with nothing to do with social housing. PINEL is five letters, so the value is prose, so it goes through the same collocation guard the description gets -- which correctly says nothing, because PINEL is not a financing noun. Listed in the invariant test's exemption table for the same reason the adverb traps are: the word 'plus' is present and is not the scheme."
+        },
+        {
+            "id": "regress-028-typology-in-a-field-is-not-a-code-list",
+            "provenance": "synthetic",
+            "source": "cdc_habitat",
+            "title": "Loyer intermediaire - Nanterre",
+            "description": "Sejour lumineux.",
+            "fields": {
+                "typelogement": "T3 PLUS"
+            },
+            "expect": {
+                "tenure": "LLI",
+                "outcome": "MATCH",
+                "min_confidence": 90
+            },
+            "why": "Why a code fragment is LETTERS ONLY. Admitting digits would make 'T3' a code fragment, 'T3 PLUS' a code list, and an ordinary typology a silent REJECT -- invisible over-rejection, the failure mode CLAUDE.md hard rule 8 warns about. Excluding digits sends the value down the prose branch, where 'T3' is not a financing noun and the guard says nothing. Exempted in the invariant test for the same reason as regress-027."
+        },
+        {
+            "id": "regress-029-indecidable-field-value-digests",
+            "provenance": "synthetic",
+            "source": "cdc_habitat",
+            "title": "Loyer intermediaire - T2 Massy",
+            "description": "Proche gare.",
+            "fields": {
+                "categorie": "LOGEMENT PLUS MODERNE"
+            },
+            "expect": {
+                "tenure": "UNKNOWN",
+                "outcome": "DIGEST"
+            },
+            "why": "The prose branch of the field rule is not a licence to go quiet. LOGEMENT is a financing noun and MODERNE is an ordinary word, so the collocation guard reaches its third answer -- indecidable -- and the field produces a DOUBT exactly as the description would. The listing digests instead of matching on its title alone. Without this the prose branch would be a fail-open wearing the prose rule as a disguise."
+        },
+        {
+            "id": "regress-030-inflected-label-then-conventionne",
+            "provenance": "synthetic",
+            "source": "cdc_habitat",
+            "title": "T3 Cergy",
+            "description": "Logements locatifs intermédiaires conventionnés, loyer plafonné.",
+            "fields": {},
+            "expect": {
+                "tenure": "LLI",
+                "outcome": "MATCH",
+                "min_confidence": 90
+            },
+            "why": "The adjacency window is measured on the MATCHED text, not on the table literal. 'logement locatif intermediaire' is 30 bytes; the ordinary French plural 'logements locatifs intermediaires' is 33, so a window computed from strlen(evidence) undershoots the end of the label by exactly the inflection and the 'conventionne' that follows stops looking adjacent -- genuine LLI stock silently digested by a plural. Added because sabotage-verification showed that swapping $other->length back to strlen($other->evidence) left the whole suite green: no fixture had an inflected label immediately followed by 'conventionne'."
+        },
+        {
+            "id": "regress-031-libre-does-not-qualify-a-conventionne",
+            "provenance": "synthetic",
+            "source": "cdc_habitat",
+            "title": "T2 Domont",
+            "description": "Loyer libre conventionné, disponible.",
+            "fields": {},
+            "expect": {
+                "tenure": "UNKNOWN",
+                "outcome": "DIGEST"
+            },
+            "why": "The exception is for INTERMEDIATE labels, and this is the adjacent-position case of that rule -- regress-003b covers the non-adjacent one. CLAUDE.md's glossary excuses 'conventionne' when the listing is 'explicitly labelled intermediate'; LIBRE is market rate, not intermediate, so it must not disarm the exclusion even when it sits immediately before the word. Sabotage-verification showed the widening from '=== LLI' back to 'isEligible()' left the suite green: every existing adjacency fixture used an LLI label, so the eligible-vs-intermediate distinction was untested at this position. The two labels also genuinely contradict each other, so withholding is the honest reading as well as the safe one."
+        },
+        {
+            "id": "regress-032-label-precedes-conventionne-but-is-not-adjacent",
+            "provenance": "synthetic",
+            "source": "cdc_habitat",
+            "title": "Résidence Les Tilleuls - Cergy",
+            "description": "Loyer intermédiaire disponible. 40 logements conventionnés réservés aux ménages sous plafond de ressources.",
+            "fields": {},
+            "expect": {
+                "tenure": "UNKNOWN",
+                "outcome": "DIGEST"
+            },
+            "why": "THE ADJACENCY TEST ITSELF, isolated. regress-020 guards a 'conventionne' that comes BEFORE the label, which the span arithmetic rejects on its own; this one has the label FIRST, so only the whitespace-only test between them stands in the way. Delete that test and any LLI anywhere in the listing deletes the conventionne signal again -- v1 of the rule, and the exact sentence quoted in review round 4: the listing MATCHED with the word 'conventionne' absent from reasons[]. Sabotage-verification showed no fixture covered it: replacing the whitespace test with `true` left the whole suite green."
         }
     ]
 }

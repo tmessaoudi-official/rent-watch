@@ -197,9 +197,24 @@ run_sabotage "prose field values bypass the collocation guard again" \
   src/php/Core/TenureClassifier.php \
   's/preg_quote($acronym, .\/.)/mb_strtolower(preg_quote($acronym, "\/"))/'
 
+# The adjacency test is the whole exception. Three separate ways to defeat it, because the first two
+# versions of this code failed in three separate ways and each fix was written blind to the next.
+# The `$between <= $s->position` half alone is not the guard — it only says the label ENDS before the
+# word. Deleting the whitespace-only test is what makes any LLI anywhere in the text qualify a
+# `conventionné`, which is v1 of this code and the shape that MATCHED a mixed résidence.
 run_sabotage "conventionne exception unbounded again (any LLI anywhere deletes it)" \
   src/php/Core/TenureClassifier.php \
-  's/if ($gap >= 0 \&\& $gap <= self::QUALIFIER_GAP) {/if (true) {/'
+  's/^\( *\)&& $this->matches(.*substr($folded, $between, $s->position - $between))) {$/\1\&\& true) {/'
+
+# NOTE: there is no "direction-aware" sabotage here. One was written, and it proved the explicit
+# `$other->position > $s->position` skip was UNREACHABLE — `$between` is `position + length`, so a
+# label starting after `conventionné` always ends after it and fails `$between <= $s->position`
+# regardless. The dead clause was deleted rather than fixture-covered; direction is now asserted
+# directly by TenureClassifierTest::testConventionneIsOnlyExcusedByALabelThatPrecedesIt().
+
+run_sabotage "conventionne adjacency measures the table literal, not the matched text" \
+  src/php/Core/TenureClassifier.php \
+  's/$between = $other->position + $other->length;/$between = $other->position + strlen($other->evidence);/'
 
 run_sabotage "invisible non-Cf characters no longer stripped" \
   src/php/Core/Text.php \
@@ -232,9 +247,9 @@ run_sabotage "'sans' negation lookbehind removed" \
   src/php/Core/TenureClassifier.php \
   's/&& $this->isPrecededBySans($folded, $position)/\&\& false/'
 
-run_sabotage "conventionne exception removed (genuine LLI stock digests)" \
+run_sabotage "conventionne exception removed entirely (genuine LLI stock digests)" \
   src/php/Core/TenureClassifier.php \
-  's/if ($fieldSaysLli) {/if (true) {/'
+  's/if ($s->tenure !== Tenure::CONVENTIONNE || $s->evidence !== .conventionne.) {/if (true) {/'
 
 printf '\n  %d sabotage(s) detected, %d undetected\n\n' "$pass" "$fail"
 

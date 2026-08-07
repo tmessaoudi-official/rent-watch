@@ -102,8 +102,21 @@ expect_fire "PLS becoming a config toggle" \
   'config option include_pls to surface pls listings'
 expect_fire "social tenure enabled in config" \
   'plai: true  # enabled'
-expect_fire "fail-closed floor lowered" \
+expect_fire "fail-closed floor lowered, expressed as a float" \
   'const CONFIDENCE_FLOOR = 0.3;'
+# The representation the CODE actually uses. `0.6` appears nowhere under src/ — confidence is stored
+# in integer basis points so PHP and phorj cannot disagree on a float — so a guard that only knew
+# the float form was watching a representation nothing uses. Setting FLOOR_BP to 0 was silent.
+expect_fire "fail-closed floor lowered, expressed in integer basis points" \
+  'private const int FLOOR_BP = 30;'
+expect_fire "fail-closed floor removed entirely" \
+  'private const int FLOOR_BP = 0;'
+expect_fire "the floor weakened at the comparison instead of the constant" \
+  'if ($confidenceBp < 20) { return Tenure::UNKNOWN; }'
+expect_fire "an excluded tenure let out through the accessor" \
+  'public function isExcluded(): bool { return match($this) { self::PLS => false, default => true }; }'
+expect_fire "an excluded tenure declared non-excluded in a table" \
+  "'PLAI' => false,"
 expect_fire "UNKNOWN routed to notification" \
   'if unknown: notify(listing)'
 expect_fire "classifier bypassed" \
@@ -118,6 +131,15 @@ expect_silence "the excluded set being asserted in a test" \
   "self::assertSame(['ANAH', 'ANRU', 'PLAI', 'PLS', 'PLUS'], \$excluded);"
 expect_silence "a float epsilon that is not a threshold" \
   'self::assertEqualsWithDelta($a, $b, 0.0001);'
+# The CORRECT value must stay quiet, or the tripwire fires on every edit that touches the floor and
+# is learned-to-be-ignored within a day. `[0-5]?[0-9]` on its own matches the trailing `0` of `60`,
+# which is why the integer alternation anchors the number to the operator.
+expect_silence "the fail-closed floor at its correct value" \
+  'private const int FLOOR_BP = 60;'
+expect_silence "a confidence ceiling, which is not the floor" \
+  'private const int CEILING_BP = 99;'
+expect_silence "isExcluded returning true, which is the rule working" \
+  'if ($result->tenure->isExcluded()) { return Outcome::REJECT; }'
 expect_silence "routing UNKNOWN to the digest, which is the rule" \
   'if ($tenure === Tenure::UNKNOWN) { return Outcome::DIGEST; }'
 expect_silence "a file outside src/, config/ and tests/" \
@@ -126,6 +148,13 @@ expect_silence "a file outside src/, config/ and tests/" \
 expect_silence "the guard's own test file, which is full of these payloads by design" \
   'allowed_tenures = ["LLI", "PLAI"]' \
   "$repo/tests/test-tenure-guard.sh"
+expect_silence "the sabotage script, whose whole content is deliberate relaxations" \
+  "s/public const int FLOOR_BP = 60;/public const int FLOOR_BP = 10;/" \
+  "$repo/tests/sabotage-check.sh"
+# The exclusions above are by EXACT PATH, so they must not shelter a lookalike elsewhere.
+expect_fire "a file merely named like the excluded ones" \
+  'private const int FLOOR_BP = 10;' \
+  "$repo/src/php/Core/sabotage-check.sh"
 
 printf '\n  %d passed, %d failed\n\n' "$pass" "$fail"
 

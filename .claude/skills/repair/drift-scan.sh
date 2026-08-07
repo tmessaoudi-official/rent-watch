@@ -250,6 +250,37 @@ elif th:
     if want not in guard_src:
         print(f"P2  tenure-guard.sh does not mention the documented threshold {want} in its comments — a "
               f"future edit cannot tell which floor its regex encodes.")
+
+# 3. THE REPRESENTATION THE CODE ACTUALLY USES.
+#
+# Check 2 above audits the guard's FLOAT pattern against CLAUDE.md's prose, and for a while that was
+# the entire threshold audit — while the classifier stored confidence in INTEGER BASIS POINTS
+# (`FLOOR_BP = 60`), so that PHP and phorj could not disagree on a float. `0.6` appears nowhere under
+# src/. Both the guard and this check were therefore validating a representation nothing used: a
+# 2026-08-06 review set the floor to 0 and neither noticed. Whatever src/ declares as its floor, the
+# guard must have a pattern that brackets values below it in the SAME notation.
+floors = set()
+for php in pathlib.Path('src').rglob('*.php') if pathlib.Path('src').is_dir() else []:
+    floors.update(re.findall(r'FLOOR_BP\s*=\s*(\d+)', php.read_text()))
+
+if len(floors) > 1:
+    print(f"P1  src/ declares more than one FLOOR_BP {sorted(floors)} — one of them is stale.")
+elif floors:
+    bp = int(floors.pop())
+    if th and bp != round(float(th[0]) * 100):
+        print(f"P0  src/ sets FLOOR_BP={bp} but CLAUDE.md documents a {th[0]} fail-closed floor "
+              f"({round(float(th[0]) * 100)} basis points) — the code and the rule disagree.")
+    # The guard must bracket values BELOW the floor in integer form. Read the digit class out of its
+    # own pattern rather than trusting that some `_bp` string is present somewhere in the file.
+    intcls = re.search(r'_bp\[\^\.\]\{0,\d+\}=? ?\*?\(\[0-(\d)\]\?\[0-9\]\)', g)
+    if not intcls:
+        print(f"P0  src/ expresses the fail-closed floor as an integer (FLOOR_BP={bp}) but "
+              f"tenure-guard.sh has no integer basis-point pattern — the tripwire only knows the "
+              f"float form, which appears nowhere in src/. Lowering FLOOR_BP is silent.")
+    elif int(intcls.group(1)) != bp // 10 - 1:
+        print(f"P0  src/ sets FLOOR_BP={bp} but tenure-guard.sh's integer pattern brackets "
+              f"[0-{intcls.group(1)}]?[0-9], i.e. values below {(int(intcls.group(1)) + 1) * 10} — "
+              f"the guard is checking a different floor than the code uses.")
 PY
 # A python section that CRASHES must not read as a section that found nothing. Under
 # `set -uo pipefail` with no `-e`, an exception here printed a traceback to stderr, wrote
@@ -291,34 +322,61 @@ if unknown:
     print(f"P1  corpus cases declare an unrecognised provenance: {', '.join(unknown[:5])} — "
           f"only 'synthetic' and 'captured' are counted, so anything else is invisible to the check.")
 
-# Any "<N> cases" / "<N>/<N> synthetic" / "<N> hand-labelled" / "<N>-case" claim must equal `cases`.
+# Prose claims about the corpus, each with the number it must equal — PER GROUP, not one global
+# total. Every claim used to be compared against `cases`, which was right only by accident: while
+# the corpus is 100% synthetic, `synthetic == cases`. The day the first real payload is frozen in,
+# an honest "all 86 are synthetic" would be reported as drift and a stale "all 87" would pass — the
+# check would be actively wrong in both directions, on the exact commit it exists to police.
+EXPECT = {'cases': cases, 'synthetic': synthetic}
 CLAIMS = [
-    (r'corpus\.json`?,?\s+(\d+)\s+cases', 'corpus.json … N cases'),
-    (r'still\s+(\d+)/(\d+)\s+synthetic', 'still N/N synthetic'),
+    (r'corpus\.json`?,?\s+(\d+)\s+cases', 'corpus.json … N cases', ('cases',)),
+    (r'still\s+(\d+)/(\d+)\s+synthetic', 'still N/N synthetic', ('synthetic', 'cases')),
     # NOT preceded by ≥ or "at least": those are the SPEC MINIMUM (spec §4 asks for >=30 texts),
     # which is a floor the corpus must clear, not a count of what it holds. This check flagged that
     # sentence on its first run.
-    (r'(?<!≥)(?<!at least )(?<!minimum )\b(\d+)\s+hand-labelled', 'N hand-labelled'),
+    (r'(?<!≥)(?<!at least )(?<!minimum )\b(\d+)\s+hand-labelled', 'N hand-labelled', ('cases',)),
     # Bold-optional and case-insensitive: `**All 77 are synthetic**` AND `all 56 are synthetic`.
     # The second phrasing sat stale in the plan for three commits because the pattern required
     # the bold markers and a capital A.
-    (r'(?i)\*{0,2}all\s+(\d+)\s+(?:are|of them are)\s+synthetic', 'all N are synthetic'),
-    (r'(?i)all\s+(\d+)\s+are synthetic', 'all N are synthetic'),
-    (r'(\d+)-case (?:language-neutral|synthetic)', 'N-case corpus'),
+    (r'(?i)\*{0,2}all\s+(\d+)\s+(?:are|of them are)\s+synthetic', 'all N are synthetic', ('synthetic',)),
+    (r'(\d+)-case (?:language-neutral|synthetic)', 'N-case corpus', ('cases',)),
 ]
+
+
+def code_spans(text):
+    """Character ranges inside fenced blocks or inline backticks.
+
+    A count QUOTED as an example is not a claim. This check's own write-up in the plan file cites
+    `all 56 are synthetic` as the phrasing an earlier version missed — and the check then reported
+    that citation as drift, on every run, forever. Documenting a bug became a permanent finding,
+    which is how a gate gets routinely overridden. Backticks are the marker because that is how a
+    stale count is naturally cited, and because a real claim is never written in code font.
+    """
+    spans = []
+    for m in re.finditer(r'```.*?```|`[^`\n]+`', text, re.S):
+        spans.append((m.start(), m.end()))
+    return spans
+
 
 for doc in ('CLAUDE.md', 'README.md', 'docs/plans/core-tenure-classifier.plan.md'):
     p = pathlib.Path(doc)
     if not p.is_file():
         continue
     text = p.read_text()
-    for pattern, label in CLAIMS:
+    quoted = code_spans(text)
+    for pattern, label, kinds in CLAIMS:
         for m in re.finditer(pattern, text):
-            for g in m.groups():
-                if int(g) != cases:
-                    line = text[:m.start()].count('\n') + 1
-                    print(f"P1  {doc}:{line} claims {g} where the corpus has {cases} ({label}) — "
-                          f"a prose count drifted from the data it describes.")
+            for i, (g, kind) in enumerate(zip(m.groups(), kinds), start=1):
+                # The NUMBER's position decides, not the match's. Testing `m.start()` exempted
+                # ``corpus.json`, 82 cases`` — the pattern begins at the filename, which is in code
+                # font, while the claim that drifted is the bare `82` after it. A rule that hides a
+                # live claim is strictly worse than the noisy one it replaced.
+                if any(a <= m.start(i) < b for a, b in quoted):
+                    continue
+                if int(g) != EXPECT[kind]:
+                    line = text[:m.start(i)].count('\n') + 1
+                    print(f"P1  {doc}:{line} claims {g} where the corpus has {EXPECT[kind]} "
+                          f"{kind} ({label}) — a prose count drifted from the data it describes.")
 
 # The open-decision count in CLAUDE.md must match docs/OPEN-QUESTIONS.md.
 oq = pathlib.Path('docs/OPEN-QUESTIONS.md')

@@ -54,27 +54,34 @@ final class Text
     ];
 
     /**
-     * Invisible characters that are neither `\p{Mn}` nor `\p{Cf}`, spelled out because no single
-     * Unicode property covers them.
+     * Invisible characters, defined by a PROPERTY rather than a list — because the list approach
+     * failed three review rounds in a row.
      *
-     * Round 2 closed `\p{Cf}` (soft hyphen, ZWSP, BOM). Round 3 showed the fix was one category
-     * short: `\p{Cc}` controls and a handful of invisible LETTERS produce the identical failure —
-     * `Ce logement<U+0001>social a loyer intermediaire` classified LLI at confidence 90, above the
-     * floor, MATCH. U+0091–U+009F in particular are the ordinary product of CP1252 bytes decoded as
-     * Latin-1, which is a routine French-CMS mojibake path, and `&#1;` / `&#12644;` reach here from
-     * any adapter that does its documented job of decoding entities.
+     * The failure is always the same: an invisible character between `logement` and `social`
+     * deletes that label while leaving `loyer intermediaire` standing, so an explicitly social
+     * listing classifies as LLI at confidence 90 — above the floor, so the fail-closed rule never
+     * engages — and the word never reaches `reasons[]`. Round 2 closed `\p{Cf}` (soft hyphen,
+     * ZWSP, BOM). Round 3 added `\p{Cc}` controls and four named invisible LETTERS. Round 4 found
+     * U+2065, U+FFF0 and U+E0080 still open: Unicode's Default_Ignorable set includes RESERVED
+     * codepoints of category `Cn`, which no enumeration of "the categories I can think of" reaches.
      *
-     * `\p{Cc}` is NOT used wholesale: it contains `\t`, `\n` and `\r`, which the whitespace collapse
-     * below depends on. Deleting those would join a title to its description. Measured, not guessed
-     * — the naive widening breaks nine tests. So the C0/C1 ranges are listed minus the whitespace
-     * ones, and the invisible letters are named individually:
-     *   U+115F, U+1160  HANGUL CHOSEONG/JUNGSEONG FILLER (Lo — a letter that renders as nothing)
-     *   U+3164          HANGUL FILLER
-     *   U+FFA0          HALFWIDTH HANGUL FILLER
-     *   U+2800          BRAILLE PATTERN BLANK (So — renders as nothing in most fonts)
+     * `\p{DI}` IS that set, and PCRE2 has it. It also excludes every whitespace character, which is
+     * what blocked the obvious `\p{Cc}` widening — that one ate `\t`, `\n` and `\r`, which the
+     * collapse below depends on, and broke nine tests.
+     *
+     * Verified exhaustively over all 0x10FFFF codepoints: **zero** Default_Ignorable survivors, and
+     * `\t \n \r \v \f` all preserved. Two additions remain necessary beyond `\p{DI}`:
+     *   - the C0/C1 control ranges minus the whitespace ones. U+0091–U+009F are the ordinary
+     *     product of CP1252 bytes decoded as Latin-1, a routine French-CMS mojibake path;
+     *   - U+2800 BRAILLE PATTERN BLANK, category `So` and NOT Default_Ignorable, but it renders as
+     *     nothing in every font a listing will meet.
+     *
+     * Known nuance, harmless: U+0085 and U+180E are both whitespace AND in the stripped set, so
+     * they are deleted rather than collapsed to a space. The `\s*` join in
+     * {@see inflectedTokenPosition()} covers the label case, and `RawListing::text()` joins on
+     * `\n`, which is preserved.
      */
-    private const string INVISIBLE = '\x{0000}-\x{0008}\x{000E}-\x{001F}\x{007F}-\x{009F}'
-        . '\x{115F}\x{1160}\x{3164}\x{FFA0}\x{2800}';
+    private const string INVISIBLE = '\p{DI}\x{0000}-\x{0008}\x{000E}-\x{001F}\x{007F}-\x{009F}\x{2800}';
 
     /** Every apostrophe French listings arrive with, folded to the ASCII one. */
     private const array APOSTROPHES = ["\u{2019}", "\u{2018}", "\u{02BC}", "\u{FF07}", '`', '´'];

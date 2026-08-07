@@ -63,6 +63,11 @@ print(f"{fp}\t{blob}")
 # outside without consulting this file at all.
 case "$file_path" in
   */tests/test-tenure-guard.sh) exit 0 ;;
+  # sabotage-check.sh is the same case for the same reason: its whole content is `sed` expressions
+  # that lower FLOOR_BP, empty the excluded set and disable the classifier, because its job is to
+  # prove the PHPUnit suite CATCHES each of those. It joined this list on 2026-08-06, when pattern 3
+  # learned the integer basis-point form and started firing on the sabotage that sets FLOOR_BP to 10.
+  */tests/sabotage-check.sh) exit 0 ;;
 esac
 
 case "$file_path" in
@@ -107,8 +112,48 @@ if grep -Eq '(exclude|excluded|denied|blocked|forbidden|never)[^.]{0,80}(remove|
 fi
 
 # 3. Fail-closed confidence threshold being weakened.
-if grep -Eq 'confidence[^.]{0,40}(0\.[0-5][0-9]?|< *0\.[0-5])' <<<"$blob"; then
-  hits+=("classifier confidence threshold looks lowered below the 0.6 fail-closed floor")
+#
+# TWO REPRESENTATIONS, AND FOR A WHILE THIS ONLY KNEW THE ONE NOTHING USES. The rule is written as
+# "confidence < 0.6" in CLAUDE.md, so the first pattern looked for `0.[0-5]` — but the classifier
+# stores confidence in INTEGER BASIS POINTS (`FLOOR_BP = 60`) precisely so that PHP and phorj cannot
+# disagree on a float, and a run of `0.6` appears nowhere in src/. A 2026-08-06 review set the floor
+# to 0 and watched the tripwire stay silent. The float form is kept because config/criteria.yaml and
+# the notification payload will both express confidence as a fraction; the integer form is what the
+# code actually uses. Both must be covered, and tests/test-tenure-guard.sh has a case for each.
+#
+# The integer alternation anchors the number to the operator (`= *` / `< *`) rather than searching
+# the line, so `FLOOR_BP = 60` cannot match by starting at its trailing `0` — which is exactly what a
+# bare `[0-5]?[0-9]` does, and what made the first attempt at this pattern fire on the correct value.
+#
+# It also requires the `_bp` suffix rather than a bare `floor`/`minimum`. "Floor" is OVERLOADED in
+# this repo: `RawListing::$floor` is the building storey, and its docblock says `$floor = 0` is the
+# rez-de-chaussée. A first draft without the suffix fired on that docblock, on `$confidenceBp = 0`
+# (assigning a computed result, not a threshold) and on two more correct files — four of the five
+# source files in the repo. A tripwire that fires on correct code is read as noise within a day,
+# which costs more than the gap it closed. Assignment is watched only on a `*_bp` FLOOR constant;
+# comparison is watched on `confidenceBp` itself, where `<` is the only interesting operator.
+if grep -Eq 'confidence[^.]{0,40}(0\.[0-5][0-9]?|< *0\.[0-5])' <<<"$blob" \
+|| grep -Eq '(floor|threshold|seuil)_bp[^.]{0,20}= *([0-5]?[0-9])([^0-9.]|$)' <<<"$blob" \
+|| grep -Eq 'confidence_?bp[^.]{0,20}< *([0-5]?[0-9])([^0-9.]|$)' <<<"$blob"; then
+  hits+=("classifier confidence threshold looks lowered below the fail-closed floor (0.6, i.e. 60 basis points)")
+fi
+
+# 3b. An excluded tenure being reclassified as not-excluded.
+#
+# Pattern 2 watches the excluded SET being emptied. This watches a single member being let out
+# through the accessor instead — `self::PLS => false` inside `isExcluded()` leaves the set literal
+# intact, passes pattern 2 untouched, and is the smallest possible edit that breaks §1. Found by the
+# same review that found the floor gap: six real relaxations went silent, and this was the quietest.
+#
+# The token must be ADJACENT to the arrow — either enum-qualified (`self::PLS => false`) or alone
+# inside its own quotes (`'PLAI' => false`). Allowing arbitrary text between fired on
+# `'explicit PLAI' => false`, the coverage tracker in TenureCorpusTest, whose `false` means "this
+# shape has not been seen yet" and is the opposite of a relaxation. `[^.;}]` on the accessor rule
+# keeps `isExcluded(); … return false` — two unrelated statements — from being read as one.
+if grep -Eq '(^|[^a-z0-9_])(self|static|tenure)::(plai|plus|pls|anru|anah|conventionne|social)[, ]*=> *false' <<<"$blob" \
+|| grep -Eq "['\"](plai|plus|pls|anru|anah|conventionne|social)['\"] *(=>|->|:) *false" <<<"$blob" \
+|| grep -Eq '(is_?excluded|excluded)[^.;}]{0,20}(=>|return) *false' <<<"$blob"; then
+  hits+=("an excluded tenure looks like it is being reclassified as not-excluded")
 fi
 
 # 4. UNKNOWN being treated as notifiable.

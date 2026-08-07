@@ -12,7 +12,7 @@ namespace RentWatch\Core;
  * that says "LLI, 0.9" is not actionable; one that says "structured field financement = LLI" lets
  * the developer decide whether to trust it in three seconds.
  */
-final readonly class TenureSignal
+final class TenureSignal
 {
     /**
      * @param int    $tier     1 = structured field, 2 = explicit label, 3 = procedural tell,
@@ -29,5 +29,18 @@ final readonly class TenureSignal
         public string $reason,
         public string $evidence,
         public int $position = 0,
-    ) {}
+        /**
+         * Byte length of the text that ACTUALLY matched, which is not `strlen($evidence)` once
+         * inflection is in play: the literal `logement locatif intermediaire` is 30 bytes and the
+         * matched `logements locatifs intermediaires` is 33. A rule that measured the literal
+         * mis-placed the end of the span by exactly the inflection, which is how the ordinary
+         * French plural broke the `conventionné` adjacency rule. Defaults to the evidence length
+         * for signals with no matched text of their own (source defaults, conflict markers).
+         */
+        public int $length = 0,
+    ) {
+        if ($this->length === 0) {
+            $this->length = strlen($this->evidence);
+        }
+    }
 }

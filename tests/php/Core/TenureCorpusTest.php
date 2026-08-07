@@ -64,47 +64,170 @@ final class TenureCorpusTest extends TestCase
      */
     public function testNoListingNamingAnExcludedTenureEverReachesAMatch(): void
     {
-        // Fixture ids that legitimately contain one of these tokens, each with the reason why.
-        // NOT a list of tenures — nothing here re-admits anything to the excluded set.
-        $exempt = [
-            // The `plus` adverb traps — the guard exists precisely so these MATCH.
-            'trap-001-plus-de-chambres' => 'the adverb in "plus de 3 chambres"',
-            'trap-002-au-plus-tard' => 'the adverb in "au plus tard" and "plus lumineux"',
-            'trap-003-plus-tier-uppercase-boundary' => 'a SHOUTED title, "PLUS DE 70 M2"',
-            'trap-003b-shouted-logement-plus-grand' => 'a SHOUTED "LOGEMENT PLUS GRAND"',
-            'trap-005-surplus-not-plus' => '"surplus" contains "plus"',
-            'trap-005b-plus-with-no-comparative-and-no-collocation' => '"PLUS UN BUREAU"',
-            // `conventionné` QUALIFYING an explicit intermediate label — the glossary's exception.
-            'lli-011-conventionne-with-intermediate-label' => 'CLAUDE.md glossary: conventionne '
-                . 'qualifying an explicit intermediate label is not excluded',
-            'regress-003-conventionne-with-a-tier-1-LLI-field' => 'a tier-1 LLI field is the '
-                . 'strongest evidence the ladder has and qualifies the whole listing',
-        ];
-
+        $exempt = self::exclusionExemptions();
         $classifier = new TenureClassifier();
-        $excludedTokens = ['plai', 'plus', 'pls', 'anru', 'anah', 'conventionne', 'logement social', 'hlm'];
 
         foreach (Corpus::provider() as $id => [$listing, $source]) {
             $result = $classifier->classify($listing, $source);
 
-            if ($result->outcome !== Outcome::MATCH || isset($exempt[$id])) {
+            if ($result->outcome !== Outcome::MATCH) {
                 continue;
             }
 
             $haystack = Text::fold($listing->text() . ' ' . implode(' ', $listing->fields));
 
-            foreach ($excludedTokens as $token) {
+            foreach (self::excludedTokens() as $token) {
+                if (isset($exempt[$id][$token])) {
+                    continue;
+                }
+
                 self::assertNull(
                     Text::inflectedTokenPosition($haystack, $token),
                     sprintf(
                         "fixture %s reached MATCH while its own listing says '%s'.\n"
                         . "That is CLAUDE.md §1. If this is a legitimate exception (the French "
                         . "adverb, or conventionne qualifying an intermediate label), add it to "
-                        . '$exempt WITH the reason — do not delete the assertion.',
+                        . '$exempt as %s => [%s => reason] — do not delete the assertion.',
+                        $id,
+                        $token,
                         $id,
                         $token,
                     ),
                 );
+            }
+        }
+    }
+
+    /**
+     * The §1 exemption table, keyed `fixture id => token => reason`.
+     *
+     * KEYED BY TOKEN, NOT BY FIXTURE ALONE. A blanket per-fixture exemption switches the invariant
+     * OFF for that listing entirely: a fixture excused for containing the French adverb `plus` would
+     * also stop being checked for `plai`, `hlm` and every other token, so the §1 assertion could be
+     * silenced on any listing by giving it one innocent reason. Naming the token keeps the rest live.
+     *
+     * @return array<string, array<string, string>>
+     */
+    private static function exclusionExemptions(): array
+    {
+        return [
+            // The `plus` adverb traps — the guard exists precisely so these MATCH.
+            'trap-001-plus-de-chambres' => ['plus' => 'the adverb in "plus de 3 chambres"'],
+            'trap-002-au-plus-tard' => ['plus' => 'the adverb in "au plus tard" and "plus lumineux"'],
+            'trap-003-plus-tier-uppercase-boundary' => ['plus' => 'a SHOUTED title, "PLUS DE 70 M2"'],
+            'trap-003b-shouted-logement-plus-grand' => ['plus' => 'a SHOUTED "LOGEMENT PLUS GRAND"'],
+            // NOTE: `trap-005-surplus-not-plus` is deliberately NOT here. It was, until the
+            // earned-exemption test above rejected it: `inflectedTokenPosition` is word-bounded, so
+            // the `plus` inside `surplus` never matched and the exemption never excused anything.
+            // A no-op exemption is worth deleting — it reads as evidence that a real hole was
+            // considered and waved through.
+            'trap-005b-plus-with-no-comparative-and-no-collocation' => ['plus' => '"PLUS UN BUREAU"'],
+            // The same adverb/scheme-name problem, in a STRUCTURED FIELD rather than in prose.
+            'regress-027-scheme-name-in-a-field-is-not-the-scheme' => [
+                'plus' => '"Pinel Plus", a 2023 scheme name that is not the PLUS financing scheme',
+            ],
+            'regress-028-typology-in-a-field-is-not-a-code-list' => ['plus' => '"T3 PLUS", a typology'],
+            // `conventionné` QUALIFYING an explicit intermediate label — the glossary's exception.
+            'lli-011-conventionne-with-intermediate-label' => [
+                'conventionne' => 'CLAUDE.md glossary: conventionne qualifying an explicit '
+                    . 'intermediate label is not excluded',
+            ],
+            'regress-030-inflected-label-then-conventionne' => [
+                'conventionne' => 'the same glossary exception, reached through an INFLECTED label '
+                    . '("logements locatifs intermédiaires conventionnés") — the case that pins the '
+                    . 'adjacency window to the matched text rather than to the table literal',
+            ],
+        ];
+    }
+
+    /**
+     * The literals the classifier itself treats as naming an excluded tenure.
+     *
+     * DERIVED FROM THE CLASSIFIER'S OWN TABLES, not hand-listed beside them. The hand-written
+     * version held eight tokens while the tables held fifteen, so `pret locatif a usage social`,
+     * `logement locatif social`, `habitation a loyer modere` and four more were absent from the one
+     * assertion that checks §1 against the LISTING rather than against the verdict — a listing whose
+     * description spelled the scheme out in full was never checked at all.
+     *
+     * BOTH tables, and that is not a detail: `plus` lives in `AMBIGUOUS_LABELS` alone, so a first
+     * version of this method that read only `LABELS` silently dropped the single most dangerous
+     * token in the set and left six now-dead `plus` exemptions behind. That is why
+     * {@see testEveryExclusionExemptionIsStillEarned()} exists — a dead exemption is the visible
+     * symptom of exactly this mistake.
+     *
+     * @return list<string>
+     */
+    private static function excludedTokens(): array
+    {
+        $class = new \ReflectionClass(TenureClassifier::class);
+        $tokens = [];
+
+        foreach (['LABELS', 'AMBIGUOUS_LABELS'] as $table) {
+            /** @var array<string, Tenure> $labels */
+            $labels = $class->getConstant($table);
+
+            self::assertNotSame([], $labels, sprintf('%s is empty — §1 lost its vocabulary', $table));
+
+            foreach ($labels as $literal => $tenure) {
+                if ($tenure->isExcluded()) {
+                    // Folded, because the haystack is `Text::fold()` output. `AMBIGUOUS_LABELS`
+                    // keys are UPPERCASE — case is evidence in the classifier's own prose guard —
+                    // and an unfolded `PLUS` would match nothing at all here.
+                    $tokens[] = Text::fold($literal);
+                }
+            }
+        }
+
+        self::assertContains('plus', $tokens, 'the excluded-token list lost `plus` — see this method');
+
+        return array_values(array_unique($tokens));
+    }
+
+    /**
+     * Every §1 exemption must still be doing work.
+     *
+     * An exemption that no longer matches anything is not harmless: it is the fingerprint of the
+     * assertion having stopped looking. When {@see excludedTokens()} briefly read only `LABELS`, the
+     * whole `plus` vocabulary vanished from the invariant and the suite stayed green — the only
+     * visible trace was six exemptions that no longer excused anything. This test turns that trace
+     * into a failure.
+     */
+    public function testEveryExclusionExemptionIsStillEarned(): void
+    {
+        $classifier = new TenureClassifier();
+        $tokens = self::excludedTokens();
+
+        foreach (self::exclusionExemptions() as $id => $byToken) {
+            foreach ($byToken as $token => $reason) {
+                self::assertContains(
+                    $token,
+                    $tokens,
+                    sprintf('fixture %s is exempted for "%s", which is no longer an excluded token', $id, $token),
+                );
+
+                $found = false;
+
+                foreach (Corpus::provider() as $caseId => [$listing, $source]) {
+                    if ($caseId !== $id) {
+                        continue;
+                    }
+
+                    $found = true;
+                    $haystack = Text::fold($listing->text() . ' ' . implode(' ', $listing->fields));
+
+                    self::assertSame(
+                        Outcome::MATCH,
+                        $classifier->classify($listing, $source)->outcome,
+                        sprintf('fixture %s no longer reaches MATCH, so its exemption is dead — remove it', $id),
+                    );
+                    self::assertNotNull(
+                        Text::inflectedTokenPosition($haystack, $token),
+                        sprintf('fixture %s no longer contains "%s" — remove the exemption', $id, $token),
+                    );
+                    self::assertNotSame('', trim($reason), sprintf('fixture %s exempts "%s" with no reason', $id, $token));
+                }
+
+                self::assertTrue($found, sprintf('exemption names fixture %s, which is not in the corpus', $id));
             }
         }
     }
