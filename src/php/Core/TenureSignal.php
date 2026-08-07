@@ -12,8 +12,25 @@ namespace RentWatch\Core;
  * that says "LLI, 0.9" is not actionable; one that says "structured field financement = LLI" lets
  * the developer decide whether to trust it in three seconds.
  */
-final class TenureSignal
+final readonly class TenureSignal
 {
+    /**
+     * Byte length of the text that ACTUALLY matched, which is not `strlen($evidence)` once
+     * inflection is in play: the literal `logement locatif intermediaire` is 30 bytes and the
+     * matched `logements locatifs intermediaires` is 33. A rule that measured the literal
+     * mis-placed the end of the span by exactly the inflection, which is how the ordinary French
+     * plural broke the `conventionné` adjacency rule. Defaults to the evidence length for signals
+     * with no matched text of their own (source defaults, conflict markers).
+     *
+     * NOT a promoted parameter, and that is deliberate. Promoting it forced the default into the
+     * constructor BODY, which meant dropping `readonly` from the whole class — so all six
+     * properties of the §1 evidence object silently became writable, and a caller holding a
+     * `Classification` could rewrite the `reasons[]` a notification is built from. Three reviewers
+     * found that independently. A non-promoted readonly property assigned once in the body gives
+     * the identical computed default with the immutability intact.
+     */
+    public int $length;
+
     /**
      * @param int    $tier     1 = structured field, 2 = explicit label, 3 = procedural tell,
      *                         4 = plafonds band, 5 = source default. Lower number wins.
@@ -29,18 +46,8 @@ final class TenureSignal
         public string $reason,
         public string $evidence,
         public int $position = 0,
-        /**
-         * Byte length of the text that ACTUALLY matched, which is not `strlen($evidence)` once
-         * inflection is in play: the literal `logement locatif intermediaire` is 30 bytes and the
-         * matched `logements locatifs intermediaires` is 33. A rule that measured the literal
-         * mis-placed the end of the span by exactly the inflection, which is how the ordinary
-         * French plural broke the `conventionné` adjacency rule. Defaults to the evidence length
-         * for signals with no matched text of their own (source defaults, conflict markers).
-         */
-        public int $length = 0,
+        ?int $length = null,
     ) {
-        if ($this->length === 0) {
-            $this->length = strlen($this->evidence);
-        }
+        $this->length = $length ?? strlen($evidence);
     }
 }

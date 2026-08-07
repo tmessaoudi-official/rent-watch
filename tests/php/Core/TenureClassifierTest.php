@@ -13,6 +13,7 @@ use RentWatch\Core\RawListing;
 use RentWatch\Core\SourceProfile;
 use RentWatch\Core\Tenure;
 use RentWatch\Core\TenureClassifier;
+use RentWatch\Core\TenureSignal;
 
 /**
  * Structural invariants — the properties that must hold for EVERY input, not just the corpus ones.
@@ -272,14 +273,26 @@ final class TenureClassifierTest extends TestCase
         yield 'enumerated codes' => ['PLUS / PLAI', Tenure::PLUS];
         yield 'lowercase enumeration' => ['plai, plus', Tenure::PLAI];
 
-        // Prose — a real French word is present, so the collocation guard decides, and it says no.
-        yield 'Pinel Plus is a scheme name, not the PLUS scheme' => ['Pinel Plus', null];
-        yield 'shouted scheme name' => ['PINEL PLUS', null];
-        yield 'the adverb, shouted' => ['MAISON DE PLUS DE 100 M2', null];
-        yield 'the adverb, lowercase' => ['maison de plus de 100 m2', null];
+        // Prose that names the word without a financing collocation — a DOUBT, never silence.
+        //
+        // These four returned NO tier-1 signal at all until review round 5, which is how
+        // `financement: "Prêt PLUS"` reached MATCH at confidence 50 on In'li with `reasons[]`
+        // saying "aucun signal dans l'annonce". Inside a TENURE FIELD the field name is already the
+        // financing collocation, so the guard's "no context found" is not an answer here. The cost
+        // is that a scheme name and a typology now digest instead of matching: one glance each,
+        // against an application for the alternative.
+        yield 'Pinel Plus is a scheme name, but the field cannot say so' => ['Pinel Plus', Tenure::UNKNOWN];
+        yield 'shouted scheme name' => ['PINEL PLUS', Tenure::UNKNOWN];
+        yield 'a financing noun outside the closed COLLOCATION list' => ['Prêt PLUS', Tenure::UNKNOWN];
+        yield 'a separator the code-list splitter does not know' => ['PLUS|CD', Tenure::UNKNOWN];
 
         // A typology token carries a digit, so it is not a code fragment and the value is prose.
-        yield 'T3 PLUS is a typology, not a financing list' => ['T3 PLUS', null];
+        yield 'T3 PLUS is a typology, but the field cannot say so' => ['T3 PLUS', Tenure::UNKNOWN];
+
+        // The ONE case that stays silent: a known comparative proves the adverb. That tail is the
+        // adverb's own grammar — a closed set — unlike the open set of nouns a scheme name follows.
+        yield 'the adverb, shouted' => ['MAISON DE PLUS DE 100 M2', null];
+        yield 'the adverb, lowercase' => ['maison de plus de 100 m2', null];
 
         // Prose that IS in a financing collocation stays decidable — the guard still runs.
         yield 'prose in collocation' => ['Logement PLUS.', Tenure::PLUS];
@@ -365,6 +378,88 @@ final class TenureClassifierTest extends TestCase
 
         self::assertNotSame(Tenure::LLI, $reversed->tenure, 'conventionne BEFORE a label is not qualified by it');
         self::assertNotSame(Outcome::MATCH, $reversed->outcome);
+    }
+
+    /**
+     * The evidence trail behind a verdict cannot be rewritten by whoever holds it.
+     *
+     * `reasons[]` is what a notification is built from (`spec/PROJECT_BRIEF.md` §5), so a mutable
+     * `TenureSignal` means a caller can make a PLAI rejection describe itself as an LLI match.
+     * `TenureSignal` was `final readonly` until `$length` gained a computed default — promoting the
+     * parameter forced the assignment into the constructor body, which is illegal in a readonly
+     * class, and the class keyword was dropped instead of the promotion. All six properties went
+     * writable, silently, and no test noticed. A non-promoted readonly property does the same job.
+     */
+    public function testASignalCannotBeRewrittenAfterTheVerdictIsFormed(): void
+    {
+        $signal = new TenureSignal(tier: 2, tenure: Tenure::PLAI, reason: 'r', evidence: 'plai', position: 5);
+
+        self::assertSame(4, $signal->length, 'the computed default must survive the readonly rewrite');
+
+        foreach (['tier', 'tenure', 'reason', 'evidence', 'position', 'length'] as $property) {
+            try {
+                $signal->{$property} = $property === 'tenure' ? Tenure::LLI : 1;
+                self::fail(sprintf('TenureSignal::$%s is writable — the §1 evidence trail is forgeable', $property));
+            } catch (\Error $e) {
+                self::assertStringContainsString('readonly', $e->getMessage());
+            }
+        }
+    }
+
+    /**
+     * `reasons[]` names the text that ACTUALLY matched, not the table literal it matched against.
+     *
+     * `reasons[]` is the product's only user-facing output (`spec/PROJECT_BRIEF.md` §5) and the
+     * whole suite asserted exactly two things about it: that it is non-empty, and that no entry is
+     * blank. Reverting `reason:` to `$hit['literal']` — so an inflected match reports a phrase the
+     * listing does not contain — left all 183 tests green. A notification that says
+     * « logement locatif intermediaire » for a listing reading *"logements locatifs intermédiaires
+     * conventionnés"* is not wrong enough to fail a test and is exactly wrong enough to erode trust.
+     */
+    public function testReasonsQuoteTheMatchedTextNotTheTableLiteral(): void
+    {
+        $result = (new TenureClassifier())->classify(
+            $this->listing(description: 'Logements locatifs intermediaires, loyer plafonne.'),
+            new SourceProfile(name: 'inli', defaultTenure: Tenure::LLI, mixedTenure: false),
+        );
+
+        $reasons = implode(' | ', $result->reasons());
+
+        self::assertStringContainsString('logements locatifs intermediaires', $reasons);
+        self::assertStringNotContainsString(
+            '« logement locatif intermediaire »',
+            $reasons,
+            'the reason quotes the singular table literal, which this listing does not say',
+        );
+    }
+
+    /**
+     * A doubt explains itself as a doubt, so the digest entry is actionable.
+     *
+     * The three tier-1 doubt reasons — unreadable field, indécidable value, and the round-5 prose
+     * floor — are the only text a human sees when deciding whether to open a digested listing.
+     */
+    #[DataProvider('doubtReasons')]
+    public function testEveryDoubtSaysWhatCouldNotBeDecided(mixed $value, string $expected): void
+    {
+        /** @var array<string,string> $fields */
+        $fields = ['categorie' => $value];
+
+        $result = (new TenureClassifier())->classify(
+            $this->listing(description: 'Loyer intermediaire, proche RER.', fields: $fields),
+            $this->source(),
+        );
+
+        self::assertSame(Outcome::DIGEST, $result->outcome);
+        self::assertStringContainsString($expected, implode(' | ', $result->reasons()));
+    }
+
+    /** @return iterable<string, array{mixed, string}> */
+    public static function doubtReasons(): iterable
+    {
+        yield 'unreadable field names its type' => [new \stdClass(), 'illisible (stdClass)'];
+        yield 'indecidable value says so' => ['LOGEMENT PLUS MODERNE', 'indécidable'];
+        yield 'unplaceable acronym says so' => ['Prêt PLUS', 'indécidable'];
     }
 
     /** `SOCIAL` corroborates any excluded tenure rather than contradicting it. */

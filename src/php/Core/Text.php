@@ -15,7 +15,9 @@ namespace RentWatch\Core;
  * host locale. An explicit table is portable, has no locale, and never changes under us.
  *
  * Folding is deliberately lossy in one direction only: it removes accents and (in {@see fold()})
- * case, and it normalises the several Unicode apostrophes French text arrives with. It does NOT
+ * ASCII case — non-ASCII uppercase survives, deliberately, so that byte offsets in the two folded
+ * surfaces agree — and it normalises the several Unicode apostrophes French text arrives with.
+ * Whitespace collapses to a single space EXCEPT newlines, which mark a field boundary. It does NOT
  * decode HTML entities — that is the adapter's job, and a classifier that quietly decoded them
  * would hide a broken adapter (see the `case-005` fixture).
  */
@@ -108,10 +110,20 @@ final class Text
         //
         // `=== 1` on its own reads a PCRE ERROR (`false`) as "no entity found", which is the same
         // fail-open shape this file rejects everywhere else — see tokenPosition() and the null
-        // check below. LATENT, not live: PCRE limits are global, so anything that breaks this call
-        // also breaks the `preg_replace` further down, whose null check throws. It is guarded here
-        // anyway because that is an accident of two patterns sharing a limit, not a guarantee, and
-        // the doctrine is stated twenty lines below its own violation.
+        // check below.
+        //
+        // THIS BRANCH DOES EXECUTE; what is latent is only its EFFECT. PCRE limits are global, so
+        // anything that breaks this call also breaks the `preg_replace` further down, whose null
+        // check throws the same exception class — remove this guard and the caller still gets a
+        // `MalformedText`, which is why no test can pin the branch on its own. An earlier version of
+        // this comment said "LATENT, not live", which reads as *unreachable*, and this repo has just
+        // deleted one guard on exactly that argument. It is reachable, it fires first, and its
+        // message is the one that names the entity gate.
+        //
+        // The exception is `notUtf8()`, whose text asserts the input is not valid UTF-8. For a
+        // resource-limit failure that is the wrong diagnosis, and it is kept only because inventing
+        // a second failure type for a path with no reproducer would be worse. If a real reproducer
+        // ever appears, give it its own named constructor rather than widening this one's message.
         $entityFound = preg_match('/&(?:[a-zA-Z][a-zA-Z0-9]{1,10}|#\d{1,6}|#[xX][0-9a-fA-F]{1,6});/', $raw, $entity);
 
         if ($entityFound === false) {
@@ -148,9 +160,23 @@ final class Text
         // correct; stripping them is right, because they are invisible by definition.
         // \s already covers the space-LIKE leaks (NBSP, narrow NBSP) via the collapse below.
         $stripped = preg_replace('/[\p{Mn}\p{Cf}' . self::INVISIBLE . ']/u', '', $s);
-        $collapsed = $stripped === null ? null : preg_replace('/\s+/u', ' ', $stripped);
 
-        // `null` from either call is a PCRE ERROR, never "nothing to replace". Casting it to string
+        // NEWLINES SURVIVE THE COLLAPSE; every other run of whitespace becomes one space.
+        //
+        // A newline here is a FIELD BOUNDARY — `RawListing::text()` joins title and description with
+        // one — and the `conventionné` adjacency rule needs to see it. Collapsing everything to a
+        // single space made a title ending in `Logement intermédiaire` sit one ordinary space from a
+        // description opening `Conventionné, réservé aux ménages sous plafond`, so the adjective
+        // read as qualifying the noun and the exception fired: MATCH, with `conventionne` absent
+        // from `reasons[]`. A comma blocked that exception and a field boundary did not, which is
+        // backwards — a boundary is the stronger phrase break of the two.
+        //
+        // Runs of newlines collapse to one, and spaces around a newline are absorbed into it, so the
+        // output stays canonical: the only whitespace bytes it can contain are ' ' and "\n".
+        $collapsed = $stripped === null ? null : preg_replace('/[^\S\n]+/u', ' ', $stripped);
+        $collapsed = $collapsed === null ? null : preg_replace('/ ?\n[\s]*/u', "\n", $collapsed);
+
+        // `null` from any of them is a PCRE ERROR, never "nothing to replace". Casting it to string
         // is what turned an unreadable listing into an unlabelled one in the first place, so the
         // anti-pattern is not left sitting two lines above its own fix.
         if ($collapsed === null) {
@@ -161,9 +187,12 @@ final class Text
     }
 
     /**
-     * Lowercase, strip accents, normalise apostrophes, collapse whitespace.
+     * Lowercase ASCII, strip accents, normalise apostrophes, collapse whitespace but KEEP newlines.
      *
      * The result is the canonical form every literal pattern in this codebase is written against.
+     * Two qualifiers in that first line are load-bearing and both were missing from it: the
+     * lowercasing is ASCII-only so the two folded surfaces stay byte-aligned, and a newline
+     * survives because it is the title/description boundary. See the body comments for each.
      */
     public static function fold(string $raw): string
     {

@@ -128,7 +128,7 @@ defend, state the assumption, and keep moving.
 The tenure classifier needs this before it can have a default, and the answer changes which
 sources are worth building at all. PLS is the top tier of *social* financing — its income
 ceilings are high and landlords routinely market it on the same page as intermediate stock — so
-it is the one genuinely ambiguous class in the glossary. PLAI and PLUS are settled (never), LLI
+it WAS the one genuinely ambiguous class in the glossary — Q4 settled it as never on 2026-08-06, and this example is kept for its shape, not its content. PLAI and PLUS are settled (never), LLI
 is settled (always). This is an eligibility question, not a preference, and I cannot answer it
 from the repo.
 

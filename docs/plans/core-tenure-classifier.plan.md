@@ -43,6 +43,43 @@ store, no notify.
   exists (blocked on U3). Every fixture therefore carries a `provenance` field, and the suite asserts
   the corpus knows how many of its own entries are synthetic — so the gap is visible as data, not as a
   comment nobody reads.
+- [2026-08-07 07:50] AGREED: **`PLS` moves from the collocation-guarded table into plain `LABELS`.**
+  No French word is spelled `pls`, so the guard's closed noun list could only ever fail open on it:
+  `Appartements PLS disponibles`, `programme agréé PLS` and `financé en PLS` all produced no signal
+  and no doubt, and on a pure source such a listing was notified at confidence 50 with `reasons[]`
+  reading *"aucun signal dans l'annonce"*. Only `PLUS` is genuinely ambiguous.
+- [2026-08-07 07:50] AGREED: **A structured tenure field is read by the SHAPE of its value, never by
+  its case.** Case is a feed's house style: `financement: plus` went silent on an explicitly social
+  code, while `PINEL PLUS` — a real 2023 scheme, routinely shouted in a `categorie` — became a silent
+  REJECT. A value made only of acronyms and short uppercase LETTER-ONLY fragments is a code list;
+  anything else is prose. Three earlier answers are recorded in the method's docblock as wrong.
+- [2026-08-07 07:50] AGREED: **The tier-1 field exemption on the `conventionné` rule is removed
+  outright**, and `regress-003` is relabelled `UNKNOWN`/`DIGEST`. Two attempts at bounding it both
+  leaked, and every leak was toward notifying. A field is not adjacent to anything in the text, and
+  adjacency is the whole content of that exception.
+- [2026-08-07 07:58] AGREED: **`Text::fold()` lowercases byte-wise, and the byte-offset invariant
+  between the two folded surfaces is load-bearing.** Label positions come from `fold()` and the
+  ambiguous acronym's from `foldPreserveCase()`; the resolver compares them directly and the
+  adjacency rule measures a span across them. `mb_strtolower` broke that for 27 codepoints. This is a
+  contract the phorj port must reproduce — see `docs/PHORJ-REQUIREMENTS.md`.
+- [2026-08-07 07:58] AGREED: **Unreachable safety code is deleted, not kept as decoration** — the
+  `conventionné` direction guard, proved unreachable by sabotage. The property it expressed is
+  asserted by a test instead. Distinguish this from code that is unreachable only because a table
+  currently has one entry (`isCodeList()`'s `$sawAcronym`), which is kept and labelled.
+- [2026-08-07 09:20] AGREED: **In a structured tenure field, an acronym the collocation guard cannot
+  place is a DOUBT, never silence.** Review round 5 found the §1 breach this closes: `financement:
+  "Prêt PLUS"` on In'li reached MATCH at confidence 50, because the guard's noun list is closed and
+  `prêt` is not in it — the same closed-list failure that moved `pls` out of the guard one commit
+  earlier, left in place for `PLUS` on the strongest rung of the ladder. Enumerating the missing
+  nouns was rejected: the review listed 66. Inside a tenure field the field NAME is already the
+  collocation, so the floor is the third answer. The cost is that `Pinel Plus` and `T3 PLUS` now
+  digest instead of matching — one glance each, against an application for the alternative.
+- [2026-08-07 09:20] AGREED: **A newline survives folding, because it is the title/description
+  boundary.** `RawListing::text()` joins with one, and collapsing it to an ordinary space let a
+  title's `Logement intermédiaire` excuse a description's opening `Conventionné` — while a mere comma
+  correctly blocked the same exception. Note the second half, which is easy to miss: PCRE's `$`
+  matches before a final newline, so narrowing the adjacency character class changed nothing until
+  the anchor became `\z`.
 
 ---
 
@@ -56,11 +93,18 @@ Three things make this module harder than it looks, and each has fixtures:
    lumineux"*. A naive `str_contains($text, 'plus')` classifies most of the Paris rental market as
    social housing. `PLAI` is worse in a different direction: as a bare substring it matches
    *plaisant*, *plaine*, *plaisir*. Every acronym is therefore matched **word-boundaried**, and the
-   two genuinely ambiguous ones (`PLUS`, `PLS`) require an uppercase spelling in a financing
-   collocation — tested on the SAME occurrence, not anywhere in the document. What follows that
-   occurrence then decides between three answers, not two: a phrase-ending token means the label, a
-   known comparative means the adverb, and **anything else means indécidable** and digests. See the
+   ONE genuinely ambiguous one — `PLUS` — is additionally held behind a financing collocation,
+   tested on the SAME occurrence rather than anywhere in the document. What follows that occurrence
+   then decides between three answers, not two: a phrase-ending token means the label, a known
+   comparative means the adverb, and **anything else means indécidable** and digests. See the
    round-2 section below for why a two-answer version could not be made correct.
+
+   This paragraph named `PLS` alongside `PLUS` and required an UPPERCASE spelling, and review round 5
+   caught both as stale. `PLS` moved into the plain label table in round 4: no French word is spelled
+   `pls`, so the guard's closed noun list could only ever fail open on it — *"Appartements PLS
+   disponibles"* was notified at confidence 50. And case stopped being the discriminator for
+   structured fields in the same round; `financement: plus` is a determinate `PLUS` whatever its
+   case, because a feed's capitalisation is a house style, not evidence.
 
 2. **Signal priority is a ladder, not a vote.** The highest tier that fires decides the tenure. Lower
    tiers may only adjust confidence. That is `CLAUDE.md`'s *"a lower-priority signal must never
@@ -200,7 +244,7 @@ that would otherwise have shipped looking fine.
   catch a regression. Wired as `tests/sabotage-check.sh`, documented in `CLAUDE.md` § Common
   workflows, and it must be run after any change to the classifier, `Text.php` or the corpus.
 - [2026-08-06 23:20] AGREED: **the corpus declares its own provenance and the suite checks it.** The
-  spec asks for real listing texts; all 90 are synthetic until a payload can be captured. Making that
+  spec asks for real listing texts; all 93 are synthetic until a payload can be captured. Making that
   machine-checked keeps the gap visible instead of letting it decay into a stale comment.
 
 ---

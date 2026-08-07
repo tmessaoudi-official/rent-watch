@@ -529,20 +529,28 @@ final readonly class TenureClassifier
      * LLI stock genuinely is conventionné, and leaving the signal in would send a
      * correctly-identified LLI listing to the digest through the conflict rule.
      *
-     * TWO CORRECTIONS FROM THE 2026-08-06 REVIEW, both of which this got wrong:
+     * TIER 2 ONLY. A `financement: LLI` structured field does NOT qualify a `conventionné` in the
+     * body text, and the history of that decision is worth keeping because it reversed:
      *
-     * 1. It tested `isEligible()`, i.e. LLI **or LIBRE**. LIBRE is not an intermediate label, so a
-     *    spurious LIBRE signal disarmed the exclusion — and combined with `logement libre` then
-     *    being in the label table, a listing whose own title read *"Logement conventionné"* reached
-     *    MATCH with the word absent from its reasons. Only an LLI label qualifies now.
-     * 2. It saw tier 2 only, so a `financement: LLI` structured field — the STRONGEST evidence the
-     *    ladder has — did not count as "explicitly labelled intermediate" while the weaker text
-     *    label did. Both tiers are considered.
+     * - Round 3 made tier 1 qualify too, on the ladder argument that a structured field is the
+     *   strongest evidence there is. That is true about the FIELD and irrelevant here — this
+     *   exception is about one French construction, an adjective qualifying the noun it follows,
+     *   and a field is not adjacent to anything in the text.
+     * - Round 4 showed what round 3 bought: a description reading *"40 logements conventionnés
+     *   réservés aux ménages sous plafond, et 12 logements en location"* MATCHED on the strength of
+     *   one field, with `conventionne` absent from `reasons[]`. The exemption was removed outright
+     *   rather than bounded a third time — both bounding attempts leaked, always toward notifying.
+     *
+     * It also tested `isEligible()`, i.e. LLI **or LIBRE**, until round 3. LIBRE is not an
+     * intermediate label, so a spurious LIBRE signal disarmed the exclusion — and combined with
+     * `logement libre` then being in the label table, a listing whose own title read *"Logement
+     * conventionné"* reached MATCH. Only an LLI label qualifies.
      *
      * `conventionne anah` / `conventionne anru` are named regimes; this exception never applies to them.
      *
-     * @param list<TenureSignal> $fieldSignals
-     * @param list<TenureSignal> $labelSignals
+     * @param list<TenureSignal> $labelSignals tier-2 signals only, by the rule above
+     * @param string             $folded       `Text::fold($listing->text())`, whose byte offsets the
+     *                                         signals' `position`/`length` index into
      *
      * @return list<TenureSignal>
      */
@@ -589,8 +597,20 @@ final readonly class TenureClassifier
 
                     $between = $other->position + $other->length;
 
+                    // `[ (\[«"']`, NOT `[\s…]`. A NEWLINE MUST NOT QUALIFY, because it is the
+                    // title/description boundary that `RawListing::text()` inserts — and a boundary
+                    // is a stronger phrase break than the comma that already blocks this rule.
+                    // With `\s` here, a title ending `Logement intermédiaire` excused a description
+                    // opening `Conventionné, réservé aux ménages sous plafond`: MATCH, with the word
+                    // absent from `reasons[]`. `Text::foldPreserveCase()` guarantees the only
+                    // whitespace bytes that reach this point are ' ' and "\n", so the class is
+                    // exhaustive rather than merely narrower.
+                    // `\z`, NOT `$`. PCRE's `$` matches before a FINAL NEWLINE as well as at the
+                    // end of the subject, so `/^[ ]*$/` accepts the single "\n" that IS the field
+                    // boundary — the exact string this class was narrowed to reject. The narrowing
+                    // looked correct and changed nothing until the anchor was fixed too.
                     if ($between <= $s->position
-                        && $this->matches('/^[\s(\[«"\']*$/u', substr($folded, $between, $s->position - $between))) {
+                        && $this->matches('/^[ (\[«"\']*\z/u', substr($folded, $between, $s->position - $between))) {
                         return false;
                     }
                 }
@@ -758,17 +778,77 @@ final readonly class TenureClassifier
         foreach (self::AMBIGUOUS_LABELS as $acronym => $tenure) {
             $hit = $this->financingAcronymPosition($cased, $acronym);
 
-            if ($hit === null) {
+            if ($hit !== null) {
+                [$position, $confident] = $hit;
+                $hits[$position] = $confident
+                    ? ['tenure' => $tenure, 'literal' => $acronym]
+                    : ['tenure' => Tenure::UNKNOWN, 'literal' => $acronym];
+
                 continue;
             }
 
-            [$position, $confident] = $hit;
-            $hits[$position] = $confident
-                ? ['tenure' => $tenure, 'literal' => $acronym]
-                : ['tenure' => Tenure::UNKNOWN, 'literal' => $acronym];
+            // THE GUARD RETURNING null IS NOT AN ANSWER HERE, and treating it as one was a §1
+            // breach: `financement: "Prêt PLUS"` on In'li produced no signal and no doubt, so the
+            // listing matched at confidence 50 with `reasons[]` reading "aucun signal dans
+            // l'annonce". That is verbatim the failure that moved `pls` out of this guard one
+            // commit earlier — left in place for `PLUS`, on the strongest rung of the ladder.
+            //
+            // `financingAcronymPosition()` answers null when no occurrence sits beside a
+            // COLLOCATION noun. That is right for a DESCRIPTION, where most of the text is not
+            // about financing. It is wrong for a TENURE FIELD, because the field NAME is already
+            // the collocation — `financement`, `categorie` and `dispositif` are literally in that
+            // list. So the floor here is the third answer, a doubt, not silence.
+            //
+            // Enumerating the missing nouns instead was considered and rejected: `Prêt PLUS`,
+            // `Financé PLUS`, `Agréé PLUS`, `Bailleur PLUS`, `Gamme PLUS` … the review that found
+            // this listed 66 of them, and a closed list is what failed here twice already.
+            //
+            // A known comparative still wins, because `PLUS DE 100 M2` is provably the adverb and
+            // digesting every such value would make the digest useless. Everything else digests —
+            // including `Pinel Plus` and `T3 PLUS`, which used to match. That is the trade: those
+            // two now cost one glance each, where the alternative costs an application.
+            $doubtAt = $this->firstNonComparativeOccurrence($cased, $acronym);
+
+            if ($doubtAt !== null) {
+                $hits[$doubtAt] = ['tenure' => Tenure::UNKNOWN, 'literal' => $acronym];
+            }
         }
 
         return $hits;
+    }
+
+    /**
+     * The first occurrence of `$acronym` that is NOT the French comparative adverb, or null.
+     *
+     * Used only for structured tenure fields, where the field name supplies the financing context
+     * that {@see financingAcronymPosition()} looks for in surrounding prose. Occurrences followed by
+     * a known comparative (`PLUS DE`, `PLUS GRAND`) are skipped — that is the one case where the
+     * word is provably not a scheme, and it is a closed set because the tail is the adverb's own
+     * grammar rather than the open set of nouns a scheme name can follow.
+     */
+    private function firstNonComparativeOccurrence(string $cased, string $acronym): ?int
+    {
+        $found = preg_match_all(
+            '/(?<![A-Za-z0-9])(?i:' . preg_quote($acronym, '/') . ')(?![A-Za-z0-9])/u',
+            $cased,
+            $matches,
+            PREG_OFFSET_CAPTURE,
+        );
+
+        // An error is not an absence of matches — the same rule every other preg call here obeys.
+        if ($found === false) {
+            throw MalformedText::notUtf8('TenureClassifier::firstNonComparativeOccurrence (' . preg_last_error_msg() . ')');
+        }
+
+        foreach ($matches[0] as [$literal, $offset]) {
+            $after = substr($cased, $offset + strlen($literal));
+
+            if (!$this->matches('/^\s*(?i:' . self::COMPARATIVE_TAIL . ')(?![A-Za-z0-9])/u', $after)) {
+                return $offset;
+            }
+        }
+
+        return null;
     }
 
     /**
@@ -783,12 +863,24 @@ final readonly class TenureClassifier
      * `T3 PLUS` a code list and turn an ordinary typology into a silent REJECT; excluding them
      * sends it down the prose branch, where `T3` is not a financing noun and the guard correctly
      * says nothing. Pure numbers are allowed because a bare count carries no French meaning.
+     *
+     * Returning `false` is NOT the safe direction here, which is why the PCRE error below throws
+     * rather than falling through to it: a value wrongly sent to the prose branch used to go silent
+     * on a scheme name. It no longer can — that branch has a doubt floor since round 5 — but the
+     * separator list is still the difference between a determinate REJECT and a digest entry, and
+     * "an error is not an absence of matches" is the rule every other preg call in this class obeys.
      */
     private function isCodeList(string $cased): bool
     {
         $tokens = preg_split('/[\s\/\-,;:()+&.]+/u', trim($cased), -1, PREG_SPLIT_NO_EMPTY);
 
-        if ($tokens === false || $tokens === []) {
+        // `false` is a PCRE ERROR and `[]` is an empty value. Conflating them made a resource-limit
+        // failure indistinguishable from a blank field.
+        if ($tokens === false) {
+            throw MalformedText::notUtf8('TenureClassifier::isCodeList (' . preg_last_error_msg() . ')');
+        }
+
+        if ($tokens === []) {
             return false;
         }
 
@@ -806,6 +898,14 @@ final readonly class TenureClassifier
             }
         }
 
+        // `$sawAcronym` is currently UNREACHABLE as a false result, and is kept deliberately —
+        // unlike the direction guard round 4 deleted on an unreachability argument, which is worth
+        // distinguishing. That one was unreachable by ARITHMETIC and could never fire. This one is
+        // unreachable only because `AMBIGUOUS_LABELS` happens to hold a single four-letter entry:
+        // any token that could satisfy the caller's search is four characters, so it either matches
+        // `ACRONYMS` or fails the fragment class above. Add a second entry — a two-letter code, say
+        // — and the check starts carrying weight immediately. It states the rule the phorj port must
+        // reproduce, and the rule is not "whatever falls out of the current table".
         return $sawAcronym;
     }
 
@@ -817,6 +917,11 @@ final readonly class TenureClassifier
      *   - the phrase ENDS (punctuation, end of text, another financing acronym) → `[offset, true]`,
      *     a determinate label;
      *   - a known French comparative follows (`PLUS GRAND`) → the adverb, skipped;
+     *
+     * Called with ONE acronym, `PLUS`, since `AMBIGUOUS_LABELS` was reduced to a single entry.
+     * Examples below that show `PLS` reaching here (`Financement / PLS`, `PLS ou PLUS`) describe
+     * the shape of the patterns, not a live call: `pls` is a plain label now. `ACRONYMS` still
+     * lists it because an acronym NEXT TO the one being tested is what makes an enumeration.
      *   - any other word follows (`LOGEMENT PLUS MODERNE`) → `[offset, false]`, **indécidable**,
      *     which the caller turns into a doubt and the digest.
      *

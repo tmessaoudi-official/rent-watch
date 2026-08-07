@@ -207,7 +207,7 @@ PY
 # changing the documented threshold without changing that class leaves the guard checking the old one.
 say "── S6 tenure invariant: docs vs the tripwire"
 python3 - <<'PY' >>"$FINDINGS"
-import pathlib, re
+import json, os, pathlib, re, subprocess
 guard = pathlib.Path('.claude/hooks/tenure-guard.sh')
 claude = pathlib.Path('CLAUDE.md')
 if not (guard.is_file() and claude.is_file()):
@@ -270,17 +270,29 @@ elif floors:
     if th and bp != round(float(th[0]) * 100):
         print(f"P0  src/ sets FLOOR_BP={bp} but CLAUDE.md documents a {th[0]} fail-closed floor "
               f"({round(float(th[0]) * 100)} basis points) — the code and the rule disagree.")
-    # The guard must bracket values BELOW the floor in integer form. Read the digit class out of its
-    # own pattern rather than trusting that some `_bp` string is present somewhere in the file.
-    intcls = re.search(r'_bp\[\^\.\]\{0,\d+\}=? ?\*?\(\[0-(\d)\]\?\[0-9\]\)', g)
-    if not intcls:
-        print(f"P0  src/ expresses the fail-closed floor as an integer (FLOOR_BP={bp}) but "
-              f"tenure-guard.sh has no integer basis-point pattern — the tripwire only knows the "
-              f"float form, which appears nowhere in src/. Lowering FLOOR_BP is silent.")
-    elif int(intcls.group(1)) != bp // 10 - 1:
-        print(f"P0  src/ sets FLOOR_BP={bp} but tenure-guard.sh's integer pattern brackets "
-              f"[0-{intcls.group(1)}]?[0-9], i.e. values below {(int(intcls.group(1)) + 1) * 10} — "
-              f"the guard is checking a different floor than the code uses.")
+    # BEHAVIOURAL, NOT A REGEX ABOUT A REGEX. The first version of this check read the digit class
+    # straight out of the guard's source with `re.search(r'_bp\[\^\.\]...')`, and a review broke it
+    # in BOTH directions: rewriting `= *` as the equivalent `=[[:space:]]*` left the guard exactly
+    # correct and produced a false P0, while renaming the prefix alternation from `floor_bp` to
+    # `ceiling_bp` killed the guard outright and this check stayed clean. A gate that blocks correct
+    # work gets overridden; one that passes broken work is worse. So: RUN the guard, the way its own
+    # test does, and assert what it actually does with a value one point under the floor.
+    guard_path = str(guard)
+    def guard_fires(snippet):
+        payload = json.dumps({'tool_name': 'Write', 'tool_input': {
+            'file_path': str(pathlib.Path.cwd() / 'src' / 'php' / 'Core' / 'Probe.php'),
+            'content': snippet}})
+        env = {**os.environ, 'OBS_LOG': os.devnull, 'CLAUDE_PROJECT_DIR': str(pathlib.Path.cwd())}
+        r = subprocess.run(['bash', guard_path], input=payload, capture_output=True, text=True, env=env)
+        return r.returncode == 2
+
+    if not guard_fires(f'private const int FLOOR_BP = {bp - 1};'):
+        print(f"P0  src/ sets FLOOR_BP={bp}, but feeding tenure-guard.sh a write that lowers it to "
+              f"{bp - 1} does NOT fire the tripwire. Lowering the fail-closed floor is silent.")
+    if guard_fires(f'private const int FLOOR_BP = {bp};'):
+        print(f"P1  tenure-guard.sh fires on the CORRECT floor (FLOOR_BP={bp}). A tripwire that "
+              f"trips on every edit that merely touches the floor is learned-to-be-ignored, which "
+              f"is how the guard's own header says it stops being a guard.")
 PY
 # A python section that CRASHES must not read as a section that found nothing. Under
 # `set -uo pipefail` with no `-e`, an exception here printed a traceback to stderr, wrote
@@ -300,6 +312,12 @@ import json, pathlib, re
 
 corpus = pathlib.Path('tests/fixtures/tenure/corpus.json')
 if not corpus.is_file():
+    # A BARE `raise SystemExit` EXITS 0, so the `[[ $? -eq 0 ]] ||` crash guard below cannot fire
+    # and every prose claim this section polices silently stops being checked. A truncated
+    # corpus.json and a `cases` -> `items` rename both surfaced correctly; the artefact simply being
+    # GONE — which CLAUDE.md lists under never-casually-deleted stateful data — was the silent case.
+    print("P0  tests/fixtures/tenure/corpus.json is MISSING — S7 checked nothing at all, and that "
+          "file is the classifier's ground truth, listed in CLAUDE.md as never casually deleted.")
     raise SystemExit
 
 data = json.loads(corpus.read_text())
@@ -344,18 +362,20 @@ CLAIMS = [
 
 
 def code_spans(text):
-    """Character ranges inside fenced blocks or inline backticks.
+    """Character ranges inside INLINE backticks. Fenced blocks are deliberately NOT exempt.
 
     A count QUOTED as an example is not a claim. This check's own write-up in the plan file cites
     `all 56 are synthetic` as the phrasing an earlier version missed — and the check then reported
     that citation as drift, on every run, forever. Documenting a bug became a permanent finding,
     which is how a gate gets routinely overridden. Backticks are the marker because that is how a
     stale count is naturally cited, and because a real claim is never written in code font.
+
+    Fenced blocks were exempt too, until a review showed that hides LIVE claims: `CLAUDE.md`'s File
+    layout quick reference IS a fenced block and already names corpus.json, so a stale
+    "corpus.json, 42 cases" line placed there produced P0=0 P1=0 P2=0 and exit 0. The single
+    citation this exemption exists for is inline, so narrowing to inline costs nothing.
     """
-    spans = []
-    for m in re.finditer(r'```.*?```|`[^`\n]+`', text, re.S):
-        spans.append((m.start(), m.end()))
-    return spans
+    return [(m.start(), m.end()) for m in re.finditer(r'`[^`\n]+`', text)]
 
 
 for doc in ('CLAUDE.md', 'README.md', 'docs/plans/core-tenure-classifier.plan.md'):

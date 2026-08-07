@@ -127,6 +127,35 @@ run_sabotage "comparative suppression removed ('LOGEMENT PLUS GRAND' reads as fi
   src/php/Core/TenureClassifier.php \
   's|^    private const string COMPARATIVE_TAIL = .*$|    private const string COMPARATIVE_TAIL = "zzzz-no-such-word";|'
 
+# `reasons[]` is the product's only user-facing output (spec §5) and had exactly two assertions on it
+# — non-empty, and no blank entry — so reverting the tier-2 reason to the TABLE LITERAL, which makes a
+# notification quote a phrase the listing does not contain, left the whole suite green.
+run_sabotage "tier-2 reason quotes the table literal instead of the matched text" \
+  src/php/Core/TenureClassifier.php \
+  "s|reason: sprintf('mention explicite « %s » dans le texte', \$hit\['matched'\] ?? \$hit\['literal'\])|reason: sprintf('mention explicite « %s » dans le texte', \$hit['literal'])|"
+
+# The doubt FLOOR in a structured tenure field. Round 5 found the prose branch answering silence when
+# no COLLOCATION noun sat beside the acronym — a §1 breach on the strongest rung of the ladder.
+run_sabotage "field prose branch goes silent again (no collocation noun => no signal, no doubt)" \
+  src/php/Core/TenureClassifier.php \
+  's/$doubtAt = $this->firstNonComparativeOccurrence($cased, $acronym);/$doubtAt = null;/'
+
+# Addressed to firstNonComparativeOccurrence() alone — `if (!$this->matches` also appears in
+# isCodeList(), and a sabotage that broke both could be "detected" by a fixture for the other one.
+run_sabotage "the comparative escape stops firing (the adverb becomes a doubt)" \
+  src/php/Core/TenureClassifier.php \
+  '/private function firstNonComparativeOccurrence/,$ s@if (!$this->matches@if (true || !$this->matches@'
+
+# The title/description boundary. Two independent halves — the fold that preserves the newline, and
+# the anchor that stops PCRE matching `$` in front of it. Breaking EITHER restores the leak.
+run_sabotage "folding flattens the title/description newline again" \
+  src/php/Core/Text.php \
+  's|\[^\\S\\n\]+|\\s+|'
+
+run_sabotage "conventionne adjacency anchor reverts to \$ (which matches before a final newline)" \
+  src/php/Core/TenureClassifier.php \
+  's|\*\\z/u|*$/u|'
+
 # The two folded surfaces must stay byte-aligned: label positions come from fold(), the ambiguous
 # acronym's from foldPreserveCase(), and the resolver compares them directly. mb_strtolower breaks
 # that for 27 codepoints (İ, ẞ, the Kelvin sign …) — which is what this code did until round 4.

@@ -21,7 +21,16 @@ final class TextTest extends TestCase
         yield 'cedilla' => ['Français', 'francais'];
         yield 'ligature' => ['Cœur de ville', 'coeur de ville'];
         yield 'curly apostrophe' => ["commission d’attribution", "commission d'attribution"];
-        yield 'collapsed whitespace' => ["logement\n\n  intermediaire", 'logement intermediaire'];
+        // NEWLINES SURVIVE, everything else collapses. Changed in review round 5: a newline is the
+        // title/description boundary that `RawListing::text()` inserts, and the `conventionné`
+        // adjacency rule has to see it. Flattening it to a space let a title ending
+        // `Logement intermédiaire` excuse a description opening `Conventionné, …` — MATCH, with the
+        // word absent from `reasons[]`, while a mere comma correctly blocked the same exception.
+        // Runs of newlines collapse to one and surrounding spaces are absorbed, so the only
+        // whitespace bytes the output can contain are still exactly two: ' ' and "\n".
+        yield 'horizontal whitespace collapses' => ["logement \t  intermediaire", 'logement intermediaire'];
+        yield 'a newline survives as a phrase boundary' => ["logement\n\n  intermediaire", "logement\nintermediaire"];
+        yield 'spaces around a newline are absorbed into it' => ["logement  \n  social", "logement\nsocial"];
         yield 'trimmed' => ['  LLI  ', 'lli'];
         yield 'em dash survives as a separator' => ['LLI — T3', 'lli — t3'];
         yield 'NFD-decomposed accent folds like a precomposed one'

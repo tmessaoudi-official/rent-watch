@@ -67,7 +67,7 @@ These are from the brief §5; **none has a weight yet**, and the weights are a d
 `spec/PROJECT_BRIEF.md` §0.1. F2 is a flat commune set. The alternative is *"≤ N minutes door-to-door
 to a named station"* via the IDFM/PRIM API, with commune as a score weight instead of a filter.
 **Default if unanswered:** keep F2 as the hard filter, ship S2 disabled, revisit after milestone 8.
-Changes: whether `src/enrich/transit.*` is milestone-1 infrastructure or a later add-on.
+Changes: whether `src/php/Enrich/Transit.php` is milestone-1 infrastructure or a later add-on.
 
 ### Ⓑ Q2 — Max rent: hard cutoff or soft?
 §0.2. F6 is `1800`. Soft would notify up to `1980` at a reduced score.
@@ -400,11 +400,13 @@ recording that "action logement" was named as a wanted *source*, not as a wanted
   component in the product — runs **byte-identically on three legs**: interpreter, bytecode VM, and
   transpiled PHP. Free differential testing on exactly the code where a bug means a social-housing false
   positive.
-- [2026-08-06] AGREED (architecture, follows from the above): **`src/core/` must not import a
-  native-only module.** No `Core.HttpClient`, `Core.Database`, `Core.Mail`, serve or `Core.File` under
-  `core/`. I/O is passed in — the classifier takes a listing, not a URL. This is ports-and-adapters
-  discipline, worth having regardless, and it is **mechanically checkable**: `phg transpile src/core/`
-  succeeding IS the proof the discipline held. Wire it as a gate once `src/` exists.
+- [2026-08-06] AGREED (architecture, follows from the above): **the pure core must not import a
+  native-only module.** No `Core.HttpClient`, `Core.Database`, `Core.Mail`, serve or `Core.File` in
+  it. I/O is passed in — the classifier takes a listing, not a URL. This is ports-and-adapters
+  discipline, worth having regardless, and it is **mechanically checkable**: `phg transpile
+  src/phorj/core/` succeeding IS the proof the discipline held. Wire it as a gate once that tree
+  exists. (Paths updated 2026-08-07: this entry said `src/core/`, the single-language layout the
+  two-language ruling replaced. The core lives at `src/php/Core/` and, later, `src/phorj/core/`.)
 - [2026-08-06] AGREED: **run every assumption past the developer** — *"even if you assume anything run
   it by me"*. Assumptions get stated explicitly and recorded here, not absorbed silently.
 - [2026-08-06] AGREED: **build the pure core without waiting for phorj** — *"let's start without

@@ -47,9 +47,13 @@ print(json.dumps({"tool_name": "Write",
   [[ $? -eq 2 ]]
 }
 
+# `$3` is an OPTIONAL path, mirroring expect_silence. It was missing until review round 5, so the
+# one case that passed a path — the lookalike guarding the two exact-path self-exclusions — silently
+# tested `Thing.php` instead. Demonstrated: widening the exclusion to a bare glob let
+# `src/php/Core/sabotage-check.sh` shelter `FLOOR_BP = 10` while this suite still reported 35/35.
 expect_fire() {
-  local label="$1" content="$2"
-  if fired "$repo/src/php/Core/Thing.php" "$content"; then
+  local label="$1" content="$2" path="${3:-$repo/src/php/Core/Thing.php}"
+  if fired "$path" "$content"; then
     printf '  \033[32mok\033[0m   FIRES     %s\n' "$label"
     pass=$((pass + 1))
   else
@@ -117,6 +121,15 @@ expect_fire "an excluded tenure let out through the accessor" \
   'public function isExcluded(): bool { return match($this) { self::PLS => false, default => true }; }'
 expect_fire "an excluded tenure declared non-excluded in a table" \
   "'PLAI' => false,"
+# Pattern 7 against the CamelCase paths the classifier tests actually have. Bash `case` globs are
+# case-sensitive, so `*tests*tenure*` matched neither of these and the pattern had never run on the
+# only two files where a skipped classifier test is possible — which CLAUDE.md §1 rates P0.
+expect_fire "a skipped test in the CamelCase corpus suite" \
+  'public function testCorpusCaseClassifiesAsLabelled(): void { $this->markTestSkipped("todo"); }' \
+  "$repo/tests/php/Core/TenureCorpusTest.php"
+expect_fire "a skipped test in the CamelCase classifier suite" \
+  '$this->markTestSkipped("todo: revisit PLS handling");' \
+  "$repo/tests/php/Core/TenureClassifierTest.php"
 expect_fire "UNKNOWN routed to notification" \
   'if unknown: notify(listing)'
 expect_fire "classifier bypassed" \
@@ -142,6 +155,41 @@ expect_silence "isExcluded returning true, which is the rule working" \
   'if ($result->tenure->isExcluded()) { return Outcome::REJECT; }'
 expect_silence "routing UNKNOWN to the digest, which is the rule" \
   'if ($tenure === Tenure::UNKNOWN) { return Outcome::DIGEST; }'
+# THE SIX NEXT-MILESTONE FALSE POSITIVES (review round 5). Every one of these is correct code that
+# has nothing to do with §1, and every one fired. The guard read as clean on the whole tree only
+# because the tree is five files: no config/, no adapter, no notify module, no health module —
+# which is exactly where the guard's vocabulary collides with ordinary code. A tripwire that fires
+# on correct code is read as noise within a day, which costs more than the gap it closed.
+expect_silence "a communes block in criteria.yaml" \
+  'communes:
+  included: [Cergy, Nanterre]
+  excluded: []' \
+  "$repo/config/criteria.yaml"
+expect_silence "a non-tenure denylist in criteria.yaml" \
+  'blocked_landlords: null' \
+  "$repo/config/criteria.yaml"
+expect_silence "a notify module restating the routing rule" \
+  '/** UNKNOWN never reaches the notify channel — it goes to the digest instead. */' \
+  "$repo/src/php/Core/Notify/Formatter.php"
+expect_silence "a health module drop threshold in basis points" \
+  'private const int DROP_THRESHOLD_BP = 30;' \
+  "$repo/src/php/Core/Health.php"
+expect_silence "an adapter docblock mentioning an absent tenure hint" \
+  '/** A source with no tenure hint still runs the classifier. */' \
+  "$repo/src/php/Adapters/HttpJson.php"
+expect_silence "a sources.yaml comment describing a mixed-tenure landlord" \
+  '# config: CDC Habitat publishes PLUS and PLAI alongside LLI' \
+  "$repo/config/sources.yaml"
+
+# Pattern 7 must not fire on PROSE ABOUT skipping — both of these are real lines from the two
+# classifier test files, and the second is that file's own docblock quoting CLAUDE.md's rule.
+expect_silence "a docblock describing a deleted skip branch" \
+  'position > $s->position -> skip, and sabotage-verification proved that clause unreachable' \
+  "$repo/tests/php/Core/TenureClassifierTest.php"
+expect_silence "a docblock quoting CLAUDE.md's own rule about skipped fixtures" \
+  'A skipped, xfailed, deleted or relabelled fixture is a P0 finding unless the old label was wrong.' \
+  "$repo/tests/php/Core/TenureCorpusTest.php"
+
 expect_silence "a file outside src/, config/ and tests/" \
   'excluded_tenures = []' \
   "$repo/README.md"

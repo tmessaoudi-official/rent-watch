@@ -256,3 +256,38 @@ exactly the code where a bug means surfacing housing the user is not eligible fo
 
 That is why item ③ being native-only is fine, and why the accent-folding decision above matters: anything
 the classifier touches must stay in the transpilable tier.
+
+---
+
+## The classifier's cross-implementation contract
+
+Added 2026-08-07, after a review found this recorded only in a PHP docblock. "Byte-identical
+differential testing" above is a promise, and these are the four properties it actually rests on. A
+phorj port that gets any of them wrong will disagree with PHP on real fixtures while looking correct.
+
+**1. Confidence is an integer 0–100, divided by 100 only at the boundary.** Float arithmetic is not
+guaranteed bit-identical across two runtimes; integer arithmetic is. Never accumulate in floats.
+
+**2. `TenureSignal` carries `position` AND `length`, both byte offsets into the folded text.**
+`position` is where the match starts; `length` is the length of the text that ACTUALLY matched, which
+is not the length of the table literal once French inflection is in play — `logement locatif
+intermediaire` is 30 bytes and the matched `logements locatifs intermediaires` is 33. Ties within a
+tier are broken on `position`, so a port that omits it gets a verdict that depends on the iteration
+order of its pattern table. The `conventionné` adjacency rule computes `position + length` and
+requires the span between two signals to be blank, so a port that measures the literal mis-places the
+end of the span by exactly the inflection.
+
+**3. The two folded surfaces must agree byte for byte.** Explicit labels are matched against the
+lowercased fold; the ambiguous acronym `PLUS` is matched against the case-preserving fold, because
+case is evidence there. Their offsets are then compared directly. This holds only if lowercasing
+cannot change byte length — so it is ASCII-only (`strtolower`, not a Unicode-aware lowercaser). A
+Unicode lowercaser breaks it for 27 codepoints, among them `İ` U+0130, `ẞ` U+1E9E and the Kelvin sign
+U+212A. Nothing in the label tables is non-ASCII, so ASCII-only folding loses no detection.
+
+**4. Folding preserves newlines and collapses every other whitespace run to one space.** The newline
+is the title/description boundary, and the `conventionné` adjacency rule treats it as a phrase break —
+a title ending in an intermediate label must not qualify a `conventionné` opening the description.
+The only whitespace bytes a folded string may contain are `U+0020` and `U+000A`.
+
+`tests/fixtures/tenure/corpus.json` is the shared oracle for all four: same file, same expected
+verdicts, both implementations.

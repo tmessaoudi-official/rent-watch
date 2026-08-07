@@ -122,15 +122,23 @@ final class TenureCorpusTest extends TestCase
             // A no-op exemption is worth deleting — it reads as evidence that a real hole was
             // considered and waved through.
             'trap-005b-plus-with-no-comparative-and-no-collocation' => ['plus' => '"PLUS UN BUREAU"'],
-            // The same adverb/scheme-name problem, in a STRUCTURED FIELD rather than in prose.
-            'regress-027-scheme-name-in-a-field-is-not-the-scheme' => [
-                'plus' => '"Pinel Plus", a 2023 scheme name that is not the PLUS financing scheme',
-            ],
-            'regress-028-typology-in-a-field-is-not-a-code-list' => ['plus' => '"T3 PLUS", a typology'],
+            // NOTE: `regress-027` and `regress-028` were exempted here until review round 5. They
+            // no longer reach MATCH — a `PLUS` in a tenure field that the guard cannot place is now
+            // a doubt rather than silence — so an exemption for them would be dead, and
+            // testEveryExclusionExemptionIsStillEarned() rejects dead exemptions on purpose.
             // `conventionné` QUALIFYING an explicit intermediate label — the glossary's exception.
             'lli-011-conventionne-with-intermediate-label' => [
                 'conventionne' => 'CLAUDE.md glossary: conventionne qualifying an explicit '
                     . 'intermediate label is not excluded',
+            ],
+            // A NEGATED procedural tell. `sans commission d'attribution` is an INTERMEDIATE signal —
+            // allocation by the landlord rather than by a commission — and it contains the social
+            // literal `commission d'attribution` as a substring. The classifier handles this with a
+            // `sans` lookbehind; this invariant reads the raw text and cannot, so the exemption is
+            // named per-token and the fixture stays checked for every other excluded literal.
+            'lli-003-explicit-label-text' => [
+                "commission d'attribution" => 'the NEGATED form, "sans commission d\'attribution", '
+                    . 'which is the intermediate tell rather than the social one',
             ],
             'regress-030-inflected-label-then-conventionne' => [
                 'conventionne' => 'the same glossary exception, reached through an INFLECTED label '
@@ -162,7 +170,14 @@ final class TenureCorpusTest extends TestCase
         $class = new \ReflectionClass(TenureClassifier::class);
         $tokens = [];
 
-        foreach (['LABELS', 'AMBIGUOUS_LABELS'] as $table) {
+        // PROCEDURAL is included, and that was a gap: `numero unique d'enregistrement`,
+        // `systeme national d'enregistrement`, `sne`, `demande de logement social` and
+        // `commission d'attribution` are five more phrases from which the classifier concludes an
+        // excluded tenure, and none of them was inside the one invariant that checks §1 against the
+        // LISTING rather than against the verdict. No live breach ran through them — every tier-3
+        // SOCIAL signal reaches `reasons[]` and the conflict rule catches it — but "no breach today"
+        // is what an untested guarantee always looks like.
+        foreach (['LABELS', 'AMBIGUOUS_LABELS', 'PROCEDURAL'] as $table) {
             /** @var array<string, Tenure> $labels */
             $labels = $class->getConstant($table);
 

@@ -22,7 +22,7 @@
     ],
     "version": 1,
     "declared_counts": {
-        "synthetic": 90,
+        "synthetic": 93,
         "captured": 0
     },
     "sources": {
@@ -1255,11 +1255,10 @@
                 "categorie": "Pinel Plus"
             },
             "expect": {
-                "tenure": "LLI",
-                "outcome": "MATCH",
-                "min_confidence": 90
+                "tenure": "UNKNOWN",
+                "outcome": "DIGEST"
             },
-            "why": "The other direction of the same round-4 finding, and the reason the fix is a shape test rather than a third case rule. 'Pinel Plus' is a real 2023 scheme name and is routinely shouted in a categorie field; under the case rule 'PINEL PLUS' became tenure PLUS at confidence 97 and a silent REJECT of a listing with nothing to do with social housing. PINEL is five letters, so the value is prose, so it goes through the same collocation guard the description gets -- which correctly says nothing, because PINEL is not a financing noun. Listed in the invariant test's exemption table for the same reason the adverb traps are: the word 'plus' is present and is not the scheme."
+            "why": "RELABELLED 2026-08-07 after review round 5, evidence here and in the commit message as CLAUDE.md requires. The prose branch of the field rule answered SILENCE when no COLLOCATION noun sat beside the acronym -- right for a description, wrong for a tenure field, because the field NAME is already the collocation. That silence was a §1 breach: 'financement: Pret PLUS' on In'li reached MATCH at confidence 50 with reasons[] reading 'aucun signal dans l'annonce'. The floor in a tenure field is now a DOUBT. This listing therefore digests rather than matching -- the field says 'Pinel Plus', the classifier cannot prove that is not the PLUS scheme, and one glance in the digest is the honest price. ORIGINAL LABEL, for the record: LLI / MATCH / min_confidence 90, added in round 4 as the other direction of that finding. 'Pinel Plus' is a real 2023 scheme name and is routinely shouted in a categorie field; under the case rule 'PINEL PLUS' became tenure PLUS at confidence 97 and a silent REJECT of a listing with nothing to do with social housing. PINEL is five letters, so the value is prose, so it goes through the same collocation guard the description gets -- which correctly says nothing, because PINEL is not a financing noun. Listed in the invariant test's exemption table for the same reason the adverb traps are: the word 'plus' is present and is not the scheme."
         },
         {
             "id": "regress-028-typology-in-a-field-is-not-a-code-list",
@@ -1271,11 +1270,10 @@
                 "typelogement": "T3 PLUS"
             },
             "expect": {
-                "tenure": "LLI",
-                "outcome": "MATCH",
-                "min_confidence": 90
+                "tenure": "UNKNOWN",
+                "outcome": "DIGEST"
             },
-            "why": "Why a code fragment is LETTERS ONLY. Admitting digits would make 'T3' a code fragment, 'T3 PLUS' a code list, and an ordinary typology a silent REJECT -- invisible over-rejection, the failure mode CLAUDE.md hard rule 8 warns about. Excluding digits sends the value down the prose branch, where 'T3' is not a financing noun and the guard says nothing. Exempted in the invariant test for the same reason as regress-027."
+            "why": "RELABELLED 2026-08-07 after review round 5 -- same cause as regress-027, and the evidence is there and in the commit message. It still pins why a code fragment is LETTERS ONLY: admitting digits would make 'T3' a fragment and 'T3 PLUS' a code list, which is a determinate REJECT -- silent over-rejection, CLAUDE.md hard rule 8. Excluding digits sends the value down the prose branch, whose floor is now a doubt rather than silence, so the listing digests instead of being rejected outright OR matched outright. ORIGINAL LABEL, for the record: LLI / MATCH / min_confidence 90. Admitting digits would make 'T3' a code fragment, 'T3 PLUS' a code list, and an ordinary typology a silent REJECT -- invisible over-rejection, the failure mode CLAUDE.md hard rule 8 warns about. Excluding digits sends the value down the prose branch, where 'T3' is not a financing noun and the guard says nothing. Exempted in the invariant test for the same reason as regress-027."
         },
         {
             "id": "regress-029-indecidable-field-value-digests",
@@ -1331,6 +1329,49 @@
                 "outcome": "DIGEST"
             },
             "why": "THE ADJACENCY TEST ITSELF, isolated. regress-020 guards a 'conventionne' that comes BEFORE the label, which the span arithmetic rejects on its own; this one has the label FIRST, so only the whitespace-only test between them stands in the way. Delete that test and any LLI anywhere in the listing deletes the conventionne signal again -- v1 of the rule, and the exact sentence quoted in review round 4: the listing MATCHED with the word 'conventionne' absent from reasons[]. Sabotage-verification showed no fixture covered it: replacing the whitespace test with `true` left the whole suite green."
+        },
+        {
+            "id": "regress-033-financing-noun-outside-the-collocation-list",
+            "provenance": "synthetic",
+            "source": "inli",
+            "title": "T3 Cergy",
+            "description": "Appartement renové, proche RER A.",
+            "fields": {
+                "financement": "Prêt PLUS"
+            },
+            "expect": {
+                "tenure": "UNKNOWN",
+                "outcome": "DIGEST"
+            },
+            "why": "P0 §1 BREACH GUARD (review round 5, 2026-08-07). The prose branch of the field rule answered SILENCE when no COLLOCATION noun sat beside the acronym. On In'li -- a PURE source with default_tenure LLI, so mixed_tenure is no defence -- this listing was NOTIFIED at confidence 50 with reasons[] reading 'aucun signal dans l'annonce', on a field explicitly naming the PLUS financing scheme. Verbatim the failure that moved 'pls' out of the same guard one commit earlier, left in place for 'PLUS' on the strongest rung of the ladder. The review listed 66 such values -- Financé PLUS, Agréé PLUS, Bailleur PLUS, Gamme PLUS -- which is why the fix is a doubt FLOOR and not more nouns: inside a tenure field the field NAME is already the collocation."
+        },
+        {
+            "id": "regress-034-unknown-separator-in-a-financing-code",
+            "provenance": "synthetic",
+            "source": "inli",
+            "title": "T2 Le Vésinet",
+            "description": "Résidence récente.",
+            "fields": {
+                "financement": "PLUS–CD"
+            },
+            "expect": {
+                "tenure": "UNKNOWN",
+                "outcome": "DIGEST"
+            },
+            "why": "Same breach through the separator class rather than the noun list. 'PLUS-CD' with an ASCII hyphen is a code list and rejects; French CMS output routinely substitutes an EN DASH, which isCodeList() does not split on, so the value fell to the prose branch and went silent. Pipe, underscore and typographic quotes behaved the same. A doubt floor makes the separator list non-load-bearing for §1 -- getting it wrong now costs a digest entry, not an application."
+        },
+        {
+            "id": "regress-035-conventionne-across-the-title-boundary",
+            "provenance": "synthetic",
+            "source": "cdc_habitat",
+            "title": "T3 Cergy - Logement intermédiaire",
+            "description": "Conventionné, réservé aux ménages sous plafond de ressources. Dossier via la mairie.",
+            "fields": {},
+            "expect": {
+                "tenure": "UNKNOWN",
+                "outcome": "DIGEST"
+            },
+            "why": "P1 (review round 5, 2026-08-07). RawListing::text() joins title and description with a newline and folding collapsed it to one ordinary space, so the adjacency rule could not tell a FIELD BOUNDARY from an intra-phrase space: the title's 'Logement intermédiaire' excused the description's opening 'Conventionné' and the listing MATCHED with the word absent from reasons[]. A comma blocked the same exception -- backwards, since a boundary is the stronger phrase break. Folding now preserves newlines and the adjacency class excludes them. Note the anchor: PCRE's '$' matches before a final newline too, so narrowing the character class alone changed nothing until it became '\\z'."
         }
     ]
 }

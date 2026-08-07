@@ -107,7 +107,27 @@ fi
 # missing the YAML and JSON nulls that `config/criteria.yaml` and `config/sources.yaml` will be
 # written in, and PHP's `array()`. That inversion was a standing gap, not a regression from the
 # narrowing: the pre-narrowing pattern missed them too.
-if grep -Eq '(exclude|excluded|denied|blocked|forbidden|never)[^.]{0,80}(remove|delete|drop|pop|clear|[^!=<>] *= *\[\]|=> *\[\]|return *\[\]|= *none|= *null|= *array\(\)|= *\(\)|: *\[\]|: *\{\}|: *null|: *~)' <<<"$blob"; then
+#
+# SUPPRESSED ONLY FOR THIS REPO'S OWN NON-TENURE CONFIG SUBJECTS, and the shape of that exemption
+# matters. `exclude|blocked|never` are ordinary words in ordinary config: `blocked_landlords: null`
+# and a `communes:` block with `excluded: []` — the single most likely line config/criteria.yaml
+# will ever contain — both fired. The guard read as silent on the whole tree only because the tree
+# is five files with no config/ yet; six plausible next-milestone files produced six false positives.
+#
+# The obvious narrowing — "require a tenure token nearby" — was tried and REJECTED: it silenced
+# `public static function excluded(): array { return []; }`, which is precisely how you would empty
+# an excluded-set accessor in the language this repo uses and which names no tenure at all. §1
+# detection must not pay for noise reduction.
+#
+# So the suppression is a closed list of subjects that are demonstrably NOT tenure — commune,
+# landlord, source, postcode — drawn from this repo's own criteria/sources schema, and it applies
+# only when NO tenure token appears anywhere in the write. Forgetting an entry costs a false
+# positive, never a missed detection, which is the direction a §1 tripwire must fail in.
+_empty='(remove|delete|drop|pop|clear|[^!=<>] *= *\[\]|=> *\[\]|return *\[\]|= *none|= *null|= *array\(\)|= *\(\)|: *\[\]|: *\{\}|: *null|: *~)'
+_tenure='(plai|plus|pls|logement social|conventionn|anru|anah|hlm|tenure)'
+_not_tenure='(commune|landlord|bailleur|source|postcode|code postal|quartier|ville|departement|arrondissement|keyword|portal)'
+if grep -Eq "(exclude|excluded|denied|blocked|forbidden|never)[^.]{0,80}$_empty" <<<"$blob" \
+&& { grep -Eq "$_tenure" <<<"$blob" || ! grep -Eq "$_not_tenure" <<<"$blob"; }; then
   hits+=("the excluded-tenure set looks like it is being emptied or shrunk")
 fi
 
@@ -133,7 +153,8 @@ fi
 # which costs more than the gap it closed. Assignment is watched only on a `*_bp` FLOOR constant;
 # comparison is watched on `confidenceBp` itself, where `<` is the only interesting operator.
 if grep -Eq 'confidence[^.]{0,40}(0\.[0-5][0-9]?|< *0\.[0-5])' <<<"$blob" \
-|| grep -Eq '(floor|threshold|seuil)_bp[^.]{0,20}= *([0-5]?[0-9])([^0-9.]|$)' <<<"$blob" \
+|| grep -Eq '(confidence|tenure|classif)[a-z_]{0,12}(floor|threshold|seuil)_bp[^.]{0,20}= *([0-5]?[0-9])([^0-9.]|$)' <<<"$blob" \
+|| grep -Eq '(^|[^a-z_])floor_bp[^.]{0,20}= *([0-5]?[0-9])([^0-9.]|$)' <<<"$blob" \
 || grep -Eq 'confidence_?bp[^.]{0,20}< *([0-5]?[0-9])([^0-9.]|$)' <<<"$blob"; then
   hits+=("classifier confidence threshold looks lowered below the fail-closed floor (0.6, i.e. 60 basis points)")
 fi
@@ -157,24 +178,46 @@ if grep -Eq '(^|[^a-z0-9_])(self|static|tenure)::(plai|plus|pls|anru|anah|conven
 fi
 
 # 4. UNKNOWN being treated as notifiable.
-if grep -Eq 'unknown[^.]{0,60}(notify|match|emit|send|alert)' <<<"$blob"; then
+# `never|not|pas|jamais|instead of` in between means the text is RESTATING the rule, not breaking
+# it — `/** UNKNOWN never reaches the notify channel */` is the comment any notify module will carry.
+if grep -Eq 'unknown[^.]{0,60}(notify|match|emit|send|alert)' <<<"$blob" \
+&& ! grep -Eq 'unknown[^.]{0,60}(never|not |n.t |pas |jamais|instead of|rather than|au lieu)[^.]{0,60}(notify|match|emit|send|alert)' <<<"$blob"; then
   hits+=("UNKNOWN tenure looks like it is being routed to notification instead of the \"à vérifier\" digest")
 fi
 
 # 5. Classifier turned off / bypassed.
-if grep -Eq '(skip|bypass|disable|no)[_ -]?(tenure|classif)' <<<"$blob"; then
+# `no` dropped from the verb list: `a source with no tenure hint`, `no tenure signal` and `no
+# tenure classifier` are all ordinary prose ABOUT the rule, and CLAUDE.md § Gotchas already records
+# this firing on the repo's own comments. A real bypass is spelled skip/bypass/disable/without.
+if grep -Eq '(skip|bypass|disable|without|sans)[_ -]?(tenure|classif)' <<<"$blob"; then
   hits+=("the tenure classifier looks like it is being skipped or disabled")
 fi
 
 # 6. Making the hard exclusions configurable.
-if grep -Eq '(config|option|setting|toggle|flag|param)[^.]{0,60}(plai|plus|pls|logement social|allow_social|include_social)' <<<"$blob"; then
+# A leading `#` or `//` means the line is a COMMENT describing the source, not a key enabling it:
+# `# config: CDC Habitat publishes PLUS and PLAI alongside LLI` is exactly the note config/sources.yaml
+# will carry about a mixed-tenure landlord, and firing on it teaches the reader to ignore the guard.
+if grep -Eq '(config|option|setting|toggle|flag|param)[^.]{0,60}(plai|plus|pls|logement social|allow_social|include_social)' <<<"$blob" \
+&& ! grep -Eq '^ *(#|//|\*)[^\n]{0,120}(config|option|setting|toggle|flag|param)[^.]{0,60}(plai|plus|pls|logement social)' <<<"$blob"; then
   hits+=("social tenure looks like it is becoming a config toggle — CLAUDE.md forbids this")
 fi
 
 # 7. Weakening classifier tests.
-case "$file_path" in
+#
+# MATCHED CASE-INSENSITIVELY, because bash `case` globs are not. The repo's classifier tests are
+# `tests/php/Core/TenureCorpusTest.php` and `TenureClassifierTest.php` — CamelCase — so
+# `*tests*tenure*` and `*tenure*test*` matched NEITHER, and this pattern had never once executed
+# against the only two files where a skipped classifier test can happen. CLAUDE.md §1 rates that P0.
+lc_path="$(printf '%s' "$file_path" | tr '[:upper:]' '[:lower:]')"
+case "$lc_path" in
   *tests*tenure*|*tenure*test*|*tests/fixtures*)
-    if grep -Eq '(skip|xfail|expectedfailure|pytest\.mark\.skip|todo|# *disabled)' <<<"$blob"; then
+    # ACTUAL SKIP CONSTRUCTS, not the WORD "skip". The bare-word version only became reachable when
+    # the case above learned to match CamelCase paths — and it immediately fired on both real
+    # classifier test files, on prose: one docblock explaining a deleted `→ skip` branch, and one
+    # QUOTING CLAUDE.md's own "a skipped, xfailed, deleted or relabelled fixture is P0". A tripwire
+    # that fires on the file's own statement of the rule it enforces is noise on every single edit
+    # to the two files it most needs to be believed about.
+    if grep -Eq '(marktestskipped|marktestincomplete|pytest\.mark\.(skip|xfail)|unittest\.skip|@expectedfailure|@skip|\.skip\(|xit\(|xdescribe|#\[ignore\]|(^|[^a-z])(todo|fixme):|# *disabled)' <<<"$blob"; then
       hits+=("a tenure test looks like it is being skipped or marked xfail — fix the classifier, not the test")
     fi
     ;;
