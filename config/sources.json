@@ -1,8 +1,6 @@
 {
   "_comment": "Source definitions. JSON, not YAML — ruled 2026-08-07 (Q22). Keyed by source name, so a duplicate name is unwritable rather than merely discouraged. Underscore-prefixed keys are comments; every other unknown key is a hard validation error. Use the /add-source skill to onboard a new one.\n\nHARD RULE 1 — EVERY source below is `enabled: false` and every url is the REMPLACER placeholder, because no endpoint in this file has been verified against the live site. CLAUDE.md hard rule 1 forbids writing an endpoint from memory, and the loader REFUSES an enabled source whose url still contains REMPLACER — so this file cannot be half-enabled by accident. Unblocking a source needs a DevTools cURL capture from the developer; docs/SOURCES.md records which sites answer a plain client and which 403 it.",
-
-    "_why": "The single flag that disarms the fail-closed rule of CLAUDE.md §1. It is REQUIRED on every block — the loader refuses a source that omits it, and SourceProfile independently defaults it to true. `false` is a claim that this landlord publishes NO social stock whatsoever, and it is only defensible for In'li (Action Logement's intermediate arm) and the private-market portals. Every value here is bound to tests/fixtures/tenure/corpus.json by ConfigTest, so the two cannot drift apart silently.",
-
+  "_why": "The single flag that disarms the fail-closed rule of CLAUDE.md §1. It is REQUIRED on every block — the loader refuses a source that omits it, and SourceProfile independently defaults it to true. `false` is a claim that this landlord publishes NO social stock whatsoever, and it is only defensible for In'li (Action Logement's intermediate arm) and the private-market portals. Every value here is bound to tests/fixtures/tenure/corpus.json by ConfigTest, so the two cannot drift apart silently.",
   "sources": {
     "inli": {
       "_comment": "A1, docs/SOURCES.md. The flagship: ~60 000 LLI units across IDF, covers both 78 and 95, rents 20-30% below market. robots.txt disallows only /espace-membre/. Pure LLI, which is why mixed_tenure is false here and almost nowhere else. Build this one first.",
@@ -19,7 +17,6 @@
         "charges_included": true
       }
     },
-
     "icf_novedis": {
       "_comment": "A2. ICF Habitat's non-social arm — 10 000 units aimed at households above the social ceilings. SNCF group, so stock clusters on rail corridors, which fits the boucle de Seine. mixed_tenure stays TRUE (Q20, ruled 2026-08-07): `false` would be right for a Novedis-only endpoint and wrong for the group portal, and nothing here yet says which the adapter will hit. Costs a few digest entries; cannot cost an application.",
       "enabled": false,
@@ -34,7 +31,6 @@
         "charges_included": true
       }
     },
-
     "cdc_habitat": {
       "_comment": "A3. robots.txt disallows /Recherche/show/, which is very likely the search-results path (Q15, ruled 2026-08-07). Stays disabled until the real endpoint path is known to sit OUTSIDE that Disallow. If it does not, CDC Habitat moves to the email-alert route like a private portal. Never work around a robots.txt (hard rule 5).",
       "enabled": false,
@@ -49,7 +45,6 @@
         "charges_included": true
       }
     },
-
     "seqens": {
       "_comment": "A5. Action Logement group, strong 78/95 footprint. robots.txt clean (/wp-admin/ only). Publishes social AND intermediate stock on the same pages — see CLAUDE.md, 'The Action Logement wrinkle'.",
       "enabled": false,
@@ -64,7 +59,6 @@
         "charges_included": true
       }
     },
-
     "seloger": {
       "_comment": "B1. Largest IDF inventory. Private market, so LIBRE — in scope since the Q4 answer. type is email_alert because direct scraping of a private portal is opt-in, disabled by default and refuses to run without an explicit flag (hard rule 4); the email-alert route is within ToS, defeats anti-bot because there is no bot, and fires on publication rather than on a poll.",
       "enabled": false,
@@ -77,7 +71,6 @@
         "charges_included": true
       }
     },
-
     "leboncoin": {
       "_comment": "B2. Where non-agency private landlords actually post. 403s a plain client, so email alert is the only route regardless of preference.",
       "enabled": false,
@@ -90,7 +83,6 @@
         "charges_included": true
       }
     },
-
     "fixture_demo": {
       "_comment": "NOT a real landlord. A frozen-payload source that exercises the whole pipeline end to end offline — config load, fetch, field map, classify, criteria, dedup, store, notify — with no network and no credentials. It is what makes `scout run --once` verifiable before any real endpoint is captured, and it is enabled BECAUSE it reads a committed file rather than the internet. mixed_tenure is true so the fixture exercises the fail-closed path, which is the half that matters.",
       "enabled": true,
@@ -104,18 +96,46 @@
         "ref": "id",
         "title": "title",
         "url": "url",
-        "commune": ["city", "address.city"],
-        "cp": ["zipCode", "address.postalCode"],
-        "rent": ["rent.total", "price"],
+        "commune": [
+          "city",
+          "address.city"
+        ],
+        "cp": [
+          "zipCode",
+          "address.postalCode"
+        ],
+        "rent": [
+          "rent.total",
+          "price"
+        ],
         "charges_included": true,
         "rent_hc": "rentHc",
         "charges": "rent.charges",
         "surface": "surface",
-        "rooms": ["rooms", "nbRooms"],
+        "rooms": [
+          "rooms",
+          "nbRooms"
+        ],
         "floor": "floor",
         "elevator": "hasElevator",
         "description": "description",
         "tenure_field": "financement"
+      }
+    },
+    "email_demo": {
+      "_comment": "NOT a real portal. A frozen ALERT-EMAIL source, the mailbox twin of fixture_demo: it exercises the whole email-alert path — IMAP-shaped mailbox, MIME parse, charset conversion, link extraction, classify, criteria, notify — with no credentials and no network. Enabled because it reads committed .eml files. Point MAILBOX_DIR at tests/fixtures/mailbox to run it; set IMAP_HOST instead and the same source reads a real mailbox with no other change.",
+      "enabled": false,
+      "family": "private",
+      "type": "email_alert",
+      "default_tenure": "LIBRE",
+      "mixed_tenure": true,
+      "params": {
+        "from": "example-portal.test",
+        "link_host": "example-portal.test"
+      },
+      "map": {
+        "ref": "url",
+        "charges_included": true
       }
     }
   }

@@ -1140,6 +1140,86 @@ run_sabotage "the freshness bonus is given to every listing forever" \
   src/php/Cli/Pipeline.php \
   's%\$this->ageSeconds(\$sighting->dedupKey, \$nowIso)%null%'
 
+# ── The network adapters, added 2026-08-07 ────────────────────────────────────────
+# The transport is testable even though no endpoint is verified: hard rule 1 governs the URL, not
+# the adapter. Every case below breaks a guarantee that is otherwise silent.
+
+run_sabotage "robots.txt stops being consulted before a fetch (hard rule 5)" \
+  src/php/Adapters/HttpJsonSource.php \
+  's%if (\$this->robots !== null \&\& !\$this->robots->allows(Robots::pathOf(\$url))) {%if (false) {%'
+
+run_sabotage "an unreadable robots.txt starts allowing everything (fails OPEN)" \
+  src/php/Adapters/Http/Robots.php \
+  's%if (!\$this->parsed) {\n            return false;%if (false) {%'
+
+run_sabotage "an empty Disallow starts meaning disallow-everything" \
+  src/php/Adapters/Http/Robots.php \
+  "s%if (\\\$value !== '') {%if (true) { \\\$value = \\\$value ?: '/';%"
+
+run_sabotage "a non-2xx response becomes an empty result instead of a failure" \
+  src/php/Adapters/HttpJsonSource.php \
+  's%if (!\$response->isSuccess()) {%if (false) {%'
+
+run_sabotage "a moved items_path yields an empty list instead of throwing" \
+  src/php/Adapters/HttpJsonSource.php \
+  's%if (\$items === null) {%if (false) { $items = [];%'
+
+run_sabotage "the REMPLACER guard is removed from the adapter itself" \
+  src/php/Adapters/HttpJsonSource.php \
+  "s%if (str_contains(\\\$url, 'REMPLACER')) {%if (false) {%"
+
+run_sabotage "the honest User-Agent is dropped for a browser disguise (hard rule 5)" \
+  src/php/Adapters/Http/CurlHttpClient.php \
+  "s%USER_AGENT = 'rent-watch%USER_AGENT = 'Mozilla/5.0 rent-watch%"
+
+run_sabotage "ISO-8859-1 stops being read as CP1252 (the euro sign vanishes)" \
+  src/php/Adapters/Mail/EmailMessage.php \
+  "s%? 'CP1252'%? 'ISO-8859-1'%"
+
+run_sabotage "folded header continuation lines stop being joined" \
+  src/php/Adapters/Mail/EmailMessage.php \
+  's%\$value .= . . . trim(\$line);%%'
+
+run_sabotage "the text/plain part stops being preferred over HTML" \
+  src/php/Adapters/Mail/EmailMessage.php \
+  's%return \$plain ?? \$html ?? ..;%return $html ?? $plain ?? "";%'
+
+run_sabotage "block tags stop becoming newlines when HTML is stripped" \
+  src/php/Adapters/Mail/EmailMessage.php \
+  's%~</(p|div|br|li|tr|h\[1-6\]|td)\\\\s\*>|<br\\\\s\*/?>~i%~<XXNOMATCHXX>~i%'
+
+run_sabotage "tracking parameters stop being stripped from an alert link id" \
+  src/php/Adapters/EmailAlertSource.php \
+  's%return \$scheme . .://. . \$host . \$path;%return $link;%'
+
+run_sabotage "unsubscribe links start becoming listings" \
+  src/php/Adapters/EmailAlertSource.php \
+  's%if (stripos(\$link, \$noise) !== false) {%if (false) {%'
+
+run_sabotage "a mailbox from the wrong sender stops being filtered out" \
+  src/php/Adapters/EmailAlertSource.php \
+  's%if (!\$this->isFrom(\$message)) {%if (false) {%'
+
+run_sabotage "a mailbox failure becomes an empty list instead of a source failure" \
+  src/php/Adapters/Mail/FileMailbox.php \
+  's%if (!is_dir(\$this->directory)) {%if (false) {%'
+
+run_sabotage "the rent plausibility band is removed (a postcode parses as a rent)" \
+  src/php/Adapters/EmailAlertSource.php \
+  's%\$value >= 200 \&\& \$value <= 20000%$value !== null%'
+
+run_sabotage "SMTP permits plaintext credentials to a remote host" \
+  src/php/Core/Notify/SmtpTransport.php \
+  "s%if (\\\$this->security === 'none' \&\& !self::isLoopback(\\\$this->host)) {%if (false) {%"
+
+run_sabotage "SMTP continues without STARTTLS when the server does not offer it" \
+  src/php/Core/Notify/SmtpTransport.php \
+  "s%if (stripos(\\\$capabilities, 'STARTTLS') === false) {%if (false) {%"
+
+run_sabotage "SMTP stops masking the base64 form of the password" \
+  src/php/Core/Notify/SmtpTransport.php \
+  's%\$out\[\] = base64_encode(\$value);%%'
+
 printf '\n  %d sabotage(s) detected, %d undetected\n' "$pass" "$fail"
 
 if (( fail > 0 )); then

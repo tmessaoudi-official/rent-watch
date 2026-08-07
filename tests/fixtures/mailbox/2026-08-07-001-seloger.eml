@@ -1,0 +1,30 @@
+From: Alertes SeLoger <alertes@example-portal.test>
+To: veille@example.test
+Subject: =?UTF-8?Q?Nouvelle_annonce_:_T4_=C3=A0_Sartrouville?=
+Message-ID: <alert-0001@example-portal.test>
+Date: Fri, 07 Aug 2026 09:12:00 +0200
+MIME-Version: 1.0
+Content-Type: multipart/alternative; boundary="b1"
+
+--b1
+Content-Type: text/plain; charset=ISO-8859-1
+Content-Transfer-Encoding: quoted-printable
+
+Nouvelle annonce correspondant =E0 votre alerte.
+
+T4 =E0 Sartrouville (78500)
+Loyer : 1 450 =80 charges comprises
+Surface : 88 m=B2 - 4 pi=E8ces
+Logement interm=E9diaire, ascenseur.
+
+Voir l'annonce : https://example-portal.test/annonces/12345?utm_source=3Dalerte&utm_id=3Dxyz789
+
+Se d=E9sabonner : https://example-portal.test/desabonnement?token=3Dabc
+
+--b1
+Content-Type: text/html; charset=ISO-8859-1
+Content-Transfer-Encoding: quoted-printable
+
+<html><body><p>T4 =E0 Sartrouville</p></body></html>
+
+--b1--

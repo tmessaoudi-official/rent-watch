@@ -4,7 +4,13 @@ declare(strict_types=1);
 
 namespace RentWatch\Cli;
 
+use RentWatch\Adapters\EmailAlertSource;
 use RentWatch\Adapters\FixtureSource;
+use RentWatch\Adapters\Http\CurlHttpClient;
+use RentWatch\Adapters\HttpJsonSource;
+use RentWatch\Adapters\Mail\FileMailbox;
+use RentWatch\Adapters\Mail\ImapMailbox;
+use RentWatch\Adapters\Mail\Mailbox;
 use RentWatch\Adapters\Source;
 use RentWatch\Adapters\SourceError;
 use RentWatch\Config\ConfigError;
@@ -14,7 +20,11 @@ use RentWatch\Config\SourceDefinition;
 use RentWatch\Core\Notify\Channel;
 use RentWatch\Core\Notify\ConsoleChannel;
 use RentWatch\Core\Notify\EmailChannel;
+use RentWatch\Core\Notify\FileTransport;
 use RentWatch\Core\Notify\Formatter;
+use RentWatch\Core\Notify\MailTransport;
+use RentWatch\Core\Notify\SendmailTransport;
+use RentWatch\Core\Notify\SmtpTransport;
 use RentWatch\Core\Notify\Notifier;
 use RentWatch\Core\Notify\NtfyChannel;
 use RentWatch\Core\Notify\Priority;
@@ -468,11 +478,64 @@ final readonly class Scout
     {
         return match ($definition->type) {
             'fixture' => new FixtureSource($definition, $store, $this->rootDir),
-            // `json`, `html` and `email_alert` have no adapter yet. The first NETWORK adapter is
-            // blocked on an INPUT rather than a decision: no endpoint in this repo has been verified
-            // and hard rule 1 forbids writing one from memory.
+            // The ADAPTER exists and is tested; what waits on the developer is the URL in
+            // `config/sources.json`. Hard rule 1 forbids writing an endpoint from memory, and the
+            // loader refuses `enabled: true` next to a REMPLACER placeholder — so this can never
+            // poll something nobody verified, while still being ready the moment a capture lands.
+            'json' => new HttpJsonSource($definition, $store, new CurlHttpClient()),
+            'email_alert' => $this->buildEmailSource($definition, $store),
+            // `html` still has no adapter: it needs a parser with CSS selectors, which is a
+            // different job from this one and is not blocked on anything but time.
             default => null,
         };
+    }
+
+    /**
+     * The email-alert path, with its mailbox chosen by `.env`.
+     *
+     * `MAILBOX_DIR` points at a directory of `.eml` files and needs no credentials at all — which is
+     * how the whole parse → classify → notify path is exercisable before an IMAP account exists, and
+     * how a real alert becomes a regression fixture once one does. `IMAP_*` switches to the live
+     * mailbox with no other change.
+     */
+    private function buildEmailSource(SourceDefinition $definition, Store $store): ?Source
+    {
+        $mailbox = $this->buildMailbox();
+
+        if ($mailbox === null) {
+            $this->warn('source ' . $definition->name . ' ignorée : ni MAILBOX_DIR ni IMAP_HOST ne sont '
+                . 'définis, donc aucune boîte aux lettres à lire');
+
+            return null;
+        }
+
+        return new EmailAlertSource(
+            $definition,
+            $store,
+            $mailbox,
+            $this->criteria()->communeLabels,
+        );
+    }
+
+    private function buildMailbox(): ?Mailbox
+    {
+        $directory = (string) (getenv('MAILBOX_DIR') ?: '');
+        if ($directory !== '') {
+            return new FileMailbox($directory);
+        }
+
+        $host = (string) (getenv('IMAP_HOST') ?: '');
+        if ($host === '') {
+            return null;
+        }
+
+        return new ImapMailbox(
+            host: $host,
+            user: (string) (getenv('IMAP_USER') ?: ''),
+            password: (string) (getenv('IMAP_PASSWORD') ?: ''),
+            folder: (string) (getenv('IMAP_MAILBOX') ?: 'INBOX'),
+            port: (int) (getenv('IMAP_PORT') ?: 993),
+        );
     }
 
     private function scrapingAllowed(): bool
@@ -505,6 +568,8 @@ final readonly class Scout
             'email' => new EmailChannel(
                 (string) (getenv('SMTP_TO') ?: ''),
                 (string) (getenv('SMTP_FROM') ?: 'rent-watch@localhost'),
+                '[rent-watch]',
+                $this->buildMailTransport(),
             ),
             default => null,
         };
@@ -524,6 +589,41 @@ final readonly class Scout
         }
 
         return $channel;
+    }
+
+    /**
+     * How email leaves, chosen by `SMTP_TRANSPORT`.
+     *
+     * `file` writes `.eml` files and needs nothing — it is how `scout test-notify` produces a real,
+     * readable message with no server and no credential. `smtp` speaks the protocol with `.env`
+     * credentials. `sendmail` hands off to a host MTA, which is right under a Docker compose stack
+     * that runs one.
+     *
+     * The default is `smtp` WHEN `SMTP_HOST` is set and `sendmail` otherwise, rather than a fixed
+     * choice: a developer who filled in the SMTP block expects it to be used, and one who did not
+     * has an MTA or does not want email at all.
+     */
+    private function buildMailTransport(): MailTransport
+    {
+        $kind = strtolower((string) (getenv('SMTP_TRANSPORT') ?: ''));
+        $host = (string) (getenv('SMTP_HOST') ?: '');
+
+        if ($kind === '') {
+            $kind = $host !== '' ? 'smtp' : 'sendmail';
+        }
+
+        return match ($kind) {
+            'file' => new FileTransport((string) (getenv('MAIL_OUTBOX') ?: $this->rootDir . '/var/outbox')),
+            'smtp' => new SmtpTransport(
+                host: $host,
+                port: (int) (getenv('SMTP_PORT') ?: 587),
+                user: (string) (getenv('SMTP_USER') ?: ''),
+                password: (string) (getenv('SMTP_PASSWORD') ?: ''),
+                from: (string) (getenv('SMTP_FROM') ?: 'rent-watch@localhost'),
+                security: strtolower((string) (getenv('SMTP_SECURITY') ?: 'starttls')),
+            ),
+            default => new SendmailTransport(),
+        };
     }
 
     private function now(): string

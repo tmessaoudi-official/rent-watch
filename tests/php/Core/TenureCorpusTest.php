@@ -501,7 +501,7 @@ final class TenureCorpusTest extends TestCase
 
         sort($exempt);
         self::assertSame(
-            ['Reader'],
+            ['ImapMailbox', 'Reader'],
             $exempt,
             'the MutableByDesign set changed. Every entry must be a non-value-object whose mutation '
             . 'IS its mechanism and which is never handed to a caller as a result — argue it here',

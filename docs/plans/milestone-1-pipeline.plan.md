@@ -480,3 +480,38 @@ A changelog that overstates is worse than one that omits, because the next sessi
   see the suite go red. As a multi-line throw-arm it could only be broken into a PHP parse error,
   which proves nothing about the guarantee.
 
+- [2026-08-07 23:15] CORRECTED, on the developer's challenge — *"Can't you use a fake smtp with fake
+  mailer and then i will just use .env to change the real credentials ??? and i don't understand
+  about the rest why it's blocked ??"*. They were right and I was wrong on three of the four
+  "blocked" items. I had conflated **credentials** with **message shape**, and **an endpoint** with
+  **an adapter**. What hard rule 1 actually forbids is writing a URL into `config/sources.json` and
+  enabling it; it says nothing about the transport. So:
+  `HttpJsonSource`, `EmailAlertSource`, `ImapMailbox`, `SmtpTransport` all exist now, fully tested
+  offline against fakes, and `.env` swaps the real thing in. Only the URL VALUE still waits on a
+  DevTools capture, and only the `plafonds` figures are genuinely unobtainable here.
+- [2026-08-07 23:15] AGREED (the seam): each network boundary is an interface with a file-backed
+  fake — `HttpClient`/`FakeHttpClient`, `Mailbox`/`FileMailbox`, `MailTransport`/`FileTransport`.
+  That is the same trade `FixtureSource` already made, and it is what makes `spec` §11's "no network
+  in CI" compatible with having network adapters at all. `docs/PHORJ-REQUIREMENTS.md` asks phorj for
+  exactly this shape on its side.
+- [2026-08-07 23:15] AGREED (hard rule 5, enforced in the transport rather than per adapter): one
+  honest User-Agent, no cookie jar, no proxy, no cross-host redirect, and `robots.txt` consulted
+  BEFORE the fetch. `Robots` **fails closed** — an unreadable file disallows everything, which is the
+  opposite of the usual convention and deliberate: a false "disallowed" costs one source staying off
+  until someone looks; a false "allowed" costs polling a site that asked us not to.
+- [2026-08-07 23:15] FOUND BY RUNNING IT — **ISO-8859-1 must be read as CP1252.** French alert mail
+  declares Latin-1 and is almost always CP1252; the two differ exactly in 0x80–0x9F, where `€` lives.
+  Under strict Latin-1 the euro sign became an invisible control character, and every rent pattern
+  requires a currency marker — so the rent came out NULL on an alert that stated it plainly, and a
+  listing with no rent is not disqualified (hard rule 9). It would have been notified as "loyer non
+  communiqué" while the alert said 1 450 €.
+- [2026-08-07 23:15] FOUND BY RUNNING `test-notify` — the shipped default sender `rent-watch@localhost`
+  fails PHP's `FILTER_VALIDATE_EMAIL` (no dot in the domain), so the email channel **silently
+  disabled itself** out of the box. The sender is now checked loosely and the recipient strictly: a
+  typo in the recipient means mail goes nowhere, but a legal dotless local sender must not disable
+  the channel.
+- [2026-08-07 23:15] AGREED (`EmailAlertSource` is deliberately conservative): no real portal alert
+  has been seen, so extraction is generic and the class is built to be SHAPED by a real message
+  rather than to guess one. The cost is stated: a listing it cannot read confidently gets no tenure
+  signal and DIGESTS on a mixed source. It must never follow the links to scrape the page — that is
+  the route hard rule 4 gates, and doing it from the email path would bypass the gate entirely.

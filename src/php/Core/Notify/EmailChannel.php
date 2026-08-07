@@ -8,14 +8,15 @@ namespace RentWatch\Core\Notify;
  * Email delivery — the readable record, as asked for on 2026-08-06:
  * *"just filter and show me/email me the list"*.
  *
- * Uses PHP's `mail()`, which hands off to the host MTA. That is a deliberate limit rather than an
- * oversight: speaking SMTP directly means auth, STARTTLS and a socket state machine, and this
- * project has ZERO Composer dependencies by necessity (the egress policy blocks Composer's dist
- * source), so a hand-rolled SMTP client would be a few hundred lines of security-relevant code
- * written to send one message a day. Under Q8's Docker deployment the MTA is a compose service.
+ * **The transport is injected**, which is the whole design. An earlier version called `mail()`
+ * directly and argued that a hand-rolled SMTP client was not worth writing — that argument was
+ * wrong on the developer's actual constraint, which is that credentials belong in `.env` and the
+ * path has to be exercisable without them. Now: {@see SmtpTransport} speaks the protocol with
+ * `.env` credentials, {@see SendmailTransport} hands off to a host MTA, and {@see FileTransport}
+ * writes `.eml` files so the entire email path can be run and READ offline.
  *
- * `check()` says so plainly when no MTA is reachable, rather than letting `mail()` return false at
- * the moment a match arrives — which is the failure Q28 is about.
+ * `check()` reports a broken transport before any send, rather than letting the failure surface at
+ * the moment a match finally arrives — days later, on the one listing that mattered (Q28).
  */
 final readonly class EmailChannel implements Channel
 {
@@ -23,7 +24,14 @@ final readonly class EmailChannel implements Channel
         private string $to,
         private string $from = 'rent-watch@localhost',
         private string $subjectPrefix = '[rent-watch]',
+        private MailTransport $transport = new SendmailTransport(),
     ) {}
+
+    /** For `doctor`, so a misconfigured transport is visible before a match depends on it. */
+    public function describe(): string
+    {
+        return $this->transport->describe();
+    }
 
     public function name(): string
     {
@@ -38,14 +46,15 @@ final readonly class EmailChannel implements Channel
         if (filter_var($this->to, FILTER_VALIDATE_EMAIL) === false) {
             return 'SMTP_TO is not a valid address: ' . var_export($this->to, true);
         }
-        if (filter_var($this->from, FILTER_VALIDATE_EMAIL) === false) {
+        // The SENDER is checked more loosely than the recipient, deliberately. PHP's filter rejects
+        // a dotless domain, so `rent-watch@localhost` — a perfectly legal SMTP sender and the
+        // obvious default for a self-hosted tool — failed it, and the shipped default silently
+        // DISABLED the email channel. Found by running `test-notify`, which is what that verb is
+        // for. The recipient keeps the strict check: a typo there means mail goes nowhere.
+        if (preg_match('~^[^@\s]+@[^@\s]+$~', $this->from) !== 1) {
             return 'the sender address is not valid: ' . var_export($this->from, true);
         }
-        if (!function_exists('mail')) {
-            return 'PHP mail() is unavailable in this build';
-        }
-
-        return null;
+        return $this->transport->check();
     }
 
     public function send(Notification $n): void
@@ -68,19 +77,12 @@ final readonly class EmailChannel implements Channel
             $body .= "\nScore : " . $n->score . "/100\n";
         }
 
-        $headers = [
-            'From: ' . self::headerSafe($this->from),
-            'Content-Type: text/plain; charset=utf-8',
-            'X-RentWatch-Kind: ' . $n->kind->value,
-            'X-RentWatch-Priority: ' . $n->priority->value,
-        ];
-
-        if (@mail($this->to, $subject, $body, implode("\r\n", $headers)) === false) {
-            throw new ChannelError(
-                $this->name(),
-                'mail() refused the message — no MTA configured, or it rejected the envelope',
-            );
-        }
+        $this->transport->send($this->to, $subject, $body, [
+            'From' => self::headerSafe($this->from),
+            'Content-Type' => 'text/plain; charset=utf-8',
+            'X-RentWatch-Kind' => $n->kind->value,
+            'X-RentWatch-Priority' => $n->priority->value,
+        ]);
     }
 
     /**
