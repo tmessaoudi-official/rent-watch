@@ -53,6 +53,29 @@ final class Text
         'Œ' => 'OE', 'Æ' => 'AE',
     ];
 
+    /**
+     * Invisible characters that are neither `\p{Mn}` nor `\p{Cf}`, spelled out because no single
+     * Unicode property covers them.
+     *
+     * Round 2 closed `\p{Cf}` (soft hyphen, ZWSP, BOM). Round 3 showed the fix was one category
+     * short: `\p{Cc}` controls and a handful of invisible LETTERS produce the identical failure —
+     * `Ce logement<U+0001>social a loyer intermediaire` classified LLI at confidence 90, above the
+     * floor, MATCH. U+0091–U+009F in particular are the ordinary product of CP1252 bytes decoded as
+     * Latin-1, which is a routine French-CMS mojibake path, and `&#1;` / `&#12644;` reach here from
+     * any adapter that does its documented job of decoding entities.
+     *
+     * `\p{Cc}` is NOT used wholesale: it contains `\t`, `\n` and `\r`, which the whitespace collapse
+     * below depends on. Deleting those would join a title to its description. Measured, not guessed
+     * — the naive widening breaks nine tests. So the C0/C1 ranges are listed minus the whitespace
+     * ones, and the invisible letters are named individually:
+     *   U+115F, U+1160  HANGUL CHOSEONG/JUNGSEONG FILLER (Lo — a letter that renders as nothing)
+     *   U+3164          HANGUL FILLER
+     *   U+FFA0          HALFWIDTH HANGUL FILLER
+     *   U+2800          BRAILLE PATTERN BLANK (So — renders as nothing in most fonts)
+     */
+    private const string INVISIBLE = '\x{0000}-\x{0008}\x{000E}-\x{001F}\x{007F}-\x{009F}'
+        . '\x{115F}\x{1160}\x{3164}\x{FFA0}\x{2800}';
+
     /** Every apostrophe French listings arrive with, folded to the ASCII one. */
     private const array APOSTROPHES = ["\u{2019}", "\u{2018}", "\u{02BC}", "\u{FF07}", '`', '´'];
 
@@ -104,7 +127,7 @@ final class Text
         // UTF-8 gate and the entity gate. Refusing these would punish the adapter for being
         // correct; stripping them is right, because they are invisible by definition.
         // \s already covers the space-LIKE leaks (NBSP, narrow NBSP) via the collapse below.
-        $stripped = preg_replace('/[\p{Mn}\p{Cf}]/u', '', $s);
+        $stripped = preg_replace('/[\p{Mn}\p{Cf}' . self::INVISIBLE . ']/u', '', $s);
         $collapsed = $stripped === null ? null : preg_replace('/\s+/u', ' ', $stripped);
 
         // `null` from either call is a PCRE ERROR, never "nothing to replace". Casting it to string

@@ -83,11 +83,11 @@ disallowed-tools: AskUserQuestion
 ## rent-watch dimensions — MANDATORY additions to this skill's review set
 
 Run these **in addition to** the dimensions below, on every sweep of this repo. Skip a dimension only
-when the tree it applies to genuinely does not exist yet (as of 2026-08-06 that is *everything under
-`src/`, `config/` and `tests/`* — the repo carries the spec and the prototype only, so most of these
+when the tree it applies to genuinely does not exist yet (as of 2026-08-06 that is *`config/`, the adapters, the store and the CLI — but NOT
+`src/php/Core/` or `tests/php/`, which exist and are populated* — so some of these
 dimensions have no subject yet) — and then **name the dimensions you skipped and why**. A silently
 skipped dimension is a coverage lie. Reviewing `prototype/scout.py` against these is legitimate and
-useful; reporting a finding about `src/core/tenure.py` before it exists is not.
+useful; reporting a finding about `src/core/tenure.py` is not — that path has never existed here; the classifier is `src/php/Core/TenureClassifier.php`.
 
 - **Tenure exclusion (P0 — this is an eligibility error, not a bug).** Trace every path from a parsed
   listing to a notification and prove that PLAI, PLUS, `conventionné`, ANRU and ANAH cannot reach it.
@@ -176,7 +176,7 @@ Run a Phase 6 Second Sweep on current uncommitted changes. **Never auto-applies 
    - **Bug hunt**: logic errors, off-by-one, null/nil/undefined deref, unchecked error returns, unhandled edge cases
    - **Security**: credentials/secrets in code, injection risks (SQL, shell, template), missing input validation at system boundaries
    - **Contracts**: changed function signatures, changed CLI flags, changed `config/*.yaml` keys, changed SQLite schema or `Source` interface methods — flag every one as a potential breaking change. For a `sources.yaml` key, say whether existing source blocks keep parsing; for a schema change, say what happens to an existing `seen`/listings database
-   - **Tests**: new behavior without a test? Modified behavior without updated tests? Derive the runner from the dependency manifest once one exists — do **not** name `pytest`, `ruff` or any command from memory. As of 2026-08-06 the runner is `php tools/phpunit.phar` and the manifest is `composer.json`; run the suite rather than assuming there is none, so the honest answer is often "no runner present yet — N/A with reason" rather than a command that cannot run
+   - **Tests**: new behavior without a test? Modified behavior without updated tests? Derive the runner from the dependency manifest once one exists — do **not** name `pytest`, `ruff` or any command from memory. As of 2026-08-06 the runner is `php tools/phpunit.phar` and the manifest is `composer.json`; run the suite rather than assuming there is none. "No runner present yet" is NOT an available answer for a PHP change; it remains the honest one only for a dimension with no subject in this tree at all
    - **Docs**: changed public interface without updated documentation?
 
    **Shell scripts** (`.sh`):

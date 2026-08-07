@@ -104,13 +104,24 @@ grep -rhoE '`(src|config|tests|spec|docs|scripts|prototype|\.claude)/[A-Za-z0-9_
     done
 ```
 
-**Judgement required on the second list, and this is the trap.** `src/core/tenure.py` and
-`config/sources.yaml` are named all over `.claude/` and do **not** exist yet — that is correct, they
-are the documented target and `CLAUDE.md` says so explicitly. Flag a path only when the text asserts
-it **exists** or tells the reader to **run** it. A `--drift` table row saying "run
-`python3 prototype/scout.py --help`" must resolve; an attack-surface bullet saying "when
-`src/core/tenure.*` lands, check X" must not be flagged. When unsure, report it as a question rather
-than a finding.
+**Judgement required on the second list, and this is the trap — in BOTH directions.**
+
+`config/sources.yaml` is named all over `.claude/` and does not exist yet. That is correct: it is the
+documented target, and a bullet saying "when it lands, check X" is not drift.
+
+**`src/core/tenure.py` is NOT in that category, and this paragraph said it was until 2026-08-06.**
+That path has never existed in this repo. `CLAUDE.md` records the two-language ruling and amends the
+spec's single-language `src/core/` to `src/<lang>/`, so the classifier is
+`src/php/Core/TenureClassifier.php`. By telling future sessions the reference was *correct*, this
+instruction actively suppressed a real finding across three review rounds — including a `/pre-commit`
+routing trigger keyed on a path that can never match, which meant the highest-blast-radius rule in
+the pre-commit gate never fired for the classifier. **A stale `src/core/` reference IS drift. Report
+it.**
+
+The general rule still holds: flag a path when the text asserts it **exists** or tells the reader to
+**run** it, and check `git ls-files src/ config/ tests/` before deciding either way rather than
+trusting any sentence — including this one. When unsure, report it as a question rather than a
+finding.
 
 ## Section 3 — INVENTORY TABLES
 
@@ -168,7 +179,10 @@ Once `config/` and `tests/fixtures/` exist:
 - every `criteria.yaml` key must be read somewhere, and every key read must be documented
 
 If those directories do not exist, print one line saying so and move on. **Do not report an empty
-`config/` as drift** — `CLAUDE.md` states the repo is spec-and-prototype only.
+`config/` as drift** — it is the documented target and has not been built yet. Note that
+`CLAUDE.md`'s status line now reads *"the pure core exists; nothing else does"*: `src/php/Core/` and
+`tests/php/` DO exist and are populated, so a claim that this repo is spec-and-prototype only is
+itself drift.
 
 ## Section 7 — LINGERING MARKERS
 

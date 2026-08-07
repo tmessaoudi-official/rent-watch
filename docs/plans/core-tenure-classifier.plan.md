@@ -192,7 +192,7 @@ that would otherwise have shipped looking fine.
   catch a regression. Wired as `tests/sabotage-check.sh`, documented in `CLAUDE.md` § Common
   workflows, and it must be run after any change to the classifier, `Text.php` or the corpus.
 - [2026-08-06 23:20] AGREED: **the corpus declares its own provenance and the suite checks it.** The
-  spec asks for real listing texts; all 56 are synthetic until a payload can be captured. Making that
+  spec asks for real listing texts; all 82 are synthetic until a payload can be captured. Making that
   machine-checked keeps the gap visible instead of letting it decay into a stale comment.
 
 ---
@@ -385,3 +385,95 @@ Three separate rounds caught a stale count in `CLAUDE.md` or `README.md`. Counti
 to remember, so `drift-scan.sh` grew **S7**: every prose count of corpus cases and open decisions is
 now checked against the artefact it describes. Its first run found a false positive (the spec's
 `≥30` minimum) which is now excluded, and a deliberate drift was re-introduced to confirm it fires.
+
+---
+
+## Round 3 — the first valid round. 25 findings, 3 P0
+
+Run against frozen `95a9720`, and all three reviewers confirmed the tree never moved. Two P0s were
+holes that my OWN round-1/2 fixes opened, which is the pattern worth naming: each fix was correct
+about the case it was written for and wrong about the case next to it.
+
+### P0 — the `conventionné` exception was scope-blind
+
+Round 1 narrowed it from "any eligible signal" to "an LLI signal". It still deleted the evidence
+whenever ANY LLI label appeared **anywhere in the listing**:
+
+```
+"Résidence mixte de logements sociaux et intermédiaires…"        → SOCIAL / REJECT  ✓
+"Résidence mixte de logements conventionnés et intermédiaires…"  → LLI / MATCH      ✗
+```
+
+Same sentence shape, opposite answer — and the corpus already guarded the first one. **Deleting an
+excluded signal biases toward notifying**, the one direction §1 forbids, and it does it invisibly
+because the word never reaches `reasons[]`. The glossary's exception is for a conventionné that
+QUALIFIES an intermediate label — the same noun phrase — so the rule is now adjacency-bounded.
+
+### P0 — the field-value guard failed OPEN
+
+Fixing `Pinel Plus` (a real 2023 scheme name read as tenure PLUS), round 2 required the whole field
+value to be financing tokens. `financement: "PLUS CD"` — a real financing code — then matched
+nothing and produced **no signal and no doubt**. Fields are not in `RawListing::text()`, so there was
+no prose fallback either, and the listing matched on its description. The strongest rung of the
+ladder was blinder than the weakest. **Case** settles both: an uppercase acronym in a financing
+field is a code, a lowercase one is a word.
+
+### P0 — the invisible-character fix was one Unicode category short
+
+Round 2 closed `\p{Cf}`. `\p{Cc}` controls and invisible LETTERS (U+3164, U+115F, U+FFA0, U+2800)
+produce the identical failure. U+0091–U+009F matter most: they are the ordinary product of CP1252
+bytes decoded as Latin-1. `\p{Cc}` could not be widened wholesale — it contains tab, newline and
+carriage return, which the whitespace collapse depends on, and the naive version broke nine tests.
+
+### The test that should have caught two of them
+
+`testNoExcludedTenureEverReachesAMatch` branches on the **verdict** being excluded. Both breaches
+had the verdict `LLI`, so it never fired — and 26/26 sabotages passed against live defects. §1 is
+about what the **listing** says. `testNoListingNamingAnExcludedTenureEverReachesAMatch` now asserts
+that, with an explicit exemption table (fixture id → reason) rather than a silent allowance.
+
+### The trap that explains why three rounds missed the stale paths
+
+`/repair`'s SKILL.md told future sessions that `src/core/tenure.py` references were **correct and
+must not be flagged**, citing `CLAUDE.md` — which says the opposite. The one skill whose job is
+finding stale references was instructing sessions to suppress this exact class. That is why
+`/pre-commit`'s MAXIMAL routing trigger — keyed on that path, so it never fired for the real
+classifier — survived two rounds of "fix the stale paths".
+
+### Corrected, not accepted
+
+Round 2's completeness reviewer reported `fetch-phpunit.sh` as accepting a bad signature. **It never
+did**: the script sets `pipefail`, which makes the reported pipeline fail. The round-3 reviewer
+re-tested with a real tampered signature and retracted the finding. `tests/test-fetch-phpunit.sh`
+asserts both directions so it cannot be re-litigated.
+
+But the round-3 resilience lens found a real defect in the *rewrite*: under `set -e`, the assignment
+`gpg_out="$(gpg …)"` aborts the script on a bad signature, so the REFUSING diagnostic never printed.
+Fail-closed, but silent — and the test's helper differed from the shipped script in exactly that
+dimension, so it passed for a reason the shipped code did not share.
+
+### Three fixtures that did not test what they claimed
+
+- `regress-018` carried `numero unique exige`, a tier-3 tell strong enough to reject on its own, so
+  the U+FEFF split it claims to guard never mattered. It passed against the pre-fix classifier.
+- `regress-019` used PRECOMPOSED accents (categories Lu/Ll), so it exercised neither strip. It is
+  now NFD-decomposed.
+- `lli-008` became byte-identical to `regress-007` after the round-2 relabel, so the corpus count
+  overstated distinct coverage. Repurposed to cover what `regress-007` cannot: a mixed source with
+  real evidence still matching.
+
+Found by reverting the classifier and observing which fixtures went red — 9 of 12 did. That check is
+now part of how a fixture gets accepted.
+
+### Standing hazards retired mechanically
+
+- `drift-scan`'s six python heredocs failed **silently**: any exception wrote nothing to `$FINDINGS`
+  and the gate reported clean. A truncated `corpus.json` produced `P0=0 P1=0 P2=0` and exit 0.
+- S7 checked `declared_counts['synthetic']` and never `['captured']` — the half that will actually
+  change as sources come online.
+- S7 also missed `all 56 are synthetic` (no bold, lowercase `a`), which is why one stale count
+  survived three commits in the plan.
+- `sabotage-check` reported `ok` for a PHP **parse error**. Now rejected outright — and it caught one
+  of my own new sabotage expressions the same day.
+- The tenure guard fired on `corpus.json` because round-2 fixture prose used the word "skips", on the
+  one file `CLAUDE.md` says to append to forever. Zero false positives across all 41 tracked files now.

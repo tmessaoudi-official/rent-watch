@@ -16,7 +16,7 @@ for the product, and **every constraint in it is a ruling**, not a draft to be i
 before touching anything under `src/`.
 
 Status: **the pure core exists; nothing else does.** As of 2026-08-06 there is a PHP 8.5
-implementation of `models` + `tenure` under `src/php/Core/`, a 77-case language-neutral classifier
+implementation of `models` + `tenure` under `src/php/Core/`, a 82-case language-neutral classifier
 corpus at `tests/fixtures/tenure/corpus.json`, and a PHPUnit suite. There is still **no**
 `config/`, no adapter, no store, no notification channel, no CLI and no CI. `src/phorj/` is not
 written yet — it waits on the three phorj builds in `docs/PHORJ-REQUIREMENTS.md`.
@@ -318,6 +318,7 @@ composer dump-autoload --dev            # if the corpus suite errors with "Class
 php tools/phpunit.phar                  # the core suite — must stay green
 bash tests/sabotage-check.sh            # proves the suite would CATCH a broken classifier
 bash tests/test-tenure-guard.sh         # proves the §1 tripwire still fires, and stays quiet on PHP
+bash tests/test-fetch-phpunit.sh        # proves the runner fetch refuses a bad signature
 bash .claude/skills/repair/drift-scan.sh                         # config/doc drift; exit 1 on P0/P1
 bash scripts/claude-bootstrap/hooks/test-precompact-handoff.sh   # 35 tests, must stay green
 bash scripts/claude-bootstrap/test-install.sh                    # 17 tests, must stay green
@@ -351,8 +352,8 @@ Required coverage, per spec §11 — non-negotiable once `src/` exists:
   Offline. No network in CI. A parser test that reaches the network is a monitoring check, not a test.
 - **Classifier tests.** ≥30 hand-labelled listing texts covering pure-LLI In'li, mixed CDC Habitat,
   an explicit PLAI, an explicit PLS, and an ambiguous case. The suite must go red if the classifier
-  regresses. **Done** — `tests/fixtures/tenure/corpus.json`, 77 cases, and the suite asserts all five
-  shapes are present so "30 easy ones" cannot satisfy it. The corpus is **still 77/77 synthetic**:
+  regresses. **Done** — `tests/fixtures/tenure/corpus.json`, 82 cases, and the suite asserts all five
+  shapes are present so "30 easy ones" cannot satisfy it. The corpus is **still 82/82 synthetic**:
   the spec asks for *real* texts and those need a captured payload (blocked on the DevTools cURL
   captures). Every case declares its `provenance` and a test asserts the declared counts, so the gap
   is visible as data. Replace them with captured texts as sources come online — append, never
@@ -378,6 +379,7 @@ tests/fixtures/tenure/      corpus.json — the language-neutral classifier corp
 tests/fixtures/<source>/    Frozen payloads, one dir per source               [not yet created]
 tests/sabotage-check.sh     Proves the classifier suite detects a regression
 tests/test-tenure-guard.sh  Proves the §1 tripwire fires, and stays quiet on ordinary PHP
+tests/test-fetch-phpunit.sh Proves the runner fetch refuses a bad signature
 tools/fetch-phpunit.sh      Fetches the runner; pinned SHA-256, refuses to install on a mismatch
 tools/phpunit.phar          Test runner (gitignored — see README § Getting started)
 var/claude/                 Reports, handoffs — gitignored, container-lifetime

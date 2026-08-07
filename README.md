@@ -25,7 +25,7 @@ everything else depends on. There is no adapter, no store, no notification chann
 | [`spec/PROJECT_BRIEF.md`](spec/PROJECT_BRIEF.md) | The full specification — the source of truth |
 | [`docs/OPEN-QUESTIONS.md`](docs/OPEN-QUESTIONS.md) | **Start here.** Every filter enumerated, and the decisions still owed |
 | `src/php/Core/` | The tenure classifier and the models it works on |
-| `tests/fixtures/tenure/corpus.json` | 77 hand-labelled listing texts — the classifier's ground truth, and language-neutral so the phorj port reads the same file. **All 77 are synthetic**: `spec/PROJECT_BRIEF.md` §4 asks for *real* texts, and capturing those needs a source endpoint that does not exist yet. Every case declares its `provenance` and a test asserts the counts, so the gap is data rather than a promise |
+| `tests/fixtures/tenure/corpus.json` | 82 hand-labelled listing texts — the classifier's ground truth, and language-neutral so the phorj port reads the same file. **All 82 are synthetic**: `spec/PROJECT_BRIEF.md` §4 asks for *real* texts, and capturing those needs a source endpoint that does not exist yet. Every case declares its `provenance` and a test asserts the counts, so the gap is data rather than a promise |
 | `prototype/` | A pre-existing single-file prototype, kept as reference. **Not** the shipping implementation — it has no tenure classifier at all |
 | [`CLAUDE.md`](CLAUDE.md) | How code gets delivered here: rules, gates, the eligibility boundary |
 | `.claude/` · `scripts/claude-bootstrap/` | Claude Code configuration ([details](scripts/claude-bootstrap/README.md)) |
@@ -83,7 +83,7 @@ is blocked on a mailbox, an endpoint capture or a phorj module that does not exi
 
 1. **Core skeleton** — models ✅, SQLite store, config loading, CLI, one notification channel. Proven
    end-to-end with a fake source.
-2. **Tenure classifier + tests.** ✅ **Done in PHP**, against a 77-case synthetic corpus — spec §4's
+2. **Tenure classifier + tests.** ✅ **Done in PHP**, against a 82-case synthetic corpus — spec §4's
    *real* listing texts are still outstanding and are blocked on capturing a payload. The phorj port
    waits on `Core.Imap`, an HTML parser and `sleep` (see `docs/PHORJ-REQUIREMENTS.md`). Before any
    real source; everything depends on it.

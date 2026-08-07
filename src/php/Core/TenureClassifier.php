@@ -51,6 +51,12 @@ final readonly class TenureClassifier
      */
     private const array TIER_BASE = [1 => 97, 2 => 90, 3 => 80, 4 => 70, 5 => 50];
 
+    /**
+     * How close a `conventionné` must sit to an intermediate label to count as QUALIFYING it
+     * rather than describing different stock in the same paragraph. Two or three words.
+     */
+    private const int QUALIFIER_GAP = 3;
+
     private const int CORROBORATION_BP = 3;
     private const int CONTRADICTION_BP = 15;
     private const int CEILING_BP = 99;
@@ -143,7 +149,14 @@ final readonly class TenureClassifier
         'attribution directe' => Tenure::LLI,
         // Social: allocated through the national register and a commission.
         "numero unique d'enregistrement" => Tenure::SOCIAL,
-        'numero unique' => Tenure::SOCIAL,
+        // A DOUBT, not a verdict. `numéro unique` alone is overwhelmingly the SNE in this domain,
+        // but it is also ordinary CRM boilerplate — *"votre numéro unique de dossier vous sera
+        // communiqué"*. As a determinate SOCIAL signal it cleared the floor unaided at tier 3, so
+        // one such sentence was a hard, silent REJECT: nothing arrives, and that is indistinguishable
+        // from a quiet market (`CLAUDE.md` hard rule 8). As a doubt it withholds instead — the
+        // listing surfaces in the "à vérifier" digest where a human settles it in three seconds.
+        // The discriminating form, with `d'enregistrement`, stays determinate above.
+        'numero unique' => Tenure::UNKNOWN,
         "systeme national d'enregistrement" => Tenure::SOCIAL,
         'sne' => Tenure::SOCIAL,
         'demande de logement social' => Tenure::SOCIAL,
@@ -411,7 +424,7 @@ final readonly class TenureClassifier
             // Inside a financing field, an acronym is unambiguous: the field is not French prose,
             // so `PLUS` there can only mean the financing scheme. The collocation guard is a
             // prose-only rule and would reject a perfectly good `financement: PLUS`.
-            foreach ($this->matchLabels($folded) + $this->matchFieldAcronyms($folded) as $position => $hit) {
+            foreach ($this->matchLabels($folded) + $this->matchFieldAcronyms((string) $value) as $position => $hit) {
                 $out[] = new TenureSignal(
                     tier: 1,
                     tenure: $hit['tenure'],
@@ -500,19 +513,52 @@ final readonly class TenureClassifier
      */
     private function dropConventionneWhenIntermediateIsStated(array $fieldSignals, array $labelSignals): array
     {
-        $statesIntermediate = array_any(
-            [...$fieldSignals, ...$labelSignals],
+        // A structured field declaring LLI is the strongest evidence the ladder has, and it is a
+        // different surface from the body text, so it qualifies the whole listing.
+        $fieldSaysLli = array_any(
+            $fieldSignals,
             static fn (TenureSignal $s): bool => $s->tenure === Tenure::LLI,
         );
 
-        if (!$statesIntermediate) {
-            return $labelSignals;
-        }
-
         return array_values(array_filter(
             $labelSignals,
-            static fn (TenureSignal $s): bool
-                => !($s->tenure === Tenure::CONVENTIONNE && $s->evidence === 'conventionne'),
+            function (TenureSignal $s) use ($labelSignals, $fieldSaysLli): bool {
+                if ($s->tenure !== Tenure::CONVENTIONNE || $s->evidence !== 'conventionne') {
+                    return true;
+                }
+
+                if ($fieldSaysLli) {
+                    return false;
+                }
+
+                // ADJACENCY, not mere co-occurrence anywhere in the listing. The rule used to drop
+                // the signal whenever ANY LLI label appeared, which is a §1 breach in the exact
+                // shape the corpus already guards against for `logement social`:
+                //
+                //   "Résidence mixte de logements sociaux et intermédiaires…"       → SOCIAL/REJECT
+                //   "Résidence mixte de logements conventionnés et intermédiaires…" → LLI/MATCH  ✗
+                //
+                // Deleting an excluded signal biases toward NOTIFYING, which is the one direction
+                // §1 forbids, and it does it invisibly — the word never reaches `reasons[]`.
+                // The glossary's exception is for a conventionné that QUALIFIES an intermediate
+                // label ("logement intermédiaire conventionné"), i.e. the same noun phrase. A
+                // conventionné describing other stock in the same paragraph is not that.
+                foreach ($labelSignals as $other) {
+                    if ($other->tenure !== Tenure::LLI) {
+                        continue;
+                    }
+
+                    $gap = $other->position < $s->position
+                        ? $s->position - ($other->position + strlen($other->evidence))
+                        : $other->position - ($s->position + strlen($s->evidence));
+
+                    if ($gap >= 0 && $gap <= self::QUALIFIER_GAP) {
+                        return false;
+                    }
+                }
+
+                return true;
+            },
         ));
     }
 
@@ -551,7 +597,7 @@ final readonly class TenureClassifier
 
     private function isPrecededBySans(string $folded, int $position): bool
     {
-        return preg_match('/\bsans\s+$/u', substr($folded, 0, $position)) === 1;
+        return $this->matches('/\bsans\s+$/u', substr($folded, 0, $position));
     }
 
     /**
@@ -634,26 +680,31 @@ final readonly class TenureClassifier
      *
      * @return array<int, array{tenure: Tenure, literal: string}>
      */
-    private function matchFieldAcronyms(string $folded): array
+    private function matchFieldAcronyms(string $rawValue): array
     {
-        // ONLY when the whole value is financing vocabulary. The docblock at the call site argues
-        // that a structured field "is not French prose" and so needs no collocation guard — true
-        // of `financement: PLUS`, false of the generic keys in TENURE_FIELDS. `categorie`,
-        // `dispositif` and `typelogement` carry prose in real feeds, and `Pinel Plus` is a real
-        // 2023 scheme name: unguarded, that value was tenure PLUS at confidence 97 and a silent
-        // REJECT. So a value is treated as a code only if it contains nothing but financing tokens
-        // and separators; anything else falls through to the prose path and its collocation guard.
-        if (preg_match('/^(?:plus|pls|plai|lli|ou|et|[\s\/\-,:;()])+$/u', $folded) !== 1) {
-            return [];
-        }
-
+        // CASE is the evidence here, not the shape of the whole value.
+        //
+        // The first version of this guard skipped the collocation test entirely, on the argument
+        // that a structured field "is not French prose". True of `financement: PLUS`, false of the
+        // generic keys in TENURE_FIELDS — `categorie`, `dispositif` and `typelogement` carry prose
+        // in real feeds, and `Pinel Plus` is a real 2023 scheme name, so that value was tenure PLUS
+        // at confidence 97 and a silent REJECT.
+        //
+        // The second version required the WHOLE value to be financing tokens and separators. That
+        // fixed `Pinel Plus` and opened a worse hole: it FAILED OPEN. A value like `PLUS CD` — a
+        // real financing code — matched nothing, produced no signal and no doubt, and since fields
+        // are not part of RawListing::text() there was no prose fallback either. The listing then
+        // matched on its description. The strongest rung of the ladder was blinder than the weakest.
+        //
+        // Case settles both: an UPPERCASE acronym in a financing field is a code (`PLUS`, `PLUS CD`,
+        // `PLUS / PLAI`), a lowercase one is a word (`Pinel Plus`, `Maison de plus de 100 m2`).
+        // The value is matched case-preserving, exactly as prose is.
         $hits = [];
+        $cased = Text::foldPreserveCase($rawValue);
 
         foreach (self::AMBIGUOUS_LABELS as $acronym => $tenure) {
-            $position = Text::tokenPosition($folded, mb_strtolower($acronym, 'UTF-8'));
-
-            if ($position !== null) {
-                $hits[$position] = ['tenure' => $tenure, 'literal' => $acronym];
+            if ($this->matchOffset('/(?<![A-Za-z0-9])' . preg_quote($acronym, '/') . '(?![A-Za-z0-9])/u', $cased, $m)) {
+                $hits[$m[0][1]] = ['tenure' => $tenure, 'literal' => $acronym];
             }
         }
 
@@ -661,26 +712,35 @@ final readonly class TenureClassifier
     }
 
     /**
-     * The collocation guard: position of the first occurrence of `$acronym` that is genuinely a
-     * financing label, or null if every occurrence is the French adverb.
+     * The collocation guard. Returns `[offset, isConfident]`, or null if no occurrence is a label.
      *
-     * TESTED PER OCCURRENCE, NOT PER DOCUMENT, and the difference is a real hole rather than a
-     * refinement. A document-level check asks "is this text in a financing context anywhere?" and
-     * "is any occurrence adverbial anywhere?" — so `Logement PLUS. Plus grand que la moyenne.`
-     * would have the genuine financing label suppressed by an unrelated adverb later in the
-     * description, and a social listing would reach a notification. Each occurrence now carries its
-     * own verdict.
+     * THREE ANSWERS, NOT TWO. An occurrence in a financing collocation is then read by what FOLLOWS
+     * it:
+     *   - the phrase ENDS (punctuation, end of text, another financing acronym) → `[offset, true]`,
+     *     a determinate label;
+     *   - a known French comparative follows (`PLUS GRAND`) → the adverb, skipped;
+     *   - any other word follows (`LOGEMENT PLUS MODERNE`) → `[offset, false]`, **indécidable**,
+     *     which the caller turns into a doubt and the digest.
      *
-     * Both conditions must hold for the SAME occurrence:
-     *   1. it sits in a financing collocation — after a financing noun, or beside another acronym;
-     *   2. it is not followed by a French comparative (`LOGEMENT PLUS GRAND` satisfies 1).
+     * The third answer replaced a two-answer version whose second condition was "not followed by a
+     * French comparative", i.e. a denylist of adjectives. That list cannot be completed, and every
+     * adjective missing from it turned an emphatic title into tenure PLUS and a silent REJECT.
+     * Asking instead whether a label ENDS the phrase is a small closed question.
+     *
+     * TESTED PER OCCURRENCE, NOT PER DOCUMENT, and that too was a real hole. A document-level check
+     * asks "is this text in a financing context anywhere?" and "is any occurrence adverbial
+     * anywhere?" — so `Logement PLUS. Plus grand que la moyenne.` had its genuine financing label
+     * suppressed by an unrelated adverb later in the description, and a social listing reached a
+     * notification.
      *
      * Uppercase is enforced by the pattern itself: `$acronym` is matched literally against
-     * case-preserving text, so `logement plus grand` never reaches either condition.
+     * case-preserving text, so `logement plus grand` never reaches any condition.
      *
      * @param string $cased accent-folded but case-PRESERVING text — case is the evidence here.
      *                      Its byte offsets align with {@see Text::fold()}'s output, because
      *                      folding removes accents first and lowercasing ASCII preserves length.
+     *
+     * @return array{int, bool}|null
      */
     private function financingAcronymPosition(string $cased, string $acronym): ?array
     {
@@ -708,11 +768,11 @@ final readonly class TenureClassifier
 
             $inContext =
                 // …after a financing noun: `Logement PLUS`, `Financement / PLS`
-                preg_match('/(?:^|[^A-Za-z0-9])(?i:' . $colloc . ')' . $sep . '$/u', $before) === 1
+                $this->matches('/(?:^|[^A-Za-z0-9])(?i:' . $colloc . ')' . $sep . '$/u', $before)
                 // …before another financing acronym: `PLUS / PLAI`, `PLS ou PLUS`
-                || preg_match('/^' . $sep . '(?:(?i:ou|et)' . $sep . ')?(?:' . $acros . ')(?![A-Za-z0-9])/u', $after) === 1
+                || $this->matches('/^' . $sep . '(?:(?i:ou|et)' . $sep . ')?(?:' . $acros . ')(?![A-Za-z0-9])/u', $after)
                 // …after another financing acronym: `PLAI / PLUS`
-                || preg_match('/(?:^|[^A-Za-z0-9])(?:' . $acros . ')' . $sep . '(?:(?i:ou|et)' . $sep . ')?$/u', $before) === 1;
+                || $this->matches('/(?:^|[^A-Za-z0-9])(?:' . $acros . ')' . $sep . '(?:(?i:ou|et)' . $sep . ')?$/u', $before);
 
             if (!$inContext) {
                 continue;
@@ -721,20 +781,56 @@ final readonly class TenureClassifier
             // A financing label ENDS a noun phrase: `Logement PLUS.`, `Logement PLUS - …`,
             // `Logement PLUS, …`, `PLUS / PLAI`, `PLS ou PLUS`. That is a small closed set, unlike
             // the set of French adjectives an adverbial `PLUS` could modify.
-            if (preg_match('/^\s*$|^\s*[,;:.!?)\]\/\-–—]|^\s*(?:(?i:ou|et)\s+)?(?:' . $acros . ')(?![A-Za-z0-9])/u', $after) === 1) {
+            if ($this->matches('/^\s*$|^\s*[,;:.!?)\]\/\-–—]|^\s*(?:(?i:ou|et)\s+)?(?:' . $acros . ')(?![A-Za-z0-9])/u', $after)) {
                 return [$offset, true];
             }
 
             // A word follows. If it is a comparative we know it was the adverb, so drop it.
-            if (preg_match('/^\s*(?i:' . self::COMPARATIVE_TAIL . ')(?![A-Za-z0-9])/u', $after) === 1) {
+            if ($this->matches('/^\s*(?i:' . self::COMPARATIVE_TAIL . ')(?![A-Za-z0-9])/u', $after)) {
                 continue;
             }
 
             // Otherwise it is genuinely ambiguous — `LOGEMENT PLUS MODERNE` in a shouted title.
-            // Do NOT guess. See the method docblock for why this becomes a digest entry.
+            // Do NOT guess: the caller turns this into a DOUBT, which withholds an otherwise-eligible
+            // verdict without ever competing with a real label. See the class docblock, idea 3.
             $ambiguousAt ??= $offset;
         }
 
         return $ambiguousAt === null ? null : [$ambiguousAt, false];
+    }
+    /**
+     * `preg_match` with the error case treated as an error.
+     *
+     * `preg_match(...) === 1` reads `false` — a PCRE failure — as "no match". Several call sites in
+     * this class compose their result into a condition whose false branch DROPS a social signal, so
+     * an error there is a silent fail-open. This should be unreachable, because every subject has
+     * already been through {@see Text::fold()}, which refuses malformed input — and that is exactly
+     * why it must be loud if it ever happens.
+     */
+    private function matches(string $pattern, string $subject): bool
+    {
+        $result = preg_match($pattern, $subject);
+
+        if ($result === false) {
+            throw MalformedText::notUtf8('TenureClassifier::matches (' . preg_last_error_msg() . ')');
+        }
+
+        return $result === 1;
+    }
+
+    /**
+     * {@see matches()}, capturing offsets.
+     *
+     * @param array<int, array{string, int}> $m
+     */
+    private function matchOffset(string $pattern, string $subject, ?array &$m): bool
+    {
+        $result = preg_match($pattern, $subject, $m, PREG_OFFSET_CAPTURE);
+
+        if ($result === false) {
+            throw MalformedText::notUtf8('TenureClassifier::matchOffset (' . preg_last_error_msg() . ')');
+        }
+
+        return $result === 1;
     }
 }

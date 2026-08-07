@@ -125,9 +125,9 @@ run_sabotage "collocation guard removed (bare 'plus' becomes a social label)" \
 
 run_sabotage "comparative suppression removed ('LOGEMENT PLUS GRAND' reads as financing)" \
   src/php/Core/TenureClassifier.php \
-  's|^    private const string COMPARATIVE_TAIL = .*$|    private const string COMPARATIVE_TAIL = "zzzznevermatches";|'
+  's|^    private const string COMPARATIVE_TAIL = .*$|    private const string COMPARATIVE_TAIL = "zzzz-no-such-word";|'
 
-run_sabotage "word boundaries removed (substring match: 'plaine' becomes PLAI)" \
+run_sabotage "word boundaries dropped (substring match: 'plaine' becomes PLAI)" \
   src/php/Core/Text.php \
   "s|'/(?<!\[a-z0-9\])' . preg_quote(\$needle, '/') . '(?!\[a-z0-9\])/u'|'/' . preg_quote(\$needle, '/') . '/u'|"
 
@@ -171,7 +171,7 @@ run_sabotage "combining marks no longer stripped (NFD text stops matching)" \
 
 run_sabotage "conventionne exception widened back to any eligible tenure" \
   src/php/Core/TenureClassifier.php \
-  's/static fn (TenureSignal $s): bool => $s->tenure === Tenure::LLI,/static fn (TenureSignal $s): bool => $s->tenure->isEligible(),/'
+  's/if ($other->tenure !== Tenure::LLI) {/if (!$other->tenure->isEligible()) {/'
 
 run_sabotage "ambiguous uppercase acronym guessed instead of digested" \
   src/php/Core/TenureClassifier.php \
@@ -195,7 +195,19 @@ run_sabotage "doubts no longer withhold an otherwise-eligible verdict" \
 
 run_sabotage "prose field values bypass the collocation guard again" \
   src/php/Core/TenureClassifier.php \
-  's/$folded) !== 1) {/$folded) === 999) {/'
+  's/preg_quote($acronym, .\/.)/mb_strtolower(preg_quote($acronym, "\/"))/'
+
+run_sabotage "conventionne exception unbounded again (any LLI anywhere deletes it)" \
+  src/php/Core/TenureClassifier.php \
+  's/if ($gap >= 0 \&\& $gap <= self::QUALIFIER_GAP) {/if (true) {/'
+
+run_sabotage "invisible non-Cf characters no longer stripped" \
+  src/php/Core/Text.php \
+  "s/self::INVISIBLE/''/"
+
+run_sabotage "numero unique alone becomes a determinate rejection again" \
+  src/php/Core/TenureClassifier.php \
+  "s/'numero unique' => Tenure::UNKNOWN,/'numero unique' => Tenure::SOCIAL,/"
 
 # NOT SABOTAGED, and the reason is worth recording rather than quietly omitting.
 # `if ($folded === '') { continue; }` in structuredFieldSignals() is defence in depth, not a
@@ -222,7 +234,7 @@ run_sabotage "'sans' negation lookbehind removed" \
 
 run_sabotage "conventionne exception removed (genuine LLI stock digests)" \
   src/php/Core/TenureClassifier.php \
-  's/if (!$statesIntermediate) {/if (true) {/'
+  's/if ($fieldSaysLli) {/if (true) {/'
 
 printf '\n  %d sabotage(s) detected, %d undetected\n\n' "$pass" "$fail"
 

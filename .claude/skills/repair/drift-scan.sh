@@ -57,6 +57,12 @@ for s in sorted(have - built - absent):
 for s in sorted(built - have - {'loop'}):
     print(f"P1  /{s} is listed as built but .claude/skills/{s}/ does not exist.")
 PY
+# A python section that CRASHES must not read as a section that found nothing. Under
+# `set -uo pipefail` with no `-e`, an exception here printed a traceback to stderr, wrote
+# nothing to $FINDINGS, and the tally below counted zero — a gate reporting clean because
+# it had been disabled. Demonstrated with a truncated corpus.json and with a `cases` →
+# `items` rename: both produced `P0=0 P1=0 P2=0` and exit 0.
+[[ $? -eq 0 ]] || printf 'P0  a drift-scan python section exited non-zero — it checked NOTHING. Re-run without --quiet and read the traceback; do not trust this run.\n' >>"$FINDINGS"
 
 # ── S1b: reviewer agents named vs defined ────────────────────────────────────────────────────────
 say "── S1b reviewer agents"
@@ -97,6 +103,12 @@ for p in pathlib.Path('.').rglob('*'):
                       f"another repo, say so explicitly — a bare path reads as local and a future "
                       f"session will follow it into nothing.")
 PY
+# A python section that CRASHES must not read as a section that found nothing. Under
+# `set -uo pipefail` with no `-e`, an exception here printed a traceback to stderr, wrote
+# nothing to $FINDINGS, and the tally below counted zero — a gate reporting clean because
+# it had been disabled. Demonstrated with a truncated corpus.json and with a `cases` →
+# `items` rename: both produced `P0=0 P1=0 P2=0` and exit 0.
+[[ $? -eq 0 ]] || printf 'P0  a drift-scan python section exited non-zero — it checked NOTHING. Re-run without --quiet and read the traceback; do not trust this run.\n' >>"$FINDINGS"
 
 # ── S2b: no SIBLING-REPO file cited as authority ─────────────────────────────────────────────────
 # Raised by the developer 2026-08-06: "why would you have twes-in/CLAUDE.md in this repo???" A rent-watch
@@ -121,6 +133,12 @@ for p in pathlib.Path('.').rglob('*.md'):
                   f"read it and a future session cannot verify it; rent-watch's own CLAUDE.md is the only "
                   f"authority here. State the argument directly instead.")
 PY
+# A python section that CRASHES must not read as a section that found nothing. Under
+# `set -uo pipefail` with no `-e`, an exception here printed a traceback to stderr, wrote
+# nothing to $FINDINGS, and the tally below counted zero — a gate reporting clean because
+# it had been disabled. Demonstrated with a truncated corpus.json and with a `cases` →
+# `items` rename: both produced `P0=0 P1=0 P2=0` and exit 0.
+[[ $? -eq 0 ]] || printf 'P0  a drift-scan python section exited non-zero — it checked NOTHING. Re-run without --quiet and read the traceback; do not trust this run.\n' >>"$FINDINGS"
 
 # ── S3: inventory tables ─────────────────────────────────────────────────────────────────────────
 say "── S3 inventory tables"
@@ -173,6 +191,12 @@ if deny:
           f"({', '.join(deny[:4])}) — this repo requires FULL AUTONOMY: a denied action cannot be run "
           f"by hand in a web session, so it is an unrecoverable dead end. See CLAUDE.md § Git autonomy.")
 PY
+# A python section that CRASHES must not read as a section that found nothing. Under
+# `set -uo pipefail` with no `-e`, an exception here printed a traceback to stderr, wrote
+# nothing to $FINDINGS, and the tally below counted zero — a gate reporting clean because
+# it had been disabled. Demonstrated with a truncated corpus.json and with a `cases` →
+# `items` rename: both produced `P0=0 P1=0 P2=0` and exit 0.
+[[ $? -eq 0 ]] || printf 'P0  a drift-scan python section exited non-zero — it checked NOTHING. Re-run without --quiet and read the traceback; do not trust this run.\n' >>"$FINDINGS"
 
 # ── S6: THE TENURE INVARIANT — rent-watch's own, and the reason this skill is not a generic copy ──
 # The one non-negotiable rule is asserted in ~16 files: CLAUDE.md §1 and its glossary, every skill
@@ -227,6 +251,12 @@ elif th:
         print(f"P2  tenure-guard.sh does not mention the documented threshold {want} in its comments — a "
               f"future edit cannot tell which floor its regex encodes.")
 PY
+# A python section that CRASHES must not read as a section that found nothing. Under
+# `set -uo pipefail` with no `-e`, an exception here printed a traceback to stderr, wrote
+# nothing to $FINDINGS, and the tally below counted zero — a gate reporting clean because
+# it had been disabled. Demonstrated with a truncated corpus.json and with a `cases` →
+# `items` rename: both produced `P0=0 P1=0 P2=0` and exit 0.
+[[ $? -eq 0 ]] || printf 'P0  a drift-scan python section exited non-zero — it checked NOTHING. Re-run without --quiet and read the traceback; do not trust this run.\n' >>"$FINDINGS"
 
 # ── S7: COUNTS WRITTEN IN PROSE vs the artefacts they describe ───────────────────────────────────
 # Three separate review rounds caught a stale corpus count in CLAUDE.md or README.md, each time
@@ -246,9 +276,20 @@ cases = len(data['cases'])
 declared = data.get('declared_counts', {})
 synthetic = sum(1 for c in data['cases'] if c.get('provenance') == 'synthetic')
 
-if declared.get('synthetic') != synthetic:
-    print(f"P0  corpus.json declares {declared.get('synthetic')} synthetic cases but contains {synthetic} — "
-          f"the provenance disclosure is the thing that keeps the 'real texts' gap honest.")
+captured = sum(1 for c in data['cases'] if c.get('provenance') == 'captured')
+
+# BOTH halves. Checking only `synthetic` left the half that will actually change as sources come
+# online unguarded: flip one case to `captured` and honestly drop `synthetic` by one, and the total
+# is unchanged, no prose count drifts, and the `captured` field rots undetected.
+for kind, actual in (('synthetic', synthetic), ('captured', captured)):
+    if declared.get(kind) != actual:
+        print(f"P0  corpus.json declares {declared.get(kind)} {kind} cases but contains {actual} — "
+              f"the provenance disclosure is the thing that keeps the 'real texts' gap honest.")
+
+unknown = [c['id'] for c in data['cases'] if c.get('provenance') not in ('synthetic', 'captured')]
+if unknown:
+    print(f"P1  corpus cases declare an unrecognised provenance: {', '.join(unknown[:5])} — "
+          f"only 'synthetic' and 'captured' are counted, so anything else is invisible to the check.")
 
 # Any "<N> cases" / "<N>/<N> synthetic" / "<N> hand-labelled" / "<N>-case" claim must equal `cases`.
 CLAIMS = [
@@ -258,7 +299,11 @@ CLAIMS = [
     # which is a floor the corpus must clear, not a count of what it holds. This check flagged that
     # sentence on its first run.
     (r'(?<!≥)(?<!at least )(?<!minimum )\b(\d+)\s+hand-labelled', 'N hand-labelled'),
-    (r'\*\*All\s+(\d+)\s+are synthetic\*\*', 'All N are synthetic'),
+    # Bold-optional and case-insensitive: `**All 77 are synthetic**` AND `all 56 are synthetic`.
+    # The second phrasing sat stale in the plan for three commits because the pattern required
+    # the bold markers and a capital A.
+    (r'(?i)\*{0,2}all\s+(\d+)\s+(?:are|of them are)\s+synthetic', 'all N are synthetic'),
+    (r'(?i)all\s+(\d+)\s+are synthetic', 'all N are synthetic'),
     (r'(\d+)-case (?:language-neutral|synthetic)', 'N-case corpus'),
 ]
 
@@ -293,6 +338,12 @@ if oq.is_file() and cm.is_file():
             print(f"P1  CLAUDE.md says {m.group(1)} ({claimed}) decisions are open; "
                   f"docs/OPEN-QUESTIONS.md has {open_qs} (Ⓑ + Ⓞ headings).")
 PY
+# A python section that CRASHES must not read as a section that found nothing. Under
+# `set -uo pipefail` with no `-e`, an exception here printed a traceback to stderr, wrote
+# nothing to $FINDINGS, and the tally below counted zero — a gate reporting clean because
+# it had been disabled. Demonstrated with a truncated corpus.json and with a `cases` →
+# `items` rename: both produced `P0=0 P1=0 P2=0` and exit 0.
+[[ $? -eq 0 ]] || printf 'P0  a drift-scan python section exited non-zero — it checked NOTHING. Re-run without --quiet and read the traceback; do not trust this run.\n' >>"$FINDINGS"
 
 # ── S5: tool availability (informational — compare against any doc that claims or hedges) ────────
 say "── S5 tool availability (informational)"

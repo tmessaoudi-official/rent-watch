@@ -1,858 +1,1218 @@
 {
-  "$comment": [
-    "THE CLASSIFIER CORPUS. Read by BOTH implementations — src/php/Core and, later, src/phorj/core.",
-    "This file is the ground truth for the tenure classifier and is listed in BLAST-RADIUS.md as",
-    "stateful data that must not be casually removed or relabelled. CLAUDE.md: 'Never weaken a",
-    "classifier test to make a change pass. If a fixture goes red, the classifier regressed.'",
-    "",
-    "PROVENANCE IS HONEST AND MACHINE-CHECKED. spec/PROJECT_BRIEF.md §4 asks for >=30 *real* listing",
-    "texts. Real texts cannot be captured until a source endpoint or a browser session exists (blocked",
-    "on U3 — the DevTools cURL captures). So every entry declares provenance: 'synthetic' texts are",
-    "hand-written French listing prose modelled on how these landlords actually word their pages;",
-    "'captured' entries are frozen from a real payload and scrubbed. The suite asserts the declared",
-    "synthetic/captured counts match reality, so the gap stays visible as data rather than as a comment.",
-    "",
-    "Each case:",
-    "  id           stable identifier; never renumber, only append",
-    "  provenance   'synthetic' | 'captured'",
-    "  source       the SourceProfile this listing arrived from",
-    "  title/description/fields   what the adapter produced",
-    "  expect.tenure / expect.outcome   the hand label — the thing under test",
-    "  why          why a human labelled it that way; the record for a future relabelling argument"
-  ],
-  "version": 1,
-  "declared_counts": {
-    "synthetic": 77,
-    "captured": 0
-  },
-  "sources": {
-    "inli": {
-      "name": "inli",
-      "family": "institutional",
-      "default_tenure": "LLI",
-      "mixed_tenure": false
-    },
-    "cdc_habitat": {
-      "name": "cdc_habitat",
-      "family": "institutional",
-      "default_tenure": null,
-      "mixed_tenure": true
-    },
-    "seqens": {
-      "name": "seqens",
-      "family": "institutional",
-      "default_tenure": null,
-      "mixed_tenure": true
-    },
-    "icf_novedis": {
-      "name": "icf_novedis",
-      "family": "institutional",
-      "default_tenure": "LLI",
-      "mixed_tenure": true,
-      "$why": "FLIPPED to true on 2026-08-06 after review. CLAUDE.md's reviewer charter names ICF among the landlords that publish social AND intermediate stock. Novedis is genuinely ICF Habitat's non-social arm, so `false` is defensible for a Novedis-only endpoint and wrong for the group portal — and nothing in this repo yet says which the adapter will target, because config/sources.yaml does not exist. mixed_tenure is the single flag that disarms the fail-closed rule, so it takes the safe value until that is decided. Tracked as an open question."
-    },
-    "seloger": {
-      "name": "seloger",
-      "family": "private",
-      "default_tenure": "LIBRE",
-      "mixed_tenure": false
-    },
-    "leboncoin": {
-      "name": "leboncoin",
-      "family": "private",
-      "default_tenure": "LIBRE",
-      "mixed_tenure": false
-    },
-    "unknown_source": {
-      "name": "unknown_source",
-      "family": "institutional",
-      "default_tenure": null,
-      "mixed_tenure": true
-    },
-    "pure_no_default": {
-      "name": "pure_no_default",
-      "family": "institutional",
-      "default_tenure": null,
-      "mixed_tenure": false
-    }
-  },
-  "cases": [
-    {
-      "id": "lli-001-structured-field",
-      "provenance": "synthetic",
-      "source": "cdc_habitat",
-      "title": "Appartement T3 - Chatou",
-      "description": "Bel appartement de 3 pieces au calme, proche RER A.",
-      "fields": { "financement": "LLI" },
-      "expect": { "tenure": "LLI", "outcome": "MATCH", "min_confidence": 90 },
-      "why": "Tier 1 structured field on a mixed source. The field is the highest-priority signal and settles it."
-    },
-    {
-      "id": "lli-002-structured-typeproduit",
-      "provenance": "synthetic",
-      "source": "seqens",
-      "title": "T4 lumineux Sartrouville",
-      "description": "Residence recente avec ascenseur.",
-      "fields": { "typeProduit": "Logement intermediaire" },
-      "expect": { "tenure": "LLI", "outcome": "MATCH", "min_confidence": 90 },
-      "why": "Same tier via a different field name. The field-name set must not be a single hard-coded key."
-    },
-    {
-      "id": "lli-003-explicit-label-text",
-      "provenance": "synthetic",
-      "source": "cdc_habitat",
-      "title": "T2 Houilles",
-      "description": "Ce logement intermediaire est propose sans commission d'attribution.",
-      "fields": {},
-      "expect": { "tenure": "LLI", "outcome": "MATCH", "min_confidence": 85 },
-      "why": "Tier 2 label plus a corroborating tier-3 procedural tell pointing the same way."
-    },
-    {
-      "id": "lli-004-accented-label",
-      "provenance": "synthetic",
-      "source": "cdc_habitat",
-      "title": "T3 Maisons-Laffitte",
-      "description": "Logement intermédiaire (LLI) — loyer plafonné, attribution directe par le bailleur.",
-      "fields": {},
-      "expect": { "tenure": "LLI", "outcome": "MATCH", "min_confidence": 85 },
-      "why": "Accents and an em dash must not defeat matching. The same text unaccented is lli-003."
-    },
-    {
-      "id": "lli-005-uppercase-acronym",
-      "provenance": "synthetic",
-      "source": "cdc_habitat",
-      "title": "LLI - T3 Le Vesinet",
-      "description": "Programme LLI livre en 2025.",
-      "fields": {},
-      "expect": { "tenure": "LLI", "outcome": "MATCH", "min_confidence": 85 },
-      "why": "Bare LLI acronym, word-boundaried."
-    },
-    {
-      "id": "lli-006-loyer-intermediaire",
-      "provenance": "synthetic",
-      "source": "seqens",
-      "title": "T2 Poissy",
-      "description": "Appartement a loyer intermediaire, 15% sous le marche.",
-      "fields": {},
-      "expect": { "tenure": "LLI", "outcome": "MATCH", "min_confidence": 85 },
-      "why": "'loyer intermediaire' is a distinct phrasing from 'logement intermediaire' and both are in the glossary."
-    },
-    {
-      "id": "lli-007-inli-source-default-pure",
-      "provenance": "synthetic",
-      "source": "inli",
-      "title": "T3 Cergy",
-      "description": "Appartement 3 pieces, 68 m2, balcon.",
-      "fields": {},
-      "expect": { "tenure": "LLI", "outcome": "MATCH", "max_confidence": 59 },
-      "why": "THE SOURCE-DEFAULT CASE. No signal in the listing at all. Confidence must stay BELOW the 0.6 floor (an absent signal lowers confidence, it does not inherit the default at full strength) — yet the outcome is still MATCH, because In'li is a pure-LLI source with no social stock to be confused with."
-    },
-    {
-      "id": "lli-008-icf-novedis-pure",
-      "provenance": "synthetic",
-      "source": "icf_novedis",
-      "title": "T4 Bezons",
-      "description": "Proche gare, residence calme.",
-      "fields": {},
-      "expect": { "tenure": "UNKNOWN", "outcome": "DIGEST" },
-      "why": "RELABELLED 2026-08-06, with the evidence here and in the commit message as CLAUDE.md requires. This was a pure-source MATCH while icf_novedis declared mixed_tenure:false. That flag was flipped to true after review (see the source table), so the source default alone no longer establishes the tenure and the listing digests. The pure-source MATCH path is still covered by lli-007 (In-li) and libre-001 (SeLoger), so no coverage was lost."
-    },
-    {
-      "id": "lli-009-sans-condition-commission",
-      "provenance": "synthetic",
-      "source": "cdc_habitat",
-      "title": "T3 Conflans-Sainte-Honorine",
-      "description": "Attribution sans condition de commission, dossier en ligne.",
-      "fields": {},
-      "expect": { "tenure": "LLI", "outcome": "MATCH", "min_confidence": 75 },
-      "why": "Tier 3 procedural tell alone, on a mixed source. 'sans condition de commission' is the intermediate-side tell named in CLAUDE.md and it clears the 0.6 floor on its own."
-    },
-    {
-      "id": "lli-010-field-and-text-agree",
-      "provenance": "synthetic",
-      "source": "cdc_habitat",
-      "title": "T2 Argenteuil",
-      "description": "Logement intermediaire, attribution directe par le bailleur.",
-      "fields": { "categorie": "LLI" },
-      "expect": { "tenure": "LLI", "outcome": "MATCH", "min_confidence": 97 },
-      "why": "CORROBORATION. Tiers 1, 2 and 3 all agree; confidence must exceed the tier-1 base of 97."
-    },
-    {
-      "id": "lli-011-conventionne-with-intermediate-label",
-      "provenance": "synthetic",
-      "source": "cdc_habitat",
-      "title": "T3 Chatou",
-      "description": "Logement intermediaire conventionne, loyer plafonne.",
-      "fields": {},
-      "expect": { "tenure": "LLI", "outcome": "MATCH", "min_confidence": 85 },
-      "why": "THE GLOSSARY'S OWN EXCEPTION, and it must be honoured or a whole class of genuine LLI stock digests. CLAUDE.md treats conventionne as social 'absent an explicit intermediate label' — here the label IS present, so the bare conventionne signal is dropped rather than left to trigger the conflict rule. LLI stock genuinely is conventionne; if this were not handled, every listing that says both would silently land in the digest."
-    },
-
-    {
-      "id": "plai-001-structured-field",
-      "provenance": "synthetic",
-      "source": "cdc_habitat",
-      "title": "T3 Mantes-la-Jolie",
-      "description": "Appartement 3 pieces.",
-      "fields": { "financement": "PLAI" },
-      "expect": { "tenure": "PLAI", "outcome": "REJECT" },
-      "why": "The explicit PLAI the spec demands. Excluded — REJECT regardless of anything else."
-    },
-    {
-      "id": "plai-002-explicit-label",
-      "provenance": "synthetic",
-      "source": "seqens",
-      "title": "T2 Sarcelles",
-      "description": "Logement PLAI, sous conditions de ressources.",
-      "fields": {},
-      "expect": { "tenure": "PLAI", "outcome": "REJECT" },
-      "why": "Tier 2."
-    },
-    {
-      "id": "plus-001-structured-field",
-      "provenance": "synthetic",
-      "source": "cdc_habitat",
-      "title": "T4 Trappes",
-      "description": "Appartement familial.",
-      "fields": { "financement": "PLUS" },
-      "expect": { "tenure": "PLUS", "outcome": "REJECT" },
-      "why": "PLUS as a structured VALUE is unambiguous — a field never means the French adverb."
-    },
-    {
-      "id": "plus-002-uppercase-in-text",
-      "provenance": "synthetic",
-      "source": "seqens",
-      "title": "T3 Les Mureaux",
-      "description": "Logement PLUS - numero unique d'enregistrement obligatoire.",
-      "fields": {},
-      "expect": { "tenure": "PLUS", "outcome": "REJECT" },
-      "why": "Uppercase PLUS with a corroborating SNE tell."
-    },
-    {
-      "id": "pls-001-structured-field",
-      "provenance": "synthetic",
-      "source": "cdc_habitat",
-      "title": "T3 Saint-Germain-en-Laye",
-      "description": "Residence neuve.",
-      "fields": { "financement": "PLS" },
-      "expect": { "tenure": "PLS", "outcome": "REJECT" },
-      "why": "The explicit PLS the spec demands. Q4 (2026-08-06) ruled PLS OUT — it is social housing (SNE + commission). This fixture is the regression guard on that ruling."
-    },
-    {
-      "id": "pls-002-uppercase-in-text",
-      "provenance": "synthetic",
-      "source": "seqens",
-      "title": "T2 Ermont",
-      "description": "Logement PLS, plafonds de ressources applicables.",
-      "fields": {},
-      "expect": { "tenure": "PLS", "outcome": "REJECT" },
-      "why": "Same ruling via tier 2."
-    },
-    {
-      "id": "social-001-logement-social",
-      "provenance": "synthetic",
-      "source": "cdc_habitat",
-      "title": "T3 Gennevilliers",
-      "description": "Ce logement social est attribue par la commission d'attribution.",
-      "fields": {},
-      "expect": { "tenure": "SOCIAL", "outcome": "REJECT" },
-      "why": "'logement social' names the family without naming the financing tier, so the verdict is SOCIAL — excluded, but not falsely precise about which tier."
-    },
-    {
-      "id": "social-002-sne-procedural",
-      "provenance": "synthetic",
-      "source": "cdc_habitat",
-      "title": "T3 Villiers-le-Bel",
-      "description": "Un numero unique d'enregistrement est exige pour toute demande.",
-      "fields": {},
-      "expect": { "tenure": "SOCIAL", "outcome": "REJECT" },
-      "why": "PROCEDURAL TELL ONLY. Zero tenure vocabulary appears anywhere. CLAUDE.md calls this 'the cheapest reliable discriminator the domain offers' — the classifier must reject on procedure alone."
-    },
-    {
-      "id": "social-003-sne-acronym",
-      "provenance": "synthetic",
-      "source": "seqens",
-      "title": "T2 Goussainville",
-      "description": "Enregistrement SNE prealable obligatoire.",
-      "fields": {},
-      "expect": { "tenure": "SOCIAL", "outcome": "REJECT" },
-      "why": "SNE as a bare acronym."
-    },
-    {
-      "id": "social-004-demande-logement-social",
-      "provenance": "synthetic",
-      "source": "cdc_habitat",
-      "title": "T4 Persan",
-      "description": "Deposez votre demande de logement social en ligne.",
-      "fields": {},
-      "expect": { "tenure": "SOCIAL", "outcome": "REJECT" },
-      "why": "Fourth procedural phrasing named in CLAUDE.md."
-    },
-    {
-      "id": "social-005-commission-attribution",
-      "provenance": "synthetic",
-      "source": "seqens",
-      "title": "T3 Franconville",
-      "description": "Dossier examine en commission d'attribution.",
-      "fields": {},
-      "expect": { "tenure": "SOCIAL", "outcome": "REJECT" },
-      "why": "Commission d'attribution alone."
-    },
-    {
-      "id": "conv-001-conventionne-bare",
-      "provenance": "synthetic",
-      "source": "cdc_habitat",
-      "title": "T2 Domont",
-      "description": "Logement conventionne APL.",
-      "fields": {},
-      "expect": { "tenure": "CONVENTIONNE", "outcome": "REJECT" },
-      "why": "CLAUDE.md: conventionne absent an explicit intermediate label is treated as social."
-    },
-    {
-      "id": "conv-002-conventionne-accented",
-      "provenance": "synthetic",
-      "source": "cdc_habitat",
-      "title": "T2 Domont",
-      "description": "Logement conventionné APL.",
-      "fields": {},
-      "expect": { "tenure": "CONVENTIONNE", "outcome": "REJECT" },
-      "why": "Accented spelling of conv-001. Must classify identically."
-    },
-    {
-      "id": "anru-001",
-      "provenance": "synthetic",
-      "source": "cdc_habitat",
-      "title": "T3 Grigny",
-      "description": "Programme ANRU de renouvellement urbain.",
-      "fields": {},
-      "expect": { "tenure": "ANRU", "outcome": "REJECT" },
-      "why": "Named in the excluded set."
-    },
-    {
-      "id": "anah-001",
-      "provenance": "synthetic",
-      "source": "cdc_habitat",
-      "title": "T2 Beaumont-sur-Oise",
-      "description": "Logement conventionne ANAH, loyer maitrise.",
-      "fields": {},
-      "expect": { "tenure": "ANAH", "outcome": "REJECT" },
-      "why": "Named in the excluded set."
-    },
-
-    {
-      "id": "trap-001-plus-de-chambres",
-      "provenance": "synthetic",
-      "source": "inli",
-      "title": "T4 avec plus de 3 chambres - Sartrouville",
-      "description": "Grand appartement offrant plus de rangements que la moyenne.",
-      "fields": {},
-      "expect": { "tenure": "LLI", "outcome": "MATCH", "max_confidence": 59 },
-      "why": "THE PLUS TRAP, case 1. 'plus' is one of the commonest French words. A naive substring match classifies this In'li flat as PLUS social housing and rejects it. Nothing arrives, and the user concludes the market is quiet. Only the source default may fire here."
-    },
-    {
-      "id": "trap-002-au-plus-tard",
-      "provenance": "synthetic",
-      "source": "seloger",
-      "title": "T3 Houilles",
-      "description": "Disponible au plus tard le 1er septembre. Le sejour est plus lumineux que sur les photos.",
-      "fields": {},
-      "expect": { "tenure": "LIBRE", "outcome": "MATCH", "max_confidence": 59 },
-      "why": "THE PLUS TRAP, case 2 — 'au plus tard' and 'plus lumineux' in one text."
-    },
-    {
-      "id": "trap-003-plus-tier-uppercase-boundary",
-      "provenance": "synthetic",
-      "source": "seloger",
-      "title": "APPARTEMENT T3 LUMINEUX - PLUS DE 70 M2",
-      "description": "BIEN RARE, PLUS DE RANGEMENTS QUE LA MOYENNE.",
-      "fields": {},
-      "expect": { "tenure": "LIBRE", "outcome": "MATCH", "max_confidence": 59 },
-      "why": "THE PLUS TRAP, case 3 and the nastiest. The title is SHOUTED, so 'uppercase PLUS' alone cannot be the social test — it must also be in a financing context. An all-caps portal title must not be read as a financing label."
-    },
-    {
-      "id": "trap-003b-shouted-logement-plus-grand",
-      "provenance": "synthetic",
-      "source": "seloger",
-      "title": "LOGEMENT PLUS GRAND - T4 CHATOU",
-      "description": "LOGEMENT PLUS SPACIEUX QUE LA MOYENNE, PLUS LUMINEUX AUSSI.",
-      "fields": {},
-      "expect": { "tenure": "LIBRE", "outcome": "MATCH", "max_confidence": 59 },
-      "why": "FOUND BY SABOTAGE-CHECK, 2026-08-06. trap-003 does not exercise the comparative suppression at all: it fails the collocation test first, so the classifier never reaches the second condition. THIS one passes collocation — uppercase PLUS immediately after 'LOGEMENT' — and is stopped only by the comparative that follows. Deleting the suppression left the suite green until this fixture existed, and a shouted 'LOGEMENT PLUS GRAND' is an ordinary portal title."
-    },
-    {
-      "id": "trap-003c-genuine-label-and-adverb-in-one-text",
-      "provenance": "synthetic",
-      "source": "cdc_habitat",
-      "title": "T3 Cergy",
-      "description": "Logement PLUS. Plus grand que la moyenne du quartier.",
-      "fields": {},
-      "expect": { "tenure": "PLUS", "outcome": "REJECT" },
-      "why": "THE OTHER SIDE OF THE SAME COIN, and the dangerous direction. One text carries a genuine financing label AND an unrelated adverb. A document-level suppression check would see 'some occurrence is adverbial' and drop the real social signal, letting a PLUS listing reach a notification. The guard is therefore evaluated per occurrence, not per document."
-    },
-    {
-      "id": "trap-004-plaine-not-plai",
-      "provenance": "synthetic",
-      "source": "seloger",
-      "title": "T3 Plaine de Versailles",
-      "description": "Cadre plaisant, vue degagee sur la plaine. Un vrai plaisir au quotidien.",
-      "fields": {},
-      "expect": { "tenure": "LIBRE", "outcome": "MATCH", "max_confidence": 59 },
-      "why": "THE PLAI TRAP. As a bare substring 'plai' matches plaine, plaisant and plaisir. Word boundaries are mandatory."
-    },
-    {
-      "id": "trap-005-surplus-not-plus",
-      "provenance": "synthetic",
-      "source": "seloger",
-      "title": "T2 Bezons",
-      "description": "Un surplus de charges est possible en hiver.",
-      "fields": {},
-      "expect": { "tenure": "LIBRE", "outcome": "MATCH", "max_confidence": 59 },
-      "why": "'surplus' contains 'plus'. Word boundaries again, from the other side."
-    },
-    {
-      "id": "trap-005b-plus-with-no-comparative-and-no-collocation",
-      "provenance": "synthetic",
-      "source": "seloger",
-      "title": "T4 CROISSY-SUR-SEINE - 3 CHAMBRES, PLUS UN BUREAU",
-      "description": "TROIS CHAMBRES, PLUS UN BUREAU FERME ET UNE BUANDERIE.",
-      "fields": {},
-      "expect": { "tenure": "LIBRE", "outcome": "MATCH", "max_confidence": 59 },
-      "why": "FOUND BY SABOTAGE-CHECK, 2026-08-06, and it took two attempts to write correctly. Every other 'plus' trap here is followed by a comparative ('plus de', 'plus tard', 'plus lumineux'), so the comparative suppression alone caught all of them and the collocation test could be deleted with the suite staying green. This one has no comparative to fall back on — 'PLUS' is followed by 'UN'. It must also be SHOUTED: uppercase is enforced by the acronym pattern itself, so a lowercase 'plus' never reaches the collocation test at all, and a lowercase version of this fixture proves nothing. An all-caps portal title with 'PLUS UN BUREAU' is ordinary, and only the collocation test stands between it and a social-housing classification."
-    },
-    {
-      "id": "trap-006-cuisine-meublee-is-not-tenure",
-      "provenance": "synthetic",
-      "source": "seloger",
-      "title": "T3 Chatou",
-      "description": "Cuisine meublee et equipee, appartement non meuble par ailleurs.",
-      "fields": {},
-      "expect": { "tenure": "LIBRE", "outcome": "MATCH", "max_confidence": 59 },
-      "why": "Guards the boundary between modules: furnishing is a CRITERIA concern (the known 'meubl' regex bug), never a tenure signal. The classifier must be indifferent to it."
-    },
-    {
-      "id": "trap-007-social-in-a-non-tenure-sense",
-      "provenance": "synthetic",
-      "source": "seloger",
-      "title": "T3 Le Pecq",
-      "description": "Quartier tres vivant avec une vie sociale riche et un centre social a proximite.",
-      "fields": {},
-      "expect": { "tenure": "LIBRE", "outcome": "MATCH", "max_confidence": 59 },
-      "why": "'sociale' and 'centre social' are not 'logement social'. Matching the bare word 'social' would reject a perfectly good private listing."
-    },
-    {
-      "id": "trap-008-pls-inside-a-word",
-      "provenance": "synthetic",
-      "source": "seloger",
-      "title": "T2 Triel-sur-Seine",
-      "description": "Reference annonce APLS2024. Contactez-nous.",
-      "fields": {},
-      "expect": { "tenure": "LIBRE", "outcome": "MATCH", "max_confidence": 59 },
-      "why": "'PLS' embedded in a reference code. Word boundaries and financing context both required."
-    },
-    {
-      "id": "trap-009-negated-social-mention",
-      "provenance": "synthetic",
-      "source": "cdc_habitat",
-      "title": "T3 Andresy",
-      "description": "Logement intermediaire : aucun numero unique d'enregistrement n'est requis, ce n'est pas un logement social.",
-      "fields": { "financement": "LLI" },
-      "expect": { "tenure": "UNKNOWN", "outcome": "DIGEST" },
-      "why": "HONEST LIMIT, DELIBERATELY LABELLED. The text is genuinely LLI and says so twice, but it also contains the strings 'numero unique d'enregistrement' and 'logement social' inside negations. The classifier does not do negation parsing, so the conflict rule fires and this lands in the digest. That is the CORRECT behaviour under a fail-closed policy: a false DIGEST costs one manual glance, a false MATCH costs a wasted application. If negation handling is added later, this label changes deliberately, with the reasoning in the commit message."
-    },
-
-    {
-      "id": "conflict-001-field-lli-text-plai",
-      "provenance": "synthetic",
-      "source": "cdc_habitat",
-      "title": "T3 Cergy",
-      "description": "Logement PLAI, sous conditions de ressources tres sociales.",
-      "fields": { "financement": "LLI" },
-      "expect": { "tenure": "UNKNOWN", "outcome": "DIGEST" },
-      "why": "THE CONFLICT RULE, and the reason it exists. The ladder alone keeps LLI at 0.97 and notifies. An eligible verdict contradicted by an excluded-tenure signal must collapse to UNKNOWN instead. It does not assert the flat is social — it withholds."
-    },
-    {
-      "id": "conflict-002-field-lli-text-sne",
-      "provenance": "synthetic",
-      "source": "cdc_habitat",
-      "title": "T2 Eragny",
-      "description": "Demande via numero unique d'enregistrement.",
-      "fields": { "typeProduit": "Logement intermediaire" },
-      "expect": { "tenure": "UNKNOWN", "outcome": "DIGEST" },
-      "why": "Same rule with the contradiction coming from a tier-3 procedural tell rather than a label."
-    },
-    {
-      "id": "conflict-003-asymmetry-plai-field-lli-text",
-      "provenance": "synthetic",
-      "source": "cdc_habitat",
-      "title": "T3 Argenteuil",
-      "description": "Logement intermediaire, loyer plafonne.",
-      "fields": { "financement": "PLAI" },
-      "expect": { "tenure": "PLAI", "outcome": "REJECT" },
-      "why": "THE ASYMMETRY, and it is deliberate. Mirror image of conflict-001, opposite result: an EXCLUDED verdict contradicted by an eligible signal stays excluded and is rejected. Softening an exclusion is the one direction that costs the user a wasted application, so the rule only ever works one way."
-    },
-    {
-      "id": "conflict-004-two-excluded-tenures",
-      "provenance": "synthetic",
-      "source": "cdc_habitat",
-      "title": "T3 Sarcelles",
-      "description": "Logement PLUS ou PLAI selon les ressources.",
-      "fields": {},
-      "expect": { "tenure": "PLUS", "outcome": "REJECT" },
-      "why": "Two excluded tenures at the same tier. Which one wins does not matter to the user — both reject — so the tie-break is fixed and deterministic rather than clever."
-    },
-
-    {
-      "id": "unknown-001-no-signal-mixed-source",
-      "provenance": "synthetic",
-      "source": "cdc_habitat",
-      "title": "T3 Osny",
-      "description": "Appartement 3 pieces, 65 m2, parking.",
-      "fields": {},
-      "expect": { "tenure": "UNKNOWN", "outcome": "DIGEST" },
-      "why": "THE FAIL-CLOSED RULE, verbatim from CLAUDE.md §1: confidence < 0.6 AND a mixed source => UNKNOWN => digest. CDC Habitat declares no default tenure, so nothing fires at all."
-    },
-    {
-      "id": "unknown-002-unknown-source-no-signal",
-      "provenance": "synthetic",
-      "source": "unknown_source",
-      "title": "T2 quelque part",
-      "description": "Appartement.",
-      "fields": {},
-      "expect": { "tenure": "UNKNOWN", "outcome": "DIGEST" },
-      "why": "A source added to config without declaring a default. mixed_tenure defaults to true, so an incomplete config fails closed rather than open."
-    },
-    {
-      "id": "unknown-003-unrecognised-field-value",
-      "provenance": "synthetic",
-      "source": "cdc_habitat",
-      "title": "T3 Pontoise",
-      "description": "Appartement 3 pieces.",
-      "fields": { "financement": "PLI" },
-      "expect": { "tenure": "UNKNOWN", "outcome": "DIGEST" },
-      "why": "PLI (Pret Locatif Intermediaire) is the pre-2014 intermediate scheme. It is genuinely NOT social — but it is not in the glossary and Q4 did not rule on it, so guessing 'intermediate, therefore match' would decide a product question in code. UNKNOWN routes it to the 'à vérifier' digest where a human decides. Raised as an open question."
-    },
-    {
-      "id": "unknown-004-empty-text",
-      "provenance": "synthetic",
-      "source": "cdc_habitat",
-      "title": "",
-      "description": "",
-      "fields": {},
-      "expect": { "tenure": "UNKNOWN", "outcome": "DIGEST" },
-      "why": "A broken parser producing empty text must not produce a match. This is hard rule 2 and 3 territory: silent breakage must not look like a clean result."
-    },
-    {
-      "id": "unknown-005-pure-source-without-a-default",
-      "provenance": "synthetic",
-      "source": "pure_no_default",
-      "title": "T3 Poissy",
-      "description": "Appartement 3 pieces, 70 m2.",
-      "fields": {},
-      "expect": { "tenure": "UNKNOWN", "outcome": "DIGEST" },
-      "why": "FOUND BY SABOTAGE-CHECK, 2026-08-06. A source declared non-mixed but given no default_tenure produces no signal at all, so the verdict is UNKNOWN. The routing branch for a source declared non-mixed would otherwise let it through. Only the explicit undetermined-tenure arm in route() stops such a listing from being notified, and until this fixture existed that arm could be removed with the suite staying green. It is a config shape nobody would write on purpose, which is exactly why it needs a fixture."
-    },
-
-    {
-      "id": "libre-001-seloger-default",
-      "provenance": "synthetic",
-      "source": "seloger",
-      "title": "T3 Chatou 1450 EUR CC",
-      "description": "Appartement 3 pieces, 70 m2, refait a neuf.",
-      "fields": {},
-      "expect": { "tenure": "LIBRE", "outcome": "MATCH", "max_confidence": 59 },
-      "why": "The Track 2 baseline. A private portal listing carries zero tenure vocabulary; the source default is the only signal, and a private portal is a pure-LIBRE source."
-    },
-    {
-      "id": "libre-002-leboncoin-particulier",
-      "provenance": "synthetic",
-      "source": "leboncoin",
-      "title": "Loue T2 Houilles particulier",
-      "description": "Loue directement par le proprietaire, pas d'agence, pas de frais.",
-      "fields": {},
-      "expect": { "tenure": "LIBRE", "outcome": "MATCH", "max_confidence": 59 },
-      "why": "Private landlord posting. 'pas de frais' must not be misread as the intermediate-side 'sans condition de commission' tell."
-    },
-    {
-      "id": "libre-003-explicit-loyer-libre",
-      "provenance": "synthetic",
-      "source": "icf_novedis",
-      "title": "T3 Villennes-sur-Seine",
-      "description": "Logement a loyer libre, sans plafond de ressources.",
-      "fields": {},
-      "expect": { "tenure": "LIBRE", "outcome": "MATCH", "min_confidence": 85 },
-      "why": "'loyer libre' as an explicit tier-2 label, overriding this source's LLI default. ICF Novedis genuinely publishes both."
-    },
-    {
-      "id": "libre-004-social-source-word-in-address",
-      "provenance": "synthetic",
-      "source": "seloger",
-      "title": "T2 rue du Docteur Social",
-      "description": "Appartement 2 pieces au calme.",
-      "fields": {},
-      "expect": { "tenure": "LIBRE", "outcome": "MATCH", "max_confidence": 59 },
-      "why": "A street name containing 'Social'. Again: only 'logement social' is the label, never the bare word."
-    },
-
-    {
-      "id": "case-001-uppercase-field-value",
-      "provenance": "synthetic",
-      "source": "cdc_habitat",
-      "title": "T3 Franconville",
-      "description": "Appartement.",
-      "fields": { "FINANCEMENT": "plai" },
-      "expect": { "tenure": "PLAI", "outcome": "REJECT" },
-      "why": "Field NAME uppercase and field VALUE lowercase. Adapters normalise inconsistently; neither side may be case-sensitive."
-    },
-    {
-      "id": "case-002-field-value-with-whitespace",
-      "provenance": "synthetic",
-      "source": "cdc_habitat",
-      "title": "T3 Herblay",
-      "description": "Appartement.",
-      "fields": { "financement": "  PLUS  " },
-      "expect": { "tenure": "PLUS", "outcome": "REJECT" },
-      "why": "Padded field value straight out of an HTML table cell."
-    },
-    {
-      "id": "case-003-field-value-composite",
-      "provenance": "synthetic",
-      "source": "cdc_habitat",
-      "title": "T3 Taverny",
-      "description": "Appartement.",
-      "fields": { "financement": "PLUS / PLAI" },
-      "expect": { "tenure": "PLUS", "outcome": "REJECT" },
-      "why": "Landlords publish combined financing on one programme. Both are excluded, so any deterministic pick is correct."
-    },
-    {
-      "id": "case-004-empty-field-value-ignored",
-      "provenance": "synthetic",
-      "source": "inli",
-      "title": "T3 Cergy",
-      "description": "Appartement 3 pieces.",
-      "fields": { "financement": "" },
-      "expect": { "tenure": "LLI", "outcome": "MATCH", "max_confidence": 59 },
-      "why": "An empty structured field is an ABSENT signal, not a tier-1 verdict. If an empty string were treated as a match on the field, tier 1 would fire on every listing from a source that emits the key unconditionally."
-    },
-    {
-      "id": "case-005-html-entities-in-text",
-      "provenance": "synthetic",
-      "source": "cdc_habitat",
-      "title": "T3 Éragny",
-      "description": "Logement interm&eacute;diaire propos&eacute; par le bailleur.",
-      "fields": {},
-      "expect": { "tenure": "UNKNOWN", "outcome": "DIGEST" },
-      "why": "HONEST LIMIT. HTML entities are the ADAPTER's job to decode, not the classifier's — a classifier that decodes entities hides a broken adapter. UPDATED 2026-08-06: the label is unchanged but the mechanism is no longer accidental. Undecoded entities are now treated as evidence that the ADAPTER stopped short, so the classifier refuses the text and says so, instead of matching whatever labels happened to survive. See case-006 for why that matters."
-    },
-    {
-      "id": "case-006-separator-breaks-a-social-label",
-      "provenance": "synthetic",
-      "source": "cdc_habitat",
-      "title": "T3 Cergy",
-      "description": "Ce logement&nbsp;social a loyer intermediaire.",
-      "fields": {},
-      "expect": { "tenure": "UNKNOWN", "outcome": "DIGEST" },
-      "why": "THE DANGEROUS HALF OF case-005's LIMIT, added 2026-08-06 after review. case-005 freezes the undecoded-entity limitation on a text where the entity breaks an LLI label, so the result digests and the limit costs nothing. Here the separator breaks the SOCIAL label while an intermediate label survives — the direction that does not fail safe. A corpus should carry the dangerous half of its own documented limit, not only the comfortable one."
-    },
-
-    {
-      "id": "regress-001-sans-commission-d-agence-is-not-a-tenure-tell",
-      "provenance": "synthetic",
-      "source": "cdc_habitat",
-      "title": "T3 Argenteuil",
-      "description": "Location directe par le bailleur, sans commission d'agence.",
-      "fields": {},
-      "expect": { "tenure": "UNKNOWN", "outcome": "DIGEST" },
-      "why": "P0 REGRESSION GUARD (review, 2026-08-06). A bare 'sans commission' was a tier-3 intermediate tell. In the wild that string is almost always 'sans commission d'agence' — a FEE disclaimer that says nothing about how the flat is allocated, and which bailleurs sociaux advertise too. Tier 3 clears the floor unaided, so this exact sentence turned a fail-closed digest into a notification. Only the two literals carrying the ATTRIBUTION sense are tells now."
-    },
-    {
-      "id": "regress-002-vacancy-date-is-not-tenure-LIBRE",
-      "provenance": "synthetic",
-      "source": "cdc_habitat",
-      "title": "Logement conventionné",
-      "description": "Logement libre au 1er août 2026. T3 de 65 m².",
-      "fields": {},
-      "expect": { "tenure": "CONVENTIONNE", "outcome": "REJECT" },
-      "why": "P0 REGRESSION GUARD (review, 2026-08-06), and the worst defect found in this module. 'logement libre' was in the label table as tenure LIBRE; it is not a tenure term at all but the standard French VACANCY phrase. It fired tier 2 at 90 on a move-in date, and the spurious LIBRE then satisfied the conventionné exception — which tested isEligible() rather than 'is an intermediate label'. Result: a listing whose own TITLE reads 'Logement conventionné' reached MATCH, with the word absent from its reasons. A §1 breach via two independently reasonable-looking table entries."
-    },
-    {
-      "id": "regress-003-conventionne-with-a-tier-1-LLI-field",
-      "provenance": "synthetic",
-      "source": "cdc_habitat",
-      "title": "T3 Herblay",
-      "description": "Logement conventionne, loyer plafonne.",
-      "fields": { "financement": "LLI" },
-      "expect": { "tenure": "LLI", "outcome": "MATCH", "min_confidence": 90 },
-      "why": "Found by review 2026-08-06. The conventionne exception looked at tier-2 labels only, so LLI declared through a STRUCTURED FIELD — the strongest evidence the ladder has — did not count as 'explicitly labelled intermediate', while the weaker text label did. Genuine LLI stock digested when its evidence arrived through the best channel. Fail-closed, so not a breach, but inconsistent with the ladder it claims to implement."
-    },
-    {
-      "id": "regress-003b-conventionne-with-LIBRE-is-still-excluded",
-      "provenance": "synthetic",
-      "source": "cdc_habitat",
-      "title": "T2 Domont",
-      "description": "Logement conventionne, loyer libre.",
-      "fields": {},
-      "expect": { "tenure": "CONVENTIONNE", "outcome": "REJECT" },
-      "why": "THE EXCEPTION IS FOR INTERMEDIATE LABELS ONLY, and this is the fixture that says so. CLAUDE.md's glossary excuses conventionne when the listing is 'explicitly labelled intermediate' — LIBRE is not intermediate, it is market rate, so a LIBRE label must NOT disarm the exclusion. Without this case the drop-rule could be widened from '=== LLI' back to 'isEligible()' with the suite staying green, which is exactly how the P0 of 2026-08-06 was built: a spurious LIBRE signal satisfied the exception and a conventionne listing reached MATCH. The two labels here genuinely contradict each other (subsidised vs market rate), so withholding is also the honest reading."
-    },
-    {
-      "id": "regress-004-ambiguous-uppercase-plus-digests",
-      "provenance": "synthetic",
-      "source": "seloger",
-      "title": "LOGEMENT PLUS MODERNE - T3 CHATOU",
-      "description": "BIEN RENOVE, PROCHE COMMERCES.",
-      "fields": {},
-      "expect": { "tenure": "UNKNOWN", "outcome": "DIGEST" },
-      "why": "Found by review 2026-08-06. The collocation guard suppressed adverbial PLUS via a denylist of French adjectives, so any adjective NOT on the list — moderne, confortable, economique, agreable, ensoleille — turned an emphatic title into tenure PLUS and a silent REJECT. A denylist of French adjectives cannot be completed. The guard now asks the closed question instead: does a financing label END the phrase (punctuation, end of text, another acronym)? If a word follows and it is a known comparative, it was the adverb; if a word follows and it is anything else, it is genuinely indecidable and lands here — visible in the digest rather than silently dropped OR silently matched."
-    },
-    {
-      "id": "regress-005-nfd-decomposed-social-tell",
-      "provenance": "synthetic",
-      "source": "cdc_habitat",
-      "title": "T3 - LLI",
-      "description": "Un numéro unique d'enregistrement est exigé pour toute demande.",
-      "fields": {},
-      "expect": { "tenure": "UNKNOWN", "outcome": "DIGEST" },
-      "why": "Found by review 2026-08-06. The fold tables carry PRECOMPOSED accented codepoints only, so text arriving NFD-decomposed ('e' + U+0301) was not folded and 'numéro unique d'enregistrement' never matched its literal — while the unaccented 'LLI' in the same listing still did. The social side vanished and the eligible side survived, which is the wrong direction to fail in. Combining marks are now stripped after the table: one line, locale-free, and portable to phorj. NOTE: this fixture's description is deliberately written with \\u0301 escapes; do not 'tidy' it into precomposed characters, or it stops testing anything."
-    },
-    {
-      "id": "regress-006-structured-field-tie-prefers-the-longer-match",
-      "provenance": "synthetic",
-      "source": "cdc_habitat",
-      "title": "T3 Taverny",
-      "description": "Appartement 3 pieces.",
-      "fields": { "financement": "LLI", "categorie": "PLAI" },
-      "expect": { "tenure": "PLAI", "outcome": "REJECT" },
-      "why": "Found by review 2026-08-06. Two structured fields each match at offset 0 of their own value, so the tie-break decides. resolve()'s comparator had its two strlen terms transposed, making the SHORTER evidence win — the opposite of its own docblock — so 'lli' (3) beat 'plai' (4) and an explicit PLAI field landed in the user-visible digest instead of REJECT. A phorj port written from the docblock would have disagreed with the PHP on exactly this input, which is the differential the shared corpus exists to expose."
-    },
-    {
-      "id": "regress-008-feminine-agreement-conventionnee",
-      "provenance": "synthetic",
-      "source": "inli",
-      "title": "T3 en résidence conventionnée",
-      "description": "Appartement 3 pieces, proche gare.",
-      "fields": {},
-      "expect": { "tenure": "CONVENTIONNE", "outcome": "REJECT" },
-      "why": "P0 REGRESSION GUARD (review round 2, 2026-08-06). FRENCH INFLECTION. Every literal was matched exactly with a trailing word-boundary guard, so 'conventionnée' -- the feminine agreement, which is what you write before 'résidence' -- was a NON-MATCH while 'conventionné' matched. On In'li (a pure source) that meant LLI/MATCH at 50 instead of CONVENTIONNE/REJECT. The acronyms (PLAI, ANRU, ANAH, HLM) are invariant, which is exactly why the table read as safe: the terms a reviewer checks first are the ones that could not break. Compare conv-001 and conv-002, which test the ACCENT but not the agreement."
-    },
-    {
-      "id": "regress-009-plural-logements-sociaux",
-      "provenance": "synthetic",
-      "source": "cdc_habitat",
-      "title": "Résidence mixte - Cergy",
-      "description": "Résidence mixte de logements sociaux et intermédiaires. Loyer intermédiaire à partir de 900 euros.",
-      "fields": {},
-      "expect": { "tenure": "SOCIAL", "outcome": "REJECT" },
-      "why": "P0 REGRESSION GUARD (review round 2, 2026-08-06), and the worst of the inflection class. The listing's own description says 'logements sociaux'. Because the plural did not match, NO excluded signal existed at all — so the conflict rule had nothing to see, and 'loyer intermédiaire' carried this to LLI/MATCH at full tier-2 confidence. It was notified. With inflection the social label fires at an earlier position than the intermediate one, wins the tier, and the documented asymmetry applies: an excluded verdict is never softened by a contradicting eligible signal, so this REJECTs rather than digesting. That is the intended reading of a mixed résidence — the specific unit is unproven and the cost of being wrong is a wasted application. (I predicted DIGEST when writing this fixture; the code was right and the prediction was wrong.)"
-    },
-    {
-      "id": "regress-010-plural-prets-locatifs-sociaux",
-      "provenance": "synthetic",
-      "source": "cdc_habitat",
-      "title": "T3 Sarcelles",
-      "description": "Financement par prêts locatifs sociaux. Loyer intermédiaire.",
-      "fields": {},
-      "expect": { "tenure": "PLS", "outcome": "REJECT" },
-      "why": "Same inflection class through a different phrase: 'prêt locatif social' pluralises BOTH nouns and the adjective takes the irregular -al/-aux form, so this guards the '-al' branch of the inflection rule specifically. It also resolves to the precise financing tier rather than the generic SOCIAL, because the expanded phrase is unambiguous. Excluded either way; PLS was ruled out by Q4."
-    },
-    {
-      "id": "regress-011-indecidable-acronym-loses-the-position-race",
-      "provenance": "synthetic",
-      "source": "cdc_habitat",
-      "title": "Loyer intermédiaire - T3 Cergy",
-      "description": "LOGEMENT PLS MODERNE, RESIDENCE CALME.",
-      "fields": {},
-      "expect": { "tenure": "UNKNOWN", "outcome": "DIGEST" },
-      "why": "P0 REGRESSION GUARD (review round 2, 2026-08-06). The indécidable acronym marker used to be a tier-2 signal resolved POSITIONALLY against real labels. Losing that race made it vanish completely -- not an objection (UNKNOWN is not excluded) and not a contradiction (score() skips same-tier signals) -- so this listing was notified, while the SAME TWO SENTENCES IN THE OPPOSITE ORDER digested. Identical facts, different word order, different answer. A doubt now competes with nothing: it cannot beat evidence and it cannot be beaten by it."
-    },
-    {
-      "id": "regress-012-indecidable-acronym-must-not-mask-a-PLAI",
-      "provenance": "synthetic",
-      "source": "cdc_habitat",
-      "title": "LOGEMENT PLUS MODERNE - T3",
-      "description": "FINANCEMENT PLAI.",
-      "fields": {},
-      "expect": { "tenure": "PLAI", "outcome": "REJECT" },
-      "why": "THE OTHER DIRECTION OF regress-011, and the one that made the digest wrong rather than the match. When the indécidable marker WON the position race it masked a determinate PLAI, turning a hard disqualifier into a user-visible 'à vérifier' entry -- CLAUDE.md hard rule 8 says a disqualifier rejects silently and is logged only. The strongest text label the ladder has was being beaten by a signal whose own reason says it knows nothing, decided by byte offset."
-    },
-    {
-      "id": "regress-013-prose-in-a-financing-field",
-      "provenance": "synthetic",
-      "source": "cdc_habitat",
-      "title": "T3 Herblay",
-      "description": "Appartement 3 pieces.",
-      "fields": { "dispositif": "Pinel Plus" },
-      "expect": { "tenure": "UNKNOWN", "outcome": "DIGEST" },
-      "why": "Found by review round 2, 2026-08-06. Tier-1 field values skipped the collocation guard on the argument that 'a structured field is not French prose'. That holds for `financement: PLUS` and fails for the generic keys in TENURE_FIELDS -- categorie, dispositif, typelogement all carry prose in real feeds. 'Pinel Plus' is a real 2023 scheme name, and unguarded it was tenure PLUS at confidence 97 and a SILENT REJECT: nothing arrives, and that is indistinguishable from a quiet market. A field value is now treated as a code only when it contains nothing but financing tokens and separators."
-    },
-    {
-      "id": "regress-014-prose-field-with-the-adverb",
-      "provenance": "synthetic",
-      "source": "cdc_habitat",
-      "title": "T4 Taverny",
-      "description": "Appartement.",
-      "fields": { "categorie": "Maison de plus de 100 m2" },
-      "expect": { "tenure": "UNKNOWN", "outcome": "DIGEST" },
-      "why": "The same defect with the ordinary French adverb rather than a scheme name. 'Maison de plus de 100 m2' in a `categorie` field was tenure PLUS / REJECT at 97."
-    },
-    {
-      "id": "regress-015-code-shaped-field-still-resolves",
-      "provenance": "synthetic",
-      "source": "cdc_habitat",
-      "title": "T3 Ermont",
-      "description": "Appartement.",
-      "fields": { "financement": "PLUS / PLAI" },
-      "expect": { "tenure": "PLUS", "outcome": "REJECT" },
-      "why": "The other side of regress-013: narrowing the field path must not break the case it exists for. A value made only of financing tokens and separators is still read as a code, with no collocation guard, exactly as case-003 requires."
-    },
-    {
-      "id": "regress-016-soft-hyphen-splits-a-social-label",
-      "provenance": "synthetic",
-      "source": "cdc_habitat",
-      "title": "T3 Cergy",
-      "description": "Ce logement­social a loyer intermediaire.",
-      "fields": {},
-      "expect": { "tenure": "SOCIAL", "outcome": "REJECT" },
-      "why": "P0 REGRESSION GUARD (review round 2, 2026-08-06). U+00AD SOFT HYPHEN sits between `logement` and `social`. It is INVISIBLE, so the label looks intact to a reader and was a non-match to the classifier — while `loyer intermediaire` in the same sentence still matched. Verdict was LLI at confidence 90, above the floor, so the fail-closed rule never engaged, and the notification`s reasons[] named the intermediate label with the word `social` absent. The doctrine in MalformedText::undecodedEntities CREATES this input: it tells the adapter that decoding is its job, and an adapter that obeys turns `&shy;` — ordinary hyphenation markup in justified French CMS output — into exactly this byte. Refusing it would punish the adapter for being correct; \\p{Cf} is stripped instead, because these characters are invisible by definition."
-    },
-    {
-      "id": "regress-017-zero-width-space-splits-a-social-label",
-      "provenance": "synthetic",
-      "source": "inli",
-      "title": "T3 Le Vesinet",
-      "description": "Ce logement​social est attribue en commission.",
-      "fields": {},
-      "expect": { "tenure": "SOCIAL", "outcome": "REJECT" },
-      "why": "Same class, different codepoint and a PURE source — where the consequence is worst, because a pure source matches below the floor. U+200B ZERO WIDTH SPACE arrives routinely from WYSIWYG editors and HTML-to-text conversion. U+200C, U+200D, U+200E, U+2060 and U+FEFF are the same category and are closed by the same one-character change to the strip."
-    },
-    {
-      "id": "regress-018-bom-inside-a-label",
-      "provenance": "synthetic",
-      "source": "cdc_habitat",
-      "title": "T2 Sarcelles",
-      "description": "Logement﻿social, numero unique exige.",
-      "fields": {},
-      "expect": { "tenure": "SOCIAL", "outcome": "REJECT" },
-      "why": "U+FEFF, the byte-order mark, appearing mid-string rather than at the head — which is what happens when two decoded fragments are concatenated. Guards the same strip from the third direction."
-    },
-    {
-      "id": "regress-019-invisibles-do-not-damage-a-legitimate-listing",
-      "provenance": "synthetic",
-      "source": "seloger",
-      "title": "T3 Châtenay-Malabry",
-      "description": "Île-de-France, cœur de ville, cadre naïf et calme.",
-      "fields": {},
-      "expect": { "tenure": "LIBRE", "outcome": "MATCH", "max_confidence": 59 },
-      "why": "THE OTHER SIDE OF THE STRIP. Stripping a Unicode category is the kind of fix that quietly damages ordinary text, so this asserts that accented French, the oe ligature and a diaeresis all survive folding untouched and the listing still classifies normally. Without it, a future widening of the stripped set could break real listings with nothing to notice."
-    },
-    {
-      "id": "regress-007-mixed-source-default-only-is-not-established",
-      "provenance": "synthetic",
-      "source": "icf_novedis",
-      "title": "T4 Bezons",
-      "description": "Proche gare, residence calme.",
-      "fields": {},
-      "expect": { "tenure": "UNKNOWN", "outcome": "DIGEST" },
-      "why": "THE FAIL-CLOSED RULE APPLIED TO THE TENURE, not merely to the routing. spec §4 requires the verdict itself to become UNKNOWN below the floor on a mixed source; the code changed only the Outcome, leaving tenure LLI, so the two halves of the object disagreed and the next module written would have believed the eligible half. No fixture exercised the branch until this one, because every mixed source in the corpus declared no default. See also the ICF ruling in this file's source table."
-    }
-  ]
+    "$comment": [
+        "THE CLASSIFIER CORPUS. Read by BOTH implementations — src/php/Core and, later, src/phorj/core.",
+        "This file is the ground truth for the tenure classifier and is listed in BLAST-RADIUS.md as",
+        "stateful data that must not be casually removed or relabelled. CLAUDE.md: 'Never weaken a",
+        "classifier test to make a change pass. If a fixture goes red, the classifier regressed.'",
+        "",
+        "PROVENANCE IS HONEST AND MACHINE-CHECKED. spec/PROJECT_BRIEF.md §4 asks for >=30 *real* listing",
+        "texts. Real texts cannot be captured until a source endpoint or a browser session exists (blocked",
+        "on U3 — the DevTools cURL captures). So every entry declares provenance: 'synthetic' texts are",
+        "hand-written French listing prose modelled on how these landlords actually word their pages;",
+        "'captured' entries are frozen from a real payload and scrubbed. The suite asserts the declared",
+        "synthetic/captured counts match reality, so the gap stays visible as data rather than as a comment.",
+        "",
+        "Each case:",
+        "  id           stable identifier; never renumber, only append",
+        "  provenance   'synthetic' | 'captured'",
+        "  source       the SourceProfile this listing arrived from",
+        "  title/description/fields   what the adapter produced",
+        "  expect.tenure / expect.outcome   the hand label — the thing under test",
+        "  why          why a human labelled it that way; the record for a future relabelling argument"
+    ],
+    "version": 1,
+    "declared_counts": {
+        "synthetic": 82,
+        "captured": 0
+    },
+    "sources": {
+        "inli": {
+            "name": "inli",
+            "family": "institutional",
+            "default_tenure": "LLI",
+            "mixed_tenure": false
+        },
+        "cdc_habitat": {
+            "name": "cdc_habitat",
+            "family": "institutional",
+            "default_tenure": null,
+            "mixed_tenure": true
+        },
+        "seqens": {
+            "name": "seqens",
+            "family": "institutional",
+            "default_tenure": null,
+            "mixed_tenure": true
+        },
+        "icf_novedis": {
+            "name": "icf_novedis",
+            "family": "institutional",
+            "default_tenure": "LLI",
+            "mixed_tenure": true,
+            "$why": "FLIPPED to true on 2026-08-06 after review. CLAUDE.md's reviewer charter names ICF among the landlords that publish social AND intermediate stock. Novedis is genuinely ICF Habitat's non-social arm, so `false` is defensible for a Novedis-only endpoint and wrong for the group portal — and nothing in this repo yet says which the adapter will target, because config/sources.yaml does not exist. mixed_tenure is the single flag that disarms the fail-closed rule, so it takes the safe value until that is decided. Tracked as an open question."
+        },
+        "seloger": {
+            "name": "seloger",
+            "family": "private",
+            "default_tenure": "LIBRE",
+            "mixed_tenure": false
+        },
+        "leboncoin": {
+            "name": "leboncoin",
+            "family": "private",
+            "default_tenure": "LIBRE",
+            "mixed_tenure": false
+        },
+        "unknown_source": {
+            "name": "unknown_source",
+            "family": "institutional",
+            "default_tenure": null,
+            "mixed_tenure": true
+        },
+        "pure_no_default": {
+            "name": "pure_no_default",
+            "family": "institutional",
+            "default_tenure": null,
+            "mixed_tenure": false
+        }
+    },
+    "cases": [
+        {
+            "id": "lli-001-structured-field",
+            "provenance": "synthetic",
+            "source": "cdc_habitat",
+            "title": "Appartement T3 - Chatou",
+            "description": "Bel appartement de 3 pieces au calme, proche RER A.",
+            "fields": {
+                "financement": "LLI"
+            },
+            "expect": {
+                "tenure": "LLI",
+                "outcome": "MATCH",
+                "min_confidence": 90
+            },
+            "why": "Tier 1 structured field on a mixed source. The field is the highest-priority signal and settles it."
+        },
+        {
+            "id": "lli-002-structured-typeproduit",
+            "provenance": "synthetic",
+            "source": "seqens",
+            "title": "T4 lumineux Sartrouville",
+            "description": "Residence recente avec ascenseur.",
+            "fields": {
+                "typeProduit": "Logement intermediaire"
+            },
+            "expect": {
+                "tenure": "LLI",
+                "outcome": "MATCH",
+                "min_confidence": 90
+            },
+            "why": "Same tier via a different field name. The field-name set must not be a single hard-coded key."
+        },
+        {
+            "id": "lli-003-explicit-label-text",
+            "provenance": "synthetic",
+            "source": "cdc_habitat",
+            "title": "T2 Houilles",
+            "description": "Ce logement intermediaire est propose sans commission d'attribution.",
+            "fields": [],
+            "expect": {
+                "tenure": "LLI",
+                "outcome": "MATCH",
+                "min_confidence": 85
+            },
+            "why": "Tier 2 label plus a corroborating tier-3 procedural tell pointing the same way."
+        },
+        {
+            "id": "lli-004-accented-label",
+            "provenance": "synthetic",
+            "source": "cdc_habitat",
+            "title": "T3 Maisons-Laffitte",
+            "description": "Logement intermédiaire (LLI) — loyer plafonné, attribution directe par le bailleur.",
+            "fields": [],
+            "expect": {
+                "tenure": "LLI",
+                "outcome": "MATCH",
+                "min_confidence": 85
+            },
+            "why": "Accents and an em dash must not defeat matching. The same text unaccented is lli-003."
+        },
+        {
+            "id": "lli-005-uppercase-acronym",
+            "provenance": "synthetic",
+            "source": "cdc_habitat",
+            "title": "LLI - T3 Le Vesinet",
+            "description": "Programme LLI livre en 2025.",
+            "fields": [],
+            "expect": {
+                "tenure": "LLI",
+                "outcome": "MATCH",
+                "min_confidence": 85
+            },
+            "why": "Bare LLI acronym, word-boundaried."
+        },
+        {
+            "id": "lli-006-loyer-intermediaire",
+            "provenance": "synthetic",
+            "source": "seqens",
+            "title": "T2 Poissy",
+            "description": "Appartement a loyer intermediaire, 15% sous le marche.",
+            "fields": [],
+            "expect": {
+                "tenure": "LLI",
+                "outcome": "MATCH",
+                "min_confidence": 85
+            },
+            "why": "'loyer intermediaire' is a distinct phrasing from 'logement intermediaire' and both are in the glossary."
+        },
+        {
+            "id": "lli-007-inli-source-default-pure",
+            "provenance": "synthetic",
+            "source": "inli",
+            "title": "T3 Cergy",
+            "description": "Appartement 3 pieces, 68 m2, balcon.",
+            "fields": [],
+            "expect": {
+                "tenure": "LLI",
+                "outcome": "MATCH",
+                "max_confidence": 59
+            },
+            "why": "THE SOURCE-DEFAULT CASE. No signal in the listing at all. Confidence must stay BELOW the 0.6 floor (an absent signal lowers confidence, it does not inherit the default at full strength) — yet the outcome is still MATCH, because In'li is a pure-LLI source with no social stock to be confused with."
+        },
+        {
+            "id": "lli-008-icf-novedis-pure",
+            "provenance": "synthetic",
+            "source": "icf_novedis",
+            "title": "T4 Bezons",
+            "description": "Logement a loyer intermediaire, proche gare, residence calme.",
+            "fields": [],
+            "expect": {
+                "tenure": "LLI",
+                "outcome": "MATCH",
+                "min_confidence": 85
+            },
+            "why": "REWRITTEN 2026-08-06 (second time). RELABELLED first, with the evidence in the commit message as CLAUDE.md requires. This was a pure-source MATCH while icf_novedis declared mixed_tenure:false. That flag was flipped to true after review (see the source table), so the source default alone no longer establishes the tenure and the listing digests. The pure-source MATCH path is still covered by lli-007 (In-li) and libre-001 (SeLoger). That relabel then made this case BYTE-IDENTICAL to regress-007, so the corpus count overstated its distinct coverage and two fixtures tested one thing. It now covers what regress-007 does not: a MIXED source with real tier-2 evidence still matches, which is the case that stops the fail-closed rule from being over-applied to every mixed landlord."
+        },
+        {
+            "id": "lli-009-sans-condition-commission",
+            "provenance": "synthetic",
+            "source": "cdc_habitat",
+            "title": "T3 Conflans-Sainte-Honorine",
+            "description": "Attribution sans condition de commission, dossier en ligne.",
+            "fields": [],
+            "expect": {
+                "tenure": "LLI",
+                "outcome": "MATCH",
+                "min_confidence": 75
+            },
+            "why": "Tier 3 procedural tell alone, on a mixed source. 'sans condition de commission' is the intermediate-side tell named in CLAUDE.md and it clears the 0.6 floor on its own."
+        },
+        {
+            "id": "lli-010-field-and-text-agree",
+            "provenance": "synthetic",
+            "source": "cdc_habitat",
+            "title": "T2 Argenteuil",
+            "description": "Logement intermediaire, attribution directe par le bailleur.",
+            "fields": {
+                "categorie": "LLI"
+            },
+            "expect": {
+                "tenure": "LLI",
+                "outcome": "MATCH",
+                "min_confidence": 97
+            },
+            "why": "CORROBORATION. Tiers 1, 2 and 3 all agree; confidence must exceed the tier-1 base of 97."
+        },
+        {
+            "id": "lli-011-conventionne-with-intermediate-label",
+            "provenance": "synthetic",
+            "source": "cdc_habitat",
+            "title": "T3 Chatou",
+            "description": "Logement intermediaire conventionne, loyer plafonne.",
+            "fields": [],
+            "expect": {
+                "tenure": "LLI",
+                "outcome": "MATCH",
+                "min_confidence": 85
+            },
+            "why": "THE GLOSSARY'S OWN EXCEPTION, and it must be honoured or a whole class of genuine LLI stock digests. CLAUDE.md treats conventionne as social 'absent an explicit intermediate label' — here the label IS present, so the bare conventionne signal is dropped rather than left to trigger the conflict rule. LLI stock genuinely is conventionne; if this were not handled, every listing that says both would silently land in the digest."
+        },
+        {
+            "id": "plai-001-structured-field",
+            "provenance": "synthetic",
+            "source": "cdc_habitat",
+            "title": "T3 Mantes-la-Jolie",
+            "description": "Appartement 3 pieces.",
+            "fields": {
+                "financement": "PLAI"
+            },
+            "expect": {
+                "tenure": "PLAI",
+                "outcome": "REJECT"
+            },
+            "why": "The explicit PLAI the spec demands. Excluded — REJECT regardless of anything else."
+        },
+        {
+            "id": "plai-002-explicit-label",
+            "provenance": "synthetic",
+            "source": "seqens",
+            "title": "T2 Sarcelles",
+            "description": "Logement PLAI, sous conditions de ressources.",
+            "fields": [],
+            "expect": {
+                "tenure": "PLAI",
+                "outcome": "REJECT"
+            },
+            "why": "Tier 2."
+        },
+        {
+            "id": "plus-001-structured-field",
+            "provenance": "synthetic",
+            "source": "cdc_habitat",
+            "title": "T4 Trappes",
+            "description": "Appartement familial.",
+            "fields": {
+                "financement": "PLUS"
+            },
+            "expect": {
+                "tenure": "PLUS",
+                "outcome": "REJECT"
+            },
+            "why": "PLUS as a structured VALUE is unambiguous — a field never means the French adverb."
+        },
+        {
+            "id": "plus-002-uppercase-in-text",
+            "provenance": "synthetic",
+            "source": "seqens",
+            "title": "T3 Les Mureaux",
+            "description": "Logement PLUS - numero unique d'enregistrement obligatoire.",
+            "fields": [],
+            "expect": {
+                "tenure": "PLUS",
+                "outcome": "REJECT"
+            },
+            "why": "Uppercase PLUS with a corroborating SNE tell."
+        },
+        {
+            "id": "pls-001-structured-field",
+            "provenance": "synthetic",
+            "source": "cdc_habitat",
+            "title": "T3 Saint-Germain-en-Laye",
+            "description": "Residence neuve.",
+            "fields": {
+                "financement": "PLS"
+            },
+            "expect": {
+                "tenure": "PLS",
+                "outcome": "REJECT"
+            },
+            "why": "The explicit PLS the spec demands. Q4 (2026-08-06) ruled PLS OUT — it is social housing (SNE + commission). This fixture is the regression guard on that ruling."
+        },
+        {
+            "id": "pls-002-uppercase-in-text",
+            "provenance": "synthetic",
+            "source": "seqens",
+            "title": "T2 Ermont",
+            "description": "Logement PLS, plafonds de ressources applicables.",
+            "fields": [],
+            "expect": {
+                "tenure": "PLS",
+                "outcome": "REJECT"
+            },
+            "why": "Same ruling via tier 2."
+        },
+        {
+            "id": "social-001-logement-social",
+            "provenance": "synthetic",
+            "source": "cdc_habitat",
+            "title": "T3 Gennevilliers",
+            "description": "Ce logement social est attribue par la commission d'attribution.",
+            "fields": [],
+            "expect": {
+                "tenure": "SOCIAL",
+                "outcome": "REJECT"
+            },
+            "why": "'logement social' names the family without naming the financing tier, so the verdict is SOCIAL — excluded, but not falsely precise about which tier."
+        },
+        {
+            "id": "social-002-sne-procedural",
+            "provenance": "synthetic",
+            "source": "cdc_habitat",
+            "title": "T3 Villiers-le-Bel",
+            "description": "Un numero unique d'enregistrement est exige pour toute demande.",
+            "fields": [],
+            "expect": {
+                "tenure": "SOCIAL",
+                "outcome": "REJECT"
+            },
+            "why": "PROCEDURAL TELL ONLY. Zero tenure vocabulary appears anywhere. CLAUDE.md calls this 'the cheapest reliable discriminator the domain offers' — the classifier must reject on procedure alone."
+        },
+        {
+            "id": "social-003-sne-acronym",
+            "provenance": "synthetic",
+            "source": "seqens",
+            "title": "T2 Goussainville",
+            "description": "Enregistrement SNE prealable obligatoire.",
+            "fields": [],
+            "expect": {
+                "tenure": "SOCIAL",
+                "outcome": "REJECT"
+            },
+            "why": "SNE as a bare acronym."
+        },
+        {
+            "id": "social-004-demande-logement-social",
+            "provenance": "synthetic",
+            "source": "cdc_habitat",
+            "title": "T4 Persan",
+            "description": "Deposez votre demande de logement social en ligne.",
+            "fields": [],
+            "expect": {
+                "tenure": "SOCIAL",
+                "outcome": "REJECT"
+            },
+            "why": "Fourth procedural phrasing named in CLAUDE.md."
+        },
+        {
+            "id": "social-005-commission-attribution",
+            "provenance": "synthetic",
+            "source": "seqens",
+            "title": "T3 Franconville",
+            "description": "Dossier examine en commission d'attribution.",
+            "fields": [],
+            "expect": {
+                "tenure": "SOCIAL",
+                "outcome": "REJECT"
+            },
+            "why": "Commission d'attribution alone."
+        },
+        {
+            "id": "conv-001-conventionne-bare",
+            "provenance": "synthetic",
+            "source": "cdc_habitat",
+            "title": "T2 Domont",
+            "description": "Logement conventionne APL.",
+            "fields": [],
+            "expect": {
+                "tenure": "CONVENTIONNE",
+                "outcome": "REJECT"
+            },
+            "why": "CLAUDE.md: conventionne absent an explicit intermediate label is treated as social."
+        },
+        {
+            "id": "conv-002-conventionne-accented",
+            "provenance": "synthetic",
+            "source": "cdc_habitat",
+            "title": "T2 Domont",
+            "description": "Logement conventionné APL.",
+            "fields": [],
+            "expect": {
+                "tenure": "CONVENTIONNE",
+                "outcome": "REJECT"
+            },
+            "why": "Accented spelling of conv-001. Must classify identically."
+        },
+        {
+            "id": "anru-001",
+            "provenance": "synthetic",
+            "source": "cdc_habitat",
+            "title": "T3 Grigny",
+            "description": "Programme ANRU de renouvellement urbain.",
+            "fields": [],
+            "expect": {
+                "tenure": "ANRU",
+                "outcome": "REJECT"
+            },
+            "why": "Named in the excluded set."
+        },
+        {
+            "id": "anah-001",
+            "provenance": "synthetic",
+            "source": "cdc_habitat",
+            "title": "T2 Beaumont-sur-Oise",
+            "description": "Logement conventionne ANAH, loyer maitrise.",
+            "fields": [],
+            "expect": {
+                "tenure": "ANAH",
+                "outcome": "REJECT"
+            },
+            "why": "Named in the excluded set."
+        },
+        {
+            "id": "trap-001-plus-de-chambres",
+            "provenance": "synthetic",
+            "source": "inli",
+            "title": "T4 avec plus de 3 chambres - Sartrouville",
+            "description": "Grand appartement offrant plus de rangements que la moyenne.",
+            "fields": [],
+            "expect": {
+                "tenure": "LLI",
+                "outcome": "MATCH",
+                "max_confidence": 59
+            },
+            "why": "THE PLUS TRAP, case 1. 'plus' is one of the commonest French words. A naive substring match classifies this In'li flat as PLUS social housing and rejects it. Nothing arrives, and the user concludes the market is quiet. Only the source default may fire here."
+        },
+        {
+            "id": "trap-002-au-plus-tard",
+            "provenance": "synthetic",
+            "source": "seloger",
+            "title": "T3 Houilles",
+            "description": "Disponible au plus tard le 1er septembre. Le sejour est plus lumineux que sur les photos.",
+            "fields": [],
+            "expect": {
+                "tenure": "LIBRE",
+                "outcome": "MATCH",
+                "max_confidence": 59
+            },
+            "why": "THE PLUS TRAP, case 2 — 'au plus tard' and 'plus lumineux' in one text."
+        },
+        {
+            "id": "trap-003-plus-tier-uppercase-boundary",
+            "provenance": "synthetic",
+            "source": "seloger",
+            "title": "APPARTEMENT T3 LUMINEUX - PLUS DE 70 M2",
+            "description": "BIEN RARE, PLUS DE RANGEMENTS QUE LA MOYENNE.",
+            "fields": [],
+            "expect": {
+                "tenure": "LIBRE",
+                "outcome": "MATCH",
+                "max_confidence": 59
+            },
+            "why": "THE PLUS TRAP, case 3 and the nastiest. The title is SHOUTED, so 'uppercase PLUS' alone cannot be the social test — it must also be in a financing context. An all-caps portal title must not be read as a financing label."
+        },
+        {
+            "id": "trap-003b-shouted-logement-plus-grand",
+            "provenance": "synthetic",
+            "source": "seloger",
+            "title": "LOGEMENT PLUS GRAND - T4 CHATOU",
+            "description": "LOGEMENT PLUS SPACIEUX QUE LA MOYENNE, PLUS LUMINEUX AUSSI.",
+            "fields": [],
+            "expect": {
+                "tenure": "LIBRE",
+                "outcome": "MATCH",
+                "max_confidence": 59
+            },
+            "why": "FOUND BY SABOTAGE-CHECK, 2026-08-06. trap-003 does not exercise the comparative suppression at all: it fails the collocation test first, so the classifier never reaches the second condition. THIS one passes collocation — uppercase PLUS immediately after 'LOGEMENT' — and is stopped only by the comparative that follows. Deleting the suppression left the suite green until this fixture existed, and a shouted 'LOGEMENT PLUS GRAND' is an ordinary portal title."
+        },
+        {
+            "id": "trap-003c-genuine-label-and-adverb-in-one-text",
+            "provenance": "synthetic",
+            "source": "cdc_habitat",
+            "title": "T3 Cergy",
+            "description": "Logement PLUS. Plus grand que la moyenne du quartier.",
+            "fields": [],
+            "expect": {
+                "tenure": "PLUS",
+                "outcome": "REJECT"
+            },
+            "why": "THE OTHER SIDE OF THE SAME COIN, and the dangerous direction. One text carries a genuine financing label AND an unrelated adverb. A document-level suppression check would see 'some occurrence is adverbial' and drop the real social signal, letting a PLUS listing reach a notification. The guard is therefore evaluated per occurrence, not per document."
+        },
+        {
+            "id": "trap-004-plaine-not-plai",
+            "provenance": "synthetic",
+            "source": "seloger",
+            "title": "T3 Plaine de Versailles",
+            "description": "Cadre plaisant, vue degagee sur la plaine. Un vrai plaisir au quotidien.",
+            "fields": [],
+            "expect": {
+                "tenure": "LIBRE",
+                "outcome": "MATCH",
+                "max_confidence": 59
+            },
+            "why": "THE PLAI TRAP. As a bare substring 'plai' matches plaine, plaisant and plaisir. Word boundaries are mandatory."
+        },
+        {
+            "id": "trap-005-surplus-not-plus",
+            "provenance": "synthetic",
+            "source": "seloger",
+            "title": "T2 Bezons",
+            "description": "Un surplus de charges est possible en hiver.",
+            "fields": [],
+            "expect": {
+                "tenure": "LIBRE",
+                "outcome": "MATCH",
+                "max_confidence": 59
+            },
+            "why": "'surplus' contains 'plus'. Word boundaries again, from the other side."
+        },
+        {
+            "id": "trap-005b-plus-with-no-comparative-and-no-collocation",
+            "provenance": "synthetic",
+            "source": "seloger",
+            "title": "T4 CROISSY-SUR-SEINE - 3 CHAMBRES, PLUS UN BUREAU",
+            "description": "TROIS CHAMBRES, PLUS UN BUREAU FERME ET UNE BUANDERIE.",
+            "fields": [],
+            "expect": {
+                "tenure": "LIBRE",
+                "outcome": "MATCH",
+                "max_confidence": 59
+            },
+            "why": "FOUND BY SABOTAGE-CHECK, 2026-08-06, and it took two attempts to write correctly. Every other 'plus' trap here is followed by a comparative ('plus de', 'plus tard', 'plus lumineux'), so the comparative suppression alone caught all of them and the collocation test could be deleted with the suite staying green. This one has no comparative to fall back on — 'PLUS' is followed by 'UN'. It must also be SHOUTED: uppercase is enforced by the acronym pattern itself, so a lowercase 'plus' never reaches the collocation test at all, and a lowercase version of this fixture proves nothing. An all-caps portal title with 'PLUS UN BUREAU' is ordinary, and only the collocation test stands between it and a social-housing classification."
+        },
+        {
+            "id": "trap-006-cuisine-meublee-is-not-tenure",
+            "provenance": "synthetic",
+            "source": "seloger",
+            "title": "T3 Chatou",
+            "description": "Cuisine meublee et equipee, appartement non meuble par ailleurs.",
+            "fields": [],
+            "expect": {
+                "tenure": "LIBRE",
+                "outcome": "MATCH",
+                "max_confidence": 59
+            },
+            "why": "Guards the boundary between modules: furnishing is a CRITERIA concern (the known 'meubl' regex bug), never a tenure signal. The classifier must be indifferent to it."
+        },
+        {
+            "id": "trap-007-social-in-a-non-tenure-sense",
+            "provenance": "synthetic",
+            "source": "seloger",
+            "title": "T3 Le Pecq",
+            "description": "Quartier tres vivant avec une vie sociale riche et un centre social a proximite.",
+            "fields": [],
+            "expect": {
+                "tenure": "LIBRE",
+                "outcome": "MATCH",
+                "max_confidence": 59
+            },
+            "why": "'sociale' and 'centre social' are not 'logement social'. Matching the bare word 'social' would reject a perfectly good private listing."
+        },
+        {
+            "id": "trap-008-pls-inside-a-word",
+            "provenance": "synthetic",
+            "source": "seloger",
+            "title": "T2 Triel-sur-Seine",
+            "description": "Reference annonce APLS2024. Contactez-nous.",
+            "fields": [],
+            "expect": {
+                "tenure": "LIBRE",
+                "outcome": "MATCH",
+                "max_confidence": 59
+            },
+            "why": "'PLS' embedded in a reference code. Word boundaries and financing context both required."
+        },
+        {
+            "id": "trap-009-negated-social-mention",
+            "provenance": "synthetic",
+            "source": "cdc_habitat",
+            "title": "T3 Andresy",
+            "description": "Logement intermediaire : aucun numero unique d'enregistrement n'est requis, ce n'est pas un logement social.",
+            "fields": {
+                "financement": "LLI"
+            },
+            "expect": {
+                "tenure": "UNKNOWN",
+                "outcome": "DIGEST"
+            },
+            "why": "HONEST LIMIT, DELIBERATELY LABELLED. The text is genuinely LLI and says so twice, but it also contains the strings 'numero unique d'enregistrement' and 'logement social' inside negations. The classifier does not do negation parsing, so the conflict rule fires and this lands in the digest. That is the CORRECT behaviour under a fail-closed policy: a false DIGEST costs one manual glance, a false MATCH costs a wasted application. If negation handling is added later, this label changes deliberately, with the reasoning in the commit message."
+        },
+        {
+            "id": "conflict-001-field-lli-text-plai",
+            "provenance": "synthetic",
+            "source": "cdc_habitat",
+            "title": "T3 Cergy",
+            "description": "Logement PLAI, sous conditions de ressources tres sociales.",
+            "fields": {
+                "financement": "LLI"
+            },
+            "expect": {
+                "tenure": "UNKNOWN",
+                "outcome": "DIGEST"
+            },
+            "why": "THE CONFLICT RULE, and the reason it exists. The ladder alone keeps LLI at 0.97 and notifies. An eligible verdict contradicted by an excluded-tenure signal must collapse to UNKNOWN instead. It does not assert the flat is social — it withholds."
+        },
+        {
+            "id": "conflict-002-field-lli-text-sne",
+            "provenance": "synthetic",
+            "source": "cdc_habitat",
+            "title": "T2 Eragny",
+            "description": "Demande via numero unique d'enregistrement.",
+            "fields": {
+                "typeProduit": "Logement intermediaire"
+            },
+            "expect": {
+                "tenure": "UNKNOWN",
+                "outcome": "DIGEST"
+            },
+            "why": "Same rule with the contradiction coming from a tier-3 procedural tell rather than a label."
+        },
+        {
+            "id": "conflict-003-asymmetry-plai-field-lli-text",
+            "provenance": "synthetic",
+            "source": "cdc_habitat",
+            "title": "T3 Argenteuil",
+            "description": "Logement intermediaire, loyer plafonne.",
+            "fields": {
+                "financement": "PLAI"
+            },
+            "expect": {
+                "tenure": "PLAI",
+                "outcome": "REJECT"
+            },
+            "why": "THE ASYMMETRY, and it is deliberate. Mirror image of conflict-001, opposite result: an EXCLUDED verdict contradicted by an eligible signal stays excluded and is rejected. Softening an exclusion is the one direction that costs the user a wasted application, so the rule only ever works one way."
+        },
+        {
+            "id": "conflict-004-two-excluded-tenures",
+            "provenance": "synthetic",
+            "source": "cdc_habitat",
+            "title": "T3 Sarcelles",
+            "description": "Logement PLUS ou PLAI selon les ressources.",
+            "fields": [],
+            "expect": {
+                "tenure": "PLUS",
+                "outcome": "REJECT"
+            },
+            "why": "Two excluded tenures at the same tier. Which one wins does not matter to the user — both reject — so the tie-break is fixed and deterministic rather than clever."
+        },
+        {
+            "id": "unknown-001-no-signal-mixed-source",
+            "provenance": "synthetic",
+            "source": "cdc_habitat",
+            "title": "T3 Osny",
+            "description": "Appartement 3 pieces, 65 m2, parking.",
+            "fields": [],
+            "expect": {
+                "tenure": "UNKNOWN",
+                "outcome": "DIGEST"
+            },
+            "why": "THE FAIL-CLOSED RULE, verbatim from CLAUDE.md §1: confidence < 0.6 AND a mixed source => UNKNOWN => digest. CDC Habitat declares no default tenure, so nothing fires at all."
+        },
+        {
+            "id": "unknown-002-unknown-source-no-signal",
+            "provenance": "synthetic",
+            "source": "unknown_source",
+            "title": "T2 quelque part",
+            "description": "Appartement.",
+            "fields": [],
+            "expect": {
+                "tenure": "UNKNOWN",
+                "outcome": "DIGEST"
+            },
+            "why": "A source added to config without declaring a default. mixed_tenure defaults to true, so an incomplete config fails closed rather than open."
+        },
+        {
+            "id": "unknown-003-unrecognised-field-value",
+            "provenance": "synthetic",
+            "source": "cdc_habitat",
+            "title": "T3 Pontoise",
+            "description": "Appartement 3 pieces.",
+            "fields": {
+                "financement": "PLI"
+            },
+            "expect": {
+                "tenure": "UNKNOWN",
+                "outcome": "DIGEST"
+            },
+            "why": "PLI (Pret Locatif Intermediaire) is the pre-2014 intermediate scheme. It is genuinely NOT social — but it is not in the glossary and Q4 did not rule on it, so guessing 'intermediate, therefore match' would decide a product question in code. UNKNOWN routes it to the 'à vérifier' digest where a human decides. Raised as an open question."
+        },
+        {
+            "id": "unknown-004-empty-text",
+            "provenance": "synthetic",
+            "source": "cdc_habitat",
+            "title": "",
+            "description": "",
+            "fields": [],
+            "expect": {
+                "tenure": "UNKNOWN",
+                "outcome": "DIGEST"
+            },
+            "why": "A broken parser producing empty text must not produce a match. This is hard rule 2 and 3 territory: silent breakage must not look like a clean result."
+        },
+        {
+            "id": "unknown-005-pure-source-without-a-default",
+            "provenance": "synthetic",
+            "source": "pure_no_default",
+            "title": "T3 Poissy",
+            "description": "Appartement 3 pieces, 70 m2.",
+            "fields": [],
+            "expect": {
+                "tenure": "UNKNOWN",
+                "outcome": "DIGEST"
+            },
+            "why": "FOUND BY SABOTAGE-CHECK, 2026-08-06. A source declared non-mixed but given no default_tenure produces no signal at all, so the verdict is UNKNOWN. The routing branch for a source declared non-mixed would otherwise let it through. Only the explicit undetermined-tenure arm in route() stops such a listing from being notified, and until this fixture existed that arm could be removed with the suite staying green. It is a config shape nobody would write on purpose, which is exactly why it needs a fixture."
+        },
+        {
+            "id": "libre-001-seloger-default",
+            "provenance": "synthetic",
+            "source": "seloger",
+            "title": "T3 Chatou 1450 EUR CC",
+            "description": "Appartement 3 pieces, 70 m2, refait a neuf.",
+            "fields": [],
+            "expect": {
+                "tenure": "LIBRE",
+                "outcome": "MATCH",
+                "max_confidence": 59
+            },
+            "why": "The Track 2 baseline. A private portal listing carries zero tenure vocabulary; the source default is the only signal, and a private portal is a pure-LIBRE source."
+        },
+        {
+            "id": "libre-002-leboncoin-particulier",
+            "provenance": "synthetic",
+            "source": "leboncoin",
+            "title": "Loue T2 Houilles particulier",
+            "description": "Loue directement par le proprietaire, pas d'agence, pas de frais.",
+            "fields": [],
+            "expect": {
+                "tenure": "LIBRE",
+                "outcome": "MATCH",
+                "max_confidence": 59
+            },
+            "why": "Private landlord posting. 'pas de frais' must not be misread as the intermediate-side 'sans condition de commission' tell."
+        },
+        {
+            "id": "libre-003-explicit-loyer-libre",
+            "provenance": "synthetic",
+            "source": "icf_novedis",
+            "title": "T3 Villennes-sur-Seine",
+            "description": "Logement a loyer libre, sans plafond de ressources.",
+            "fields": [],
+            "expect": {
+                "tenure": "LIBRE",
+                "outcome": "MATCH",
+                "min_confidence": 85
+            },
+            "why": "'loyer libre' as an explicit tier-2 label, overriding this source's LLI default. ICF Novedis genuinely publishes both."
+        },
+        {
+            "id": "libre-004-social-source-word-in-address",
+            "provenance": "synthetic",
+            "source": "seloger",
+            "title": "T2 rue du Docteur Social",
+            "description": "Appartement 2 pieces au calme.",
+            "fields": [],
+            "expect": {
+                "tenure": "LIBRE",
+                "outcome": "MATCH",
+                "max_confidence": 59
+            },
+            "why": "A street name containing 'Social'. Again: only 'logement social' is the label, never the bare word."
+        },
+        {
+            "id": "case-001-uppercase-field-value",
+            "provenance": "synthetic",
+            "source": "cdc_habitat",
+            "title": "T3 Franconville",
+            "description": "Appartement.",
+            "fields": {
+                "FINANCEMENT": "plai"
+            },
+            "expect": {
+                "tenure": "PLAI",
+                "outcome": "REJECT"
+            },
+            "why": "Field NAME uppercase and field VALUE lowercase. Adapters normalise inconsistently; neither side may be case-sensitive."
+        },
+        {
+            "id": "case-002-field-value-with-whitespace",
+            "provenance": "synthetic",
+            "source": "cdc_habitat",
+            "title": "T3 Herblay",
+            "description": "Appartement.",
+            "fields": {
+                "financement": "  PLUS  "
+            },
+            "expect": {
+                "tenure": "PLUS",
+                "outcome": "REJECT"
+            },
+            "why": "Padded field value straight out of an HTML table cell."
+        },
+        {
+            "id": "case-003-field-value-composite",
+            "provenance": "synthetic",
+            "source": "cdc_habitat",
+            "title": "T3 Taverny",
+            "description": "Appartement.",
+            "fields": {
+                "financement": "PLUS / PLAI"
+            },
+            "expect": {
+                "tenure": "PLUS",
+                "outcome": "REJECT"
+            },
+            "why": "Landlords publish combined financing on one programme. Both are excluded, so any deterministic pick is correct."
+        },
+        {
+            "id": "case-004-empty-field-value-ignored",
+            "provenance": "synthetic",
+            "source": "inli",
+            "title": "T3 Cergy",
+            "description": "Appartement 3 pieces.",
+            "fields": {
+                "financement": ""
+            },
+            "expect": {
+                "tenure": "LLI",
+                "outcome": "MATCH",
+                "max_confidence": 59
+            },
+            "why": "An empty structured field is an ABSENT signal, not a tier-1 verdict. If an empty string were treated as a match on the field, tier 1 would fire on every listing from a source that emits the key unconditionally."
+        },
+        {
+            "id": "case-005-html-entities-in-text",
+            "provenance": "synthetic",
+            "source": "cdc_habitat",
+            "title": "T3 Éragny",
+            "description": "Logement interm&eacute;diaire propos&eacute; par le bailleur.",
+            "fields": [],
+            "expect": {
+                "tenure": "UNKNOWN",
+                "outcome": "DIGEST"
+            },
+            "why": "HONEST LIMIT. HTML entities are the ADAPTER's job to decode, not the classifier's — a classifier that decodes entities hides a broken adapter. UPDATED 2026-08-06: the label is unchanged but the mechanism is no longer accidental. Undecoded entities are now treated as evidence that the ADAPTER stopped short, so the classifier refuses the text and says so, instead of matching whatever labels happened to survive. See case-006 for why that matters."
+        },
+        {
+            "id": "case-006-separator-breaks-a-social-label",
+            "provenance": "synthetic",
+            "source": "cdc_habitat",
+            "title": "T3 Cergy",
+            "description": "Ce logement&nbsp;social a loyer intermediaire.",
+            "fields": [],
+            "expect": {
+                "tenure": "UNKNOWN",
+                "outcome": "DIGEST"
+            },
+            "why": "THE DANGEROUS HALF OF case-005's LIMIT, added 2026-08-06 after review. case-005 freezes the undecoded-entity limitation on a text where the entity breaks an LLI label, so the result digests and the limit costs nothing. Here the separator breaks the SOCIAL label while an intermediate label survives — the direction that does not fail safe. A corpus should carry the dangerous half of its own documented limit, not only the comfortable one."
+        },
+        {
+            "id": "regress-001-sans-commission-d-agence-is-not-a-tenure-tell",
+            "provenance": "synthetic",
+            "source": "cdc_habitat",
+            "title": "T3 Argenteuil",
+            "description": "Location directe par le bailleur, sans commission d'agence.",
+            "fields": [],
+            "expect": {
+                "tenure": "UNKNOWN",
+                "outcome": "DIGEST"
+            },
+            "why": "P0 REGRESSION GUARD (review, 2026-08-06). A bare 'sans commission' was a tier-3 intermediate tell. In the wild that string is almost always 'sans commission d'agence' — a FEE disclaimer that says nothing about how the flat is allocated, and which bailleurs sociaux advertise too. Tier 3 clears the floor unaided, so this exact sentence turned a fail-closed digest into a notification. Only the two literals carrying the ATTRIBUTION sense are tells now."
+        },
+        {
+            "id": "regress-002-vacancy-date-is-not-tenure-LIBRE",
+            "provenance": "synthetic",
+            "source": "cdc_habitat",
+            "title": "Logement conventionné",
+            "description": "Logement libre au 1er août 2026. T3 de 65 m².",
+            "fields": [],
+            "expect": {
+                "tenure": "CONVENTIONNE",
+                "outcome": "REJECT"
+            },
+            "why": "P0 REGRESSION GUARD (review, 2026-08-06), and the worst defect found in this module. 'logement libre' was in the label table as tenure LIBRE; it is not a tenure term at all but the standard French VACANCY phrase. It fired tier 2 at 90 on a move-in date, and the spurious LIBRE then satisfied the conventionné exception — which tested isEligible() rather than 'is an intermediate label'. Result: a listing whose own TITLE reads 'Logement conventionné' reached MATCH, with the word absent from its reasons. A §1 breach via two independently reasonable-looking table entries."
+        },
+        {
+            "id": "regress-003-conventionne-with-a-tier-1-LLI-field",
+            "provenance": "synthetic",
+            "source": "cdc_habitat",
+            "title": "T3 Herblay",
+            "description": "Logement conventionne, loyer plafonne.",
+            "fields": {
+                "financement": "LLI"
+            },
+            "expect": {
+                "tenure": "LLI",
+                "outcome": "MATCH",
+                "min_confidence": 90
+            },
+            "why": "Found by review 2026-08-06. The conventionne exception looked at tier-2 labels only, so LLI declared through a STRUCTURED FIELD — the strongest evidence the ladder has — did not count as 'explicitly labelled intermediate', while the weaker text label did. Genuine LLI stock digested when its evidence arrived through the best channel. Fail-closed, so not a breach, but inconsistent with the ladder it claims to implement."
+        },
+        {
+            "id": "regress-003b-conventionne-with-LIBRE-is-still-excluded",
+            "provenance": "synthetic",
+            "source": "cdc_habitat",
+            "title": "T2 Domont",
+            "description": "Logement conventionne, loyer libre.",
+            "fields": [],
+            "expect": {
+                "tenure": "CONVENTIONNE",
+                "outcome": "REJECT"
+            },
+            "why": "THE EXCEPTION IS FOR INTERMEDIATE LABELS ONLY, and this is the fixture that says so. CLAUDE.md's glossary excuses conventionne when the listing is 'explicitly labelled intermediate' — LIBRE is not intermediate, it is market rate, so a LIBRE label must NOT disarm the exclusion. Without this case the drop-rule could be widened from '=== LLI' back to 'isEligible()' with the suite staying green, which is exactly how the P0 of 2026-08-06 was built: a spurious LIBRE signal satisfied the exception and a conventionne listing reached MATCH. The two labels here genuinely contradict each other (subsidised vs market rate), so withholding is also the honest reading."
+        },
+        {
+            "id": "regress-004-ambiguous-uppercase-plus-digests",
+            "provenance": "synthetic",
+            "source": "seloger",
+            "title": "LOGEMENT PLUS MODERNE - T3 CHATOU",
+            "description": "BIEN RENOVE, PROCHE COMMERCES.",
+            "fields": [],
+            "expect": {
+                "tenure": "UNKNOWN",
+                "outcome": "DIGEST"
+            },
+            "why": "Found by review 2026-08-06. The collocation guard suppressed adverbial PLUS via a denylist of French adjectives, so any adjective NOT on the list — moderne, confortable, economique, agreable, ensoleille — turned an emphatic title into tenure PLUS and a silent REJECT. A denylist of French adjectives cannot be completed. The guard now asks the closed question instead: does a financing label END the phrase (punctuation, end of text, another acronym)? If a word follows and it is a known comparative, it was the adverb; if a word follows and it is anything else, it is genuinely indecidable and lands here — visible in the digest rather than silently dropped OR silently matched."
+        },
+        {
+            "id": "regress-005-nfd-decomposed-social-tell",
+            "provenance": "synthetic",
+            "source": "cdc_habitat",
+            "title": "T3 - LLI",
+            "description": "Un numéro unique d'enregistrement est exigé pour toute demande.",
+            "fields": [],
+            "expect": {
+                "tenure": "UNKNOWN",
+                "outcome": "DIGEST"
+            },
+            "why": "Found by review 2026-08-06. The fold tables carry PRECOMPOSED accented codepoints only, so text arriving NFD-decomposed ('e' + U+0301) was not folded and 'numéro unique d'enregistrement' never matched its literal — while the unaccented 'LLI' in the same listing still did. The social side vanished and the eligible side survived, which is the wrong direction to fail in. Combining marks are now stripped after the table: one line, locale-free, and portable to phorj. NOTE: this fixture's description is deliberately written with \\u0301 escapes; do not 'tidy' it into precomposed characters, or it stops testing anything."
+        },
+        {
+            "id": "regress-006-structured-field-tie-prefers-the-longer-match",
+            "provenance": "synthetic",
+            "source": "cdc_habitat",
+            "title": "T3 Taverny",
+            "description": "Appartement 3 pieces.",
+            "fields": {
+                "financement": "LLI",
+                "categorie": "PLAI"
+            },
+            "expect": {
+                "tenure": "PLAI",
+                "outcome": "REJECT"
+            },
+            "why": "Found by review 2026-08-06. Two structured fields each match at offset 0 of their own value, so the tie-break decides. resolve()'s comparator had its two strlen terms transposed, making the SHORTER evidence win — the opposite of its own docblock — so 'lli' (3) beat 'plai' (4) and an explicit PLAI field landed in the user-visible digest instead of REJECT. A phorj port written from the docblock would have disagreed with the PHP on exactly this input, which is the differential the shared corpus exists to expose."
+        },
+        {
+            "id": "regress-008-feminine-agreement-conventionnee",
+            "provenance": "synthetic",
+            "source": "inli",
+            "title": "T3 en résidence conventionnée",
+            "description": "Appartement 3 pieces, proche gare.",
+            "fields": [],
+            "expect": {
+                "tenure": "CONVENTIONNE",
+                "outcome": "REJECT"
+            },
+            "why": "P0 REGRESSION GUARD (review round 2, 2026-08-06). FRENCH INFLECTION. Every literal was matched exactly with a trailing word-boundary guard, so 'conventionnée' -- the feminine agreement, which is what you write before 'résidence' -- was a NON-MATCH while 'conventionné' matched. On In'li (a pure source) that meant LLI/MATCH at 50 instead of CONVENTIONNE/REJECT. The acronyms (PLAI, ANRU, ANAH, HLM) are invariant, which is exactly why the table read as safe: the terms a reviewer checks first are the ones that could not break. Compare conv-001 and conv-002, which test the ACCENT but not the agreement."
+        },
+        {
+            "id": "regress-009-plural-logements-sociaux",
+            "provenance": "synthetic",
+            "source": "cdc_habitat",
+            "title": "Résidence mixte - Cergy",
+            "description": "Résidence mixte de logements sociaux et intermédiaires. Loyer intermédiaire à partir de 900 euros.",
+            "fields": [],
+            "expect": {
+                "tenure": "SOCIAL",
+                "outcome": "REJECT"
+            },
+            "why": "P0 REGRESSION GUARD (review round 2, 2026-08-06), and the worst of the inflection class. The listing's own description says 'logements sociaux'. Because the plural did not match, NO excluded signal existed at all — so the conflict rule had nothing to see, and 'loyer intermédiaire' carried this to LLI/MATCH at full tier-2 confidence. It was notified. With inflection the social label fires at an earlier position than the intermediate one, wins the tier, and the documented asymmetry applies: an excluded verdict is never softened by a contradicting eligible signal, so this REJECTs rather than digesting. That is the intended reading of a mixed résidence — the specific unit is unproven and the cost of being wrong is a wasted application. (I predicted DIGEST when writing this fixture; the code was right and the prediction was wrong.)"
+        },
+        {
+            "id": "regress-010-plural-prets-locatifs-sociaux",
+            "provenance": "synthetic",
+            "source": "cdc_habitat",
+            "title": "T3 Sarcelles",
+            "description": "Financement par prêts locatifs sociaux. Loyer intermédiaire.",
+            "fields": [],
+            "expect": {
+                "tenure": "PLS",
+                "outcome": "REJECT"
+            },
+            "why": "Same inflection class through a different phrase: 'prêt locatif social' pluralises BOTH nouns and the adjective takes the irregular -al/-aux form, so this guards the '-al' branch of the inflection rule specifically. It also resolves to the precise financing tier rather than the generic SOCIAL, because the expanded phrase is unambiguous. Excluded either way; PLS was ruled out by Q4."
+        },
+        {
+            "id": "regress-011-indecidable-acronym-loses-the-position-race",
+            "provenance": "synthetic",
+            "source": "cdc_habitat",
+            "title": "Loyer intermédiaire - T3 Cergy",
+            "description": "LOGEMENT PLS MODERNE, RESIDENCE CALME.",
+            "fields": [],
+            "expect": {
+                "tenure": "UNKNOWN",
+                "outcome": "DIGEST"
+            },
+            "why": "P0 REGRESSION GUARD (review round 2, 2026-08-06). The indécidable acronym marker used to be a tier-2 signal resolved POSITIONALLY against real labels. Losing that race made it vanish completely -- not an objection (UNKNOWN is not excluded) and not a contradiction (score() elides same-tier signals) -- so this listing was notified, while the SAME TWO SENTENCES IN THE OPPOSITE ORDER digested. Identical facts, different word order, different answer. A doubt now competes with nothing: it cannot beat evidence and it cannot be beaten by it."
+        },
+        {
+            "id": "regress-012-indecidable-acronym-must-not-mask-a-PLAI",
+            "provenance": "synthetic",
+            "source": "cdc_habitat",
+            "title": "LOGEMENT PLUS MODERNE - T3",
+            "description": "FINANCEMENT PLAI.",
+            "fields": [],
+            "expect": {
+                "tenure": "PLAI",
+                "outcome": "REJECT"
+            },
+            "why": "THE OTHER DIRECTION OF regress-011, and the one that made the digest wrong rather than the match. When the indécidable marker WON the position race it masked a determinate PLAI, turning a hard disqualifier into a user-visible 'à vérifier' entry -- CLAUDE.md hard rule 8 says a disqualifier rejects silently and is logged only. The strongest text label the ladder has was being beaten by a signal whose own reason says it knows nothing, decided by byte offset."
+        },
+        {
+            "id": "regress-013-prose-in-a-financing-field",
+            "provenance": "synthetic",
+            "source": "cdc_habitat",
+            "title": "T3 Herblay",
+            "description": "Appartement 3 pieces.",
+            "fields": {
+                "dispositif": "Pinel Plus"
+            },
+            "expect": {
+                "tenure": "UNKNOWN",
+                "outcome": "DIGEST"
+            },
+            "why": "Found by review round 2, 2026-08-06. Tier-1 field values bypassed the collocation guard on the argument that 'a structured field is not French prose'. That holds for `financement: PLUS` and fails for the generic keys in TENURE_FIELDS -- categorie, dispositif, typelogement all carry prose in real feeds. 'Pinel Plus' is a real 2023 scheme name, and unguarded it was tenure PLUS at confidence 97 and a SILENT REJECT: nothing arrives, and that is indistinguishable from a quiet market. CASE settles it: an UPPERCASE acronym in a financing field is a code, a lowercase one is a word. NOTE: the first fix here required the WHOLE value to be financing tokens, which FAILED OPEN on real codes like PLUS CD -- see regress-021."
+        },
+        {
+            "id": "regress-014-prose-field-with-the-adverb",
+            "provenance": "synthetic",
+            "source": "cdc_habitat",
+            "title": "T4 Taverny",
+            "description": "Appartement.",
+            "fields": {
+                "categorie": "Maison de plus de 100 m2"
+            },
+            "expect": {
+                "tenure": "UNKNOWN",
+                "outcome": "DIGEST"
+            },
+            "why": "The same defect with the ordinary French adverb rather than a scheme name. 'Maison de plus de 100 m2' in a `categorie` field was tenure PLUS / REJECT at 97."
+        },
+        {
+            "id": "regress-015-code-shaped-field-still-resolves",
+            "provenance": "synthetic",
+            "source": "cdc_habitat",
+            "title": "T3 Ermont",
+            "description": "Appartement.",
+            "fields": {
+                "financement": "PLUS / PLAI"
+            },
+            "expect": {
+                "tenure": "PLUS",
+                "outcome": "REJECT"
+            },
+            "why": "The other side of regress-013: narrowing the field path must not break the case it exists for. A value made only of financing tokens and separators is still read as a code, with no collocation guard, exactly as case-003 requires."
+        },
+        {
+            "id": "regress-016-soft-hyphen-splits-a-social-label",
+            "provenance": "synthetic",
+            "source": "cdc_habitat",
+            "title": "T3 Cergy",
+            "description": "Ce logement­social a loyer intermediaire.",
+            "fields": [],
+            "expect": {
+                "tenure": "SOCIAL",
+                "outcome": "REJECT"
+            },
+            "why": "P0 REGRESSION GUARD (review round 2, 2026-08-06). U+00AD SOFT HYPHEN sits between `logement` and `social`. It is INVISIBLE, so the label looks intact to a reader and was a non-match to the classifier — while `loyer intermediaire` in the same sentence still matched. Verdict was LLI at confidence 90, above the floor, so the fail-closed rule never engaged, and the notification`s reasons[] named the intermediate label with the word `social` absent. The doctrine in MalformedText::undecodedEntities CREATES this input: it tells the adapter that decoding is its job, and an adapter that obeys turns `&shy;` — ordinary hyphenation markup in justified French CMS output — into exactly this byte. Refusing it would punish the adapter for being correct; \\p{Cf} is stripped instead, because these characters are invisible by definition."
+        },
+        {
+            "id": "regress-017-zero-width-space-splits-a-social-label",
+            "provenance": "synthetic",
+            "source": "inli",
+            "title": "T3 Le Vesinet",
+            "description": "Ce logement​social est attribue en commission.",
+            "fields": [],
+            "expect": {
+                "tenure": "SOCIAL",
+                "outcome": "REJECT"
+            },
+            "why": "Same class, different codepoint and a PURE source — where the consequence is worst, because a pure source matches below the floor. U+200B ZERO WIDTH SPACE arrives routinely from WYSIWYG editors and HTML-to-text conversion. U+200C, U+200D, U+200E, U+2060 and U+FEFF are the same category and are closed by the same one-character change to the strip."
+        },
+        {
+            "id": "regress-018-bom-inside-a-label",
+            "provenance": "synthetic",
+            "source": "cdc_habitat",
+            "title": "T2 Sarcelles",
+            "description": "Logement﻿social, dossier a deposer en ligne.",
+            "fields": [],
+            "expect": {
+                "tenure": "SOCIAL",
+                "outcome": "REJECT"
+            },
+            "why": "U+FEFF, the byte-order mark, appearing mid-string rather than at the head — which is what happens when two decoded fragments are concatenated. Guards the same strip from the third direction. NOTE: this description carried a 'numero unique exige' clause until 2026-08-06, which is a tier-3 tell strong enough to reject on its own — so the fixture passed against the PRE-FIX classifier and proved nothing. Found by reverting the classifier and observing which fixtures went red. Keep this text free of any other tenure signal."
+        },
+        {
+            "id": "regress-019-invisibles-do-not-damage-a-legitimate-listing",
+            "provenance": "synthetic",
+            "source": "seloger",
+            "title": "T3 Châtenay-Malabry",
+            "description": "Ilê-de-France, cœur de ville, cadre naïf et calme. Résidence récente.",
+            "fields": [],
+            "expect": {
+                "tenure": "LIBRE",
+                "outcome": "MATCH",
+                "max_confidence": 59
+            },
+            "why": "THE OTHER SIDE OF THE STRIP. Stripping a Unicode category is the kind of fix that quietly damages ordinary text, so this asserts that accented French, the oe ligature and a diaeresis all survive folding untouched and the listing still classifies normally. Without it, a future widening of the stripped set could break real listings with nothing to notice. NOTE: the last sentence is stored NFD-DECOMPOSED (base letter + U+0301), so it genuinely exercises the \\p{Mn} strip; the rest is precomposed and exercises the fold table. Until 2026-08-06 this fixture was entirely precomposed — categories Lu/Ll — so it constrained neither, and a deliberate widening that broke nine other tests left this one green."
+        },
+        {
+            "id": "regress-020-mixed-residence-with-conventionnes",
+            "provenance": "synthetic",
+            "source": "cdc_habitat",
+            "title": "Résidence mixte - Cergy",
+            "description": "Résidence mixte de logements conventionnés et intermédiaires. Loyer intermédiaire à partir de 900 euros.",
+            "fields": [],
+            "expect": {
+                "tenure": "CONVENTIONNE",
+                "outcome": "REJECT"
+            },
+            "why": "P0 REGRESSION GUARD (review round 3, 2026-08-06). The conventionne exception was scope-blind: ANY LLI label ANYWHERE in the listing deleted the conventionne signal, so the conflict rule saw no objection and this reached LLI/MATCH -- with the word absent from reasons[]. The corpus already guarded the identical sentence shape for 'logements sociaux' (regress-009), which is what makes the gap so visible in hindsight. DELETING an excluded signal biases toward NOTIFYING, the one direction §1 forbids. The glossary's exception is for a conventionne that QUALIFIES an intermediate label -- the same noun phrase, as in lli-011 -- so the rule is now adjacency-bounded."
+        },
+        {
+            "id": "regress-021-uppercase-code-in-a-financing-field",
+            "provenance": "synthetic",
+            "source": "cdc_habitat",
+            "title": "T3 66 m2 - Residence Les Tilleuls",
+            "description": "Residence neuve proposant des logements a loyer intermediaire.",
+            "fields": {
+                "Financement": "PLUS CD"
+            },
+            "expect": {
+                "tenure": "PLUS",
+                "outcome": "REJECT"
+            },
+            "why": "P0 REGRESSION GUARD (review round 3, 2026-08-06), and a fix that opened a worse hole than the one it closed. Guarding against 'Pinel Plus' being read as tenure PLUS, the field path was made to require the WHOLE value to be financing tokens -- so 'PLUS CD', a real financing code, matched nothing and produced NO signal and NO doubt. Fields are not part of RawListing::text(), so there was no prose fallback either, and the listing matched on its description instead. The strongest rung of the ladder was blinder than the weakest. CASE settles it: an UPPERCASE acronym in a financing field is a code, a lowercase one is a word."
+        },
+        {
+            "id": "regress-022-c0-control-splits-a-social-label",
+            "provenance": "synthetic",
+            "source": "cdc_habitat",
+            "title": "T3 Cergy",
+            "description": "Ce logement\u0001social a loyer intermediaire, 3 pieces.",
+            "fields": [],
+            "expect": {
+                "tenure": "SOCIAL",
+                "outcome": "REJECT"
+            },
+            "why": "P0 REGRESSION GUARD (review round 3, 2026-08-06). Round 2 closed \\p{Cf}; the fix was one Unicode category short. U+0001 sits between 'logement' and 'social' here. C0/C1 controls are not \\p{Cf} and not \\s, so they survived the strip and produced the identical failure: LLI at confidence 90, above the floor, MATCH. U+0091-U+009F matter most -- they are the ordinary product of CP1252 bytes decoded as Latin-1, a routine French-CMS mojibake path. \\p{Cc} could NOT be used wholesale: it contains tab, newline and carriage return, which the whitespace collapse depends on, and the naive widening broke nine tests."
+        },
+        {
+            "id": "regress-023-invisible-letter-splits-a-social-label",
+            "provenance": "synthetic",
+            "source": "cdc_habitat",
+            "title": "T2 Sarcelles",
+            "description": "Ce logementㅤsocial est propose sans autre precision.",
+            "fields": [],
+            "expect": {
+                "tenure": "SOCIAL",
+                "outcome": "REJECT"
+            },
+            "why": "The same class from the least obvious direction: U+3164 HANGUL FILLER is category Lo -- a LETTER -- that renders as nothing. No character property groups it with the controls or the format characters, so it has to be named explicitly, alongside U+115F, U+1160, U+FFA0 and U+2800 BRAILLE PATTERN BLANK. Listed rather than inferred, because a future reader will otherwise assume \\p{Mn}+\\p{Cf} is the whole story, which is exactly the assumption that failed twice."
+        },
+        {
+            "id": "regress-024-numero-unique-alone-is-a-doubt",
+            "provenance": "synthetic",
+            "source": "cdc_habitat",
+            "title": "T3 Franconville",
+            "description": "Votre numéro unique de dossier vous sera communiqué par courriel.",
+            "fields": [],
+            "expect": {
+                "tenure": "UNKNOWN",
+                "outcome": "DIGEST"
+            },
+            "why": "Found by review round 3, 2026-08-06. 'numéro unique' alone is overwhelmingly the SNE in this domain, but it is also ordinary CRM boilerplate -- and as a determinate tier-3 SOCIAL signal it cleared the floor unaided, making this sentence a HARD, SILENT reject. Nothing arrives, and nothing arriving is indistinguishable from a quiet market (CLAUDE.md hard rule 8). It is now a doubt: the listing surfaces in the digest where a human settles it in three seconds. The discriminating form, with 'd'enregistrement', stays determinate -- see social-002."
+        },
+        {
+            "id": "regress-007-mixed-source-default-only-is-not-established",
+            "provenance": "synthetic",
+            "source": "icf_novedis",
+            "title": "T4 Bezons",
+            "description": "Proche gare, residence calme.",
+            "fields": [],
+            "expect": {
+                "tenure": "UNKNOWN",
+                "outcome": "DIGEST"
+            },
+            "why": "THE FAIL-CLOSED RULE APPLIED TO THE TENURE, not merely to the routing. spec §4 requires the verdict itself to become UNKNOWN below the floor on a mixed source; the code changed only the Outcome, leaving tenure LLI, so the two halves of the object disagreed and the next module written would have believed the eligible half. No fixture exercised the branch until this one, because every mixed source in the corpus declared no default. See also the ICF ruling in this file's source table."
+        }
+    ]
 }

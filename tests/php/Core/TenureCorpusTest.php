@@ -12,6 +12,7 @@ use RentWatch\Core\Outcome;
 use RentWatch\Core\RawListing;
 use RentWatch\Core\SourceProfile;
 use RentWatch\Core\Tenure;
+use RentWatch\Core\Text;
 use RentWatch\Core\TenureClassifier;
 
 /**
@@ -45,6 +46,66 @@ final class TenureCorpusTest extends TestCase
 
         if (isset($expect['max_confidence'])) {
             self::assertLessThanOrEqual((int) $expect['max_confidence'], $result->confidenceBp, $context);
+        }
+    }
+
+    /**
+     * §1 asserted against the LISTING, not against the verdict — the invariant that was missing.
+     *
+     * {@see testNoExcludedTenureEverReachesAMatch()} branches on `$result->tenure->isExcluded()`.
+     * Every §1 breach found so far had the verdict `LLI`, so that assertion never fired: a listing
+     * whose own description said `logements conventionnés` and one whose `financement` field said
+     * `PLUS CD` both reached MATCH with the whole suite green, including 26/26 sabotages. §1 is
+     * about what the LISTING says; that test is about what the classifier concluded.
+     *
+     * So: no corpus case may reach MATCH while its own text or fields name an excluded tenure —
+     * unless it is on the allow-list below, which exists because a handful of fixtures deliberately
+     * contain the FRENCH ADVERB `plus` and are the whole point of the collocation guard.
+     */
+    public function testNoListingNamingAnExcludedTenureEverReachesAMatch(): void
+    {
+        // Fixture ids that legitimately contain one of these tokens, each with the reason why.
+        // NOT a list of tenures — nothing here re-admits anything to the excluded set.
+        $exempt = [
+            // The `plus` adverb traps — the guard exists precisely so these MATCH.
+            'trap-001-plus-de-chambres' => 'the adverb in "plus de 3 chambres"',
+            'trap-002-au-plus-tard' => 'the adverb in "au plus tard" and "plus lumineux"',
+            'trap-003-plus-tier-uppercase-boundary' => 'a SHOUTED title, "PLUS DE 70 M2"',
+            'trap-003b-shouted-logement-plus-grand' => 'a SHOUTED "LOGEMENT PLUS GRAND"',
+            'trap-005-surplus-not-plus' => '"surplus" contains "plus"',
+            'trap-005b-plus-with-no-comparative-and-no-collocation' => '"PLUS UN BUREAU"',
+            // `conventionné` QUALIFYING an explicit intermediate label — the glossary's exception.
+            'lli-011-conventionne-with-intermediate-label' => 'CLAUDE.md glossary: conventionne '
+                . 'qualifying an explicit intermediate label is not excluded',
+            'regress-003-conventionne-with-a-tier-1-LLI-field' => 'a tier-1 LLI field is the '
+                . 'strongest evidence the ladder has and qualifies the whole listing',
+        ];
+
+        $classifier = new TenureClassifier();
+        $excludedTokens = ['plai', 'plus', 'pls', 'anru', 'anah', 'conventionne', 'logement social', 'hlm'];
+
+        foreach (Corpus::provider() as $id => [$listing, $source]) {
+            $result = $classifier->classify($listing, $source);
+
+            if ($result->outcome !== Outcome::MATCH || isset($exempt[$id])) {
+                continue;
+            }
+
+            $haystack = Text::fold($listing->text() . ' ' . implode(' ', $listing->fields));
+
+            foreach ($excludedTokens as $token) {
+                self::assertNull(
+                    Text::inflectedTokenPosition($haystack, $token),
+                    sprintf(
+                        "fixture %s reached MATCH while its own listing says '%s'.\n"
+                        . "That is CLAUDE.md §1. If this is a legitimate exception (the French "
+                        . "adverb, or conventionne qualifying an intermediate label), add it to "
+                        . '$exempt WITH the reason — do not delete the assertion.',
+                        $id,
+                        $token,
+                    ),
+                );
+            }
         }
     }
 

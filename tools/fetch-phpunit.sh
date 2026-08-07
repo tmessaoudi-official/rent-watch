@@ -60,12 +60,17 @@ fi
 # ── Signature check ──────────────────────────────────────────────────────────────────────────────
 # WRITTEN THIS WAY BECAUSE THE OBVIOUS WAY IS BROKEN, and a review caught it here:
 #
-#   if gpg --batch --verify sig file 2>&1 | grep -q "$EXPECTED_KEY"; then   # ← ACCEPTS A BAD SIGNATURE
+#   if gpg --batch --verify sig file 2>&1 | grep -q "$EXPECTED_KEY"; then   # ← vulnerable shape
 #
 # The pipeline's exit status is grep's, not gpg's, and gpg prints `using RSA key <fingerprint>` on
-# its output even when the very next line says `BAD signature`. So a tampered PHAR carrying a
-# signature that merely NAMES the pinned key passed. Demonstrated end to end in
-# tests/test-fetch-phpunit.sh, which is the reason that test exists.
+# its output even when the very next line says `BAD signature`. A tampered PHAR carrying a signature
+# that merely NAMES the pinned key would pass.
+#
+# IT NEVER PASSED HERE, and the correction matters more than the finding: `set -euo pipefail` above
+# makes that pipeline fail, so the shipped script always refused. Two reviewers disagreed about this
+# across two rounds; tests/test-fetch-phpunit.sh now asserts BOTH facts — vulnerable without
+# pipefail, safe with it — so it cannot be re-litigated from memory. The shape was replaced anyway,
+# because correctness that depends on a shell option set thirty lines away is correctness by luck.
 #
 # `--status-fd=1` emits the machine-readable protocol instead: `VALIDSIG <fingerprint>` appears only
 # for a signature that actually verified. gpg's own exit status is checked separately.
@@ -75,12 +80,23 @@ if [[ -s "$tmp/phpunit.phar.asc" ]]; then
   if gpg --list-keys "$EXPECTED_KEY" >/dev/null 2>&1 \
     || gpg --batch --quiet --keyserver hkps://keys.openpgp.org --recv-keys "$EXPECTED_KEY" >/dev/null 2>&1 \
     || gpg --batch --quiet --keyserver hkps://keyserver.ubuntu.com --recv-keys "$EXPECTED_KEY" >/dev/null 2>&1; then
-    gpg_out="$(gpg --batch --status-fd=1 --verify "$tmp/phpunit.phar.asc" "$tmp/phpunit.phar" 2>/dev/null)"
-    gpg_rc=$?
+    # `gpg_rc=$?` on the NEXT line would never run: `set -e` is on, and a bad signature makes gpg
+    # exit non-zero, which aborts the script at the assignment — taking the REFUSING message below
+    # with it. The outcome was still fail-closed (exit 1, nothing installed), but silently, with
+    # gpg's own stderr discarded by `2>/dev/null`. A security tool that refuses without saying why
+    # teaches its user to distrust the tool rather than the artefact. `|| gpg_rc=$?` keeps the
+    # assignment from tripping `set -e` so the diagnostic path actually executes.
+    gpg_rc=0
+    gpg_out="$(gpg --batch --status-fd=1 --verify "$tmp/phpunit.phar.asc" "$tmp/phpunit.phar" 2>/dev/null)" || gpg_rc=$?
 
+    # VALIDSIG's FIRST field is the signing key, which for a real release key is usually a SUBKEY;
+    # its LAST field is the primary. The pin was taken from gpg's `using RSA key` line, i.e. the
+    # signing key — but this file invites a maintainer to verify the fingerprint out of band, and
+    # phpunit.de publishes the PRIMARY. Accepting either stops that correction from breaking every
+    # future fetch, and neither can be forged without the private key.
     if [[ $gpg_rc -eq 0 ]] \
       && grep -q '^\[GNUPG:\] GOODSIG' <<<"$gpg_out" \
-      && grep -q "^\[GNUPG:\] VALIDSIG $EXPECTED_KEY" <<<"$gpg_out"; then
+      && grep -qE "^\[GNUPG:\] VALIDSIG ($EXPECTED_KEY |.* $EXPECTED_KEY\$)" <<<"$gpg_out"; then
       sig_state='good'
       printf '  signature VERIFIED against the pinned key\n'
     else

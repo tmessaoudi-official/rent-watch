@@ -30,7 +30,7 @@ As of 2026-08-06 the repo carries `spec/PROJECT_BRIEF.md`, `prototype/`, `CLAUDE
 source" are all findings *about things that do not exist* — and for this lens they are the best output
 it has. Incompleteness relative to the **spec** is legitimate and useful right now; that gap is most of
 the project. What is forbidden is *attributing* a finding to a file that does not exist — quoting
-`src/core/tenure.py:42`, or claiming to have read a test suite that was never written. Report the gap;
+a path that does not exist (`src/core/tenure.py` never has), or claiming to have read a test suite that was never run — `php tools/phpunit.phar` exists, so run it. Report the gap;
 anchor it to something real (the spec section, the config file, the CLAUDE.md rule it violates).
 An earlier wording said "a finding about a file that does not exist is not [legitimate]", which would
 have downgraded this lens to code-only correctness — the reviewer reading its own charter caught it.

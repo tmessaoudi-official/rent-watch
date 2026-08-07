@@ -143,7 +143,7 @@ Classify each file:
 
 Three rent-watch classifications that outrank the rest when they apply:
 
-1. A staged change to **`src/core/tenure.*`, the excluded-tenure set, the confidence threshold, or a
+1. A staged change to **`src/php/Core/Tenure*.php`, `src/php/Core/Text.php`, the excluded-tenure set, the confidence threshold, or a
    classifier fixture** is a Public-interface change *and* the highest blast-radius item this repo
    has. State explicitly: which tenures can now reach a notification that could not before (the
    answer must be "none"), whether the corpus was re-run, and whether any fixture label changed. This
