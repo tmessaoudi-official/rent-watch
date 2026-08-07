@@ -752,9 +752,9 @@ run_sabotage "the padded-base64 blob pattern is removed" \
   src/php/Core/Redact.php \
   's%{16,}%{999,}%g'
 
-run_sabotage "the LOGIN tag requirement is dropped (French prose is eaten)" \
+run_sabotage "the LOGIN stoplist is bypassed (French prose is eaten)" \
   src/php/Core/Redact.php \
-  's%(\[A-Za-z\]{0,4}\[0-9\]{1,5})\[ .t\]+(LOGIN)%(LOGIN)%'
+  's%(LOGIN)\[ .t\]+. . $notProse . .%(LOGIN)[ \\t]+\x27 . \x27%'
 
 
 # ── The store, round five ─────────────────────────────────────────────────────────────────────────
@@ -777,7 +777,7 @@ run_sabotage "the base64 blob drops its padding requirement (identifiers are eat
 
 run_sabotage "the whole-line base64 rule is removed (SMTP AUTH blobs pass through)" \
   src/php/Core/Redact.php \
-  's%.\[A-Za-z0-9+/\]{16,}={0,2}%^zzz-no-such-blob%'
+  's%(?:\[A-Za-z0-9+/\]{4}){4,}%zzz-no-such-blob%'
 
 run_sabotage "a value of pure punctuation is masked again (JSON parse errors are eaten)" \
   src/php/Core/Redact.php \
@@ -800,7 +800,7 @@ run_sabotage "record() reverts to a deferred transaction (the busy handler is sk
 
 run_sabotage "journalMode() reports what was asked for, not what was given" \
   src/php/Store/Store.php \
-  "s%\$journalMode = \$mode === false ? 'unknown' : (string) \$mode->fetchColumn();%\$journalMode = 'wal';%"
+  "s%\$journalMode = (string) \$mode->fetchColumn();%\$journalMode = 'wal';%"
 
 run_sabotage "the span reverts to last-minus-first (a skewed first run disables the detector)" \
   src/php/Store/Store.php \
@@ -832,9 +832,72 @@ run_sabotage "the ntfy topic drops back to the ambiguous list (a JSON body leaks
   src/php/Core/Redact.php \
   "s%^        'topic',\$%%"
 
-run_sabotage "the failure count is bounded on the new side again (a stale writer hides failures)" \
+run_sabotage "the counting window has no upper edge at all" \
   src/php/Store/Store.php \
-  "s%if ((int) \$runs\[\$i\]\['at_epoch'\] < \$cutoff) {%if ((int) \$runs[\$i]['at_epoch'] < \$cutoff || (int) \$runs[\$i]['at_epoch'] > \$reference) {%"
+  's%$edge = $now ?? (int) $runs\[array_key_last($runs)\]\[.at_epoch.\];%$edge = PHP_INT_MAX;%'
+
+# ── The store, round seven ────────────────────────────────────────────────────────────────────────
+#
+# Round 14 returned 25 findings. Two were the LOGIN rule and the counting window overshooting AGAIN,
+# in the opposite direction each time; the rest were guarantees this file was not watching. Every
+# sub-part of the two camel boundaries now has its own case, because "remove the whole alternative"
+# turned out to pass while three of its four pieces could be degraded silently.
+
+run_sabotage "boundaryL loses its (?-i:) wrapper (bypass= is eaten)" \
+  src/php/Core/Redact.php \
+  's%(?-i:(?<=\[a-z0-9\])(?=\[A-Z\]))%(?<=[a-z0-9])(?=[A-Z])%'
+
+run_sabotage "boundaryR loses its (?-i:) wrapper (keyword= and signal= are eaten)" \
+  src/php/Core/Redact.php \
+  's%(?-i:(?=\[A-Z\]\[a-z\]))%(?=[A-Z][a-z])%'
+
+run_sabotage "boundaryR drops the real-hump requirement (PASSAGE= is eaten)" \
+  src/php/Core/Redact.php \
+  's%(?=\[A-Z\]\[a-z\])%(?=[A-Z])%'
+
+run_sabotage "the AUTHENTICATE rule is removed entirely (a short SASL argument leaks)" \
+  src/php/Core/Redact.php \
+  's%(AUTHENTICATE)\[ .t\]+(\[A-Za-z0-9%(zzz-no-such-verb)[ \\t]+([A-Za-z0-9%'
+
+run_sabotage "the whole-line base64 rule loses its CRLF tolerance" \
+  src/php/Core/Redact.php \
+  's%){4,}={0,2})\[ .t\]\*.r?\$~m%){4,}={0,2})[ \\t]*$~m%'
+
+run_sabotage "the whole-line base64 rule drops its multiple-of-four requirement" \
+  src/php/Core/Redact.php \
+  's%(?:\[A-Za-z0-9+/\]{4}){4,}%[A-Za-z0-9+/]{16,}%'
+
+run_sabotage "the whole-line base64 rule drops its mixed-case requirement" \
+  src/php/Core/Redact.php \
+  's%(?=\[A-Za-z0-9+/\]\*\[A-Z\])%%'
+
+run_sabotage "the whole-line base64 rule loses its trace-prefix allowance" \
+  src/php/Core/Redact.php \
+  "s%'~(^|\[:>\]\[ .t\])%'~(^)%"
+
+run_sabotage "the PASS stoplist loses its French half" \
+  src/php/Core/Redact.php \
+  "s%|erreur|unknown|inconnu%|zzz-no-word-1|unknown|zzz-no-word-2%"
+
+run_sabotage "the stoplist loses its case-insensitivity" \
+  src/php/Core/Redact.php \
+  "s%(?i:' . self::PROSE_AFTER_VERB%(?:' . self::PROSE_AFTER_VERB%"
+
+run_sabotage "the stoplist boundary reverts to \\b (accented entries go dead)" \
+  src/php/Core/Redact.php \
+  "s%')(?!\[A-Za-z0-9_\]))'%')..b)'%"
+
+run_sabotage "the byte-fallback trim loses \\x85 and \\xAD" \
+  src/php/Store/Store.php \
+  's%.x85.xA0.xAD%\\xA0%'
+
+run_sabotage "the counting window loses its upper edge (a future-stamped row alerts forever)" \
+  src/php/Store/Store.php \
+  's%if ($at < $cutoff || $at > $edge) {%if ($at < $cutoff) {%'
+
+run_sabotage "the counting window ignores the clock (a stale writer hides failures)" \
+  src/php/Store/Store.php \
+  "s%\$edge = \$now ?? (int)%\$edge = (int)%"
 
 printf '\n  %d sabotage(s) detected, %d undetected\n' "$pass" "$fail"
 

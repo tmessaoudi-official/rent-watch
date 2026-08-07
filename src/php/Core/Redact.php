@@ -64,7 +64,11 @@ final readonly class Redact
         'command|commande|failed|required|requis|invalid|invalide|incorrect|expected|attendu'
         . '|argument|arguments|syntax|syntaxe|missing|manquant|denied|refused|refuse|refusé|error'
         . '|erreur|unknown|inconnu|supported|allowed|obligatoire|only|must|cannot|not|non|is|was'
-        . '|before|after|avant|apres|après';
+        . '|before|after|avant|apres|après'
+        // Prepositions and politeness, for the LOGIN rule: `échec LOGIN sur imap.example.net`,
+        // `LOGIN please use the referral server` (RFC 2221).
+        . '|sur|please|veuillez|to|for|via|au|aux|du|de|des|dans|depuis|avec|use|utilisez'
+        . '|rejected|rejete|rejeté|impossible|echec|échec|indisponible|unavailable|timeout';
 
     public static function text(?string $message): ?string
     {
@@ -83,8 +87,7 @@ final readonly class Redact
         // first version allowed any surrounding letters, which turned every name into a substring
         // match and ate this project's own vocabulary: `passage:` (the PRIM enrichment domain),
         // `passed:`, `tokens:`, `bypass:`, `signatures:`, `keyword=`, `signal=` and `design=`.
-        // All of those survived before the affix existed. Hence the boundaries below: a component
-        // ends at `_`, `-` or `.`, and never mid-word.
+        // All of those survived before the affix existed. Hence the boundaries below.
         // A component boundary is a DELIMITER *or* a case transition. Requiring a delimiter alone
         // was the round-13 P0: camelCase is the dominant JSON key convention and the literal
         // spelling of every OAuth field, so `clientSecret`, `accessToken`, `botToken`,
@@ -98,8 +101,14 @@ final readonly class Redact
         // `PASSAGE` and `SIGNAL` in an all-caps log line stay intact.
         $boundaryL = '(?:(?<![A-Za-z])|(?-i:(?<=[a-z0-9])(?=[A-Z])))';
         $boundaryR = '(?:(?![A-Za-z])|(?-i:(?=[A-Z][a-z])))';
-        $before = '[A-Za-z0-9_.\-]*' . $boundaryL;
-        $after = $boundaryR . '[A-Za-z0-9_.\-]*';
+        // BOUNDED, not `*`. An unbounded greedy star makes matching quadratic in the length of an
+        // unbroken `[A-Za-z0-9_.-]` run: 448 KB of `secret.secret.…` took 18 seconds, and anchoring
+        // the star to a token start made it worse rather than better. No realistic payload produces
+        // such a run — spaces, quotes, `<`, `:` and newlines all break it — but `Redact::text()`
+        // sits on the synchronous poll path, and a 40-character cap costs nothing: no env-var
+        // prefix or camelCase component in this domain comes close.
+        $before = '[A-Za-z0-9_.\-]{0,40}' . $boundaryL;
+        $after = $boundaryR . '[A-Za-z0-9_.\-]{0,40}';
 
         // A value that is itself a URL is never the secret — the secret is INSIDE it, and the
         // query-parameter branch reaches that on its own pass.
@@ -129,6 +138,9 @@ final readonly class Redact
         // quoted alternative below from matching, which is how a quoted passphrase kept leaking all
         // but its first word.
         $delimiter = '["\']?\s*(?:=>|[:=])\s*';
+
+        // Shared by all three credential-verb rules below.
+        $notProse = '(?!(?i:' . self::PROSE_AFTER_VERB . ')(?![A-Za-z0-9_]))';
 
         $patterns = [
             // URL userinfo: https://user:hunter2@host/… The `?` exclusions stop a query-borne `@`
@@ -161,40 +173,51 @@ final readonly class Redact
             //     the password on their own lines, where no verb precedes them.
             '~\b[A-Za-z0-9+/]{16,}==~' => self::MASK,
             '~\b(?=[A-Za-z0-9+/]*[0-9+/])[A-Za-z0-9+/]{16,}=~' => self::MASK,
-            '~^[A-Za-z0-9+/]{16,}={0,2}[ \t]*\r?$~m' => self::MASK,
-            // IMAP `<tag> LOGIN <user> <pass>` and POP3 `PASS <pass>` — space-separated, no
-            // delimiter at all, and on the primary ingestion path. Three rules have failed here and
-            // each failure is encoded below rather than summarised.
+            //   A line that is nothing but base64 — SMTP AUTH puts the user and the password on
+            //     their own lines, where no verb precedes them. Three narrowings, each earned:
+            //     a MULTIPLE OF FOUR (base64 always is), and BOTH cases present (encoded random
+            //     bytes are mixed-case; French words and SCREAMING_CONSTANTS are not). Without them
+            //     this ate `AUTHENTICATIONFAILED`, `tests/fixtures/tenure`, a bare SHA-256 line and
+            //     — worst — `conventionnement`, which is §1 classifier vocabulary. A `[:>] ` prefix
+            //     is allowed because a debug trace writes `CLIENT -> SERVER: <blob>`.
+            '~(^|[:>][ \t])((?=[A-Za-z0-9+/]*[a-z])(?=[A-Za-z0-9+/]*[A-Z])(?:[A-Za-z0-9+/]{4}){4,}={0,2})[ \t]*\r?$~m'
+                => '$1' . self::MASK,
+            // IMAP `LOGIN <user> <pass>`, POP3 `PASS <pass>`, SASL `AUTHENTICATE <mech> <arg>` —
+            // space-separated, no delimiter at all, and on the primary ingestion path. Four rules
+            // have failed here and each failure is recorded rather than summarised.
             //
             // 1. A character class ("the argument contains a digit or a symbol") LEAKED every
             //    all-letter password. A Google app password is sixteen lowercase letters, and a
             //    dedicated Gmail mailbox is what `.env.example` provisions.
-            // 2. An end-of-line anchor alone leaked whenever the adapter WRAPPED the library error
-            //    with its own context — `… > A01 LOGIN user pass (tentative 1/3)` — which is the
-            //    natural way to satisfy hard rule 3. Seven of thirteen realistic shapes got through.
-            // 3. A short negative lookahead ate `PASS command issued in wrong state` (RFC 1939).
+            // 2. An end-of-line anchor leaked whenever the adapter WRAPPED the library error with
+            //    its own context — `… > A01 LOGIN user pass (tentative 1/3)` — which is the natural
+            //    way to satisfy hard rule 3. Seven of thirteen realistic shapes got through.
+            // 3. An IMAP-TAG whitelist for LOGIN failed OPEN: `[A-Za-z]{0,4}[0-9]{1,5}` misses a
+            //    six-digit tag, a longer prefix, a `.`/`*` tag and an untagged trace, and every one
+            //    of those put a cleartext password into a push notification.
+            // 4. A short negative lookahead ate `PASS command issued in wrong state` (RFC 1939).
             //
-            // So LOGIN keys off the IMAP TAG, which prose does not have — an untagged end-of-line
-            // variant was tried and ate `échec LOGIN sur imap.example.net`, and IMAP commands always
-            // carry a tag anyway. PASS keys off a stoplist of protocol and prose
-            // words — and note the DIRECTION: an unlisted word is MASKED, so a missing entry costs a
-            // masked diagnostic word, never a leaked credential. The earlier lookahead had it the
-            // other way round.
-            '~\b([A-Za-z]{0,4}[0-9]{1,5})[ \t]+(LOGIN)[ \t]+(?:' . $quoted . '|\S+)[ \t]+(?:' . $quoted . '|\S+)~'
-                => '$1 $2 ' . self::MASK,
-            '~\b(PASS)[ \t]+(?!(?i:' . self::PROSE_AFTER_VERB . ')\b)(?:' . $quoted . '|\S+)~'
+            // So all three verbs now key off ONE stoplist, and the direction is the whole point: an
+            // unlisted word is MASKED, so a missing entry costs one masked diagnostic word and never
+            // a leaked credential. Rule 3 failed the other way, in the same class whose docblock
+            // says losing a diagnostic is recoverable and leaking is not.
+            //
+            // `(?![A-Za-z0-9_])` rather than `\b`: there is no `u` flag here, so after a multi-byte
+            // character `\b` can never assert — both the trailing byte of `é` and the space after it
+            // are non-word bytes. `refusé` was a dead entry because of it, and being the only
+            // accented one, nothing else exposed the defect.
+            '~\b(LOGIN)[ \t]+' . $notProse . '(?:' . $quoted . '|\S+)[ \t]+(?:' . $quoted . '|\S+)~'
                 => '$1 ' . self::MASK,
-            // AUTHENTICATE keys off the tag for the same reason LOGIN does: an untagged
-            // `AUTHENTICATE XOAUTH2 rejected, server requires PLAIN` is a server RESPONSE, and
-            // which mechanism was rejected is the whole diagnostic. The mechanism name is kept.
-            '~\b([A-Za-z]{0,4}[0-9]{1,5})[ \t]+(AUTHENTICATE)[ \t]+([A-Za-z0-9\-]{3,20})[ \t]+(?:' . $quoted . '|\S+)~'
-                => '$1 $2 $3 ' . self::MASK,
+            '~\b(PASS)[ \t]+' . $notProse . '(?:' . $quoted . '|\S+)~' => '$1 ' . self::MASK,
+            // The mechanism name survives: which mechanism the server rejected is the diagnostic.
+            '~\b(AUTHENTICATE)[ \t]+([A-Za-z0-9\-]{3,20})[ \t]+' . $notProse . '(?:' . $quoted . '|\S+)~'
+                => '$1 $2 ' . self::MASK,
             // key=…, token: …, "client_secret": "…", Authorization: Bearer …
             // The key's own closing quote is captured into `$1`, so `['api_key' => '…']` keeps its
             // bracket count instead of coming out as `['api_key=[masqué]]`.
             '~(' . $before . '(?:' . $names . ')' . $after . '["\']?)\s*(?:=>|[:=])\s*' . $value . '~i'
                 => '$1=' . self::MASK,
-            '~(' . $before . '(?:' . $ambiguous . ')' . $after . ')["\']?\s*(?:=>|=)\s*' . $value . '~i'
+            '~(' . $before . '(?:' . $ambiguous . ')' . $after . '["\']?)\s*(?:=>|=)\s*' . $value . '~i'
                 => '$1=' . self::MASK,
             // The RFR income figure. `CLAUDE.md` hard rule 7 names it in the same breath as the
             // IMAP password, and the eligibility comparison of Q6 is exactly the code that would

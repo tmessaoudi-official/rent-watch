@@ -301,3 +301,43 @@ time by following the worktree recipe I had written one commit earlier — which
 - [2026-08-08 09:20] AGREED: the worktree rule lives in `CLAUDE.md` § "Certification ladder", not
   only in the agent charters. The charters are exactly the surface that is absent in the
   self-graded fallback the ladder itself names.
+
+### Round 14 — 25 findings, and two of them were false claims in my own commit message
+
+The correction first, because it is the worst of the four P0s. `202c744`'s message said *"the
+`exec('ROLLBACK')` justification is corrected"* and *"the store test contract gains the three
+categories it was missing"*. Neither was true: the comment was byte-identical across both commits
+(the edit lived in a script that aborted before writing), and two categories were added, not three.
+A changelog that overstates is worse than one that omits, because the next session stops checking.
+
+- [2026-08-08 14:05] AGREED: **all three credential verbs key off ONE stoplist**, and none off a
+  whitelist. An IMAP-tag whitelist for `LOGIN` failed OPEN — `[A-Za-z]{0,4}[0-9]{1,5}` misses a
+  six-digit tag, a longer prefix, a `.`/`*` tag and an untagged trace, every one of which put a
+  cleartext password into a push notification. `PASS` failed CLOSED on the same commit, so one class
+  held two rules failing in opposite directions, which its own docblock forbids.
+- [2026-08-08 14:05] AGREED: the stoplist's boundary is `(?![A-Za-z0-9_])`, not `\b`. Without a `u`
+  flag, `\b` cannot assert after a multi-byte character, so `refusé` was a dead entry — and being
+  the only accented one, nothing else exposed it.
+- [2026-08-08 14:05] AGREED: **the counting window's upper edge is `now`, and only a clock knows it.**
+  Three attempts: bounded by the last-inserted stamp hid eleven real failures behind a lagging
+  writer; unbounded above let twenty future-stamped successes dilute a flaky source back to `OK` AND
+  let ten future-stamped failures alert permanently through ninety healthy days, with a detail line
+  claiming ten failures "en 7 jours" when the window held none. Bounded by `$now` is correct in both
+  directions, because a row stamped after the current time has not happened yet.
+- [2026-08-08 14:05] AGREED: the whole-line base64 rule needs a multiple of four AND both letter
+  cases. Without them it ate `AUTHENTICATIONFAILED`, `tests/fixtures/tenure`, a bare SHA-256 line and
+  `conventionnement` — §1 classifier vocabulary — while a `[:>] ` prefix allowance is what covers the
+  `CLIENT -> SERVER: <blob>` shape an unpadded secret actually arrives in.
+- [2026-08-08 14:05] AGREED: the name affix is BOUNDED at 40 characters. An unbounded greedy star is
+  quadratic in the length of an unbroken `[A-Za-z0-9_.-]` run (448 KB took 18 s), and anchoring it to
+  a token start made it worse, not better. No realistic payload produces such a run, but
+  `Redact::text()` sits on the synchronous poll path.
+- [2026-08-08 14:05] AGREED: the four `=== false` guards after `query()` are REMOVED. Under
+  `ERRMODE_EXCEPTION` they are unreachable, and each fabricated a benign default for a condition that
+  cannot occur. The `$row === false` checks after `fetch()` stay — an empty result set is ordinary.
+- [2026-08-08 14:05] AGREED: `seen-set` is a named test category. "A listing is new exactly once" and
+  "notified is not seen" are the store's two most basic guarantees and had no category for three
+  rounds, while the contract said a behaviour without one is a behaviour nobody decided to guarantee.
+- [2026-08-08 14:05] AGREED (carried from `2f119d7`, missing from this log until now): the ntfy
+  `topic` sits in the strict name list rather than the ambiguous one, so `{"topic":"…"}` from an HTTP
+  client is masked and not only `NTFY_TOPIC=`.

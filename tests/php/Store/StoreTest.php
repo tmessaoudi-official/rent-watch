@@ -361,7 +361,11 @@ final class StoreTest extends TestCase
         // valid UTF-8, so the Unicode trim's `/u` pattern returns null and the byte fallback is what
         // has to strip it. With a plain `trim()` it survived, made the id look non-empty, and
         // collapsed every listing in the run onto `:id:%A0`.
-        foreach (["\u{00A0}", "\u{2007}", "\u{202F}", "\u{3000}", "\u{200B}", "\u{FEFF}", " \t ", "\xA0"] as $blank) {
+        // The last three are LATIN-1 bytes, not valid UTF-8: `\xA0` (&nbsp;), `\x85` (NEL) and
+        // `\xAD` (soft hyphen), all of which appear in scraped text. The Unicode trim's `/u` pattern
+        // returns null on them, so the byte fallback is what has to strip them — and only `\xA0`
+        // was pinned, leaving the other two asserted by a code comment alone.
+        foreach (["\u{00A0}", "\u{2007}", "\u{202F}", "\u{3000}", "\u{200B}", "\u{FEFF}", " \t ", "\xA0", "\x85", "\xAD"] as $blank) {
             $a = $this->listing(externalId: $blank, url: 'https://a.test/1', title: 'T2 Nanterre');
             $b = $this->listing(externalId: $blank, url: 'https://a.test/2', title: 'T4 Meudon');
 
@@ -1211,11 +1215,11 @@ final class StoreTest extends TestCase
         $health = $this->store->health('inli');
 
         self::assertSame(SourceStatus::OK, $health->status);
-        // The MEAN excludes it — that is what the upper bound on `rollingMeanBefore()` is for. The
-        // COUNT includes it, deliberately: a run happened, whatever its clock says, and bounding the
-        // count on the new side is what let a stale-stamping writer hide eleven real failures.
+        // Both the mean and the count exclude it. `health()` is called here WITHOUT a clock, so the
+        // window's upper edge falls back to the last-inserted stamp — bounded and self-correcting.
+        // Leaving the count unbounded instead made a future-stamped row alert forever.
         self::assertSame(10.0, $health->rollingMean, 'the 2036 run inflated the mean of every later verdict');
-        self::assertSame(6, $health->runsInWindow);
+        self::assertSame(5, $health->runsInWindow);
     }
 
     /**
@@ -1304,7 +1308,7 @@ final class StoreTest extends TestCase
 
         // All four in-window predecessors, not just the two on the near side of the bad row.
         self::assertSame(55.0, $health->rollingMean);
-        self::assertSame(6, $health->runsInWindow, 'the out-of-range run still happened');
+        self::assertSame(5, $health->runsInWindow, 'the out-of-range run is outside the window');
     }
 
     /**
@@ -1521,7 +1525,60 @@ final class StoreTest extends TestCase
 
         self::assertTrue($health->status->isAlerting(), 'eleven real failures reported as healthy');
         self::assertSame(SourceStatus::WARN_FLAKY, $health->status);
-        self::assertSame(11, $health->failedRunsInWindow);
+        // Seven, not eleven: the clock puts the window's cutoff at day 6, so the four failures
+        // before it age out exactly as they should. What matters is that NONE of the stale-stamped
+        // successes dilute the ratio — they are older than the cutoff too.
+        self::assertSame(7, $health->failedRunsInWindow);
+        self::assertSame(7, $health->runsInWindow);
+    }
+
+    /**
+     * Future-stamped SUCCESSES must not dilute a genuinely flaky source back to healthy.
+     *
+     * Twenty successes stamped a year ahead pushed a source with seven failures in twenty-one real
+     * runs from `WARN_FLAKY` to `OK` — hard rule 2's headline failure, reached by inflating the
+     * denominator. A row stamped after the current time has not happened yet.
+     */
+    public function testFutureStampedSuccessesDoNotDiluteAFlakySource(): void
+    {
+        foreach (range(1, 21) as $i) {
+            $ok = $i % 3 !== 0;
+            $this->store->recordRun('inli', $ok ? 12 : 0, $ok, $ok ? null : 'HTTP 502',
+                sprintf('2026-08-%02dT09:00:00+00:00', $i));
+        }
+
+        foreach (range(1, 20) as $i) {
+            $this->store->recordRun('inli', 12, true, null, sprintf('2027-08-%02dT09:00:00+00:00', $i));
+        }
+
+        $health = $this->store->health('inli', '2026-08-21T10:00:00+00:00');
+
+        self::assertSame(SourceStatus::WARN_FLAKY, $health->status);
+        self::assertTrue($health->status->isAlerting());
+    }
+
+    /**
+     * Future-stamped FAILURES must not alert forever, either.
+     *
+     * Ten failures logged while the clock read 2036 — a dead RTC, a pre-NTP boot — kept
+     * `WARN_FLAKY` on through ninety healthy days, with a detail line claiming ten failures "en 7
+     * jours" when the last seven days held none. An alert that never clears is one the operator
+     * learns to ignore, which puts a genuinely broken source back to indistinguishable from quiet.
+     */
+    public function testFutureStampedFailuresDoNotAlertForever(): void
+    {
+        foreach (range(1, 10) as $i) {
+            $this->store->recordRun('inli', 0, false, 'HTTP 502', sprintf('2036-01-%02dT09:00:00+00:00', $i));
+        }
+
+        foreach (range(1, 28) as $i) {
+            $this->store->recordRun('inli', 12, true, null, sprintf('2026-09-%02dT09:00:00+00:00', $i));
+        }
+
+        $health = $this->store->health('inli', '2026-09-28T10:00:00+00:00');
+
+        self::assertSame(SourceStatus::OK, $health->status);
+        self::assertSame(0, $health->failedRunsInWindow);
     }
 
     /**

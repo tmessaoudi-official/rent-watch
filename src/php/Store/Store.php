@@ -142,7 +142,7 @@ final readonly class Store
         // back and kept, rather than assumed. It is not fatal (`:memory:` legitimately answers
         // `memory`), but it must be visible: `scout doctor` reports it.
         $mode = $pdo->query('PRAGMA journal_mode = WAL');
-        $journalMode = $mode === false ? 'unknown' : (string) $mode->fetchColumn();
+        $journalMode = (string) $mode->fetchColumn();
         // An unconsumed result set counts as a statement in progress and makes the FIRST COMMIT of
         // the migration below fail with "cannot commit transaction - SQL statements in progress".
         $mode?->closeCursor();
@@ -259,7 +259,7 @@ final readonly class Store
         try {
             if ($recorded < 2) {
                 $columns = $this->pdo->query('PRAGMA table_info(listings)');
-                $names = $columns === false ? [] : array_column($columns->fetchAll(), 'name');
+                $names = array_column($columns->fetchAll(), 'name');
 
                 if (!\in_array('seen_epoch', $names, true)) {
                     $this->pdo->exec('ALTER TABLE listings ADD COLUMN seen_epoch INTEGER NOT NULL DEFAULT 0');
@@ -270,7 +270,7 @@ final readonly class Store
                 $rows = $this->pdo->query('SELECT dedup_key, last_seen_at FROM listings WHERE seen_epoch = 0');
                 $update = $this->pdo->prepare('UPDATE listings SET seen_epoch = :epoch WHERE dedup_key = :key');
 
-                foreach ($rows === false ? [] : $rows->fetchAll() as $row) {
+                foreach ($rows->fetchAll() as $row) {
                     try {
                         $epoch = self::epoch((string) $row['last_seen_at']);
                     } catch (\InvalidArgumentException) {
@@ -604,8 +604,9 @@ final readonly class Store
      * of it did not. A log that drops entries is not a log.
      *
      * What actually defends against a poisoned timestamp is downstream, in {@see health()}: recency
-     * is read from the log's own insertion order, and the rolling window is bounded at both ends so
-     * a run dated 2036 cannot sit in it forever.
+     * is read from the log's own insertion order, and the rolling MEAN is bounded at both ends so a
+     * run dated 2036 cannot inflate it forever. The COUNTS are bounded differently — see
+     * {@see windowCounts()}, which has to answer a different question.
      *
      * @throws \InvalidArgumentException on an unreadable timestamp
      */
@@ -703,7 +704,7 @@ final readonly class Store
         $epochs = array_map(static fn (array $run): int => (int) $run['at_epoch'], $runs);
         $emptyStreak = self::trailingEmptyRuns($runs);
         $rollingMean = self::rollingMeanBefore($runs, \count($runs) - 1);
-        [$runsInWindow, $failedInWindow] = self::windowCounts($runs);
+        [$runsInWindow, $failedInWindow] = self::windowCounts($runs, $nowIso === null ? null : self::epoch($nowIso));
 
         $health = static fn (SourceStatus $status, string $detail): SourceHealth => new SourceHealth(
             sourceName: $sourceName,
@@ -816,8 +817,13 @@ final readonly class Store
 
     private function schemaVersionOrNull(): ?int
     {
+        // No `$statement === false` guard: `ERRMODE_EXCEPTION` is set at construction, so `query()`
+        // throws rather than returning false. Four such branches existed and all four were dead —
+        // each fabricating a benign default for a condition that cannot occur, which reads as
+        // protection and provides none. The `$row === false` checks after `fetch()` are LIVE and
+        // stay: an empty result set is an ordinary outcome.
         $statement = $this->pdo->query("SELECT value FROM schema_meta WHERE key = 'schema_version'");
-        $row = $statement === false ? false : $statement->fetch();
+        $row = $statement->fetch();
 
         return $row === false ? null : (int) $row['value'];
     }
@@ -940,7 +946,7 @@ final readonly class Store
      * @param  list<array{ok:int|string, at_epoch:int|string, ...}> $runs
      * @return array{int, int}
      */
-    private static function windowCounts(array $runs): array
+    private static function windowCounts(array $runs, ?int $now): array
     {
         // Anchored on the LAST-INSERTED row, deliberately, and NOT on `max(at_epoch)`.
         //
@@ -949,18 +955,31 @@ final readonly class Store
         // the maximum loses it FOREVER, because the skewed row stays the maximum and every real row
         // sits outside its window. A bounded degradation beats a permanent one, so this reads the
         // log's own order for the same reason `health()` does.
-        $reference = (int) $runs[array_key_last($runs)]['at_epoch'];
-        $cutoff = $reference - self::ROLLING_WINDOW_DAYS * 86400;
+        // THE UPPER EDGE OF THE WINDOW IS "NOW", AND ONLY A CLOCK KNOWS IT.
+        //
+        // Three attempts, each failing differently, so all three are recorded:
+        //   bounded by the last-INSERTED row's stamp — a writer stamping from a lagging `Date:`
+        //     header hid eleven consecutive real failures, because every newer-stamped row fell
+        //     outside the window and `failedRunsInWindow` read 0 of 11.
+        //   unbounded above — a future-stamped row never leaves the window. Twenty successes
+        //     stamped a year ahead diluted a genuinely flaky source back to OK; ten failures
+        //     stamped a year ahead alerted permanently through ninety healthy days, with a detail
+        //     line reading "10 échecs sur 18 runs en 7 jours" when the last seven days held none.
+        //   bounded by `$now` — correct in both, because a row stamped after the current time has
+        //     not happened yet. That is the whole reason `health()` takes a clock.
+        //
+        // Without a clock we fall back to the last-inserted stamp: the first failure above, bounded
+        // and self-correcting, rather than the second, unbounded in both directions. `CLAUDE.md`
+        // requires `scout doctor` to pass one.
+        $edge = $now ?? (int) $runs[array_key_last($runs)]['at_epoch'];
+        $cutoff = $edge - self::ROLLING_WINDOW_DAYS * 86400;
         $total = 0;
         $failed = 0;
 
-        // COUNTING is bounded on the OLD side only. The upper bound belongs on the MEAN, where a
-        // future-stamped row would otherwise inflate every later verdict — but applied to the counts
-        // it hid failures: two writers on one source, one stamping from a lagging `Date:` header,
-        // gave eleven consecutive real failures with `failedRunsInWindow` reading 0 of 11, so
-        // neither BROKEN nor WARN_FLAKY could fire. A failure is a failure whatever its clock says.
         for ($i = \count($runs) - 1; $i >= 0; --$i) {
-            if ((int) $runs[$i]['at_epoch'] < $cutoff) {
+            $at = (int) $runs[$i]['at_epoch'];
+
+            if ($at < $cutoff || $at > $edge) {
                 continue;
             }
 
@@ -985,9 +1004,12 @@ final readonly class Store
     private static function rollBackQuietly(\PDO $pdo): void
     {
         try {
-            // `exec('ROLLBACK')` rather than `PDO::rollBack()`, to match the `BEGIN IMMEDIATE`
-            // above: PDO tracks only transactions it started itself, so `rollBack()` would throw
-            // "no active transaction" on every call regardless of the real state.
+            // `exec('ROLLBACK')` to match the `BEGIN IMMEDIATE` above — symmetry, not necessity.
+            // An earlier version of this comment claimed `PDO::rollBack()` would throw because PDO
+            // tracks only its own transactions. That is FALSE for PDO_SQLITE, which reads the
+            // engine's autocommit state: `inTransaction()` is true after `exec('BEGIN IMMEDIATE')`
+            // and `rollBack()` works. The correction is recorded rather than silently applied
+            // because the previous commit's message claimed to have made it and had not.
             $pdo->exec('ROLLBACK');
         } catch (\Throwable) {
             // The engine already rolled back — verified in BOTH journal modes: SQLITE_FULL leaves

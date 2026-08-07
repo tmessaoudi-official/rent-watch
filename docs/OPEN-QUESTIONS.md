@@ -345,10 +345,12 @@ closing them needed thresholds the spec does not supply:
 | STALE's silence bound | `ROLLING_WINDOW_DAYS` (7 days) | no run in this long ⇒ the schedule itself has stopped |
 | `Store::BUSY_TIMEOUT_MS` | `5000` | how long a second writer waits before giving up |
 
-The shapes being caught, all four the same class — a source that is not working and does not fail:
-one erroring on half its fetches (the streak counter resets on any success, and the BROKEN rule
-reads only the last run); one that answers HTTP 200 and parses zero items forever; one whose
-schedule stopped; and two processes contending for the database instead of waiting.
+Three of the four shapes are the same class — a source that is not working and does not fail: one
+erroring on half its fetches (the streak counter resets on any success, and the BROKEN rule reads
+only the last run); one that answers HTTP 200 and parses zero items forever; and one whose schedule
+stopped. The fourth is not: two processes contending for the database fails LOUDLY with
+`SQLITE_BUSY`, which is precisely why `BUSY_TIMEOUT_MS` exists — it is a threshold on how long to
+wait, not a detector for silence.
 
 None of the five numbers is derived. `MIN_SPAN_FOR_NEVER_PRODUCED` in particular is justified by an
 anecdote — three empty polls at a fifteen-minute interval was accusing a source of a bad field map

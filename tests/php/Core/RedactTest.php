@@ -163,6 +163,29 @@ final class RedactTest extends TestCase
         yield 'POP3 PASS mid-line' => ['échec POP3 : PASS abcdefghijklmnop — vérifiez .env', ['abcdefghijklmnop']];
         yield 'IMAP LOGIN with a trailing response' => ['a01 LOGIN alice hunter2 (réponse: NO)', ['hunter2']];
 
+        // Tag shapes an IMAP-tag whitelist missed, each of which leaked a cleartext password.
+        yield 'six-digit IMAP tag' => ['00000003 LOGIN alertes-immo hunter2secret', ['hunter2secret']];
+        yield 'long alphabetic tag prefix' => ['TAG123456 LOGIN alertes-immo hunter2secret', ['hunter2secret']];
+        yield 'no tag at all' => ['LOGIN alertes-immo hunter2secret', ['hunter2secret']];
+        yield 'quoted args, no tag' => ['imap: LOGIN "alertes-immo" "hunter2secret"', ['hunter2secret']];
+
+        // The tagged AUTHENTICATE rule had two NEGATIVE fixtures and no positive one, so it could
+        // be deleted wholesale with the suite green — while being the only rule reaching a short
+        // argument the SASL base64 floor does not.
+        yield 'AUTHENTICATE with a short argument' => ['a01 AUTHENTICATE PLAIN c2VjcmV0', ['c2VjcmV0']];
+
+        // Unpadded base64 with a line prefix — the union case. Two fixtures pinned prefixed+padded
+        // and unpadded+standalone; neither pinned the intersection, which is the same real trace
+        // with a password whose length is a multiple of three.
+        yield 'unpadded base64 behind a trace prefix' => [
+            'CLIENT -> SERVER: bW90ZGVwYXNzZXNl',
+            ['bW90ZGVwYXNzZXNl'],
+        ];
+        yield 'base64 blob on a CRLF line' => [
+            "334 UGFzc3dvcmQ6\r\nSHVudGVyMiFzZWNyZXRwYXNz\r\n535 5.7.8 auth failed",
+            ['SHVudGVyMiFzZWNyZXRwYXNz'],
+        ];
+
         // base64_encode() of a 16-character app password is 22 chars with no digit — so a rule
         // demanding 24 AND a digit missed exactly the secret the plaintext rule leaks.
         // `base64_encode()` of a 16-character app password is 22–24 characters. This one is also
@@ -294,6 +317,60 @@ final class RedactTest extends TestCase
         ];
 
         yield 'PASS followed by a protocol word' => ['-ERR PASS required', ['PASS required']];
+
+        // The stoplist's FRENCH half, and its case-insensitivity. The docblock justifies both —
+        // "this project's own messages are French" — and only an English lowercase entry was pinned.
+        yield 'PASS followed by a French protocol word' => [
+            '-ERR PASS erreur de syntaxe',
+            ['PASS erreur de syntaxe'],
+        ];
+        yield 'PASS followed by a capitalised word' => [
+            '-ERR PASS Command issued in wrong state',
+            ['PASS Command issued'],
+        ];
+        // `refusé` was a dead entry: without a `u` flag, `\b` after a multi-byte character can
+        // never assert, and it is the only accented word in the list.
+        yield 'PASS followed by an accented French word' => [
+            '-ERR PASS refusé par le serveur',
+            ['PASS refusé par le serveur'],
+        ];
+
+        // Diagnostics the whole-line base64 rule ate before it required a multiple of four and both
+        // cases. `conventionnement` is §1 classifier vocabulary.
+        yield 'an all-caps token alone on a line' => [
+            "IMAP:\nAUTHENTICATIONFAILED\ncredentials rejected",
+            ['AUTHENTICATIONFAILED'],
+        ];
+        yield 'a French domain word alone on a line' => [
+            "régime détecté:\nconventionnement\nsur la fiche",
+            ['conventionnement'],
+        ];
+        yield 'a path alone on a line' => [
+            "fixture introuvable:\ntests/fixtures/tenure\nabandon",
+            ['tests/fixtures/tenure'],
+        ];
+        yield 'a bare SHA-256 alone on a line' => [
+            "checksum mismatch\n9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08\nexpected",
+            ['9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08'],
+        ];
+
+        // The camel boundaries' `(?-i:)` wrappers and the "real hump" requirement. Degrading any of
+        // the three re-opens the over-masking that was a P0 in two consecutive rounds.
+        yield 'SCREAMING_CASE is not a camel hump' => ['PASSAGE=interdit sur la ligne 4', ['PASSAGE=interdit']];
+        yield 'SIGNAL in caps is not a secret' => ['SIGNAL=SIGTERM reçu', ['SIGNAL=SIGTERM']];
+        yield 'passerelle is not a pass' => ['passerelle=inli-proxy', ['passerelle=inli-proxy']];
+        // `bypass` is `pass` with a lowercase prefix — only the case-sensitivity of the LEFT camel
+        // assertion keeps it out. `robots.txt bypass` is this project's own hard-rule-5 vocabulary.
+        yield 'bypass is not a pass' => [
+            'robots.txt bypass: refusé par la configuration',
+            ['bypass: refusé par la configuration'],
+        ];
+        // Mixed case and 21 characters — it satisfies the whole-line rule's case requirement, so
+        // only the multiple-of-four requirement keeps it intact.
+        yield 'a mixed-case class name alone on a line' => [
+            "classe introuvable:\nCommissionAttribution\nabandon",
+            ['CommissionAttribution'],
+        ];
 
         yield 'a lowercase verb at end of line is prose' => [
             'réponse inattendue: pass invalide',

@@ -399,9 +399,11 @@ Required coverage, per spec §11 — non-negotiable once `src/` exists:
   vanishes and returns are four different facts); **time** (a trailing `Z` is UTC on any host
   timezone, fractional seconds of any width parse, a non-existent date is refused, the DST gap is an
   instant); **health** (every `SourceStatus` member reachable and asserted, every `SourceHealth`
-  field asserted — five were once replaceable with constants while the suite stayed green); **
-  persistence** (the seen-set and price history survive reopening; an older schema is upgraded and a
-  newer one refused; a snapshot carries every field it claims); **concurrency** (WAL, and a second
+  field asserted — five were once replaceable with constants while the suite stayed green);
+  **seen-set** (a listing is new exactly once, and *notified* is a different fact from *seen* — the
+  store's two most basic guarantees, and the two that had no category for three rounds);
+  **persistence** (the seen-set and price history survive reopening; an older schema is upgraded and
+  a newer one refused; a snapshot carries every field it claims); **concurrency** (WAL, and a second
   writer that WAITS rather than failing — demonstrated, because a deferred transaction silently
   skips SQLite's busy handler); **failure paths** (every refusal is loud and leaves nothing
   half-written); **secrets** (`Redact` masks before anything is persisted or shown, and does not eat
