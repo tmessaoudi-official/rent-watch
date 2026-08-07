@@ -13,19 +13,28 @@ namespace RentWatch\Core;
  *    may only move the confidence. That is `CLAUDE.md`'s "a lower-priority signal must never
  *    override a higher one", implemented rather than restated.
  *
- * 2. **The collocation guard.** `PLUS` is a financing scheme and `plus` is one of the commonest
- *    words in French. Word boundaries alone are not enough (`plus de 3 chambres`), and uppercase
- *    alone is not enough (portal titles are SHOUTED). The acronym counts as a tenure label only
- *    when it is uppercase AND sits in a financing collocation AND is not followed by a French
- *    comparative. Three conditions for one word, because getting it wrong drops eligible listings
- *    silently — nothing arrives, and silence looks exactly like a quiet market.
+ * 2. **The collocation guard, and its third answer.** `PLUS` is a financing scheme and `plus` is one
+ *    of the commonest words in French. Word boundaries alone are not enough (`plus de 3 chambres`),
+ *    and uppercase alone is not enough (portal titles are SHOUTED). An uppercase acronym in a
+ *    financing collocation is read three ways, per occurrence:
+ *      - a financing label ENDS the phrase (punctuation, end of text, another acronym) → the label;
+ *      - a known French comparative follows (`PLUS GRAND`) → the adverb, no signal;
+ *      - any other word follows (`LOGEMENT PLUS MODERNE`) → **indécidable**, and it says so.
+ *    The third answer exists because the alternative was a denylist of French adjectives, which
+ *    cannot be completed: every adjective missing from it turned an emphatic title into a silent
+ *    REJECT, and nothing arriving looks exactly like a quiet market.
  *
- * 3. **The conflict rule.** The ladder on its own is not fail-closed. A structured field saying
- *    `LLI` and a body text saying `PLAI` leaves the ladder at LLI/0.97, sailing past the 0.6 floor
- *    into a notification. So an eligible verdict contradicted by any excluded-tenure signal
+ * 3. **The conflict rule, and doubts.** The ladder on its own is not fail-closed. A structured field
+ *    saying `LLI` and a body text saying `PLAI` leaves the ladder at LLI/0.97, sailing past the 0.6
+ *    floor into a notification. So an eligible verdict contradicted by any excluded-tenure signal
  *    collapses to UNKNOWN. It does not assert the listing is social — it withholds. The reverse is
  *    deliberately NOT symmetric: an excluded verdict contradicted by an eligible signal stays
  *    excluded. Softening an exclusion is the one direction that costs a wasted application.
+ *
+ *    An *indécidable* marker from (2) is a **doubt**, not a tenure claim, so it is held apart from
+ *    the ladder entirely: it withholds an otherwise-eligible verdict, and it never competes with,
+ *    masks or is masked by a real label. It used to be resolved positionally against them, which
+ *    made the answer depend on sentence order.
  */
 final readonly class TenureClassifier
 {

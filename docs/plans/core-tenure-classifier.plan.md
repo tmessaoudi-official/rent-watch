@@ -56,9 +56,11 @@ Three things make this module harder than it looks, and each has fixtures:
    lumineux"*. A naive `str_contains($text, 'plus')` classifies most of the Paris rental market as
    social housing. `PLAI` is worse in a different direction: as a bare substring it matches
    *plaisant*, *plaine*, *plaisir*. Every acronym is therefore matched **word-boundaried**, and the
-   two genuinely ambiguous ones (`PLUS`, `PLS`) additionally require ALL of: an uppercase spelling in
-   the original text, an adjacent financing-context word, and no French comparative immediately
-   after — each tested on the SAME occurrence, not anywhere in the document.
+   two genuinely ambiguous ones (`PLUS`, `PLS`) require an uppercase spelling in a financing
+   collocation — tested on the SAME occurrence, not anywhere in the document. What follows that
+   occurrence then decides between three answers, not two: a phrase-ending token means the label, a
+   known comparative means the adverb, and **anything else means indécidable** and digests. See the
+   round-2 section below for why a two-answer version could not be made correct.
 
 2. **Signal priority is a ladder, not a vote.** The highest tier that fires decides the tenure. Lower
    tiers may only adjust confidence. That is `CLAUDE.md`'s *"a lower-priority signal must never
