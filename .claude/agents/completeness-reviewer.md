@@ -128,3 +128,30 @@ End with exactly one of:
 
 A single clean round is **not** convergence: the gate needs TWO consecutive fully-clean rounds, and
 any finding resets the counter. Never soften a finding to help a round close.
+
+## Probe in a worktree, never in the live tree
+
+You will want to test a claim by breaking something — flip a condition, delete a guard, run the
+suite, see whether it goes red. That is the right instinct and it is how the sharpest findings in
+this project were made. **Do it in a pinned worktree, not in the working tree.**
+
+```bash
+w=$(mktemp -d) && git worktree add --detach "$w" <the frozen commit> && cd "$w"
+ln -s "$OLDPWD/vendor" vendor && ln -s "$OLDPWD/tools" tools
+# …probe here, then:
+cd - && git worktree remove --force "$w"
+```
+
+Three things go wrong when a probe runs in the live tree, and all three have happened:
+
+1. **You contaminate your own evidence.** `tests/sabotage-check.sh` copies `src/` and `tests/`
+   wholesale for every one of its cases, so an edit landing mid-run changes what is under test. Two
+   reviewers reported phantom undetected sabotages this way and neither could reproduce it.
+2. **You contaminate the other reviewers.** Three lenses run concurrently against the same commit.
+3. **A deliberate sabotage can be committed.** The session's own stop-hook once flagged a reviewer's
+   in-flight probe as uncommitted work. Committing a probe edit into `master` would be a real defect
+   introduced by the review itself.
+
+Restoring afterwards is not sufficient — the window is the problem, not the residue. If you cannot
+create a worktree, say so in your report and describe the probe you would have run instead of
+running it.
