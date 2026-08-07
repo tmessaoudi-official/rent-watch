@@ -238,6 +238,47 @@ contains personal data.
 
 ---
 
+## Part 2c — Raised by review rounds 5–7 (2026-08-07)
+
+One question, and it is a genuine notify/digest tradeoff I decided unilaterally while closing a §1
+breach. It is resolved in the safe direction, so nothing is blocked — but the cost falls on you, in
+digest entries, every day the tool runs.
+
+### Ⓞ Q21 — How much digest noise is an uppercase `PLUS` worth?
+
+`PLUS` is both the mainstream social-housing scheme and one of the commonest words in French. The
+classifier holds it behind a collocation guard: an uppercase `PLUS` next to a financing noun is the
+scheme, one followed by a known comparative (`PLUS DE 70 M2`) is the adverb. Rounds 5–7 showed the
+noun list is closed and always will be — `Prêt PLUS`, `Financé PLUS`, `Agréé PLUS`, `Gamme PLUS` all
+went silent, and on a pure source such a listing was NOTIFIED at confidence 50 with `reasons[]`
+reading *"aucun signal dans l'annonce"*.
+
+**What I decided:** a shouted `PLUS` that no comparative explains is now a DOUBT wherever it
+appears — prose, any field value, any field name — and doubts go to the *"à vérifier"* digest.
+
+**What it costs you.** `trap-005b` is the honest example: an all-caps portal title reading
+`T4 CROISSY-SUR-SEINE - 3 CHAMBRES, PLUS UN BUREAU` is ordinary French and now digests instead of
+matching. Every SHOUTED listing whose title happens to contain `PLUS` followed by an ordinary word
+lands in the digest. Lowercase `plus` is unaffected — the prose rule is case-sensitive precisely so
+that `plus de 3 chambres` does not digest half the market (`trap-010` pins that).
+
+**Options:**
+
+1. **Keep it** *(recommended, and the current behaviour)*. A wasted application costs an afternoon
+   and the tool's credibility; a digest entry costs one glance. Until real captured payloads exist
+   we cannot even estimate how often shouted titles collide, and the estimate is what would justify
+   loosening it.
+2. **Narrow to institutional sources only.** Private portals (SeLoger, Leboncoin) publish no social
+   stock, so the guard could be skipped there and `PLUS UN BUREAU` would match again. Cheap to do,
+   and it trades a `default_tenure` declaration for a §1 protection — which is exactly the kind of
+   config-driven exemption `CLAUDE.md` §1 warns about, so I did not do it unasked.
+3. **Digest, but rank the doubt low** so it never competes with real matches for attention. Needs
+   the notification layer, which does not exist yet.
+4. **None of these / challenge the premise** — for instance, if you would rather see the false
+   positives and filter by eye, say so and the floor comes out.
+
+**Default if unanswered:** option 1. Nothing changes.
+
 ## Part 2b — Raised by building the tenure classifier (2026-08-06)
 
 Both of these were found by writing the code rather than by planning it, and both are currently

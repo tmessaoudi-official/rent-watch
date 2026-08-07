@@ -328,6 +328,42 @@ final class Text
     }
 
     /**
+     * {@see fold()}, but for INCIDENTAL surfaces: it never refuses, it repairs.
+     *
+     * `fold()` throws on an undecoded HTML entity or malformed UTF-8, and that is right for the
+     * title, the description and a declared tenure field — an entity sitting inside a multi-word
+     * label deletes that label and leaves the others standing, so classifying around it is worse
+     * than refusing. But once the classifier began scanning EVERY field, that gate ran on URLs and
+     * surface cells, where `&amp;` in an href and `&nbsp;` in `68&nbsp;m2` are the ordinary output
+     * of an HTML scrape. One link turned an entire listing into UNKNOWN/DIGEST.
+     *
+     * Refusing there is disproportionate and skipping there is a fail-open, so this does neither:
+     * entities and invalid bytes become a SPACE. That is the one substitution which cannot create a
+     * false positive and cannot hide a true one — every literal in the tables is matched with `\s*`
+     * between its words, so splitting a token is harmless, while `p&amp;lai` becoming `p lai`
+     * matches nothing. Detection survives, and a broken adapter costs a digest entry rather than a
+     * silent market.
+     *
+     * NOT a general-purpose relaxation: use `fold()` anywhere the surface is meant to carry the
+     * tenure. The distinction is the point.
+     */
+    public static function foldTolerant(string $raw): string
+    {
+        $repaired = mb_convert_encoding($raw, 'UTF-8', 'UTF-8');
+        $repaired = preg_replace('/&(?:[a-zA-Z][a-zA-Z0-9]{1,10}|#\d{1,6}|#[xX][0-9a-fA-F]{1,6});/', ' ', $repaired);
+
+        if ($repaired === null) {
+            return '';                          // unrepairable; the caller treats '' as no signal
+        }
+
+        try {
+            return self::fold($repaired);
+        } catch (MalformedText) {
+            return '';
+        }
+    }
+
+    /**
      * Reduce a structured field NAME to a comparison key: folded, then stripped of every
      * separator. `typeProduit`, `TYPE_PRODUIT` and `Type de produit` all become `typeproduit`
      * — adapters disagree about field-name style and none of them is wrong.

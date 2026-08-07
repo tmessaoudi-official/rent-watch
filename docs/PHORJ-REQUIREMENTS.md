@@ -290,9 +290,13 @@ a title ending in an intermediate label must not qualify a `conventionné` openi
 The only whitespace bytes a folded string may contain are `U+0020` and `U+000A`.
 
 **5. A newline is a PHRASE BOUNDARY, and every rule that consumes whitespace adjacency must honour
-it.** There are four in the PHP implementation: the financing phrase-end test (a newline ENDS the
-phrase), the comparative-adverb escape (same line only), the `sans` negation lookbehind (same line
-only), and the `conventionné` adjacency span (a newline does not qualify). Getting one of them wrong
+it.** There are FIVE in the PHP implementation, and a review found the fifth only after the other
+four had been converted: the financing phrase-end test (a newline ENDS the phrase), the
+comparative-adverb escape (same line only — it exists in TWO methods, and only one of them sits
+below a phrase-end test, so converting "the" escape converts half of it), the `sans` negation
+lookbehind (same line only), the `conventionné` adjacency span (a newline does not qualify), and
+the collocation separator `$sep` (same line only, so a financing noun ending the title cannot
+supply context to an acronym opening the description). Getting one of them wrong
 is not cosmetic — with the comparative escape reading across the boundary, the first word of the
 description decided whether a shouted `LOGEMENT PLUS` title rejected or notified.
 

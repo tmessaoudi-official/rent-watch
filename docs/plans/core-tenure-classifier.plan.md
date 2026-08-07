@@ -124,6 +124,42 @@ store, no notify.
   line-preserving view. Pattern 2's non-tenure suppression was removed rather than narrowed: no
   proximity window separates `communes:` before a match from `source` in a docblock just as close,
   so it fires on a communes block and that noise is asserted as the accepted cost.
+- [2026-08-07 11:40] AGREED: **`reasons[]` may never contain a raw newline.** It is the product's
+  only user-facing output and it quotes the text that actually matched; once folding preserved
+  newlines, a label straddling the title/description join rendered as two lines on a phone. Fixed at
+  the formatting site (`oneLine()`), not in the fold — the newline is load-bearing for matching and
+  inert for rendering. Recorded 2026-08-07 after round 7 found it living only in commit prose.
+- [2026-08-07 11:40] AGREED: **The runner config is a §1 surface.** `phpunit.xml` is inside the
+  tripwire's path filter, because one `<exclude>` or `<file>` line there drops the whole corpus
+  suite with every other automated control still reporting green — measured at 202 tests → 90, exit
+  0, drift-scan clean. A `bootstrap=` retarget is deliberately NOT covered: it appears in every
+  valid config and a grep cannot tell the real one from a stub.
+- [2026-08-07 14:10] AGREED: **The surface matrix is a TEST, not a discipline.** Seven consecutive
+  review rounds each found a P0, and every one was the same shape — a correct rule applied to a
+  subset of the surfaces it belongs on. A per-fixture corpus cannot find those: it covers the cells
+  someone thought to write. `tests/php/Core/SurfaceMatrixTest.php` takes the cross product of the
+  classifier's own excluded vocabulary, read out of its three tables by reflection, and every
+  surface a listing presents, on the worst-case source. An empty cell is now a failing test. It
+  found 45 on its first run, in two surfaces nothing had ever read: field NAMES and non-scalar
+  values.
+- [2026-08-07 14:10] AGREED: **The suite needs a counterweight against over-rejection.** Every
+  corpus-level invariant asserted only that MATCH is not reached, so nothing could notice a
+  classifier that simply stopped matching — and across three commits the corpus went MATCH 33.3% →
+  30.1% → 28.0%, with every relabel running MATCH→DIGEST and none ever the other way. A
+  one-directional suite makes moving a fixture to DIGEST the cheapest way to pass any change.
+  `testAnOrdinaryEligibleListingStillMatchesOnEverySurface()` is the assertion that points the
+  other way.
+- [2026-08-07 14:10] AGREED: **Incidental surfaces are folded TOLERANTLY, tenure-bearing ones
+  strictly.** Reading every field ran `Text::fold()`'s entity gate on URLs and surface cells, so one
+  `&amp;` in an href — ordinary scrape output — digested the whole listing and even softened a
+  determinate REJECT. `Text::foldTolerant()` substitutes a space for an entity or a bad byte: the
+  one repair that can neither invent a match nor hide one, since every literal is matched with `\s*`
+  between its words. The strict gate stays on the title, the description and declared tenure fields.
+- [2026-08-07 14:10] AGREED: **Each procedural surface is scanned separately, never concatenated.**
+  Appending field values after a newline let a literal be assembled from two unrelated surfaces —
+  a description ending `aucune commission` and a field opening `Attribution directe` became the
+  social `commission attribution` and hard-REJECTED, silently. Scanning per surface removes the
+  class rather than choosing a better separator.
 
 ---
 
@@ -288,7 +324,7 @@ that would otherwise have shipped looking fine.
   catch a regression. Wired as `tests/sabotage-check.sh`, documented in `CLAUDE.md` § Common
   workflows, and it must be run after any change to the classifier, `Text.php` or the corpus.
 - [2026-08-06 23:20] AGREED: **the corpus declares its own provenance and the suite checks it.** The
-  spec asks for real listing texts; all 100 are synthetic until a payload can be captured. Making that
+  spec asks for real listing texts; all 105 are synthetic until a payload can be captured. Making that
   machine-checked keeps the gap visible instead of letting it decay into a stale comment.
 
 ---

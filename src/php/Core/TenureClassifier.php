@@ -416,6 +416,69 @@ final readonly class TenureClassifier
         $out = [];
 
         foreach ($listing->fields as $name => $value) {
+            // ── Checks that apply to EVERY field, before the recognised/unrecognised split ──────
+            //
+            // Both of these used to sit inside the recognised branch, and both were empty cells in
+            // the surface matrix. `tests/php/Core/SurfaceMatrixTest.php` now enumerates the cross
+            // product of the excluded vocabulary and every surface a listing has, so a rule that
+            // reaches one field kind and not the other is a failing test rather than a review
+            // finding — which is how the previous four rounds each found one of these.
+
+            // 1. AN UNREADABLE VALUE IS A DOUBT ON ANY FIELD. Annotated `array<string,string>`, and
+            //    an annotation is not a runtime guarantee: a JSON feed with
+            //    `"gamme": ["PLUS","PLAI"]` decodes to a list and an adapter forwarding it verbatim
+            //    arrives here. The recognised branch raised a doubt; the unrecognised branch
+            //    silently dropped it, so a spelled-out PLAI in `gamme` NOTIFIED at confidence 50
+            //    with `reasons[]` asserting "aucun signal dans l'annonce". Hard rule 3: a breakage
+            //    is never an absence — and the unrecognised branch is MORE exposed, because its
+            //    whole reason to exist is that the recognised list is closed.
+            if (!is_scalar($value) && !$value instanceof \Stringable && $value !== null) {
+                $out[] = new TenureSignal(
+                    tier: 1,
+                    tenure: Tenure::UNKNOWN,
+                    reason: sprintf(
+                        'champ structuré %s illisible (%s) — à vérifier',
+                        self::oneLine((string) $name),
+                        get_debug_type($value),
+                    ),
+                    evidence: '?',
+                );
+
+                continue;
+            }
+
+            // 2. THE FIELD NAME IS EVIDENCE TOO, and no rule read it — it was only ever exact-matched
+            //    against `TENURE_FIELDS`. `numeroUnique` and `demandeLogementSocial` are ordinary
+            //    bailleur-social JSON keys and both are literal `PROCEDURAL` entries; a listing
+            //    carrying either matched at 50 with the name unread. A doubt rather than the tenure,
+            //    for the same reason as an unrecognised value: a key is not a declaration.
+            // A FOLD FAILURE ON ONE FIELD IS A DOUBT ON THAT FIELD, not a dead listing.
+            //
+            // `Text::fold()` refuses an undecoded HTML entity or non-UTF-8 input, which is right for
+            // the title and description: an entity inside a multi-word label deletes that label and
+            // leaves the others standing. Since this class began reading EVERY field, that gate ran
+            // on URLs and surface cells too — and `&amp;` in an href is the ordinary output of an
+            // HTML scrape, so one link turned the whole listing into UNKNOWN/DIGEST. Worse, it
+            // SOFTENED determinate rejections: a description saying PLAI went from REJECT to DIGEST
+            // because an unrelated field was encoded, which the class doctrine forbids outright.
+            //
+            // Caught per field, so the breakage is recorded where it happened and the rest of the
+            // listing is still classified. Hard rule 3 without the collateral.
+            $nameSignal = $this->excludedVocabularyIn((string) $name);
+
+            if ($nameSignal !== null) {
+                $out[] = new TenureSignal(
+                    tier: 1,
+                    tenure: Tenure::UNKNOWN,
+                    reason: sprintf(
+                        'le NOM du champ « %s » contient « %s » — à vérifier',
+                        self::oneLine((string) $name),
+                        $nameSignal,
+                    ),
+                    evidence: $nameSignal . '?',
+                );
+            }
+
             if (!in_array(Text::fieldKey((string) $name), self::TENURE_FIELDS, true)) {
                 // NOT A TENURE FIELD — but an excluded label sitting in one is still §1 evidence,
                 // and skipping outright made `TENURE_FIELDS` a closed list standing between a
@@ -430,7 +493,7 @@ final readonly class TenureClassifier
                 // the value may be prose rather than a financing declaration — `commentaire: "pas de
                 // PLAI ici"` must not become a silent REJECT. Digesting says what was seen and lets
                 // a human settle it, which is the fail-closed direction without the over-rejection.
-                $unknownFieldDoubt = $this->excludedLabelInUnknownField($value);
+                $unknownFieldDoubt = $this->excludedVocabularyIn($value);
 
                 if ($unknownFieldDoubt !== null) {
                     $out[] = new TenureSignal(
@@ -449,28 +512,6 @@ final readonly class TenureClassifier
                 continue;
             }
 
-            // `RawListing::$fields` is ANNOTATED `array<string,string>`, and an annotation is not a
-            // runtime guarantee. A JSON feed with `"financement": ["PLUS","PLAI"]` decodes to an
-            // array and an adapter that forwards it verbatim arrives here. `(string) $value` made
-            // that the literal `"Array"` — tier 1 blind on a field naming an excluded scheme, no
-            // signal, no doubt — and made a stdClass an uncaught `Error` that kills the whole run.
-            // Neither may stand: this field claims to carry the one fact §1 turns on, so failing to
-            // read it is a DOUBT, which digests. See hard rule 3 — a breakage is never an absence.
-            if (!is_scalar($value) && !$value instanceof \Stringable && $value !== null) {
-                $out[] = new TenureSignal(
-                    tier: 1,
-                    tenure: Tenure::UNKNOWN,
-                    reason: sprintf(
-                        'champ structuré %s illisible (%s) — à vérifier',
-                        (string) $name,
-                        get_debug_type($value),
-                    ),
-                    evidence: '?',
-                );
-
-                continue;
-            }
-
             $raw = (string) $value;
 
             // An EMPTY field value is an absent signal, not a verdict. Sources that emit the key
@@ -481,6 +522,19 @@ final readonly class TenureClassifier
             }
 
             foreach ($this->matchLabels($folded) + $this->fieldAcronymSignals($raw) as $position => $hit) {
+                // The third caller of `matchLabels()`, and the one the eligible-may-not-span rule
+                // was not carried to — `labelSignals()` and `proceduralSignals()` got it, this did
+                // not. A multi-line field value therefore assembled an eligible label across its own
+                // newline at confidence 97, the highest this system produces and comfortably above
+                // the floor, so the fail-closed arm never engaged — while the identical fragments in
+                // prose digested. Same asymmetry as everywhere else: an EXCLUDED label may span,
+                // because failing to match it is the §1 fail-open.
+                if (isset($hit['matched'])
+                    && $hit['tenure']->isEligible()
+                    && str_contains($hit['matched'], "\n")) {
+                    continue;
+                }
+
                 $out[] = new TenureSignal(
                     tier: 1,
                     tenure: $hit['tenure'],
@@ -702,22 +756,70 @@ final readonly class TenureClassifier
      * social procedural literals is also in `LABELS`, so the tier-1 field scan could not see them
      * either: the surface was blind to every one of them at once.
      *
-     * The field values are appended after a NEWLINE, which is a phrase boundary everywhere else in
-     * this class — so an inflection or a `sans` negation cannot straddle the join between a
-     * description and a field, or between two fields.
+     * EACH SURFACE IS SCANNED SEPARATELY rather than concatenated, and the first version of this
+     * method got that wrong in a way its own docblock denied. It appended field values after a
+     * newline and claimed *"an inflection or a `sans` negation cannot straddle the join between a
+     * description and a field, or between two fields"*. False:
+     * {@see Text::inflectedTokenPosition()} joins a literal's words with `\s*`, which matches a
+     * newline, and only ELIGIBLE tells were blocked from spanning. So a description ending
+     * *"…aucune commission"* and the next field opening *"Attribution directe par le bailleur"* —
+     * the brief's canonical INTERMEDIATE tell — assembled into the social `commission attribution`
+     * and hard-REJECTED. `REJECT` is silent by design, so nothing arrived and nothing said why.
+     *
+     * Scanning per surface removes the class rather than patching the separator: two fragments in
+     * two different surfaces can no longer become one literal, whatever the separator is.
+     *
+     * KNOWN AND LEFT: the same assembly is still possible ACROSS THE TITLE/DESCRIPTION JOIN, which
+     * is one surface by construction (`RawListing::text()`). Closing it would mean forbidding a
+     * literal to span any newline, and that breaks the case round 6 protected — a line-wrapped
+     * `logement social` in a `text/plain` alert body, which `CLAUDE.md` hard rule 4 makes the
+     * PRIMARY ingestion path. The residue over-rejects, which is the safe direction, and it is
+     * stated here rather than denied.
      *
      * @return list<TenureSignal>
      */
     private function proceduralSignals(RawListing $listing): array
     {
-        $folded = Text::fold($listing->text());
+        $out = [];
 
-        foreach ($listing->fields as $value) {
-            if (is_scalar($value) || $value instanceof \Stringable) {
-                $folded .= "\n" . Text::fold((string) $value);
+        foreach ($this->proceduralSurfaces($listing) as $folded) {
+            foreach ($this->proceduralSignalsIn($folded) as $signal) {
+                $out[] = $signal;
             }
         }
 
+        return $out;
+    }
+
+    /**
+     * The free text, then each readable field value — each its own string.
+     *
+     * @return list<string>
+     */
+    private function proceduralSurfaces(RawListing $listing): array
+    {
+        $surfaces = [Text::fold($listing->text())];
+
+        foreach ($listing->fields as $value) {
+            if (!is_scalar($value) && !$value instanceof \Stringable) {
+                continue;              // structuredFieldSignals() raises the unreadable doubt
+            }
+
+            // TOLERANT: an undecoded `&amp;` in one field must not delete the procedural evidence in
+            // every other field, nor kill the listing. See `Text::foldTolerant()`.
+            $folded = Text::foldTolerant((string) $value);
+
+            if ($folded !== '') {
+                $surfaces[] = $folded;
+            }
+        }
+
+        return $surfaces;
+    }
+
+    /** @return list<TenureSignal> */
+    private function proceduralSignalsIn(string $folded): array
+    {
         $out = [];
 
         foreach (self::PROCEDURAL as $literal => $tenure) {
@@ -868,20 +970,40 @@ final readonly class TenureClassifier
     }
 
     /**
-     * The first excluded-tenure literal named by a field this class does not recognise, or null.
+     * The first excluded-tenure literal named by an arbitrary string, or null.
      *
-     * Deliberately narrower than {@see matchLabels()}: only literals whose tenure is EXCLUDED count,
-     * so an unknown field saying `LLI` or `loyer libre` stays silent rather than manufacturing
-     * evidence for eligibility out of an unrecognised key. The result is only ever used to raise a
-     * doubt, never to decide a tenure.
+     * READS ALL THREE TABLES, and the previous version reading only `LABELS` was the round-7 P0.
+     * `PLUS` is not in `LABELS` — it is the sole entry of `AMBIGUOUS_LABELS` — so the fix that
+     * closed unrecognised fields for `PLAI`, `PLS`, `HLM` and `logement social` left open the one
+     * acronym the whole bug class had been about: `gamme: "Prêt PLUS"` matched at 50 on a pure
+     * source while `typeFinancement: "PLUS"` rejected at 97. `PROCEDURAL` is here for field NAMES
+     * like `numeroUnique` and `demandeLogementSocial`, which are literal entries in it.
+     *
+     * Deliberately narrower than a full classification in two ways. Only EXCLUDED tenures count, so
+     * an unrecognised field saying `LLI` cannot manufacture eligibility out of a key nobody
+     * declared. And the result only ever raises a DOUBT — never decides a tenure — because such a
+     * string may be prose: `commentaire: "pas de PLAI ici"` must not become a silent REJECT.
+     *
+     * Case-insensitive, via `Text::fold()`. That matches the field-value path and differs from the
+     * prose path on purpose: prose is where `plus` is a French adverb, and a field key or an
+     * unrecognised value is not prose enough to be worth the false negatives.
+     *
+     * Returns the MATCHED text, not the table literal — the same correction tier 2 needed, so a
+     * digest entry quotes what the listing actually says rather than a lowercased singular the
+     * reader will not find in it.
      */
-    private function excludedLabelInUnknownField(mixed $value): ?string
+    private function excludedVocabularyIn(mixed $value): ?string
     {
         if (!is_scalar($value) && !$value instanceof \Stringable) {
-            return null;
+            return null;                       // callers raise the unreadable doubt themselves
         }
 
-        $folded = Text::fold((string) $value);
+        // TOLERANT, not refusing. This method is called on field NAMES and on the values of fields
+        // nobody declared as carrying tenure — incidental surfaces where an undecoded `&amp;` is
+        // ordinary scrape output. `Text::fold()` would throw, and catching that per field made
+        // every listing with an encoded URL digest. See `Text::foldTolerant()` for why substituting
+        // a space is the one repair that neither invents nor hides a match.
+        $folded = Text::foldTolerant((string) $value);
 
         if ($folded === '') {
             return null;
@@ -889,7 +1011,27 @@ final readonly class TenureClassifier
 
         foreach ($this->matchLabels($folded) as $hit) {
             if ($hit['tenure']->isExcluded()) {
-                return $hit['literal'];
+                return self::oneLine($hit['matched'] ?? $hit['literal']);
+            }
+        }
+
+        foreach (self::PROCEDURAL as $literal => $tenure) {
+            if (!$tenure->isExcluded()) {
+                continue;
+            }
+
+            $hit = Text::inflectedTokenPosition($folded, $literal);
+
+            if ($hit !== null) {
+                return self::oneLine($hit[1]);
+            }
+        }
+
+        // The ambiguous acronym last, and case-insensitively — `AMBIGUOUS_LABELS` is keyed
+        // UPPERCASE because case is evidence in prose, and this surface is not prose.
+        foreach (array_keys(self::AMBIGUOUS_LABELS) as $acronym) {
+            if ($this->matches('/(?<![A-Za-z0-9])(?i:' . preg_quote($acronym, '/') . ')(?![A-Za-z0-9])/u', $folded)) {
+                return $acronym;
             }
         }
 
@@ -1131,7 +1273,13 @@ final readonly class TenureClassifier
         $a = preg_quote($acronym, '/');
         $colloc = self::COLLOCATION;
         $acros = self::ACRONYMS;
-        $sep = '[\s\/\-,:;()]{1,3}';
+        // `[^\S\n]` — whitespace EXCEPT a newline — for the same reason as the phrase-end test, the
+        // comparative escape, the `sans` lookbehind and the `conventionné` adjacency span. This was
+        // the fifth consumer of the boundary rule and the last one still reading `\s`: a collocation
+        // noun ending the TITLE supplied financing context to a `PLUS` opening the DESCRIPTION, so
+        // `Residence de 40 logements` / `PLUS. Contactez-nous.` invented a determinate REJECT at 90
+        // that the same words on one line cannot produce. Over-rejection, therefore invisible.
+        $sep = '(?:[^\S\n]|[\/\-,:;()]){1,3}';
         $ambiguousAt = null;
 
         // `=== 0` alone would let a PCRE error (`false`) fall through into the foreach and silently

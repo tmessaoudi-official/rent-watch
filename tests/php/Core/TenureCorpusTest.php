@@ -74,7 +74,20 @@ final class TenureCorpusTest extends TestCase
                 continue;
             }
 
-            $haystack = Text::fold($listing->text() . ' ' . implode(' ', $listing->fields));
+            // Built the way the CLASSIFIER reads surfaces, not as one concatenation: the free text
+            // strictly, each field tolerantly, and field NAMES included because they carry evidence
+            // too. A single `Text::fold()` over everything threw on the `&amp;` in a URL fixture —
+            // an invariant using a stricter reader than the code it polices is its own kind of
+            // drift, and it would have hidden any listing whose fields do not survive the gate.
+            $haystack = Text::fold($listing->text());
+
+            foreach ($listing->fields as $fieldName => $fieldValue) {
+                $haystack .= ' ' . Text::foldTolerant((string) $fieldName);
+
+                if (is_scalar($fieldValue) || $fieldValue instanceof \Stringable) {
+                    $haystack .= ' ' . Text::foldTolerant((string) $fieldValue);
+                }
+            }
 
             foreach (self::excludedTokens() as $token) {
                 if (isset($exempt[$id][$token])) {
@@ -145,6 +158,16 @@ final class TenureCorpusTest extends TestCase
             'lli-003-explicit-label-text' => [
                 "commission d'attribution" => 'the NEGATED form, "sans commission d\'attribution", '
                     . 'which is the intermediate tell rather than the social one',
+            ],
+            // The invariant reads text and fields as ONE haystack, so it re-assembles across the
+            // surface join that the classifier now refuses to — `…aucune commission` in the
+            // description and `Attribution directe…` in a field. That is the invariant being
+            // coarser than the code, not a §1 exception: the classifier is correct here and the
+            // listing carries the INTERMEDIATE tell, not the social one.
+            'regress-044-procedural-literal-not-assembled-across-a-field-join' => [
+                'commission attribution' => 'assembled by the invariant across the description/field '
+                    . 'join; the listing says "aucune commission" and "attribution directe", which '
+                    . 'are two surfaces and two different tells',
             ],
             'regress-030-inflected-label-then-conventionne' => [
                 'conventionne' => 'the same glossary exception, reached through an INFLECTED label '
@@ -418,8 +441,25 @@ final class TenureCorpusTest extends TestCase
     {
         $mutable = [];
 
-        foreach (glob(__DIR__ . '/../../../src/php/Core/*.php') ?: [] as $file) {
-            $class = 'RentWatch\\Core\\' . basename($file, '.php');
+        // RECURSIVE. `glob('*.php')` does not cross a directory separator, and this method's own
+        // docblock claimed it closed the class "including for classes not yet written" — while
+        // `CLAUDE.md`'s architecture table puts the Notify layer at `src/php/Core/Notify/`. A
+        // `Formatter` there holding a writable `reasons` array is precisely the mutation the ruling
+        // was written against, and it passed.
+        $files = new \RecursiveIteratorIterator(
+            new \RecursiveDirectoryIterator(__DIR__ . '/../../../src/php', \FilesystemIterator::SKIP_DOTS),
+        );
+
+        foreach ($files as $file) {
+            $file = (string) $file;
+
+            if (!str_ends_with($file, '.php')) {
+                continue;
+            }
+
+            // PSR-4: `src/php/` maps to `RentWatch\`, so a subdirectory is a sub-namespace.
+            $relative = substr($file, strpos($file, 'src/php/') + strlen('src/php/'));
+            $class = 'RentWatch\\' . str_replace('/', '\\', substr($relative, 0, -4));
 
             if (!class_exists($class)) {
                 continue;                          // enums and interfaces have no mutable state

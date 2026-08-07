@@ -136,12 +136,48 @@ expect_fire "a PHPUnit attribute skip on a corpus test" \
   "#[RequiresPhpExtension('rentwatch_corpus')]
 public function testCorpusCaseClassifiesAsLabelled(): void {}" \
   "$repo/tests/php/Core/TenureCorpusTest.php"
-# The runner CONFIG route: one line here drops the whole 93-case §1 corpus and every other automated
+# The runner CONFIG route: one line here drops the whole §1 corpus and every other automated
 # control in the repo still reports green. phpunit.xml sits at the repo root and was outside the
 # guard's path filter entirely.
 expect_fire "the corpus suite excluded in phpunit.xml" \
   '<testsuite name="core"><exclude>tests/php/Core/TenureCorpusTest.php</exclude></testsuite>' \
   "$repo/phpunit.xml"
+
+# ROUND 7. Each of these was silent, and each is a real spelling.
+expect_fire "UNKNOWN routed to notify, with a negation elsewhere on the line" \
+  'if ($t === Tenure::UNKNOWN) { $this->notify($l); } // cannot be reached twice' \
+  "$repo/src/php/Core/Notify/Push.php"
+expect_fire "the corpus suite retargeted via <file> rather than <exclude>" \
+  '<testsuite name="core"><file>tests/php/Core/TextTest.php</file></testsuite>' \
+  "$repo/phpunit.xml"
+# NOTE: a `bootstrap=` retarget is NOT covered, deliberately. `bootstrap="…"` is in every valid
+# phpunit.xml, so detecting it fires on every edit to the real file — and a grep cannot tell
+# `tests/bootstrap.php` from `tests/stub.php`. Same for `<testsuite>` and `<directory>`. `<file>`
+# IS covered because this project's config is directory-based, so an explicit file list is a
+# narrowing. Recorded so a future reader knows the gap was measured, not missed.
+expect_fire "the classifier disabled by the inverse spelling" \
+  'tenure_check: false' \
+  "$repo/config/criteria.yaml"
+expect_fire "the classifier disabled by an enable flag" \
+  'enable_tenure: false' \
+  "$repo/config/criteria.yaml"
+# A PHP docblock is a comment too — the byte-identical YAML spelling was already exempt.
+expect_silence "a source declaring itself pure with mixed_tenure: false" \
+  'cdc_habitat:
+  mixed_tenure: false' \
+  "$repo/config/sources.yaml"
+expect_silence "a PHP constructor call passing mixedTenure: false" \
+  'new SourceProfile(name: "inli", defaultTenure: Tenure::LLI, mixedTenure: false);'
+expect_silence "a PHP docblock describing a mixed-tenure landlord" \
+  '/** config: CDC Habitat publishes PLUS and PLAI alongside LLI. */' \
+  "$repo/src/php/Adapters/sites/CdcHabitat.php"
+# A breach must survive a large write: `grep -q` closes the pipe and SIGPIPE kills the upstream grep,
+# which `pipefail` then reports as failure — so the finding was lost past the pipe buffer.
+expect_fire "a breach on line 1 followed by 80 KB of exempt lines" \
+  "$(printf 'config toggle for plus: true
+'; for i in $(seq 1 2000); do printf '# config toggle plus note %d
+' "$i"; done)" \
+  "$repo/config/sources.yaml"
 
 expect_fire "UNKNOWN routed to notification" \
   'if unknown: notify(listing)'

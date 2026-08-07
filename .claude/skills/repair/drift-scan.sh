@@ -377,11 +377,43 @@ def code_spans(text):
     layout quick reference IS a fenced block and already names corpus.json, so a stale
     "corpus.json, 42 cases" line placed there produced P0=0 P1=0 P2=0 and exit 0. The single
     citation this exemption exists for is inline, so narrowing to inline costs nothing.
+
+    Double-quoted spans count too. A stale count CITED in a shell or python comment is naturally
+    written "all 86 are synthetic", not in backticks -- and once this check grew from three
+    hand-listed docs to every tracked .md and .sh, it started reporting its own write-ups of the
+    bugs it fixed. Same reasoning as the backticks: nobody states a live claim in quotation marks.
     """
-    return [(m.start(), m.end()) for m in re.finditer(r'`[^`\n]+`', text)]
+    return [
+        (m.start(), m.end())
+        for m in re.finditer(r'`[^`\n]+`|"[^"\n]{0,120}"', text)
+    ]
 
 
-for doc in ('CLAUDE.md', 'README.md', 'docs/plans/core-tenure-classifier.plan.md'):
+def is_citation(line):
+    """Does this line describe a PAST state rather than assert a current one?
+
+    The same test S2 uses for plan pointers, applied to counts. `an earlier version … 82 cases` is
+    a changelog entry, and a detector that fires on its own changelog gets ignored within a week —
+    which is the sentence this script opens with.
+    """
+    return re.search(
+        r'used to|earlier version|an earlier|would be reported|previously|formerly|no longer|'
+        r'until a review|was reported|had been|stale "|placed there produced',
+        line, re.I,
+    ) is not None
+
+
+# EVERY tracked .md and .sh, not a hand-listed three. The list was `CLAUDE.md`, `README.md` and the
+# plan — so the same commit that updated 93→100 in those three introduced two fresh `93-case` claims
+# in `.claude/hooks/tenure-guard.sh` and `tests/test-tenure-guard.sh` and this check reported clean.
+# A drift detector with a hardcoded file list drifts exactly where it is not looking.
+docs = sorted(
+    str(q) for q in pathlib.Path('.').rglob('*')
+    if q.suffix in ('.md', '.sh') and q.is_file()
+    and not any(x in q.parts for x in ('.git', 'var', 'node_modules', 'vendor'))
+)
+
+for doc in docs:
     p = pathlib.Path(doc)
     if not p.is_file():
         continue
@@ -390,11 +422,16 @@ for doc in ('CLAUDE.md', 'README.md', 'docs/plans/core-tenure-classifier.plan.md
     for pattern, label, kinds in CLAIMS:
         for m in re.finditer(pattern, text):
             for i, (g, kind) in enumerate(zip(m.groups(), kinds), start=1):
-                # The NUMBER's position decides, not the match's. Testing `m.start()` exempted
-                # ``corpus.json`, 82 cases`` — the pattern begins at the filename, which is in code
-                # font, while the claim that drifted is the bare `82` after it. A rule that hides a
-                # live claim is strictly worse than the noisy one it replaced.
+                # The NUMBER's position decides, not the match's. An earlier version tested
+                # `m.start()` and so exempted "corpus.json, 82 cases" — the pattern begins at the
+                # filename, which is in code font, while the claim that drifted is the bare number
+                # after it. A rule that hides a live claim is worse than the noisy one it replaced.
                 if any(a <= m.start(i) < b for a, b in quoted):
+                    continue
+
+                line_text = text[text.rfind('\n', 0, m.start(i)) + 1:text.find('\n', m.start(i))]
+
+                if is_citation(line_text):
                     continue
                 if int(g) != EXPECT[kind]:
                     line = text[:m.start(i)].count('\n') + 1

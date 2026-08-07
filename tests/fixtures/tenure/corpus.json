@@ -22,7 +22,7 @@
     ],
     "version": 1,
     "declared_counts": {
-        "synthetic": 100,
+        "synthetic": 105,
         "captured": 0
     },
     "sources": {
@@ -1470,6 +1470,82 @@
                 "outcome": "DIGEST"
             },
             "why": "An ELIGIBLE label may not be assembled across a phrase boundary. Text::inflectedTokenPosition joins a multi-word literal with '\\\\s*' so an inflected or line-wrapped phrase still matches -- right for an EXCLUDED literal, where failing to match is the §1 fail-open and a wrapped 'logement social' in a text/plain alert body is the primary ingestion path (hard rule 4), and wrong for an eligible one, where it manufactures eligibility out of two unrelated fragments. A title ending '- Loyer' and a description opening 'intermediaire,' is not a listing that says 'loyer intermediaire'. Asymmetric on purpose, exactly like the conflict rule: the restriction applies only in the direction that costs a wasted application. See regress-040 for the same asymmetry on a procedural tell."
+        },
+        {
+            "id": "regress-042-collocation-noun-does-not-reach-across-the-boundary",
+            "provenance": "synthetic",
+            "source": "inli",
+            "title": "Residence de 40 logements",
+            "description": "PLUS. Contactez-nous pour une visite.",
+            "fields": {},
+            "expect": {
+                "tenure": "UNKNOWN",
+                "outcome": "DIGEST"
+            },
+            "why": "THE FIFTH CONSUMER of the newline-boundary rule, found in review round 7. Rounds 5 and 6 converted the phrase-end test, the comparative escape, the sans lookbehind and the conventionne adjacency span from '\\\\s' to '[^\\\\S\\\\n]'; the collocation separator '$sep' was missed, so a financing noun ending the TITLE still supplied context to a PLUS opening the DESCRIPTION and invented a determinate REJECT at 90 that the same words on one line cannot produce. Over-rejection, so invisible per hard rule 8 -- nothing arrives. The identical text with both halves in the description digests, and now so does this."
+        },
+        {
+            "id": "regress-043-eligible-label-across-a-multi-line-field-value",
+            "provenance": "synthetic",
+            "source": "cdc_habitat",
+            "title": "T3 Cergy",
+            "description": "Bel appartement.",
+            "fields": {
+                "dispositif": "Montant du Loyer\nintermediaire entre 2 offres"
+            },
+            "expect": {
+                "tenure": "UNKNOWN",
+                "outcome": "DIGEST"
+            },
+            "why": "The eligible-may-not-span rule reached two of the three callers of matchLabels(). labelSignals() and proceduralSignals() got it in round 6; structuredFieldSignals() did not, so a multi-line field value assembled 'loyer intermediaire' out of two unrelated fragments at confidence 97 -- the highest this system produces, comfortably above the floor, so the fail-closed arm never engaged -- while the identical fragments in prose digested. Same asymmetry as everywhere: an EXCLUDED label may still span, because failing to match it is the §1 fail-open."
+        },
+        {
+            "id": "regress-044-procedural-literal-not-assembled-across-a-field-join",
+            "provenance": "synthetic",
+            "source": "inli",
+            "title": "T3 Le Vesinet",
+            "description": "Location directe, aucune commission",
+            "fields": {
+                "modalites": "Attribution directe par le bailleur"
+            },
+            "expect": {
+                "tenure": "LLI",
+                "outcome": "MATCH",
+                "min_confidence": 75
+            },
+            "why": "A silent HARD REJECT, and the docblock said it could not happen. proceduralSignals() appended field values after a newline and asserted that 'an inflection or a sans negation cannot straddle the join between a description and a field, or between two fields'. False: inflectedTokenPosition joins a literal's words with '\\s*', which matches a newline, and only ELIGIBLE tells were blocked from spanning. So this listing -- whose own field carries 'Attribution directe par le bailleur', the brief's canonical INTERMEDIATE tell -- was hard-rejected as SOCIAL because the previous surface ended in the word 'commission' and this one began with 'attribution'. REJECT is silent by design (hard rule 8), so nothing arrived and nothing said why. Each surface is now scanned separately, which removes the class rather than patching the separator: two fragments in two surfaces cannot become one literal whatever joins them."
+        },
+        {
+            "id": "regress-045-an-undecoded-entity-in-one-field-does-not-kill-the-listing",
+            "provenance": "synthetic",
+            "source": "inli",
+            "title": "T3 Le Vesinet",
+            "description": "Bel appartement lumineux.",
+            "fields": {
+                "financement": "LLI",
+                "lien": "https://example.test/annonce?ref=1&amp;page=2"
+            },
+            "expect": {
+                "tenure": "LLI",
+                "outcome": "MATCH",
+                "min_confidence": 90
+            },
+            "why": "Round 7 regression guard, and a case where the SAFE-LOOKING answer was the wrong one. Once the classifier began reading every field, Text::fold()'s entity gate ran on URLs and surface cells -- and '&amp;' in an href is the ordinary output of an HTML scrape, so one link turned the whole listing into UNKNOWN/DIGEST. It also SOFTENED determinate rejections: a description naming PLAI went from REJECT to DIGEST because an unrelated field was encoded, which the class doctrine forbids outright. Incidental surfaces now use Text::foldTolerant(), which substitutes a space for an entity rather than refusing -- the one repair that can neither invent a match nor hide one, since every literal is matched with '\\\\s*' between its words. Detection survives: see regress-046."
+        },
+        {
+            "id": "regress-046-an-entity-splitting-a-social-label-is-still-caught",
+            "provenance": "synthetic",
+            "source": "inli",
+            "title": "T2 Cergy",
+            "description": "Residence recente.",
+            "fields": {
+                "gamme": "logement&nbsp;social"
+            },
+            "expect": {
+                "tenure": "UNKNOWN",
+                "outcome": "DIGEST"
+            },
+            "why": "The other half of regress-045, and the reason the tolerant fold substitutes a SPACE rather than deleting. An entity sitting inside a multi-word label is exactly the asymmetric failure Text::INVISIBLE exists for -- it deletes that label and leaves every other one standing. Replacing it with a space keeps the label matchable, because inflectedTokenPosition joins a literal's words with '\\\\s*'. Deleting it instead would make this listing silent, which is the §1 fail-open wearing a repair as a disguise."
         }
     ]
 }

@@ -76,7 +76,7 @@ esac
 case "$file_path" in
   */config/*|*/src/*|*/tests/*|*config/*|*src/*|*tests/*) ;;
   # phpunit.xml lives at the repo ROOT and matched none of the above, so the guard exited before any
-  # pattern ran — and ONE `<exclude>` line there drops the 93-case §1 corpus from the suite. A review
+  # pattern ran — and ONE `<exclude>` line there drops the §1 corpus from the suite. A review
   # measured it: 193 tests became 90, and drift-scan still reported P0=0 P1=0 P2=0. Only
   # sabotage-check.sh noticed, and CLAUDE.md scopes that to changes under src/php/Core/Tenure*,
   # which a runner-config edit is not.
@@ -207,9 +207,18 @@ fi
 # module carrying `/** UNKNOWN never reaches the notify channel */` could route UNKNOWN to
 # notification three lines below and stay silent — and that co-occurrence is the likeliest one in
 # the repo, because the docblock is the one this guard's own test uses as its exempt case.
-if grep -Eq 'unknown[^.]{0,60}(notify|match|emit|send|alert)' <<<"$lines" \
-&& grep -E 'unknown[^.]{0,60}(notify|match|emit|send|alert)' <<<"$lines" \
-   | grep -qvE '(never|not |n.t |pas |jamais|instead of|rather than|au lieu)'; then
+# POSITIONAL, and losing that was the cost of the per-line rewrite. The whole-blob form required
+# the negation to sit BETWEEN `unknown` and `notify`; the first per-line version tested the line for
+# a negation word ANYWHERE, so `if (UNKNOWN) { notify(); } // cannot be reached twice` went silent —
+# `n.t ` matches `cannot`. Per line AND between the two tokens is what the rule actually means.
+#
+# Captured to a variable rather than piped into `grep -q`. Under `set -o pipefail`, `grep -q` exits
+# on its first hit and closes the pipe, the upstream grep dies of SIGPIPE (141), and pipefail
+# propagates 141 as the pipeline status — so the `if` is FALSE and the breach is not reported.
+# Measured: fires at ~40 KB of following matches, silent at ~80 KB, i.e. once the pipe buffer fills.
+_p4="$(grep -E 'unknown[^.]{0,60}(notify|match|emit|send|alert)' <<<"$lines")"
+if [[ -n "$_p4" ]] \
+&& grep -qvE 'unknown[^.]{0,60}(never|not |n.t |pas |jamais|instead of|rather than|au lieu)[^.]{0,60}(notify|match|emit|send|alert)' <<<"$_p4"; then
   hits+=("UNKNOWN tenure looks like it is being routed to notification instead of the \"à vérifier\" digest")
 fi
 
@@ -223,7 +232,9 @@ fi
 # signal`) stays silent because it has no separator, which is the distinction that actually matters.
 if grep -Eq '(skip|bypass|disable|without|sans)[_ -]?(tenure|classif)' <<<"$blob" \
 || grep -Eq '(^|[^a-z])no[_-](tenure|classif)' <<<"$blob" \
-|| grep -Eq '(^|[^a-z])no(tenure|classif)' <<<"$blob"; then
+|| grep -Eq '(^|[^a-z])no(tenure|classif)' <<<"$blob" \
+|| grep -Eq '(^|[^a-z_])(tenure|classifier)(_?(check|enabled|active))? *[:=] *(false|0|off|disabled)' <<<"$blob" \
+|| grep -Eq '(^|[^a-z_])(enable|use|run|activate)[_ -]?(tenure|classif)[a-z_]{0,12} *[:=] *(false|0|off)' <<<"$blob"; then
   hits+=("the tenure classifier looks like it is being skipped or disabled")
 fi
 
@@ -235,8 +246,12 @@ fi
 # could only ever anchor at the start of the whole write, so a leading comment line hid every toggle
 # below it, while the same comment indented on line 3 — where it will actually live in a YAML block
 # — still fired. Now each line is judged on its own: a comment is exempt, code is not.
-if grep -E '(config|option|setting|toggle|flag|param)[^.]{0,60}(plai|plus|pls|logement social|allow_social|include_social)' <<<"$lines" \
-   | grep -qvE '^[[:space:]]*(#|//|\*|--)'; then
+# The comment alternation covers `/**` and `/*` as well as `#`, `//`, ` *` and `--`. It did not, so
+# a PHP docblock opening `/** config: CDC Habitat publishes PLUS and PLAI … */` fired while the
+# byte-identical YAML spelling was exempt — and the guard's own test only asserted the `#` form.
+# Captured to a variable for the same SIGPIPE reason as pattern 4.
+_p6="$(grep -E '(config|option|setting|toggle|flag|param)[^.]{0,60}(plai|plus|pls|logement social|allow_social|include_social)' <<<"$lines")"
+if [[ -n "$_p6" ]] && grep -qvE '^[[:space:]]*(#|//|/\*|\*|--)' <<<"$_p6"; then
   hits+=("social tenure looks like it is becoming a config toggle — CLAUDE.md forbids this")
 fi
 
@@ -262,7 +277,7 @@ case "$lc_path" in
     # A construct list that stopped at `markTestSkipped` missed the whole family, and missing a
     # construct is how narrowing a pattern loses detection. `<exclude>`/`<testsuite>` cover the
     # runner-config route, which is why phpunit.xml is now inside the path filter above.
-    if grep -Eq '(marktestskipped|marktestincomplete|pytest\.mark\.(skip|xfail)|unittest\.skip|@expectedfailure|@skip|\.skip\(|xit\(|xdescribe|#\[ignore\]|#\[requires|#\[group|@group|(^|[^a-z])(todo|fixme):|# *disabled|<exclude>|excludetestsuite|--exclude-group)' <<<"$blob"; then
+    if grep -Eq '(marktestskipped|marktestincomplete|pytest\.mark\.(skip|xfail)|unittest\.skip|@expectedfailure|@skip|\.skip\(|xit\(|xdescribe|#\[ignore\]|#\[requires|#\[group|@group|(^|[^a-z])(todo|fixme):|# *disabled|<exclude>|excludetestsuite|--exclude-group|<file>|defaulttestsuite|failonrisky *= *.false|failonwarning *= *.false)' <<<"$blob"; then
       hits+=("a tenure test looks like it is being skipped or marked xfail — fix the classifier, not the test")
     fi
     ;;

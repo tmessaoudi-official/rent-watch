@@ -169,22 +169,54 @@ run_sabotage "a newline stops ending the financing phrase" \
   src/php/Core/TenureClassifier.php \
   's@\^\[^\\S\\n\]\*(\\n|\$)@^[^\\S\\n]*($)@'
 
-# NOTE: there is no sabotage for the comparative escape's own `[^\S\n]*`. Reverting it to `\s*` is
-# provably inert: the phrase-end test above it returns determinate for any `$after` that starts with
-# a newline, so the comparative never sees one. It is kept as belt and braces — whichever of the two
-# is edited first must not be able to reopen the hole — and belt-and-braces cannot be sabotage-tested
-# one change at a time. The boundary behaviour is covered by the phrase-end sabotage and regress-037.
+# The comparative escape exists in TWO methods, and an earlier note here claimed a sabotage was
+# unnecessary for "the comparative escape" as though there were one. That is true only of the copy
+# inside financingAcronymPosition(), which sits below a phrase-end test that returns first — verified
+# inert. The copy in firstNonComparativeOccurrence() has NO phrase-end test above it and is the sole
+# guard on the doubt floor, so reverting it to `\s*` silently reopened the boundary hole with the
+# suite green. One note stretched over two call sites; each now has its own answer.
+run_sabotage "the doubt floor's comparative escape reads across the boundary" \
+  src/php/Core/TenureClassifier.php \
+  '/private function firstNonComparativeOccurrence/,$ s@\[^\\S\\n\]\*(?i:@\\s*(?i:@'
+
+run_sabotage "the collocation separator spans the title/description newline" \
+  src/php/Core/TenureClassifier.php \
+  "s|(?:\[^\\\\S\\\\n\]\|\[\\\\/\\\\-,:;()\]){1,3}|[\\\\s\\\\/\\\\-,:;()]{1,3}|"
+
+run_sabotage "an eligible label may be assembled across a multi-line FIELD value" \
+  src/php/Core/TenureClassifier.php \
+  "s|isset(\$hit\['matched'\])|false|"
+
+run_sabotage "the field NAME stops being read for excluded vocabulary" \
+  src/php/Core/TenureClassifier.php \
+  's|$nameSignal = $this->excludedVocabularyIn((string) $name);|$nameSignal = null;|'
+
+run_sabotage "the unrecognised-surface scan sees LABELS only again (PLUS goes blind)" \
+  src/php/Core/TenureClassifier.php \
+  's|foreach (array_keys(self::AMBIGUOUS_LABELS) as $acronym) {|foreach ([] as $acronym) {|'
+
+run_sabotage "an unreadable field value is silently dropped instead of digested" \
+  src/php/Core/TenureClassifier.php \
+  's|if (!is_scalar($value) \&\& !$value instanceof \\Stringable \&\& $value !== null) {|if (false) {|'
+
+run_sabotage "procedural surfaces are concatenated again (literals assemble across field joins)" \
+  src/php/Core/TenureClassifier.php \
+  's|$surfaces\[\] = $folded;|$surfaces[0] .= "\\n" . $folded;|'
+
+run_sabotage "incidental surfaces refuse instead of repairing (one entity kills the listing)" \
+  src/php/Core/Text.php \
+  's|return self::fold($repaired);|return self::fold($raw);|'
 run_sabotage "sans negates across the title/description boundary again" \
   src/php/Core/TenureClassifier.php \
   "s|'/\\\\bsans\[^\\\\S\\\\n\]+\\\\z/u'|'/\\\\bsans\\\\s+\$/u'|"
 
 run_sabotage "procedural tells stop reading structured fields" \
   src/php/Core/TenureClassifier.php \
-  's|\$folded .= "\\n" . Text::fold((string) \$value);|;|'
+  's|foreach ($this->proceduralSurfaces($listing) as $folded) {|foreach ([Text::fold($listing->text())] as $folded) {|'
 
 run_sabotage "an excluded label in an unrecognised field is ignored again" \
   src/php/Core/TenureClassifier.php \
-  's|\$unknownFieldDoubt = \$this->excludedLabelInUnknownField(\$value);|$unknownFieldDoubt = null;|'
+  's|$unknownFieldDoubt = $this->excludedVocabularyIn($value);|$unknownFieldDoubt = null;|'
 
 run_sabotage "an eligible tell may be assembled across a phrase boundary" \
   src/php/Core/TenureClassifier.php \
