@@ -36,7 +36,7 @@ disallowed-tools: AskUserQuestion
 # /add-source — onboard a listing source
 
 Adding a source must be **config-only** in the common case. A bespoke adapter under
-`src/adapters/sites/` is the fallback, not the default path. If you find yourself writing Python here,
+`src/php/Adapters/sites/` is the fallback, not the default path. If you find yourself writing PHP here,
 stop and say why config was not enough — a contract every source bypasses is not a contract.
 
 ---

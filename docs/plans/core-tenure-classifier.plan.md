@@ -80,9 +80,17 @@ Three things make this module harder than it looks, and each has fixtures:
 |---|---|---|
 | 1 | Explicit structured field (`financement`, `typeProduit`, `categorie`, …) | 97 |
 | 2 | Explicit label in text (`logement intermédiaire`, `LLI`, `PLAI`, `logement social`, …) | 90 |
-| 3 | Procedural tell (`SNE`, `numéro unique`, `commission d'attribution` ⇒ social) | 80 |
+| 3 | Procedural tell (`SNE`, `numéro unique **d'enregistrement**`, `commission d'attribution` ⇒ social) | 80 |
+| 3d | Procedural tell that is only *probably* one — bare `numéro unique` — ⇒ **doubt, not a verdict** | — |
 | 4 | Plafonds de ressources band | 70 — **ships with no band data**, see below |
 | 5 | Source default | **50** |
+
+Row **3d** was added on 2026-08-06 after review round 3 and this table went four commits without it.
+`numéro unique` on its own is overwhelmingly the SNE in this domain, but it is also ordinary CRM
+boilerplate — and as a determinate tier-3 SOCIAL signal it cleared the floor unaided, making that one
+phrase a hard, silent reject. Nothing arrives, and nothing arriving is indistinguishable from a quiet
+market (`CLAUDE.md` hard rule 8). The discriminating form, *with* `d'enregistrement`, stays
+determinate. See `regress-024` and `social-002`.
 
 Tier 5 sits **below the 0.6 floor on purpose**. A mixed source that emits a listing with no tenure
 signal at all lands in the digest, never in a notification. That is `CLAUDE.md`'s *"an absent signal

@@ -105,7 +105,7 @@ which is why it needs an adversarial reviewer rather than a test.
 ## Regression angle
 
 - Which existing tests cover the changed code, and were they **executed**? Run them and paste the
-  output. If there is no test runner in the tree, say exactly that rather than naming one.
+  output. The runner is `php tools/phpunit.phar` (PHPUnit's PHAR, not a Composer dev dependency — see `README.md` § Getting started). "No test runner in the tree" is NOT an available answer for any change under `src/`, `config/` or `tests/`; run the suite.
 - For every adapter change, is there a fixture-backed test that would fail if the field map drifted?
   If not, that absence IS the finding.
 - Any changed shared helper: enumerate ALL callers with grep. A `dig()` or `to_num()` change touches

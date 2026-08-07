@@ -111,8 +111,8 @@ result — it is a wasted application, and it is the thing that makes the user s
 ## Regression angle
 
 - Which existing tests cover the changed code, and were they **executed**? Run them and paste the
-  output. "The tests should pass" is not evidence. If there is no test runner in the tree yet, say
-  exactly that — do not name `pytest` as if it were wired.
+  output. "The tests should pass" is not evidence. The runner is `php tools/phpunit.phar` (PHPUnit's PHAR, not a Composer dev dependency — see `README.md` § Getting started). "No test runner in the tree" is NOT an available answer for any change under `src/`, `config/` or `tests/`; run the suite.
+  Do not name `pytest`: the only Python here is the superseded prototype.
 - **The classifier corpus is the crown jewel.** It must hold ≥30 hand-labelled real listing texts
   covering pure-LLI In'li, mixed CDC Habitat, an explicit PLAI, an explicit PLS, and an ambiguous
   case. Check the diff for a fixture that was **skipped, xfailed, deleted or relabelled**. That is

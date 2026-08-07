@@ -105,7 +105,20 @@ final class Text
         // An HTML entity here means an adapter stopped short. Refuse rather than classify around
         // it: an entity sitting inside a multi-word label deletes that label and leaves the others
         // standing, and the label it deletes is not chosen fairly.
-        if (preg_match('/&(?:[a-zA-Z][a-zA-Z0-9]{1,10}|#\d{1,6}|#[xX][0-9a-fA-F]{1,6});/', $raw, $entity) === 1) {
+        //
+        // `=== 1` on its own reads a PCRE ERROR (`false`) as "no entity found", which is the same
+        // fail-open shape this file rejects everywhere else — see tokenPosition() and the null
+        // check below. LATENT, not live: PCRE limits are global, so anything that breaks this call
+        // also breaks the `preg_replace` further down, whose null check throws. It is guarded here
+        // anyway because that is an accident of two patterns sharing a limit, not a guarantee, and
+        // the doctrine is stated twenty lines below its own violation.
+        $entityFound = preg_match('/&(?:[a-zA-Z][a-zA-Z0-9]{1,10}|#\d{1,6}|#[xX][0-9a-fA-F]{1,6});/', $raw, $entity);
+
+        if ($entityFound === false) {
+            throw MalformedText::notUtf8('Text::foldPreserveCase entity gate (' . preg_last_error_msg() . ')');
+        }
+
+        if ($entityFound === 1) {
             throw MalformedText::undecodedEntities($entity[0]);
         }
 
@@ -154,7 +167,23 @@ final class Text
      */
     public static function fold(string $raw): string
     {
-        return mb_strtolower(self::foldPreserveCase($raw), 'UTF-8');
+        // BYTE-WISE `strtolower`, NOT `mb_strtolower`, and the difference is load-bearing.
+        //
+        // Positions from this surface and from `foldPreserveCase()` are compared directly: the
+        // resolver breaks ties on `TenureSignal::position`, and the `conventionné` adjacency rule
+        // does arithmetic across a span. Both are only meaningful if the two surfaces agree byte
+        // for byte, which the docblock in `TenureClassifier::financingAcronymPosition()` asserted —
+        // and `mb_strtolower` made false for 27 codepoints, among them `İ` (U+0130), `ẞ` (U+1E9E)
+        // and the Kelvin sign `K` (U+212A), each of which changes byte length when lowercased. A
+        // listing containing one before a `PLUS` shifted every later offset and could mis-decide
+        // the adjacency test. Found by enumerating U+0020..U+2FFFF; no test had asserted it.
+        //
+        // ASCII-only lowercasing costs nothing here because `foldPreserveCase()` has already mapped
+        // French to ASCII — `É`→`E`, `Œ`→`OE`, `Ç`→`C` — and every literal in this codebase's label
+        // tables is ASCII. Greek and Cyrillic uppercase now survive un-lowercased, which no pattern
+        // was ever going to match either way. `testFoldPreservesByteOffsets()` enumerates the range
+        // and keeps this true rather than merely claimed.
+        return strtolower(self::foldPreserveCase($raw));
     }
 
     /**

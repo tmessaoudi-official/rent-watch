@@ -127,6 +127,13 @@ run_sabotage "comparative suppression removed ('LOGEMENT PLUS GRAND' reads as fi
   src/php/Core/TenureClassifier.php \
   's|^    private const string COMPARATIVE_TAIL = .*$|    private const string COMPARATIVE_TAIL = "zzzz-no-such-word";|'
 
+# The two folded surfaces must stay byte-aligned: label positions come from fold(), the ambiguous
+# acronym's from foldPreserveCase(), and the resolver compares them directly. mb_strtolower breaks
+# that for 27 codepoints (İ, ẞ, the Kelvin sign …) — which is what this code did until round 4.
+run_sabotage "fold() lowercases multibyte again (byte offsets diverge between the two surfaces)" \
+  src/php/Core/Text.php \
+  's/return strtolower(self::foldPreserveCase($raw));/return mb_strtolower(self::foldPreserveCase($raw), "UTF-8");/'
+
 run_sabotage "word boundaries dropped (substring match: 'plaine' becomes PLAI)" \
   src/php/Core/Text.php \
   "s|'/(?<!\[a-z0-9\])' . preg_quote(\$needle, '/') . '(?!\[a-z0-9\])/u'|'/' . preg_quote(\$needle, '/') . '/u'|"

@@ -48,8 +48,8 @@ the fixture. Your job is to check whether they did.
 1. **Evidence produced, not promised.** The four-dimension gate (Coverage / Docs / Config / Blast
    radius) is only satisfied by *executed* commands. Hunt for the tells: "the tests should pass",
    "this will work", "verified the logic". Re-run what the author claims to have run and paste the
-   output. If there is no test runner in the tree, the honest Coverage answer is "no runner present
-   yet — N/A with reason", and a claim of a green suite is itself the finding.
+   output. The runner is `php tools/phpunit.phar` (PHPUnit's PHAR, not a Composer dev dependency — see `README.md` § Getting started). "No test runner in the tree" is NOT an available answer for any change under `src/`, `config/` or `tests/`; run the suite. A claim of a green suite that was
+   not run is itself the finding.
 2. **Shown, not described.** rent-watch has no visual surface by design (`spec/PROJECT_BRIEF.md`
    §12 — a web UI is a ruled non-goal), so do **not** demand screenshots. Two things must be shown as
    real output rather than described: a change to the **notification payload** (paste the actual

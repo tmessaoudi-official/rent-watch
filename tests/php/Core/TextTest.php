@@ -137,4 +137,92 @@ final class TextTest extends TestCase
     {
         self::assertSame($expected, Text::fieldKey($raw));
     }
+
+    /**
+     * `fold()` and `foldPreserveCase()` produce byte-identical LENGTHS, for every codepoint.
+     *
+     * Not a stylistic property — a correctness one. `TenureClassifier` matches explicit labels
+     * against `fold()` output and the ambiguous acronym against `foldPreserveCase()` output, then
+     * compares the resulting `TenureSignal::position` values directly: the resolver breaks ties on
+     * them, and the `conventionné` adjacency rule measures a span across them. If one surface is a
+     * byte longer than the other, every offset after the divergence is wrong on one of the two.
+     *
+     * The invariant was asserted in a docblock and was FALSE for 27 codepoints under
+     * `mb_strtolower` — `İ`, `ẞ`, the Kelvin sign and 24 others all change byte length when
+     * lowercased. Nothing tested it. Enumerated rather than sampled, because the failures were
+     * scattered across Latin Extended-D and the letterlike-symbols block and no plausible hand-
+     * written list would have contained them.
+     */
+    public function testFoldPreservesByteOffsets(): void
+    {
+        $diverged = [];
+
+        for ($cp = 0x20; $cp <= 0x2FFFF; ++$cp) {
+            if ($cp >= 0xD800 && $cp <= 0xDFFF) {
+                continue;                                  // surrogates are not scalar values
+            }
+
+            $char = mb_chr($cp, 'UTF-8');
+
+            if ($char === false) {
+                continue;
+            }
+
+            // Embedded in real text: the property that matters is that a character sitting BEFORE
+            // a label cannot shift that label's offset on one surface but not the other.
+            $subject = 'logement ' . $char . ' social';
+
+            try {
+                $cased = Text::foldPreserveCase($subject);
+                $folded = Text::fold($subject);
+            } catch (MalformedText) {
+                continue;                                  // refused input has no offsets to align
+            }
+
+            if (strlen($cased) !== strlen($folded)) {
+                $diverged[] = sprintf('U+%04X', $cp);
+            }
+        }
+
+        self::assertSame(
+            [],
+            $diverged,
+            'fold() and foldPreserveCase() disagree on byte length for: ' . implode(' ', array_slice($diverged, 0, 30)),
+        );
+    }
+
+    /**
+     * A PCRE failure is never quietly folded into a clean string.
+     *
+     * Every guard in this file exists for one shape of bug: `false`/`null` from a preg call read as
+     * "nothing matched", which turns an unreadable listing into an unlabelled one and lets it match
+     * on the source default. The property under test is end-to-end — whatever fails inside
+     * `foldPreserveCase`, the caller gets an exception, never text.
+     *
+     * PCRE limits are process-global and restored in `finally`, which is why this test drives the
+     * failure that way rather than by crafting a pathological subject: the entity gate and the
+     * invisible-character strip share the limit, so no input reaches one broken and the other
+     * working. That sharing is what makes the entity gate's own guard defence-in-depth rather than
+     * a live fix, and it is stated as such in the code.
+     */
+    public function testAPcreFailureNeverBecomesCleanText(): void
+    {
+        $backtrack = ini_get('pcre.backtrack_limit');
+        $jit = ini_get('pcre.jit');
+
+        try {
+            ini_set('pcre.jit', '0');
+            ini_set('pcre.backtrack_limit', '1');
+            ini_set('pcre.recursion_limit', '1');
+
+            $subject = str_repeat('a', 100) . '&abcdefghij;';
+
+            $this->expectException(MalformedText::class);
+            Text::foldPreserveCase($subject);
+        } finally {
+            ini_set('pcre.backtrack_limit', $backtrack === false ? '1000000' : $backtrack);
+            ini_set('pcre.recursion_limit', '100000');
+            ini_set('pcre.jit', $jit === false ? '1' : $jit);
+        }
+    }
 }

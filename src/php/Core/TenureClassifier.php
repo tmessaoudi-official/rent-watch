@@ -837,6 +837,12 @@ final readonly class TenureClassifier
      * @param string $cased accent-folded but case-PRESERVING text — case is the evidence here.
      *                      Its byte offsets align with {@see Text::fold()}'s output, because
      *                      folding removes accents first and lowercasing ASCII preserves length.
+     *                      That alignment is what makes positions from the two surfaces
+     *                      comparable at all, and it was ASSERTED HERE AND FALSE: `fold()` used
+     *                      `mb_strtolower`, which changes byte length for 27 codepoints. It is now
+     *                      byte-wise `strtolower` and enumerated by
+     *                      `TextTest::testFoldPreservesByteOffsets()` — do not restore the
+     *                      multibyte call, and do not weaken this paragraph back to a promise.
      *
      * @return array{int, bool}|null
      */
