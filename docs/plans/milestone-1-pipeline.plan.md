@@ -22,7 +22,10 @@ failures are silent, and they are cheapest to get right before anything depends 
 | `HttpJsonSource` — the first NETWORK adapter | **blocked on an input**, not a decision: no endpoint in this repo has been verified, and hard rule 1 forbids writing one from memory. Needs a DevTools cURL capture |
 | `dedup` — cross-portal clustering | **done**, `src/php/Core/Dedup.php` |
 | Notification formatter + channels (console, ntfy, email) | **done**, `src/php/Core/Notify/` |
-| `scout` CLI (`doctor`, `dump <source>`, `run --once`) | not started |
+| `scout` CLI (`doctor`, `dump`, `run --once/--seed`, `digest`, `reclassify`, `test-notify`) | **done**, `bin/scout` + `src/php/Cli/` |
+| Schema v3 — tenure verdict, `duration_ms`, `source_alerts` | **done** |
+| The run loop (fetch → classify → criteria → dedup → store → notify) | **done**, `src/php/Cli/Pipeline.php` |
+| `scout run --watch` | **refuses** rather than running unpaced — needs the Q37 cadence |
 
 ## Settled — the config file format
 
@@ -442,4 +445,38 @@ A changelog that overstates is worse than one that omits, because the next sessi
   EXPLICIT null override — so `['rentCc' => null]` silently kept the default and the hors-charges
   test asserted against a listing that had a CC rent after all. A helper that quietly ignores what a
   test asked for makes the test prove something other than what it says.
+- [2026-08-07 21:30] AGREED (schema v3): `listings.tenure` / `confidence_bp` / `signals_json` (Q24),
+  `source_runs.duration_ms` (Q25) and a `source_alerts` table (Q29). The last one is the reason v3
+  could not wait: the alert cooldown has NOWHERE durable to live otherwise, and in process memory a
+  crash-looping container re-alerts on every restart while a manual `doctor` shares no state with a
+  running `--watch`. It cannot be derived from `source_runs` either — that table records RUNS, not
+  ALERTS, and cannot tell "was broken" from "was told about". The migration does NOT backfill
+  `tenure`: `UNKNOWN` would be indistinguishable from a real UNKNOWN verdict, and `NULL` is the truth.
+- [2026-08-07 21:30] FOUND BY RUNNING IT: `--seed` recorded sightings but left `notified_at` NULL, so
+  the very next run notified all six matches — the flood simply moved one run later, which is exactly
+  what Q36 exists to prevent. `--seed` now means "already seen AND already told about".
+- [2026-08-07 21:30] FOUND BY RUNNING IT: the digest re-emitted its whole contents every pass. Q34
+  requires entries be marked emitted only after DELIVERY; without that it becomes the alert fatigue
+  it was designed to avoid, and a digest the developer has learned to skip costs the fail-closed rule
+  its only landing zone. `notified_at` is reused rather than duplicated — being carried in a
+  delivered digest IS being told about the listing.
+- [2026-08-07 21:30] **THE SABOTAGE RUN EARNED ITS KEEP AGAIN, harder than before.** `ScoutTest`
+  asserts on the CLI's real stdout, which is the right evidence for the CLI — and 15 sabotages left
+  it green. Eleven were genuine holes: a failed fetch that went unrecorded, `item_count` counting
+  matches instead of parsed items, an ignored alert cooldown, a cooldown keyed on the source alone,
+  no recovery notice, a verdict never persisted, an unmeasured duration, a removed scraping gate, a
+  silently dropped channel name, a freshness bonus given to everything forever, and a match marked
+  notified with no channel confirming. `tests/php/Cli/PipelineRunTest.php` exists because of that
+  round, and a temp-root harness was added to `ScoutTest` because four guards were unreachable from
+  the committed config at all — a guard no test can reach is a guard someone will delete.
+- [2026-08-07 21:30] RETIRED, with the reason recorded rather than the case quietly deleted: the
+  "doctor stops passing the clock" sabotage could never go red. `doctor` records its own successful
+  run immediately before asking for health, so the clock and the newest stamp always agree and no
+  verdict can differ — the argument is defensive there, not load-bearing. An earlier version of the
+  test's docblock CLAIMED it proved doctor passes the clock; it did not, and the claim is corrected
+  in place rather than removed.
+- [2026-08-07 21:30] AGREED: `buildChannel()`'s unknown-channel refusal was restructured from a
+  `default => throw` arm into a separate guard, purely so a sabotage can remove it in ONE line and
+  see the suite go red. As a multi-line throw-arm it could only be broken into a PHP parse error,
+  which proves nothing about the guarantee.
 

@@ -1,0 +1,351 @@
+<?php
+
+declare(strict_types=1);
+
+namespace RentWatch\Cli;
+
+use RentWatch\Adapters\Source;
+use RentWatch\Adapters\SourceError;
+use RentWatch\Config\Criteria;
+use RentWatch\Core\CriteriaEngine;
+use RentWatch\Core\Dedup;
+use RentWatch\Core\Notify\Formatter;
+use RentWatch\Core\Notify\Notifier;
+use RentWatch\Core\Outcome;
+use RentWatch\Core\RawListing;
+use RentWatch\Core\TenureClassifier;
+use RentWatch\Core\Verdict;
+use RentWatch\Store\Store;
+
+/**
+ * One pass: fetch every enabled source, classify, filter, dedup, store, notify.
+ *
+ * THE ORDER IS THE DESIGN, and each step is where it is for a reason that cost something to learn:
+ *
+ * 1. **Fetch, and record the run whatever happens.** A failed fetch is a recorded failure, never an
+ *    empty result — `CLAUDE.md` hard rule 3, and the thing source health is derived from.
+ * 2. **Classify, then apply criteria.** The classifier owns `REJECT`/`DIGEST` so §1's fail-closed
+ *    rule lives in exactly one place.
+ * 3. **Dedup across sources, before storing.** Deduping after would have already recorded two
+ *    sightings of one flat and manufactured a price history for a listing that does not exist.
+ * 4. **Store, THEN notify, and only mark notified when a channel confirmed.** The reverse order
+ *    loses a listing on a crash between the two; marking optimistically loses it on a send failure.
+ */
+final readonly class Pipeline
+{
+    public function __construct(
+        private Criteria $criteria,
+        private Store $store,
+        private Notifier $notifier,
+        private TenureClassifier $classifier = new TenureClassifier(),
+        private ?CriteriaEngine $engine = null,
+        private Dedup $dedup = new Dedup(),
+        private Formatter $formatter = new Formatter(),
+    ) {}
+
+    /**
+     * @param list<Source> $sources
+     * @param bool         $seedOnly populate the seen-set without notifying — `scout run --seed`,
+     *                               the way through a freshly created database (Q36)
+     */
+    public function runOnce(array $sources, string $nowIso, bool $seedOnly = false): RunResult
+    {
+        $engine = $this->engine ?? new CriteriaEngine($this->criteria);
+
+        $sourcesRun = 0;
+        $sourcesFailed = 0;
+        $itemsParsed = 0;
+        $errors = [];
+
+        /** @var list<array{listing: RawListing, family: string}> $harvested */
+        $harvested = [];
+
+        foreach ($sources as $source) {
+            ++$sourcesRun;
+            $startedAt = hrtime(true);
+
+            try {
+                $listings = $source->fetch();
+                $durationMs = (int) round((hrtime(true) - $startedAt) / 1_000_000);
+
+                // `item_count` is what the ADAPTER PARSED, before criteria (Q30). Counting matches
+                // would make source health a measure of the rental market rather than of the
+                // adapter, and a drifted selector on a source whose matches are usually zero would
+                // become undetectable — which is the exact failure §8 exists for.
+                $this->store->recordRun($source->name(), count($listings), true, null, $nowIso, $durationMs);
+                $itemsParsed += count($listings);
+
+                foreach ($listings as $listing) {
+                    $harvested[] = ['listing' => $listing, 'family' => $source->family()];
+                }
+            } catch (SourceError $e) {
+                $durationMs = (int) round((hrtime(true) - $startedAt) / 1_000_000);
+                ++$sourcesFailed;
+                $errors[] = $e->getMessage();
+                // Recorded, not swallowed. This row is what `SourceStatus::BROKEN` is derived from,
+                // and a failure that leaves no trace is indistinguishable from a quiet market.
+                $this->store->recordRun($source->name(), 0, false, $e->getMessage(), $nowIso, $durationMs);
+            } catch (\Throwable $e) {
+                $durationMs = (int) round((hrtime(true) - $startedAt) / 1_000_000);
+                ++$sourcesFailed;
+                // An adapter throwing something it did not declare is still a source failure, and it
+                // must not abort the pass — the remaining sources have not been tried yet.
+                $wrapped = new SourceError($source->name(), $e->getMessage(), $e);
+                $errors[] = $wrapped->getMessage();
+                $this->store->recordRun($source->name(), 0, false, $wrapped->getMessage(), $nowIso, $durationMs);
+            }
+        }
+
+        $clustered = $this->dedup->cluster($harvested);
+        $duplicates = count($harvested) - count($clustered);
+
+        $matches = 0;
+        $digested = 0;
+        $rejectedCount = 0;
+        $rentDrops = 0;
+        $undelivered = 0;
+        $rejected = [];
+
+        /** @var list<array{listing: RawListing, verdict: Verdict, key: string}> $digestEntries */
+        $digestEntries = [];
+
+        foreach ($clustered as $cluster) {
+            $listing = $cluster['listing'];
+            $classification = $this->classifier->classify($listing, $this->profileFor($sources, $listing));
+
+            $sighting = $this->store->record($listing, $listing->effectiveRentCc(), $nowIso);
+            $this->store->recordVerdict(
+                $sighting->dedupKey,
+                $classification->tenure->value,
+                $classification->confidenceBp,
+                $classification->reasons(),
+            );
+
+            // Freshness (score component S7) is measured from FIRST seen, not from this sighting.
+            // `null` means "new right now" and earns the bonus outright; an existing listing earns
+            // it only while it is still inside the window. Passing `null` unconditionally — which an
+            // earlier draft did, with both branches of a ternary returning null — would have given
+            // every listing the freshness bonus forever, quietly flattening the one component that
+            // is supposed to separate a flat published this hour from one that has sat for a week.
+            $verdict = $engine->judge($listing, $classification, $this->ageSeconds($sighting->dedupKey, $nowIso));
+
+            if ($verdict->outcome === Outcome::REJECT) {
+                ++$rejectedCount;
+                $rejected[] = $listing->sourceName . ':' . $listing->externalId . ' — ' . (string) $verdict->disqualifier;
+                continue;
+            }
+
+            if ($verdict->outcome === Outcome::DIGEST) {
+                ++$digested;
+
+                // ONLY WHAT IS NEW SINCE THE LAST SUCCESSFUL EMISSION (Q34). Without this the
+                // digest repeats its whole contents every pass, which is the alert fatigue it was
+                // designed to avoid — and a digest the developer has learned to skip costs the
+                // fail-closed rule its only landing zone.
+                //
+                // `notified_at` is reused rather than given a parallel column: being carried in a
+                // DELIVERED digest is being told about the listing, which is what the field means.
+                // `scout reclassify` clears it for a row whose verdict improves (Q35), so a listing
+                // promoted from DIGEST to MATCH is still announced.
+                if (!$this->store->wasNotified($sighting->dedupKey)) {
+                    $digestEntries[] = [
+                        'listing' => $listing,
+                        'verdict' => $verdict,
+                        'key' => $sighting->dedupKey,
+                    ];
+                }
+
+                continue;
+            }
+
+            ++$matches;
+
+            if ($seedOnly) {
+                // MARKED NOTIFIED WITHOUT SENDING, and that is the whole point of the mode.
+                // Recording the sighting alone was not enough: `notified_at` stayed NULL, so the
+                // very next run notified all of them and the flood simply moved one run later —
+                // which is precisely what Q36 exists to prevent. `--seed` means "treat everything
+                // currently published as already seen AND already told about"; only what appears
+                // after it is news.
+                $this->store->markNotified($sighting->dedupKey, $nowIso);
+
+                continue;
+            }
+
+            // A rent that fell on a listing we already knew is its own event — and one that crosses
+            // the ceiling from above is a NEW MATCH whatever its size (Q33), which is why the size
+            // thresholds are not consulted in that case.
+            $crossedCeiling = $sighting->previousRentCc !== null
+                && $this->criteria->maxRentCc !== null
+                && $sighting->previousRentCc > $this->criteria->maxRentCc
+                && ($listing->effectiveRentCc() ?? PHP_INT_MAX) <= $this->criteria->maxRentCc;
+
+            if ($sighting->isPriceDrop && $sighting->previousRentCc !== null && $listing->effectiveRentCc() !== null) {
+                $notable = $crossedCeiling
+                    || $this->criteria->notify->isNotableDrop($sighting->previousRentCc, (int) $listing->effectiveRentCc());
+
+                if ($notable) {
+                    ++$rentDrops;
+                    $failures = $this->notifier->send($this->formatter->rentDrop(
+                        $listing,
+                        $sighting->previousRentCc,
+                        (int) $listing->effectiveRentCc(),
+                        $crossedCeiling,
+                    ));
+
+                    if (!$this->notifier->delivered($failures)) {
+                        ++$undelivered;
+                    }
+                }
+            }
+
+            if ($this->store->wasNotified($sighting->dedupKey)) {
+                continue;
+            }
+
+            $failures = $this->notifier->send($this->formatter->match($listing, $verdict, $cluster['duplicates']));
+
+            if ($this->notifier->delivered($failures)) {
+                $this->store->markNotified($sighting->dedupKey, $nowIso);
+            } else {
+                // Left un-notified ON PURPOSE, so the next run retries. Marking it notified here is
+                // the hole Q28 closes: the run reports success, the listing is recorded as sent, and
+                // the flat is gone with nothing anywhere saying so.
+                ++$undelivered;
+            }
+        }
+
+        if ($digestEntries !== []) {
+            if ($seedOnly) {
+                foreach ($digestEntries as $entry) {
+                    $this->store->markNotified($entry['key'], $nowIso);
+                }
+            } else {
+                // Emitted at the end of any run that produced NEW entries (Q34), rather than once a
+                // day. A third of the corpus routes here, it is the fail-closed rule's only landing
+                // zone, and a daily cadence turns "one glance, later" into "gone".
+                $failures = $this->notifier->send($this->formatter->digest($digestEntries));
+
+                if ($this->notifier->delivered($failures)) {
+                    // Marked only AFTER the channel confirmed. Marking first would lose the whole
+                    // batch permanently on a failed send — and a digest entry, unlike a match, has
+                    // no second chance: nothing else will ever surface it.
+                    foreach ($digestEntries as $entry) {
+                        $this->store->markNotified($entry['key'], $nowIso);
+                    }
+                } else {
+                    ++$undelivered;
+                }
+            }
+        }
+
+        if (!$seedOnly) {
+            $undelivered += $this->alertOnHealth($sources, $nowIso);
+        }
+
+        return new RunResult(
+            sourcesRun: $sourcesRun,
+            sourcesFailed: $sourcesFailed,
+            itemsParsed: $itemsParsed,
+            matches: $matches,
+            digested: $digested,
+            rejectedCount: $rejectedCount,
+            duplicates: $duplicates,
+            rentDrops: $rentDrops,
+            undelivered: $undelivered,
+            errors: $errors,
+            rejected: $rejected,
+        );
+    }
+
+    /**
+     * Alert on EVERY status where `isAlerting()` is true, deduplicated per `(source, status)`.
+     *
+     * Ruled 2026-08-07 (Q29). The routing table originally named `SOURCE_BROKEN` alone, while six
+     * statuses alert — so `NEVER_PRODUCED`, added precisely because it hid behind `OK`, and `STALE`,
+     * which catches the schedule itself having stopped, would have been derived, stored and never
+     * sent. An alert that is computed and never sent is worse than none (hard rule 2).
+     *
+     * @param list<Source> $sources
+     */
+    private function alertOnHealth(array $sources, string $nowIso): int
+    {
+        $undelivered = 0;
+        $cooldown = $this->criteria->notify->sourceBrokenCooldownHours;
+
+        foreach ($sources as $source) {
+            $health = $source->health($nowIso);
+
+            if (!$health->status->isAlerting()) {
+                // A source that WAS alerting and is now OK gets exactly one recovery notice, and
+                // clearing the keys is what makes a second, different breakage that day audible.
+                if ($this->store->clearAlerts($source->name())) {
+                    $failures = $this->notifier->send($this->formatter->sourceRecovered($health));
+                    if (!$this->notifier->delivered($failures)) {
+                        ++$undelivered;
+                    }
+                }
+
+                continue;
+            }
+
+            if (!$this->store->shouldAlert($source->name(), $health->status->value, $nowIso, $cooldown)) {
+                continue;
+            }
+
+            $failures = $this->notifier->send($this->formatter->sourceHealth($health));
+
+            if ($this->notifier->delivered($failures)) {
+                $this->store->markAlerted($source->name(), $health->status->value, $nowIso);
+            } else {
+                // NOT marked, so the alert is retried. A cooldown that starts on a failed send would
+                // silence the alert for a day on the strength of a delivery that never happened.
+                ++$undelivered;
+            }
+        }
+
+        return $undelivered;
+    }
+
+    /**
+     * How long ago this listing was first seen, or `null` if it is new to the store right now.
+     *
+     * A listing with no snapshot is new. An UNDATEABLE `first_seen_at` returns `null` rather than
+     * throwing: the store's own migration treats an undateable row as the oldest thing on record
+     * rather than refusing to open the database, and refusing to score a listing over a bad
+     * timestamp would be a harsher response to the same corruption.
+     */
+    private function ageSeconds(string $dedupKey, string $nowIso): ?int
+    {
+        $snapshot = $this->store->snapshot($dedupKey);
+        if ($snapshot === null) {
+            return null;
+        }
+
+        try {
+            $first = new \DateTimeImmutable($snapshot->firstSeenAt);
+            $now = new \DateTimeImmutable($nowIso);
+        } catch (\Exception) {
+            return null;
+        }
+
+        return max(0, $now->getTimestamp() - $first->getTimestamp());
+    }
+
+    /**
+     * @param list<Source> $sources
+     */
+    private function profileFor(array $sources, RawListing $listing): \RentWatch\Core\SourceProfile
+    {
+        foreach ($sources as $source) {
+            if ($source->name() === $listing->sourceName) {
+                return $source->profile();
+            }
+        }
+
+        // Unreachable in practice — the listing came from one of these sources. Fail CLOSED anyway:
+        // `mixedTenure: true` with no default means a listing with no signal digests rather than
+        // matching, which is the direction §1 requires when we do not know what we are looking at.
+        return new \RentWatch\Core\SourceProfile($listing->sourceName, 'institutional', null, true);
+    }
+}

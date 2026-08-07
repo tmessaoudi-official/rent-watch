@@ -603,7 +603,7 @@ run_sabotage "redaction fails OPEN on a PCRE error (raw text returned)" \
 
 run_sabotage "schema version stops tracking the schema (an older database opens and then throws)" \
   src/php/Store/Store.php \
-  's%public const int SCHEMA_VERSION = 2;%public const int SCHEMA_VERSION = 1;%'
+  's%public const int SCHEMA_VERSION = 3;%public const int SCHEMA_VERSION = 1;%'
 
 run_sabotage "the v1 upgrade never runs (seen_epoch column missing forever)" \
   src/php/Store/Store.php \
@@ -1060,6 +1060,85 @@ run_sabotage "the literal-secret mask is dropped (a self-hosted ntfy topic leaks
 run_sabotage "a known duplicate is silently dropped instead of shown" \
   src/php/Core/Notify/Formatter.php \
   "s%if (\\\$duplicates !== \[\]) {%if (false) {%"
+
+# ── The run loop, the CLI and schema v3, added 2026-08-07 ─────────────────────────
+# The CLI is the only surface the developer sees, so a defect here is a defect in the product's
+# entire output. Every case below was written against a specific ruling.
+
+run_sabotage "run stops refusing on a freshly created database (Q36: a missing volume re-notifies everything)" \
+  src/php/Cli/Scout.php \
+  's%if (\$store->wasCreated() \&\& !\$seed) {%if (false) {%'
+
+run_sabotage "--seed stops marking listings notified (the flood moves one run later)" \
+  src/php/Cli/Pipeline.php \
+  's%MARKED NOTIFIED WITHOUT SENDING%DISABLED%; s%^                \$this->store->markNotified(\$sighting->dedupKey, \$nowIso);$%%'
+
+run_sabotage "the digest re-emits everything on every pass (Q34)" \
+  src/php/Cli/Pipeline.php \
+  's%if (!\$this->store->wasNotified(\$sighting->dedupKey)) {%if (true) {%'
+
+run_sabotage "a match is marked notified even when no channel confirmed" \
+  src/php/Cli/Pipeline.php \
+  's%if (\$this->notifier->delivered(\$failures)) {%if (true) {%'
+
+run_sabotage "a failed fetch stops being recorded as a failed run" \
+  src/php/Cli/Pipeline.php \
+  's%\$this->store->recordRun(\$source->name(), 0, false, \$e->getMessage(), \$nowIso, \$durationMs);%%'
+
+run_sabotage "an adapter exception aborts the whole pass instead of one source" \
+  src/php/Cli/Pipeline.php \
+  's%catch (SourceError %catch (\\UnexpectedValueException %'
+
+run_sabotage "item_count starts counting MATCHES instead of parsed items (Q30)" \
+  src/php/Cli/Pipeline.php \
+  's%\$this->store->recordRun(\$source->name(), count(\$listings), true%\$this->store->recordRun($source->name(), 0, true%'
+
+run_sabotage "health alerting narrows back to BROKEN alone (Q29)" \
+  src/php/Cli/Pipeline.php \
+  's%!\$health->status->isAlerting()%\$health->status->value !== "broken"%'
+
+run_sabotage "the alert cooldown is ignored (a broken source pushes every run)" \
+  src/php/Store/Store.php \
+  's%return (\$now - \$last) >= \$cooldownHours \* 3600;%return true;%'
+
+run_sabotage "the cooldown keys on the source alone, so an escalation is swallowed" \
+  src/php/Store/Store.php \
+  "s%WHERE source = :source AND status = :status'%WHERE source = :source'%"
+
+run_sabotage "a source that recovers sends no recovery notice" \
+  src/php/Cli/Pipeline.php \
+  's%if (\$this->store->clearAlerts(\$source->name())) {%if (false) {%'
+
+run_sabotage "the tenure verdict stops being persisted (Q24)" \
+  src/php/Cli/Pipeline.php \
+  's%\$this->store->recordVerdict(%$this->store->schemaVersion(); $unused = array(%'
+
+run_sabotage "run duration stops being measured (Q25: doctor's fourth column)" \
+  src/php/Cli/Scout.php \
+  's%\$durationMs = (int) round((hrtime(true) - \$startedAt) / 1_000_000);%$durationMs = null;%'
+
+run_sabotage "doctor stops printing the journal mode (a silent WAL refusal)" \
+  src/php/Cli/Scout.php \
+  "s%. ', journal ' . \\\$store->journalMode() . ')')%. ')')%"
+
+# RETIRED, with the reason recorded rather than the case quietly deleted: "doctor stops passing the
+# clock to health()" could never go red, and a sabotage that cannot fail reports nothing for its whole
+# life. `doctor` records its own successful run IMMEDIATELY BEFORE asking for health, so the clock and
+# the newest stamp always agree and no verdict can differ — the argument is defensive there, not
+# load-bearing. Where it IS load-bearing is any health read not preceded by a run, and StoreTest
+# covers that directly. Do not re-add this case without first making doctor's output depend on it.
+
+run_sabotage "the scraping opt-in gate is removed (hard rule 4 / Q26)" \
+  src/php/Cli/Scout.php \
+  's%if (\$definition->requiresScrapingOptIn() \&\& !\$this->scrapingAllowed()) {%if (false) {%'
+
+run_sabotage "an unknown notification channel name is silently dropped" \
+  src/php/Cli/Scout.php \
+  's%if (\$channel === null) {%if (false) {%'
+
+run_sabotage "the freshness bonus is given to every listing forever" \
+  src/php/Cli/Pipeline.php \
+  's%\$this->ageSeconds(\$sighting->dedupKey, \$nowIso)%null%'
 
 printf '\n  %d sabotage(s) detected, %d undetected\n' "$pass" "$fail"
 

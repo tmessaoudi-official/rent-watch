@@ -1,0 +1,27 @@
+#!/usr/bin/env php
+<?php
+
+declare(strict_types=1);
+
+/**
+ * `scout` — the CLI entry point (spec/PROJECT_BRIEF.md §10).
+ *
+ * Deliberately thin: everything testable lives in `RentWatch\Cli\Scout`, which takes its streams as
+ * arguments so a test can assert on REAL stdout rather than on a description of it.
+ */
+
+$autoload = __DIR__ . '/../vendor/autoload.php';
+
+if (!is_file($autoload)) {
+    fwrite(STDERR, "vendor/autoload.php est absent — lancez `composer install`.\n");
+    exit(2);
+}
+
+require $autoload;
+
+// Ruled 2026-08-07 (Q34): a Docker container without TZ runs UTC, so "08:00 local" silently becomes
+// 10:00 Paris in summer. Read from the environment, with the same default `.env.example` documents.
+$tz = getenv('TZ');
+date_default_timezone_set(is_string($tz) && $tz !== '' ? $tz : 'Europe/Paris');
+
+exit((new RentWatch\Cli\Scout(dirname(__DIR__)))->run(array_slice($argv, 1)));

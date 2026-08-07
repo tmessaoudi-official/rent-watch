@@ -15,8 +15,10 @@ The full specification is [`spec/PROJECT_BRIEF.md`](spec/PROJECT_BRIEF.md). It i
 for the product, and **every constraint in it is a ruling**, not a draft to be improved on. Read it
 before touching anything under `src/`.
 
-Status: **the pure core, the store, the config layer, the adapter contract and the criteria engine
-exist. The notification channels and the CLI do not.** As of 2026-08-07 there is a PHP 8.5
+Status: **milestone 1 is functionally complete against a frozen payload.** The pure core, the store
+(schema v3), the config layer, the adapter contract, the criteria engine, dedup, the notification
+layer and the `scout` CLI all exist. What is missing is a NETWORK adapter, and that is blocked on an
+input rather than a decision. As of 2026-08-07 there is a PHP 8.5
 implementation of `models` + `tenure` under `src/php/Core/`, a 114-case language-neutral classifier
 corpus at `tests/fixtures/tenure/corpus.json`, the seen-set / price-history / run-log store under
 `src/php/Store/` with `SourceHealth` + `SourceStatus` in `Core/`, a strict JSON config layer under
@@ -24,13 +26,14 @@ corpus at `tests/fixtures/tenure/corpus.json`, the seen-set / price-history / ru
 `FixtureSource` under `src/php/Adapters/`, the criteria engine (`CriteriaEngine` + `Verdict`), and a
 PHPUnit suite. `scout run --once` is demonstrable end to end today against a frozen payload.
 
-There is still **no** notification channel, **no** CLI, **no** dedup and no CI. The first NETWORK
-adapter is blocked on an input rather than a decision: no endpoint here has been verified, and hard
-rule 1 forbids writing one from memory. `src/phorj/` is not written
+`scout doctor`, `scout dump`, `scout run --once/--seed` and `scout test-notify` all work end to end
+today. There is still no CI, no `--watch` loop (it refuses rather than running unpaced — Q37), no
+IMAP adapter and no HTTP adapter. **The first NETWORK adapter is blocked on an input rather than a
+decision**: no endpoint here has been verified, and hard rule 1 forbids writing one from memory. `src/phorj/` is not written
 yet — it waits on the three phorj builds in `docs/PHORJ-REQUIREMENTS.md`.
 
-Anything below describing `dedup`, `enrich` or the notification channels is the **target**, not the
-present. Do not report findings against files that do not exist yet, and do not name `pytest` as
+Anything below describing `enrich`, the IMAP path or a real landlord endpoint is the **target**, not
+the present. Do not report findings against files that do not exist yet, and do not name `pytest` as
 though it were wired — the PHP suite is the only test runner here.
 
 **Every question is closed as of 2026-08-07** — see [`docs/OPEN-QUESTIONS.md`](docs/OPEN-QUESTIONS.md).
@@ -361,7 +364,7 @@ tests would notice if it stopped working. **Run it after any change to `src/php/
 regressions and one piece of dead safety code on the day it was written, and two more holes in the
 store's own suite the day that was added.
 
-<!-- ADAPT: fill from the manifest / Makefile once milestone 1 lands. There is no CLI today.
+<!-- ADAPT: keep in step with bin/scout.
      Target CLI surface, per spec §10:
        scout doctor              # health-check every source: status, timing, item counts
        scout dump <source>       # raw payload of the first item — for building field maps

@@ -45,7 +45,7 @@ final readonly class Store
      * without complaint and then threw a raw `no such column` at the first sighting. That is the
      * whole argument for this constant existing, demonstrated against itself.
      */
-    public const int SCHEMA_VERSION = 2;
+    public const int SCHEMA_VERSION = 3;
 
     /** Spec §8: the mean is rolling over seven days, not over a fixed number of runs. */
     public const int ROLLING_WINDOW_DAYS = 7;
@@ -103,7 +103,11 @@ final readonly class Store
      */
     public const int MIN_SPAN_FOR_NEVER_PRODUCED = 604800;
 
-    private function __construct(private \PDO $pdo, private string $journalModeInUse) {}
+    private function __construct(
+        private \PDO $pdo,
+        private string $journalModeInUse,
+        private bool $wasCreated = false,
+    ) {}
 
     /**
      * The journal mode SQLite actually gave us — `wal` on a normal filesystem, `memory` for
@@ -122,6 +126,14 @@ final readonly class Store
      */
     public static function open(string $path): self
     {
+        // Captured BEFORE the connection, because PDO creates the file on connect. Q8 rules out
+        // GitHub Actions *because* no persistent disk means re-notifying everything, then adopts
+        // Docker-on-a-VPS, which has the identical failure mode: a typo in `-v`, or a volume that
+        // fails to reattach on reboot, produces a valid, empty, migrated database indistinguishable
+        // from a healthy one — and with nothing batched, every historic listing pushes at once.
+        // `scout run` refuses to notify on a fresh database (Q36); `--seed` is the way through.
+        $existedBefore = $path === ':memory:' || is_file($path);
+
         if ($path !== ':memory:') {
             $directory = \dirname($path);
 
@@ -161,10 +173,22 @@ final readonly class Store
         // the migration below fail with "cannot commit transaction - SQL statements in progress".
         $mode?->closeCursor();
 
-        $store = new self($pdo, $journalMode);
+        $store = new self($pdo, $journalMode, !$existedBefore);
         $store->migrate();
 
         return $store;
+    }
+
+    /**
+     * Did {@see open()} CREATE this database, rather than find one?
+     *
+     * The one signal that tells a missing volume mount apart from a first run — and they need
+     * telling apart, because the first is a misconfiguration whose symptom is notifying the entire
+     * market at once, and the second is expected.
+     */
+    public function wasCreated(): bool
+    {
+        return $this->wasCreated;
     }
 
     /**
@@ -199,7 +223,16 @@ final readonly class Store
                 first_seen_at TEXT NOT NULL,
                 last_seen_at  TEXT NOT NULL,
                 seen_epoch    INTEGER NOT NULL,
-                notified_at   TEXT
+                notified_at   TEXT,
+                -- Schema v3 (Q24). A listing stored under an old classifier cannot be re-evaluated
+                -- or explained without re-fetching it, and by then the source may have removed the
+                -- ad. Combined with the seen-set's "new exactly once" guarantee, a listing digested
+                -- as UNKNOWN under a classifier that is later improved is a PERMANENT silent miss —
+                -- and Q18 (PLI) and Q21 (shouted PLUS) both route there deliberately, so that bin
+                -- will not be small. `scout reclassify` is what consumes these.
+                tenure          TEXT,
+                confidence_bp   INTEGER,
+                signals_json    TEXT
             );
 
             CREATE INDEX IF NOT EXISTS listings_source ON listings (source);
@@ -221,10 +254,29 @@ final readonly class Store
                 ok         INTEGER NOT NULL,
                 error      TEXT,
                 at         TEXT NOT NULL,
-                at_epoch   INTEGER NOT NULL
+                at_epoch   INTEGER NOT NULL,
+                -- Schema v3 (Q25). Spec §8 specifies `scout doctor` reports status, TIMING and item
+                -- counts; three of the four were implemented and the fourth was aspirational.
+                duration_ms INTEGER
             );
 
             CREATE INDEX IF NOT EXISTS source_runs_source ON source_runs (source, at_epoch, id);
+
+            -- Schema v3, ruled 2026-08-07 (Q29). WITHOUT THIS TABLE THE ALERT COOLDOWN HAS NOWHERE
+            -- DURABLE TO LIVE, and that is not a storage nicety: in process memory a crash-looping
+            -- container re-alerts on every restart, and a manual `scout doctor` shares no state with
+            -- the running `--watch`. It cannot be derived from `source_runs` either — that table
+            -- records RUNS, not ALERTS, and cannot tell "was broken" from "was told about".
+            --
+            -- Keyed on (source, status), not on source alone: an escalation from WARN_DROP to BROKEN
+            -- must not be swallowed by the earlier, quieter alert.
+            CREATE TABLE IF NOT EXISTS source_alerts (
+                source   TEXT NOT NULL,
+                status   TEXT NOT NULL,
+                at       TEXT NOT NULL,
+                at_epoch INTEGER NOT NULL,
+                PRIMARY KEY (source, status)
+            );
             SQL
         );
 
@@ -299,6 +351,35 @@ final readonly class Store
 
                     $update->execute(['epoch' => $epoch, 'key' => (string) $row['dedup_key']]);
                 }
+            }
+
+            if ($recorded < 3) {
+                // Additive only, and every step re-runnable — a migration that half-applied and
+                // then died must be safe to run again, because the data underneath is the seen-set
+                // and it cannot be rebuilt from anywhere.
+                foreach ([
+                    'listings' => ['tenure' => 'TEXT', 'confidence_bp' => 'INTEGER', 'signals_json' => 'TEXT'],
+                    'source_runs' => ['duration_ms' => 'INTEGER'],
+                ] as $table => $columns) {
+                    $existing = array_column($this->pdo->query('PRAGMA table_info(' . $table . ')')->fetchAll(), 'name');
+
+                    foreach ($columns as $column => $type) {
+                        if (!\in_array($column, $existing, true)) {
+                            $this->pdo->exec('ALTER TABLE ' . $table . ' ADD COLUMN ' . $column . ' ' . $type);
+                        }
+                    }
+                }
+
+                // NOT backfilled, deliberately. There is no honest value for the tenure of a listing
+                // classified before the column existed: writing UNKNOWN would be indistinguishable
+                // from a real UNKNOWN verdict, and `scout reclassify` selects on exactly that
+                // distinction. NULL means "never classified under a version that recorded it", which
+                // is the truth and is what makes those rows selectable.
+                $this->pdo->exec(
+                    'CREATE TABLE IF NOT EXISTS source_alerts ('
+                    . ' source TEXT NOT NULL, status TEXT NOT NULL, at TEXT NOT NULL,'
+                    . ' at_epoch INTEGER NOT NULL, PRIMARY KEY (source, status))',
+                );
             }
 
             $stamp = $this->pdo->prepare("UPDATE schema_meta SET value = :value WHERE key = 'schema_version'");
@@ -624,18 +705,28 @@ final readonly class Store
      *
      * @throws \InvalidArgumentException on an unreadable timestamp
      */
-    public function recordRun(string $sourceName, int $itemCount, bool $ok, ?string $error, string $atIso): void
-    {
+    public function recordRun(
+        string $sourceName,
+        int $itemCount,
+        bool $ok,
+        ?string $error,
+        string $atIso,
+        ?int $durationMs = null,
+    ): void {
         $epoch = self::epoch($atIso);
 
         $statement = $this->pdo->prepare(
-            'INSERT INTO source_runs (source, item_count, ok, error, at, at_epoch)
-             VALUES (:source, :count, :ok, :error, :at, :epoch)',
+            'INSERT INTO source_runs (source, item_count, ok, error, at, at_epoch, duration_ms)
+             VALUES (:source, :count, :ok, :error, :at, :epoch, :duration)',
         );
         $statement->execute([
             'source' => $sourceName,
             'count' => $itemCount,
             'ok' => $ok ? 1 : 0,
+            // Schema v3 (Q25). Nullable, because only the CLI can measure a fetch and a caller that
+            // does not measure must record `null` rather than a fabricated 0 — a zero-millisecond
+            // fetch would read as a suspiciously fast source rather than as an unmeasured one.
+            'duration' => $durationMs,
             // An adapter exception naturally carries the request URL or the mailbox it failed on,
             // and this value reaches both the database and the user-facing detail below.
             'error' => Redact::text($error),
@@ -652,6 +743,143 @@ final readonly class Store
      * alone: `STALE`, a source whose SCHEDULE has stopped. Without it, a source that last ran three
      * hundred days ago is indistinguishable from one that ran this morning.
      */
+    // ── Alert cooldown (schema v3, Q29) ───────────────────────────────────────────────────────────
+
+    /**
+     * Should this source/status alert be sent, given the cooldown?
+     *
+     * KEYED ON `(source, status)`, never on source alone. An escalation from `WARN_DROP` to `BROKEN`
+     * is a different fact from the warning that preceded it, and keying on the source would let the
+     * quieter alert swallow the louder one for a whole day.
+     *
+     * Persisted rather than held in memory, and that is the point of the table: a crash-looping
+     * container re-alerts on every restart, and a manual `scout doctor` shares no state with a
+     * running `--watch`. It also cannot be derived from `source_runs`, which records RUNS and cannot
+     * distinguish "was broken" from "was told about".
+     */
+    public function shouldAlert(string $sourceName, string $status, string $nowIso, int $cooldownHours): bool
+    {
+        $now = self::epoch($nowIso);
+
+        $statement = $this->pdo->prepare(
+            'SELECT at_epoch FROM source_alerts WHERE source = :source AND status = :status',
+        );
+        $statement->execute(['source' => $sourceName, 'status' => $status]);
+        $row = $statement->fetch();
+
+        if ($row === false) {
+            return true;
+        }
+
+        $last = (int) $row['at_epoch'];
+
+        // A future-stamped row means a clock moved backwards, or a hand-edited database. Alerting
+        // is the safe direction: the alternative is a source that is silently un-alertable until the
+        // clock catches up, which could be indefinitely.
+        if ($last > $now) {
+            return true;
+        }
+
+        return ($now - $last) >= $cooldownHours * 3600;
+    }
+
+    /** Record that an alert for this `(source, status)` has just been sent. */
+    public function markAlerted(string $sourceName, string $status, string $atIso): void
+    {
+        $statement = $this->pdo->prepare(
+            'INSERT INTO source_alerts (source, status, at, at_epoch)
+             VALUES (:source, :status, :at, :epoch)
+             ON CONFLICT (source, status) DO UPDATE SET at = :at, at_epoch = :epoch',
+        );
+        $statement->execute([
+            'source' => $sourceName,
+            'status' => $status,
+            'at' => $atIso,
+            'epoch' => self::epoch($atIso),
+        ]);
+    }
+
+    /**
+     * A source is `OK` again: forget every alert we sent about it.
+     *
+     * Returns whether anything was cleared, which is exactly the condition for sending the ONE
+     * recovery notice. Without it a developer who fixes a field map sees nothing and has no
+     * confirmation the fix took — and the next, different breakage that day would also be silent,
+     * because the cooldown from the old alert would still be running.
+     */
+    public function clearAlerts(string $sourceName): bool
+    {
+        $statement = $this->pdo->prepare('DELETE FROM source_alerts WHERE source = :source');
+        $statement->execute(['source' => $sourceName]);
+
+        return $statement->rowCount() > 0;
+    }
+
+    // ── Tenure verdicts (schema v3, Q24) ──────────────────────────────────────────────────────────
+
+    /**
+     * Persist the classifier's verdict alongside the listing, so a past decision can be audited —
+     * and, more importantly, REVISED.
+     *
+     * Q24 asked for auditability and answered only the storage half. The reason this matters more
+     * than auditing: the seen-set guarantees a listing is new exactly once, so a listing digested as
+     * `UNKNOWN` under a classifier that is later improved is a permanent silent miss. `scout
+     * reclassify` re-runs the classifier over these rows, and it can only select the stale ones
+     * because {@see staleVerdicts()} knows which were never classified.
+     *
+     * @param list<string> $signals the `reasons[]`, stored verbatim so the verdict can be explained
+     *                              later without re-fetching an ad the source may have removed
+     */
+    public function recordVerdict(string $dedupKey, string $tenure, int $confidenceBp, array $signals): void
+    {
+        $statement = $this->pdo->prepare(
+            'UPDATE listings SET tenure = :tenure, confidence_bp = :bp, signals_json = :signals
+             WHERE dedup_key = :key',
+        );
+        $statement->execute([
+            'tenure' => $tenure,
+            'bp' => $confidenceBp,
+            'signals' => json_encode($signals, JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE),
+            'key' => $dedupKey,
+        ]);
+    }
+
+    /**
+     * Listings whose stored verdict predates a given classifier state, for `scout reclassify`.
+     *
+     * `tenure IS NULL` is deliberately included: those are rows stored before schema v3, and the
+     * migration does NOT backfill them. There is no honest value to backfill with — writing
+     * `UNKNOWN` would be indistinguishable from a real UNKNOWN verdict, and this query is exactly
+     * the place that distinction has to survive.
+     *
+     * @param list<string> $tenures which stored verdicts to re-examine, e.g. `['UNKNOWN']`
+     *
+     * @return list<array{dedup_key: string, source: string, external_id: string, title: string, tenure: ?string}>
+     */
+    public function staleVerdicts(array $tenures = ['UNKNOWN']): array
+    {
+        $placeholders = [];
+        $params = [];
+        foreach (array_values($tenures) as $i => $tenure) {
+            $placeholders[] = ':t' . $i;
+            $params['t' . $i] = $tenure;
+        }
+
+        $sql = 'SELECT dedup_key, source, external_id, title, tenure FROM listings WHERE tenure IS NULL';
+        if ($placeholders !== []) {
+            $sql .= ' OR tenure IN (' . implode(', ', $placeholders) . ')';
+        }
+        $sql .= ' ORDER BY seen_epoch DESC, dedup_key ASC';
+
+        $statement = $this->pdo->prepare($sql);
+        $statement->execute($params);
+
+        /** @var list<array{dedup_key: string, source: string, external_id: string, title: string, tenure: ?string}> $rows */
+        $rows = $statement->fetchAll();
+
+        return $rows;
+    }
+
     public function health(string $sourceName, ?string $nowIso = null): SourceHealth
     {
         $statement = $this->pdo->prepare(
