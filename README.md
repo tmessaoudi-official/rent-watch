@@ -61,13 +61,17 @@ continuity check rather than a root of trust.
 Two checks that are not the test suite, and matter more than it does here:
 
 ```bash
-bash tests/sabotage-check.sh       # breaks the classifier many ways; the suite must catch every one
+bash tests/sabotage-check.sh       # breaks the classifier and the store many ways; the suite must catch every one
 bash tests/test-tenure-guard.sh    # the §1 tripwire still fires, and stays quiet on ordinary PHP
 ```
 
 Every failure mode in the tenure module is *silent* — a classifier that over-rejects is
-indistinguishable from a quiet rental market. A green suite proves the code passes the tests; only
-the sabotage run proves the tests would notice if the code stopped working.
+indistinguishable from a quiet rental market. The store is the same shape: a seen-set that stops
+persisting, a price history that stops recording, a run log that reports a dead source as calm. A
+green suite proves the code passes the tests; only the sabotage run proves the tests would notice if
+the code stopped working. It has earned that twice over — a three-lens review panel found 25 defects
+in the store's first cut, and five of its guarantees were shown untested by running this very script
+against them.
 
 ## Why this exists
 
@@ -84,8 +88,8 @@ Per `spec/PROJECT_BRIEF.md` §13. Each milestone ships working — no big-bang i
 Built out of order on purpose: the classifier needs nothing from anyone, while every other milestone
 is blocked on a mailbox, an endpoint capture or a phorj module that does not exist yet.
 
-1. **Core skeleton** — models ✅, SQLite store, config loading, CLI, one notification channel. Proven
-   end-to-end with a fake source.
+1. **Core skeleton** — models ✅, SQLite store ✅ (seen-set, price history, run log, source health),
+   config loading, CLI, one notification channel. Proven end-to-end with a fake source.
 2. **Tenure classifier + tests.** ✅ **Done in PHP**, against a 108-case synthetic corpus — spec §4's
    *real* listing texts are still outstanding and are blocked on capturing a payload. The phorj port
    waits on `Core.Imap`, an HTML parser and `sleep` (see `docs/PHORJ-REQUIREMENTS.md`). Before any

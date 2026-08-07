@@ -29,6 +29,16 @@ enum SourceStatus: string
      */
     case NEVER_PRODUCED = 'never_produced';
 
+    /**
+     * Has run and produced, but not recently — the schedule itself has stopped.
+     *
+     * A reclaimed container, a removed cron entry, a disabled systemd timer. `NEVER_RUN` covered
+     * "never" and nothing covered "stopped": one successful run three hundred days ago reported
+     * `OK`, non-alerting, forever. Same silent-absence class as `NEVER_PRODUCED`, arrived at from
+     * the other end. Only derivable when the caller supplies the current time.
+     */
+    case STALE = 'stale';
+
     /** Ran, succeeded, and returned a count consistent with its own recent history. */
     case OK = 'ok';
 

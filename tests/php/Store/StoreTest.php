@@ -14,7 +14,7 @@ use RentWatch\Store\Store;
  * The store is where a silent failure costs the most, and it is not the obvious one.
  *
  * `CLAUDE.md` § "Credentials & stateful data" lists the seen-set and the price history as data that
- * must never be casually deleted: losing the seen-set re-notifies the entire market at once, and
+ * must not be casually deleted: losing the seen-set re-notifies the entire market at once, and
  * price history is not reconstructible because a listing only ever shows its CURRENT rent. Both
  * failures are silent in the direction that matters — nothing warns you that a rent drop went
  * unnoticed, because the evidence it happened is the thing that was lost.
@@ -112,12 +112,12 @@ final class StoreTest extends TestCase
     /**
      * `null` IS NOT ZERO, and here it is not a price drop either — `CLAUDE.md` hard rule 9.
      *
-     * A source that stops publishing the rent, or one that never published it, must not read as a
-     * drop to 0. This is the trap in its natural habitat: `1000 → null` is "the listing stopped
+     * A source that stops publishing the rent, or one that has not published it at all, must not
+     * read as a fall to 0. This is the trap in its natural habitat: `1000 → null` is "the listing stopped
      * saying", and treating it as a 1000-euro reduction would fire the loudest notification the
      * system has on the least information it has ever had.
      */
-    public function testAnUnknownRentIsNeverAPriceDrop(): void
+    public function testAnUnknownRentDoesNotCountAsAPriceDrop(): void
     {
         $listing = $this->listing(externalId: 'ANN-1');
 
@@ -417,6 +417,76 @@ final class StoreTest extends TestCase
         self::assertSame([1200, 1000], $this->store->priceHistory($this->store->dedupKey($listing)));
     }
 
+    /**
+     * A superseded sighting does not count as a price drop, whatever its arithmetic says.
+     *
+     * The scenario needs no contradictory data: rent goes 1200 → 900 → 1000, and the 900 alert is
+     * delivered last. The store answered `rentCc = 900, isPriceDrop = true` for a flat whose stored
+     * current rent it correctly believed to be 1000. The ROW was hardened against this and the
+     * verdict object — the thing the notifier actually reads — was left exposed.
+     */
+    public function testASupersededSightingDoesNotCountAsAPriceDrop(): void
+    {
+        $listing = $this->listing(externalId: 'ANN-1');
+
+        $this->store->record($listing, 1200, '2026-08-07T08:00:00+00:00');
+        $this->store->record($listing, 1000, '2026-08-07T12:00:00+00:00');
+        $late = $this->store->record($listing, 900, '2026-08-07T10:00:00+00:00');   // delayed alert
+
+        self::assertFalse($late->isCurrent);
+        self::assertFalse($late->isPriceDrop);
+        self::assertSame(1000, $this->store->snapshot($this->store->dedupKey($listing))?->rentCc);
+    }
+
+    /**
+     * A REAL drop must not be swallowed by an out-of-order sighting that preceded it.
+     *
+     * `price_history` is changes-only, so it is not a record of observations — an observation equal
+     * to its predecessor leaves no row. Reading it to answer "has the rent changed since what we
+     * believe now?" made a backfilled 900 become the chronological predecessor of the real one, and
+     * the 100-euro drop reported `isPriceDrop = false`. The two questions need two different
+     * sources: the stored current rent, and the history.
+     */
+    public function testALateSightingDoesNotSwallowTheRealDropThatFollows(): void
+    {
+        $listing = $this->listing(externalId: 'ANN-1');
+
+        $this->store->record($listing, 1000, '2026-08-07T10:00:00+00:00');
+        $this->store->record($listing, 1000, '2026-08-07T12:00:00+00:00');
+        $this->store->record($listing, 900, '2026-08-07T11:00:00+00:00');    // delayed, superseded
+        $real = $this->store->record($listing, 900, '2026-08-07T13:00:00+00:00');
+
+        self::assertTrue($real->isCurrent);
+        self::assertSame(1000, $real->previousRentCc);
+        self::assertSame(-100, $real->rentDeltaCc);
+        self::assertTrue($real->isPriceDrop, 'a 100-euro drop went unreported');
+    }
+
+    /**
+     * A stale sighting may FILL a hole it finds, though it may never overwrite.
+     *
+     * A run whose link selector broke, followed by a delayed alert that carries the link, otherwise
+     * left the store permanently without a URL — the whole UPDATE was skipped for stale data. The
+     * notify layer needs the URL and the title to produce anything actionable.
+     */
+    public function testAStaleSightingMayFillAMissingUrlOrTitle(): void
+    {
+        $broken = new RawListing(sourceName: 'inli', externalId: 'ANN-1');       // url null, title ''
+        $complete = $this->listing(externalId: 'ANN-1', url: 'https://inli.test/a/1', title: 'T3 Cergy');
+
+        $this->store->record($broken, null, '2026-08-07T09:00:00+00:00');
+        $this->store->record($complete, 1200, '2026-08-06T09:00:00+00:00');      // delayed, but richer
+
+        $snapshot = $this->store->snapshot($this->store->dedupKey($broken));
+
+        self::assertNotNull($snapshot);
+        self::assertSame('https://inli.test/a/1', $snapshot->url);
+        self::assertSame('T3 Cergy', $snapshot->title);
+        self::assertSame(1200, $snapshot->rentCc);
+        // …but `first_seen_at` records when WE first saw it, which is what a seen-set is for.
+        self::assertSame('2026-08-07T09:00:00+00:00', $snapshot->firstSeenAt);
+    }
+
     /** The changes-only invariant survives an insertion between two equal rents. */
     public function testPriceHistoryStaysChangesOnlyUnderOutOfOrderSightings(): void
     {
@@ -518,6 +588,33 @@ final class StoreTest extends TestCase
      * makes the parse strict, and `'hier matin'` — which `createFromFormat` rejects outright —
      * never exercised it.
      */
+    /**
+     * The timestamp shapes a real adapter will actually emit are accepted.
+     *
+     * Millisecond precision is what every JSON API and `Date.toISOString()` produces, and it was
+     * rejected because the six-digit microsecond format round-trips to six digits. `-00:00` is
+     * permitted by RFC 3339 §4.3 and PHP renders the same instant as `+00:00`, so it was refused on
+     * spelling alone. Both are strictness aimed at the wrong target: the round-trip exists to catch
+     * `2026-02-30`, not to insist on one rendering of a correct instant.
+     */
+    public function testTheTimestampShapesRealFeedsEmitAreAccepted(): void
+    {
+        $accepted = [
+            '2026-08-07T09:00:00+00:00',
+            '2026-08-07T09:00:00Z',
+            '2026-08-07T09:00:00-00:00',
+            '2026-08-07T09:00:00.123Z',
+            '2026-08-07T09:00:00.123+02:00',
+            '2026-08-07T09:00:00.123456Z',
+        ];
+
+        foreach ($accepted as $index => $iso) {
+            $this->store->recordRun('src' . $index, 3, true, null, $iso);
+
+            self::assertSame(3, $this->store->health('src' . $index)->lastCount, $iso);
+        }
+    }
+
     public function testADateThatDoesNotExistIsRefused(): void
     {
         $this->expectException(\InvalidArgumentException::class);
@@ -571,24 +668,162 @@ final class StoreTest extends TestCase
     }
 
     /**
-     * An OLDER database is refused too, and that direction was the real gap.
+     * A version-1 database is UPGRADED, and its data survives.
      *
-     * `CREATE TABLE IF NOT EXISTS` adds no columns to a table that already exists, and nothing
-     * re-stamped `schema_meta` — so the day `SCHEMA_VERSION` becomes 2, every existing user
-     * database would have opened silently as v1 forever, with `schemaVersion()` reporting 1 and
-     * nothing downstream able to detect the mismatch.
+     * The day `SCHEMA_VERSION` became 2 was the day this stopped being hypothetical — and the
+     * column that forced it (`listings.seen_epoch`) had already been added at version 1 by mistake,
+     * in the very commit that introduced the mismatch refusal. `CREATE TABLE IF NOT EXISTS` adds no
+     * columns to an existing table, so a database written the day before opened without complaint
+     * and threw a raw `no such column` at the first sighting.
+     *
+     * The fixture below is v1's schema written out literally rather than fetched from git, because
+     * the point is to pin what the old shape WAS: if this ever drifts to match the current schema,
+     * the test silently stops testing a migration.
      */
-    public function testADatabaseFromAnOlderSchemaIsRefused(): void
+    public function testAVersionOneDatabaseIsUpgradedAndKeepsItsData(): void
     {
         $path = $this->temporaryDatabase();
-        Store::open($path);
 
         $raw = new \PDO('sqlite:' . $path, options: [\PDO::ATTR_ERRMODE => \PDO::ERRMODE_EXCEPTION]);
-        $raw->exec("UPDATE schema_meta SET value = '0' WHERE key = 'schema_version'");
+        $raw->exec(
+            <<<'SQL'
+            CREATE TABLE schema_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+            CREATE TABLE listings (
+                dedup_key TEXT PRIMARY KEY, source TEXT NOT NULL, external_id TEXT NOT NULL,
+                url TEXT, title TEXT NOT NULL, rent_cc INTEGER,
+                first_seen_at TEXT NOT NULL, last_seen_at TEXT NOT NULL, notified_at TEXT
+            );
+            CREATE TABLE price_history (
+                id INTEGER PRIMARY KEY AUTOINCREMENT, dedup_key TEXT NOT NULL,
+                rent_cc INTEGER NOT NULL, at TEXT NOT NULL, at_epoch INTEGER NOT NULL
+            );
+            CREATE TABLE source_runs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT, source TEXT NOT NULL, item_count INTEGER NOT NULL,
+                ok INTEGER NOT NULL, error TEXT, at TEXT NOT NULL, at_epoch INTEGER NOT NULL
+            );
+            INSERT INTO schema_meta VALUES ('schema_version', '1');
+            INSERT INTO listings VALUES
+                ('inli:id:ANN-1', 'inli', 'ANN-1', 'https://a.test/1', 'T3 Cergy', 1000,
+                 '2026-08-01T09:00:00+00:00', '2026-08-05T09:00:00+00:00', NULL);
+            INSERT INTO price_history (dedup_key, rent_cc, at, at_epoch) VALUES
+                ('inli:id:ANN-1', 1000, '2026-08-01T09:00:00+00:00', 1785315600);
+            SQL
+        );
         unset($raw);
 
-        $this->expectException(\RuntimeException::class);
-        Store::open($path);
+        $store = Store::open($path);
+
+        self::assertSame(Store::SCHEMA_VERSION, $store->schemaVersion());
+
+        $snapshot = $store->snapshot('inli:id:ANN-1');
+        self::assertNotNull($snapshot, 'the upgrade lost the seen-set');
+        self::assertSame('T3 Cergy', $snapshot->title);
+        self::assertSame([1000], $store->priceHistory('inli:id:ANN-1'));
+
+        // The backfill must use the stored `last_seen_at`, not zero. This assertion comes FIRST,
+        // because any later current sighting rewrites `seen_epoch` and erases the evidence: a
+        // sighting OLDER than the migrated timestamp must read as superseded. Backfilled to 0,
+        // every upgraded listing looks older than everything that arrives after it.
+        $stale = $store->record(
+            $this->listing(externalId: 'ANN-1', url: 'https://a.test/1', title: 'ANCIEN TITRE'),
+            1500,
+            '2026-08-03T09:00:00+00:00',
+        );
+
+        self::assertFalse($stale->isCurrent);
+        self::assertSame('T3 Cergy', $store->snapshot('inli:id:ANN-1')?->title);
+
+        // …and a genuinely later sighting is current, so the upgraded row is not frozen either.
+        $drop = $store->record(
+            $this->listing(externalId: 'ANN-1', url: 'https://a.test/1', title: 'T3 Cergy'),
+            940,
+            '2026-08-09T09:00:00+00:00',
+        );
+
+        self::assertFalse($drop->isNew);
+        self::assertTrue($drop->isPriceDrop);
+        self::assertSame(940, $store->snapshot('inli:id:ANN-1')?->rentCc);
+    }
+
+    /**
+     * Every field of a snapshot is asserted, because the last time a value object shipped with
+     * unasserted fields, five of them could be replaced with constants and the suite stayed green.
+     */
+    public function testASnapshotCarriesEveryFieldItClaims(): void
+    {
+        $listing = $this->listing(externalId: 'ANN-7', url: 'https://inli.test/a/7', title: 'T3 Cergy');
+        $key = $this->store->dedupKey($listing);
+
+        $this->store->record($listing, 1000, '2026-08-01T09:00:00+00:00');
+        $this->store->record($listing, 940, '2026-08-05T09:00:00+00:00');
+        $this->store->markNotified($key, '2026-08-05T09:05:00+00:00');
+
+        $snapshot = $this->store->snapshot($key);
+
+        self::assertNotNull($snapshot);
+        self::assertSame($key, $snapshot->dedupKey);
+        self::assertSame('inli', $snapshot->sourceName);
+        self::assertSame('ANN-7', $snapshot->externalId);
+        self::assertSame('https://inli.test/a/7', $snapshot->url);
+        self::assertSame('T3 Cergy', $snapshot->title);
+        self::assertSame(940, $snapshot->rentCc);
+        self::assertSame('2026-08-01T09:00:00+00:00', $snapshot->firstSeenAt);
+        self::assertSame('2026-08-05T09:00:00+00:00', $snapshot->lastSeenAt);
+        self::assertSame('2026-08-05T09:05:00+00:00', $snapshot->notifiedAt);
+    }
+
+    public function testASnapshotOfAnUnknownListingIsNull(): void
+    {
+        self::assertNull($this->store->snapshot('inli:id:never-recorded'));
+    }
+
+    /**
+     * When the disk fills mid-`record()`, the operator is told the disk is full.
+     *
+     * SQLite auto-rolls-back on `SQLITE_FULL`, so an unguarded `PDO::rollBack()` throws "There is no
+     * active transaction" and that propagates INSTEAD of the real error. Disk-full is precisely the
+     * failure where the seen-set stops growing and the next run re-notifies the market, and the
+     * message was about transactions.
+     */
+    public function testAFullDiskReportsAFullDiskAndRollsBack(): void
+    {
+        $store = Store::open($this->temporaryDatabase());
+
+        // The standard SQLITE_FULL simulation is `PRAGMA max_page_count`, and it is per-CONNECTION —
+        // it does not persist to a second handle — so it has to be set on the store's own. Reaching
+        // for the private property is the point: `Store` must not expose a knob that exists only to
+        // make a test possible. The cap CLAMPS to the current page count, so it has to be set to
+        // exactly that and then exceeded by an oversized row.
+        $pdo = (new \ReflectionProperty(Store::class, 'pdo'))->getValue($store);
+        self::assertInstanceOf(\PDO::class, $pdo);
+        $pdo->exec('PRAGMA max_page_count = ' . (int) $pdo->query('PRAGMA page_count')->fetchColumn());
+
+        $oversized = $this->listing(externalId: 'ANN-1', title: str_repeat('x', 200_000));
+
+        try {
+            $store->record($oversized, 1000, '2026-08-07T09:00:00+00:00');
+            self::fail('the capped database accepted a write');
+        } catch (\PDOException $failure) {
+            self::assertStringContainsString(
+                'disk is full',
+                $failure->getMessage(),
+                'the rollback\'s own "no active transaction" error replaced the real one',
+            );
+        }
+
+        // No transaction was left open, so the connection is usable afterwards.
+        self::assertFalse($pdo->inTransaction());
+    }
+
+    /** Running the upgrade twice is not an error — a migration that died half-way must be re-runnable. */
+    public function testTheUpgradeIsIdempotent(): void
+    {
+        $path = $this->temporaryDatabase();
+        $store = Store::open($path);
+        $store->migrate();
+        $store->migrate();
+
+        self::assertSame(Store::SCHEMA_VERSION, $store->schemaVersion());
     }
 
     /** A database path whose parent is a regular file fails with this class's own message. */
@@ -658,24 +893,139 @@ final class StoreTest extends TestCase
     }
 
     /**
-     * The run log is monotonic per source, and an out-of-order write is refused loudly.
+     * ONE run from a skewed clock must not hide every run that follows it.
      *
-     * Timestamps are caller-supplied and never checked against a clock — a deliberate choice, since
-     * health can only be tested if time is an argument. The cost is that ONE run stamped from a
-     * skewed clock (NTP not yet synced after a resume, a VM restored from a snapshot, a caller
-     * passing the listing's published date instead of the run time) sorts last forever and makes
-     * every later run invisible to `health()`: twenty consecutive outright failures reported `OK`,
-     * detail cheerfully naming the 25 listings of the skewed run. Refusing the write converts that
-     * silent freeze into a diagnosable one. Unlike a sighting, a run has no legitimate
-     * out-of-order case — it is logged when it happens.
+     * Timestamps are caller-supplied and never checked against a clock — deliberate, since health
+     * can only be tested if time is an argument. The cost is that a run stamped from a bad clock
+     * (NTP not yet synced after a resume, a VM restored from a snapshot, a caller passing the
+     * listing's published date instead of the run time) is accepted. It must then be inert, not
+     * poisonous.
+     *
+     * **This test replaces one that asserted the opposite**, and the replacement is not a
+     * weakening — the old contract was demonstrated to make the failure worse. It refused any run
+     * stamped before one already logged, which did nothing about the FIRST skewed run (nothing
+     * checks a clock) and discarded the real runs that followed. Three outright failures went
+     * unrecorded and health still said `OK`, now with `lastFailureAt` null: the freeze survived and
+     * the evidence of it did not. Recency is read from the log's own insertion order instead.
      */
-    public function testARunMayNotBeLoggedBeforeOneAlreadyRecorded(): void
+    public function testASkewedClockDoesNotHideTheRunsThatFollowIt(): void
     {
-        $this->store->recordRun('inli', 25, true, null, '2027-01-01T09:00:00+00:00');   // skewed clock
+        $this->store->recordRun('inli', 25, true, null, '2036-01-01T09:00:00+00:00');   // skewed clock
 
-        $this->expectException(\InvalidArgumentException::class);
+        foreach (['2026-08-05', '2026-08-06', '2026-08-07'] as $day) {
+            $this->store->recordRun('inli', 0, false, 'HTTP 503', $day . 'T09:00:00+00:00');
+        }
 
-        $this->store->recordRun('inli', 0, false, 'HTTP 503', '2026-08-07T09:00:00+00:00');
+        $health = $this->store->health('inli');
+
+        self::assertSame(SourceStatus::BROKEN, $health->status);
+        self::assertSame('2026-08-07T09:00:00+00:00', $health->lastFailureAt);
+        self::assertSame(4, $health->totalRuns, 'a log that drops entries is not a log');
+    }
+
+    /** A run dated far in the future must not sit inside the rolling window forever. */
+    public function testASkewedRunDoesNotStayInTheRollingWindow(): void
+    {
+        $this->store->recordRun('inli', 900, true, null, '2036-01-01T09:00:00+00:00');
+
+        foreach (range(1, 5) as $day) {
+            $this->store->recordRun('inli', 10, true, null, sprintf('2026-08-%02dT09:00:00+00:00', $day));
+        }
+
+        $health = $this->store->health('inli');
+
+        self::assertSame(SourceStatus::OK, $health->status);
+        self::assertSame(10.0, $health->rollingMean, 'the 2036 run inflated the mean of every later verdict');
+        self::assertSame(5, $health->runsInWindow);
+    }
+
+    /**
+     * One QUIET run between the productive history and the streak must not zero the baseline.
+     *
+     * The first fix here fell back to "the last SUCCESSFUL run of any age", which includes a run
+     * that legitimately returned nothing. A single such run set the baseline to zero, `$baseline >
+     * 0.0` went false, and a source with a 25-listing history went silent for three runs and
+     * reported `OK` — the same defect one step deeper. A quiet run is not evidence that nothing is
+     * normal here; a productive one is evidence that something was.
+     */
+    public function testAQuietRunBeforeTheStreakDoesNotZeroTheBaseline(): void
+    {
+        $this->store->recordRun('inli', 25, true, null, '2026-08-01T09:00:00+00:00');
+        $this->store->recordRun('inli', 0, true, null, '2026-08-02T09:00:00+00:00');    // a quiet day
+        $this->store->recordRun('inli', 0, false, 'HTTP 503', '2026-08-03T09:00:00+00:00');
+
+        // …then an outage longer than the rolling window, and the site redesigns meanwhile.
+        foreach (['2026-09-10', '2026-09-11', '2026-09-12'] as $day) {
+            $this->store->recordRun('inli', 0, true, null, $day . 'T09:00:00+00:00');
+        }
+
+        $health = $this->store->health('inli');
+
+        self::assertSame(SourceStatus::BROKEN, $health->status);
+        self::assertStringContainsString('25', $health->detail);
+    }
+
+    /** The same, with productive and empty runs alternating before the gap. */
+    public function testAnAlternatingHistoryAcrossAGapIsStillABaseline(): void
+    {
+        foreach ([[1, 30], [2, 0], [3, 28], [4, 0]] as [$day, $count]) {
+            $this->store->recordRun('inli', $count, true, null, sprintf('2026-08-%02dT09:00:00+00:00', $day));
+        }
+
+        foreach (['2026-09-20', '2026-09-21', '2026-09-22'] as $day) {
+            $this->store->recordRun('inli', 0, true, null, $day . 'T09:00:00+00:00');
+        }
+
+        self::assertSame(SourceStatus::BROKEN, $this->store->health('inli')->status);
+    }
+
+    /**
+     * The rolling window really is seven days.
+     *
+     * Every surface added alongside `WARN_FLAKY` — `runsInWindow`, `failedRunsInWindow`,
+     * `failureRate()` — hangs off this cutoff, and nothing tested it: failures from two months ago
+     * counted forever, so a source that has succeeded daily since could be reported flaky.
+     */
+    public function testTheRollingWindowExcludesRunsOlderThanSevenDays(): void
+    {
+        foreach (range(1, 5) as $day) {
+            $this->store->recordRun('inli', 0, false, 'HTTP 503', sprintf('2026-06-%02dT09:00:00+00:00', $day));
+        }
+
+        foreach (range(1, 5) as $day) {
+            $this->store->recordRun('inli', 12, true, null, sprintf('2026-08-%02dT09:00:00+00:00', $day));
+        }
+
+        $health = $this->store->health('inli');
+
+        self::assertSame(5, $health->runsInWindow, 'the June failures are outside the seven-day window');
+        self::assertSame(0, $health->failedRunsInWindow);
+        self::assertSame(0.0, $health->failureRate());
+        self::assertSame(SourceStatus::OK, $health->status);
+    }
+
+    /**
+     * An out-of-range timestamp in the MIDDLE of the log is skipped, not treated as the end of it.
+     *
+     * The rows come back in insertion order, not timestamp order, so a backward scan that STOPS at
+     * the first row outside the window (`break`) silently truncates the history at whatever sits
+     * next to the bad row. Only a run whose timestamp is out of range *and* has older runs behind
+     * it can tell the two apart — which is why the first version of this went undetected.
+     */
+    public function testAnOutOfRangeRunInTheMiddleOfTheLogIsSkippedNotFatal(): void
+    {
+        $this->store->recordRun('inli', 100, true, null, '2026-08-01T09:00:00+00:00');
+        $this->store->recordRun('inli', 100, true, null, '2026-08-02T09:00:00+00:00');
+        $this->store->recordRun('inli', 900, true, null, '2036-01-01T09:00:00+00:00');   // skewed clock
+        $this->store->recordRun('inli', 10, true, null, '2026-08-03T09:00:00+00:00');
+        $this->store->recordRun('inli', 10, true, null, '2026-08-04T09:00:00+00:00');
+        $this->store->recordRun('inli', 10, true, null, '2026-08-05T09:00:00+00:00');
+
+        $health = $this->store->health('inli');
+
+        // All four in-window predecessors, not just the two on the near side of the bad row.
+        self::assertSame(55.0, $health->rollingMean);
+        self::assertSame(5, $health->runsInWindow);
     }
 
     /**
@@ -696,6 +1046,46 @@ final class StoreTest extends TestCase
 
         self::assertSame(SourceStatus::NEVER_PRODUCED, $health->status);
         self::assertTrue($health->status->isAlerting());
+    }
+
+    /**
+     * A source whose SCHEDULE has stopped is not healthy, and only a clock can tell.
+     *
+     * `NEVER_RUN` covered "never" and nothing covered "stopped". A container reclaimed, a cron
+     * entry removed, a systemd timer disabled. One successful run three hundred days ago reported
+     * `OK`, non-alerting, forever — the same silent-absence class as `NEVER_PRODUCED`, reached from
+     * the other end. `health()` takes the current time as an argument because this class never
+     * reads the clock; omit it and the check does not run.
+     */
+    public function testASourceWhoseScheduleHasStoppedIsStale(): void
+    {
+        $this->store->recordRun('inli', 25, true, null, '2026-01-01T09:00:00+00:00');
+
+        self::assertSame(SourceStatus::OK, $this->store->health('inli')->status);
+        self::assertSame(
+            SourceStatus::STALE,
+            $this->store->health('inli', '2026-11-01T09:00:00+00:00')->status,
+        );
+        // …and a source that ran this morning is not stale.
+        self::assertSame(
+            SourceStatus::OK,
+            $this->store->health('inli', '2026-01-02T09:00:00+00:00')->status,
+        );
+    }
+
+    /**
+     * A source onboarded forty-five minutes ago is not told its field map is wrong.
+     *
+     * Three successful empty polls at a fifteen-minute interval satisfied `NEVER_PRODUCED` with no
+     * time floor at all, and In'li LLI stock in one commune is legitimately empty for days.
+     */
+    public function testANewlyOnboardedSourceIsNotAccusedOfABadFieldMap(): void
+    {
+        foreach (['09:00', '09:15', '09:30', '09:45'] as $time) {
+            $this->store->recordRun('newsource', 0, true, null, '2026-08-07T' . $time . ':00+00:00');
+        }
+
+        self::assertNotSame(SourceStatus::NEVER_PRODUCED, $this->store->health('newsource')->status);
     }
 
     /**

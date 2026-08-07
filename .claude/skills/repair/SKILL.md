@@ -180,9 +180,10 @@ Once `config/` and `tests/fixtures/` exist:
 
 If those directories do not exist, print one line saying so and move on. **Do not report an empty
 `config/` as drift** — it is the documented target and has not been built yet. Note that
-`CLAUDE.md`'s status line now reads *"the pure core exists; nothing else does"*: `src/php/Core/` and
-`tests/php/` DO exist and are populated, so a claim that this repo is spec-and-prototype only is
-itself drift.
+`CLAUDE.md`'s status line now reads *"the pure core and the store exist; nothing else does"*:
+`src/php/Core/`, `src/php/Store/` and `tests/php/` DO exist and are populated, so a claim that this
+repo is spec-and-prototype only is itself drift. Re-read the line rather than trusting this quote —
+it was stale here for one round, in the tool whose whole job is catching exactly that.
 
 ## Section 7 — LINGERING MARKERS
 

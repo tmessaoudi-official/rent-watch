@@ -110,3 +110,57 @@ correctly in the shape the tests happened to use. That is the whole argument for
 - [2026-08-07 17:05] AGREED: the store's test contract is written into `CLAUDE.md` § "Testing &
   verification" as six named categories. Five `SourceHealth` fields — including the three hard rule 2
   names by name — could be replaced with constants while the whole suite stayed green.
+
+### Round 10 — 30 findings against round 9's fixes, four of them P0
+
+Every P0 this round was the same shape: **the round-9 repair was one step shallower than the
+defect**. That is the pattern the certification ladder exists to interrupt, and it is why two
+consecutive clean rounds are required rather than one.
+
+- [2026-08-07 20:40] AGREED: `SCHEMA_VERSION` is 2 and `migrate()` carries a real upgrade path. It
+  was 1 while the same commit added `listings.seen_epoch` — so a database written the day before
+  opened clean, reported version 1, and threw a raw `no such column` at the first sighting. The
+  mismatch refusal introduced to prevent exactly that could not fire, demonstrated against itself.
+- [2026-08-07 20:40] AGREED: the empty-run baseline falls back to the last **productive** run, not
+  the last successful one. A single successful-but-empty run between the history and the streak
+  zeroed the baseline, so a source with a 25-listing history went silent for three runs and reported
+  `OK` — the round-9 defect, reachable one neighbouring case over.
+- [2026-08-07 20:40] AGREED: **the monotonic run log is reverted.** It did not fix the
+  skewed-clock freeze; it deleted the evidence of it. Nothing checks a timestamp against a clock, so
+  the FIRST bad run was still accepted, and the refusal then discarded the real runs that followed —
+  three outright failures unrecorded, `health()` reporting `OK` with `lastFailureAt` null. Recency is
+  now read from the log's own insertion order, and the rolling window is bounded at BOTH ends so a
+  run dated 2036 cannot sit in it forever. A log that drops entries is not a log.
+- [2026-08-07 20:40] AGREED: a **superseded** sighting is never a price drop. A delayed alert
+  carrying an older, intermediate price made the store answer "dropped to 900" for a flat it
+  correctly believed to be at 1000 — the row was hardened and the verdict object left exposed.
+  `Sighting::$isCurrent` carries the fact explicitly.
+- [2026-08-07 20:40] AGREED: "has the rent changed since what we believe now?" is answered by the
+  stored current rent, NOT by `price_history`. The history is changes-only, so it is not a record of
+  observations: a backfilled 900 became the chronological predecessor of the real 900 and swallowed
+  a 100-euro drop entirely.
+- [2026-08-07 20:40] AGREED: a stale sighting may FILL a missing URL or title, though never
+  overwrite one. `first_seen_at` deliberately does not move backwards — it records when *we* first
+  saw the listing, which is what a seen-set is for.
+- [2026-08-07 20:40] AGREED: `STALE` is a status. `NEVER_RUN` covered "never" and nothing covered
+  "stopped"; one successful run three hundred days ago reported `OK` forever. It needs the current
+  time, so `health()` takes an optional `$nowIso` — the class still never reads the clock.
+- [2026-08-07 20:40] AGREED: `NEVER_PRODUCED` gets a time floor. Three empty polls at a 15-minute
+  interval was accusing a source of a bad field map 45 minutes after onboarding.
+- [2026-08-07 20:40] AGREED: `rollBackQuietly()` — SQLite auto-rolls-back on `SQLITE_FULL`, so an
+  unguarded `rollBack()` throws "no active transaction" and that replaces "database or disk is
+  full". Its `inTransaction()` fast path was written and then REMOVED: the surrounding catch already
+  covered every case it did, so it was dead safety code that read as protection.
+- [2026-08-07 20:40] AGREED: `Redact` gains path-segment, space-separated and French shapes — the
+  Telegram bot token and the ntfy topic both travel in a URL PATH, IMAP `LOGIN user pass` and POP3
+  `PASS` carry no delimiter at all, `pass=` was missing from the name list, and the RFR income
+  figure had no pattern despite hard rule 7 naming it beside the IMAP password. Ambiguous names
+  (`key`, `auth`) now require `=`, and a value that is itself a URL is never masked — `auth:` before
+  a URL was destroying the failing endpoint, which is how a masker gets deleted.
+- [2026-08-07 20:40] AGREED: the database default moves out of `var/` to `state/`. `var/` is
+  documented as container-lifetime scratch, so `rm -rf var/` is a reasonable thing to do — and the
+  seen-set is the opposite of scratch. `BLAST-RADIUS.md` now names the path, and names `rm -rf var/`
+  as safe so nobody widens it by analogy.
+- [2026-08-07 20:40] AGREED: WAL and a 5-second busy timeout. `--watch` alongside a manual
+  `scout doctor` is the spec's own target usage, and the default journal mode failed instantly with
+  "database is locked" instead of waiting.

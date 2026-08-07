@@ -22,13 +22,16 @@ change appears to…", stop and go read it.
 
 ## Rule zero-point-five — do not invent a subject, and never read `.env`
 
-As of 2026-08-06 `src/php/Core/` exists (the pure core: models + the tenure classifier) and so does
-`tests/php/`. There is still no `config/`, no adapter, no network code and no `.env.example` — so
-this lens's usual subjects are mostly still absent, and saying so is the right output. Check with
-`git ls-files src/ config/ tests/` rather than trusting this line, which was wrong for a while. If
-the diff does not touch a file that exists, say so rather than manufacturing a finding. And `.env` is **permission-denied and
-gitignored on purpose** — audit `.env.example` and the code's reads of the environment. Never `cat`
-the real `.env`, and never paste a value you found in one into a finding.
+As of 2026-08-07 `src/php/Core/` exists (the pure core: models, the tenure classifier, `SourceHealth`
+/ `SourceStatus`, and `Redact`, which masks credentials in adapter error text), and so do
+`src/php/Store/` (the SQLite seen-set, price history and run log, including the source-health
+derivation this lens cares most about), `tests/php/` and **`.env.example`**. There is still no
+`config/`, no adapter and no network code. Check with `git ls-files src/ config/ tests/` rather than
+trusting this line, which was wrong for a while — and which denied `.env.example` for a full round
+after it was committed, while instructing you to audit it. If the diff does not touch a file that
+exists, say so rather than manufacturing a finding. `.env` itself is gitignored on purpose — audit
+`.env.example` and the code's reads of the environment. Never `cat` the real `.env`, and never paste
+a value you found in one into a finding.
 
 ## The claim you are attacking
 

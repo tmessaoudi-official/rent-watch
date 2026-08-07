@@ -38,6 +38,103 @@ final class RedactTest extends TestCase
         yield 'basic header' => ['Authorization: Basic dGFraTpodW50ZXIy', ['dGFraTpodW50ZXIy']];
         yield 'mailbox' => ['LOGIN failed for jean.dupont@example.com', ['jean.dupont@example.com']];
         yield 'signature parameter' => ['?sig=9f8e7d6c5b4a3210&page=2', ['9f8e7d6c5b4a3210']];
+
+        // Every case below got through the first version, and four of them are keys `.env.example`
+        // itself names. They share a shape the original patterns could not see: the secret carries
+        // no `name=value` delimiter, because its transport is a space or a URL path segment.
+
+        yield 'IMAP LOGIN, space-separated' => [
+            'A01 NO [AUTHENTICATIONFAILED] in command: A01 LOGIN alertes-immo@example.net Hunter2Secret',
+            ['Hunter2Secret'],
+        ];
+
+        yield 'POP3 PASS' => ['-ERR authorization failed: PASS Hunter2Secret', ['Hunter2Secret']];
+
+        yield 'pass= (what imap_open emits)' => [
+            'imap_open(): Login failed for user=alertes host=imap.example.net pass=Hunter2Secret',
+            ['Hunter2Secret'],
+        ];
+
+        yield 'Telegram bot token in the URL PATH' => [
+            'HTTP 404 https://api.telegram.org/bot7412345678:AAH9xQvKQ_fake_token_value/sendMessage',
+            ['AAH9xQvKQ_fake_token_value'],
+        ];
+
+        yield 'ntfy topic in the URL path' => [
+            // docs/OPEN-QUESTIONS.md Q9 calls the topic a secret: anyone who knows it reads the
+            // notifications.
+            'HTTP 500 https://ntfy.sh/rentwatch-a8f3d9c1-private',
+            ['rentwatch-a8f3d9c1-private'],
+        ];
+
+        yield 'RFR income figure, French spacing' => [
+            'critère de ressources : RFR N-2 = 41 250 € — au-dessus du plafond',
+            ['41 250'],
+        ];
+
+        yield 'RFR income figure, env-var spelling' => ['RFR_N2=41250 dépasse le plafond', ['41250']];
+    }
+
+    /**
+     * The masker must not eat the words that say what went wrong.
+     *
+     * Each of these is a real diagnostic shape that an over-eager pattern destroyed: `auth:` before
+     * a URL, `key:` in a YAML error, `Login failed for` before the actual failure, and a `?` query
+     * containing an `@` which made the userinfo pattern mask the HOST — pointing a debugging human
+     * at the wrong server entirely.
+     *
+     * @return iterable<string, array{string, list<string>}>
+     */
+    public static function diagnostics(): iterable
+    {
+        yield 'auth: before a URL' => [
+            'Erreur auth: https://www.inli.fr/api/recherche a répondu 403 Forbidden',
+            ['https://www.inli.fr/api/recherche', '403'],
+        ];
+
+        yield 'key: in a config error' => [
+            'erreur config à la ligne 12 : key: sources n\'est pas une liste',
+            ['sources', 'ligne 12'],
+        ];
+
+        yield 'Login failed for' => [
+            'imap_open(): Login failed for user=alertes host=imap.example.net',
+            ['Login failed for', 'imap.example.net'],
+        ];
+
+        yield 'host:port with an @ in the query' => [
+            'GET https://host.example.com:8443/api?redirect=agent@example.com timed out',
+            ['host.example.com:8443', '/api'],
+        ];
+
+        yield 'a value that is itself a URL is not the secret' => [
+            // The secret would be INSIDE such a URL, and the query-parameter branch reaches it on
+            // its own pass. Masking the whole value destroys the endpoint instead.
+            'callback refused: key=https://callback.test/hook?apikey=abc123XYZ',
+            ['https://callback.test/hook'],
+        ];
+
+        yield 'rents and counts are not secrets' => [
+            '0 annonces — loyer=1450 charges=120 surface=68',
+            ['loyer=1450', 'charges=120', 'surface=68'],
+        ];
+    }
+
+    /** @param list<string> $mustSurvive */
+    #[DataProvider('diagnostics')]
+    public function testTheDiagnosticIsNotDestroyed(string $raw, array $mustSurvive): void
+    {
+        $masked = Redact::text($raw);
+
+        self::assertNotNull($masked);
+
+        foreach ($mustSurvive as $fragment) {
+            self::assertStringContainsString(
+                $fragment,
+                $masked,
+                sprintf('« %s » was masked away; a masker that eats diagnostics gets deleted', $fragment),
+            );
+        }
     }
 
     /** @param list<string> $mustVanish */

@@ -149,7 +149,7 @@ impossible by design rather than by omission (`docs/PHORJ-REQUIREMENTS.md`).
 
 | Layer | Path | Responsibility |
 |---|---|---|
-| Core | `src/php/Core/` · later `src/phorj/core/` | `models`, `tenure` (the classifier), `criteria` (score + hard disqualifiers), `dedup`, `health` (`SourceHealth` + `SourceStatus`) |
+| Core | `src/php/Core/` · later `src/phorj/core/` | `models`, `tenure` (the classifier), `criteria` (score + hard disqualifiers), `dedup`, `health` (`SourceHealth` + `SourceStatus`), `Redact` (masks secrets in adapter error text) |
 | Store | `src/php/Store/` | SQLite seen-set, price history and run log. **PHP-only** — it touches a database, so phorj will not transpile it. |
 | Notify | `src/php/Core/Notify/` | One module per channel. Every notification carries `score` + human-readable `reasons[]`. |
 | Adapters | `src/php/Adapters/` | `base` (the `Source` interface), `http_json`, `html`, `email_alert` (IMAP), `browser` (Playwright, opt-in), `sites/` for per-site overrides |
@@ -395,6 +395,7 @@ Required coverage, per spec §11 — non-negotiable once `src/` exists:
 ## File layout quick reference
 
 ```
+.env.example                Committed template for every secret and path. `.env` itself is gitignored
 spec/PROJECT_BRIEF.md       Full specification — the source of truth, and a ruling set
 prototype/                  Pre-existing single-file prototype. Reference only; do not extend in place
 docs/OPEN-QUESTIONS.md      Decisions still pending, with the default if unanswered
@@ -473,6 +474,8 @@ scripts/claude-bootstrap/   Reinstalls ~/.claude/ at SessionStart (cloud contain
 
 ## Credentials & stateful data
 
+**Nothing reads the environment yet** — the adapters, the channels and the CLI do not exist, so
+`.env.example` is the agreed SHAPE of the configuration rather than live settings.
 `.env.example` is the committed template and lists every key: the dedicated alert mailbox's IMAP
 host/user/password, the notification channel token (ntfy / Telegram / SMTP), the IDFM/PRIM API key,
 `RFR_N2` if income-eligibility checking is enabled (Q6), and `RENT_WATCH_DB`. Keep the two in sync —
@@ -487,8 +490,9 @@ into a user-facing detail, so `RentWatch\Core\Redact` masks it at that single fu
 Stateful data that must not be casually deleted — see
 [`scripts/claude-bootstrap/BLAST-RADIUS.md`](scripts/claude-bootstrap/BLAST-RADIUS.md):
 
-- the seen-set / listings DB (`RENT_WATCH_DB`, default `var/rent-watch.sqlite3`) — deleting it makes
-  the next run **re-notify everything**
+- the seen-set / listings DB (`RENT_WATCH_DB`, default `state/rent-watch.sqlite3` — deliberately NOT
+  under `var/`, which this file documents as container-lifetime scratch) — deleting it makes the next
+  run **re-notify everything**
 - price history — a rent drop is a notification-worthy event; the history is not reconstructible
 - `tests/fixtures/**` — the frozen payload IS the test's ground truth
 - the classifier corpus labels — relabelling one can make a false positive "correct"

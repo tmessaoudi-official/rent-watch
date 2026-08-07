@@ -448,9 +448,9 @@ run_sabotage "unparseable timestamp silently becomes the epoch" \
   src/php/Store/Store.php \
   's@throw new .InvalidArgumentException(sprintf(.horodatage ISO-8601 illisible : %s., $iso));@return 0;@'
 
-run_sabotage "any schema-version mismatch is operated on anyway" \
+run_sabotage "a database from a NEWER schema is operated on anyway" \
   src/php/Store/Store.php \
-  's%if ($recorded !== self::SCHEMA_VERSION) {%if (false) {%'
+  's%if ($recorded > self::SCHEMA_VERSION) {%if (false) {%'
 
 run_sabotage "a source that never ran is reported healthy" \
   src/php/Store/Store.php \
@@ -486,11 +486,7 @@ run_sabotage "drop-below-mean warning threshold neutralised" \
 
 run_sabotage "unknown baseline treated as a zero baseline (broken-after-a-gap reads OK)" \
   src/php/Store/Store.php \
-  's%$baseline = self::lastSuccessfulCount($runs, $streakStart);%$baseline = 0.0;%'
-
-run_sabotage "run log no longer monotonic (one skewed clock freezes health forever)" \
-  src/php/Store/Store.php \
-  "s%if (\$row !== false && \$row\['newest'\] !== null && \$epoch < (int) \$row\['newest'\]) {%if (false) {%"
+  's%$baseline = self::lastProductiveCount($runs, $streakStart);%$baseline = 0.0;%'
 
 run_sabotage "trailing Z no longer normalised (parsed in the host timezone)" \
   src/php/Store/Store.php \
@@ -518,7 +514,7 @@ run_sabotage "changes-only invariant drops its forward check (duplicate consecut
 
 run_sabotage "a stale sighting overwrites the current state" \
   src/php/Store/Store.php \
-  's%} elseif ($isCurrent) {%} elseif (true) {%'
+  's%} elseif (!$isCurrent) {%} elseif (false) {%'
 
 run_sabotage "a partial re-parse erases the stored URL" \
   src/php/Store/Store.php \
@@ -532,25 +528,22 @@ run_sabotage "price history ordered by insertion id rather than by time" \
   src/php/Store/Store.php \
   's%SELECT rent_cc FROM price_history WHERE dedup_key = :key ORDER BY at_epoch ASC, id ASC%SELECT rent_cc FROM price_history WHERE dedup_key = :key ORDER BY id ASC%'
 
-# NOT SABOTAGED, and the reason belongs on the record rather than in a silent omission.
-# `health()` reads the run log `ORDER BY at_epoch ASC, id ASC`, and breaking that to `id ASC` leaves
-# the suite green — verified. It is not a hole: `recordRun()` now REFUSES a run stamped before one
-# already logged, so insertion order and chronological order are the same order by construction, and
-# no test can produce a history where they differ. The clause is defence in depth against a database
-# written before that guard existed. Listing it as a sabotage would report a coverage gap that is
-# actually a redundancy, which is the same lie in the other direction.
+# This slot used to hold a "NOT SABOTAGED" note claiming the run-log ordering was redundant because
+# `recordRun()` refused out-of-order writes. A reviewer proved the excuse false on two counts, and
+# the refusal itself turned out to be the worse bug — it deleted the runs it refused. Both the
+# ordering and its opposite are now real, tested guarantees:
+
+run_sabotage "run recency read from the timestamp again (one skewed clock hides every later run)" \
+  src/php/Store/Store.php \
+  's%WHERE source = :source ORDER BY id ASC%WHERE source = :source ORDER BY at_epoch ASC, id ASC%'
 
 run_sabotage "never-productive source hides behind OK again" \
   src/php/Store/Store.php \
-  's%if (!$everProduced && $successfulRuns >= self::EMPTY_RUNS_BEFORE_BROKEN) {%if (false) {%'
+  's%if (!$everProduced && $successfulRuns >= self::EMPTY_RUNS_BEFORE_BROKEN%if (false%'
 
 run_sabotage "a source failing half its fetches reads as healthy" \
   src/php/Store/Store.php \
   's%if ($runsInWindow >= self::MIN_RUNS_FOR_FLAKY%if (false%'
-
-run_sabotage "older-schema refusal removed (a v1 database opens as v2 forever)" \
-  src/php/Store/Store.php \
-  's%if ($recorded !== self::SCHEMA_VERSION) {%if ($recorded > self::SCHEMA_VERSION) {%'
 
 run_sabotage "adapter error text persisted and shown unredacted" \
   src/php/Store/Store.php \
@@ -562,7 +555,7 @@ run_sabotage "only BROKEN alerts (NEVER_RUN and NEVER_PRODUCED go quiet)" \
 
 run_sabotage "the secret-name list is emptied (key= and token= pass through)" \
   src/php/Core/Redact.php \
-  "s%'key', 'passwd', 'password', 'pwd', 'secret', 'session', 'sig', 'signature', 'token',%'zzz-no-such-name',%"
+  "s%'signature', 'token',%'zzz-no-such-name',%"
 
 run_sabotage "mailbox masking neutralised (the IMAP address reaches the notification)" \
   src/php/Core/Redact.php \
@@ -571,6 +564,101 @@ run_sabotage "mailbox masking neutralised (the IMAP address reaches the notifica
 run_sabotage "redaction fails OPEN on a PCRE error (raw text returned)" \
   src/php/Core/Redact.php \
   's%return self::MASK;%return $message;%'
+
+
+# ── The store, round three ────────────────────────────────────────────────────────────────────────
+#
+# Round 10's panel returned 30 findings against round 9's fixes, four of them P0 — every one a case
+# where the repair was one step shallower than the defect. That is the pattern this file exists to
+# interrupt, so each of those repairs now has a sabotage of its own.
+
+run_sabotage "schema version stops tracking the schema (an older database opens and then throws)" \
+  src/php/Store/Store.php \
+  's%public const int SCHEMA_VERSION = 2;%public const int SCHEMA_VERSION = 1;%'
+
+run_sabotage "the v1 upgrade never runs (seen_epoch column missing forever)" \
+  src/php/Store/Store.php \
+  's%if ($recorded < 2) {%if (false) {%'
+
+run_sabotage "the upgrade forgets to re-stamp the version (every open re-migrates)" \
+  src/php/Store/Store.php \
+  "s%\$stamp->execute(\['value' => (string) self::SCHEMA_VERSION\]);%%"
+
+run_sabotage "seen_epoch backfilled to zero (every stored listing reads as older than anything)" \
+  src/php/Store/Store.php \
+  "s%'epoch' => self::epoch((string) \$row\['last_seen_at'\]),%'epoch' => 0,%"
+
+run_sabotage "baseline falls back to the last SUCCESSFUL run again (one quiet day zeroes it)" \
+  src/php/Store/Store.php \
+  "s%&& (int) \$runs\[\$i\]\['item_count'\] > 0%%"
+
+run_sabotage "the rolling window loses its upper bound (a 2036 run inflates every later mean)" \
+  src/php/Store/Store.php \
+  's%if ($at < $cutoff || $at > $reference) {%if ($at < $cutoff) {%'
+
+run_sabotage "the window scan stops at the first out-of-range row instead of skipping it" \
+  src/php/Store/Store.php \
+  's%                continue;%                break;%'
+
+run_sabotage "a superseded sighting counts as a price drop again" \
+  src/php/Store/Store.php \
+  's%isPriceDrop: $isCurrent && $delta !== null && $delta < 0,%isPriceDrop: $delta !== null \&\& $delta < 0,%'
+
+run_sabotage "the rent comparison reads the changes-only history again (a real drop is swallowed)" \
+  src/php/Store/Store.php \
+  's%$previousRentCc = $isCurrent%$previousRentCc = false%'
+
+run_sabotage "a stale sighting can no longer fill a missing URL" \
+  src/php/Store/Store.php \
+  's%url     = COALESCE(url, :url),%url     = url,%'
+
+run_sabotage "a stale sighting overwrites the URL instead of filling it" \
+  src/php/Store/Store.php \
+  's%url     = COALESCE(url, :url),%url     = COALESCE(:url, url),%'
+
+run_sabotage "the rollback is unguarded again (disk-full reports 'no active transaction')" \
+  src/php/Store/Store.php \
+  's%} catch (\\Throwable) {%} catch (\\LogicException) {%'
+
+run_sabotage "STALE never fires (a source whose schedule stopped reads OK forever)" \
+  src/php/Store/Store.php \
+  's%if ($silentFor > self::ROLLING_WINDOW_DAYS \* 86400) {%if (false) {%'
+
+run_sabotage "NEVER_PRODUCED loses its time floor (a source is accused 45 minutes after onboarding)" \
+  src/php/Store/Store.php \
+  's%&& $span >= self::MIN_SPAN_FOR_NEVER_PRODUCED%%'
+
+run_sabotage "millisecond timestamps refused again (what every JSON API emits)" \
+  src/php/Store/Store.php \
+  's%.Y-m-d.TH:i:s.vP., %%'
+
+run_sabotage "IMAP LOGIN / POP3 PASS credentials pass through unmasked" \
+  src/php/Core/Redact.php \
+  's%(LOGIN|AUTHENTICATE|PASS)%(zzz-no-such-verb)%'
+
+run_sabotage "the Telegram bot token in a URL path passes through" \
+  src/php/Core/Redact.php \
+  's%bot%zzz-no-such-verb%g'
+
+run_sabotage "the ntfy topic in a URL path passes through" \
+  src/php/Core/Redact.php \
+  's%(ntfy\\.\[A-Za-z0-9.\\-\]+/)%(zzz-no-such-host/)%'
+
+run_sabotage "the RFR income figure passes through" \
+  src/php/Core/Redact.php \
+  's%(RFR)\[%(zzz-no-such-name)[%'
+
+run_sabotage "'pass' dropped from the secret names (what imap_open emits)" \
+  src/php/Core/Redact.php \
+  "s%'mot de passe', 'motdepasse', 'pass', %%"
+
+run_sabotage "a URL value is masked as if it were a secret (the failing endpoint is destroyed)" \
+  src/php/Core/Redact.php \
+  "s%(?!https?://)%%"
+
+run_sabotage "ambiguous names accept ':' again ('Erreur auth: <url>' eats the url)" \
+  src/php/Core/Redact.php \
+  "s%'signature', 'token',%'signature', 'token', 'auth', 'key',%"
 
 printf '\n  %d sabotage(s) detected, %d undetected\n\n' "$pass" "$fail"
 

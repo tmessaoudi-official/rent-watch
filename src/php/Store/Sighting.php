@@ -17,16 +17,24 @@ final readonly class Sighting
     /**
      * @param string   $dedupKey       the stable key this listing resolved to
      * @param bool     $isNew          the store had never seen this key before
+     * @param bool     $isCurrent      this sighting is at least as recent as everything already
+     *                                 recorded for the listing. False means it has been SUPERSEDED
+     *                                 — a delayed email alert carrying an older price point — and
+     *                                 nothing in it describes the listing as it stands now. Carried
+     *                                 explicitly because the store used to answer "yes, dropped to
+     *                                 900" for a flat it correctly believed to be at 1000.
      * @param int|null $rentCc         rent charges comprises as of this sighting; null = unknown
      * @param int|null $previousRentCc last KNOWN rent before this sighting; null = never known
      * @param int|null $rentDeltaCc    signed change in euros, or null when either side is unknown.
      *                                 Null is not zero: an unknown rent is not "no change", and it
      *                                 is certainly not a drop to zero (`CLAUDE.md` hard rule 9).
-     * @param bool     $isPriceDrop    the rent is known, was known before, and fell
+     * @param bool     $isPriceDrop    the rent is known, was known before, fell, and this sighting
+     *                                 is current
      */
     public function __construct(
         public string $dedupKey,
         public bool $isNew,
+        public bool $isCurrent = true,
         public ?int $rentCc = null,
         public ?int $previousRentCc = null,
         public ?int $rentDeltaCc = null,

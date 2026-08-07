@@ -25,7 +25,9 @@ to…", stop and go read it.
 **The tenure path EXISTS as of 2026-08-06 and it is PHP, not Python.** It is
 `src/php/Core/TenureClassifier.php`, `Tenure.php`, `Text.php`, `Outcome.php` and the corpus at
 `tests/fixtures/tenure/corpus.json`; the suite is `tests/php/Core/` run with `php tools/phpunit.phar`.
-There is still no `config/` and no adapter.
+`src/php/Store/` also exists as of 2026-08-07 and carries the within-source dedup key, so findings
+about `dedupKey()` over-merging or under-merging have a real subject. There is still no `config/`,
+no adapter, and no CROSS-PORTAL dedup — that half is still a target.
 
 This paragraph used to say the opposite, and until 2026-08-06 it also told you to return
 `PANEL VERDICT: CLEAN` when the diff did not touch `src/core/tenure.py` — a path that never existed

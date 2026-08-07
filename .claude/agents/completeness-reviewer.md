@@ -20,10 +20,12 @@ files, the actual tests. If you catch yourself writing "the change appears to…
 
 ## Rule zero-point-five — do not invent a subject
 
-As of 2026-08-06 the repo carries `spec/PROJECT_BRIEF.md`, `prototype/`, `CLAUDE.md`, `.claude/**`,
-`scripts/claude-bootstrap/**`, and — since the pure core landed — `src/php/Core/`, `tests/php/` and
-`tests/fixtures/tenure/corpus.json`. There is still no `config/` and no adapter. Confirm with
-`git ls-files` rather than trusting this sentence; it has been stale before.
+As of 2026-08-07 the repo carries `spec/PROJECT_BRIEF.md`, `prototype/`, `CLAUDE.md`, `.claude/**`,
+`scripts/claude-bootstrap/**`, `.env.example`, and — since the pure core and the store landed —
+`src/php/Core/`, `src/php/Store/`, `tests/php/` and `tests/fixtures/tenure/corpus.json`. There is
+still no `config/` and no adapter. Confirm with `git ls-files` rather than trusting this sentence; it
+has been stale before, including on `.env.example`, which this paragraph denied for one round after
+it was created.
 
 **This constrains the HOST of a claim, not the gap it reports.** "A missing test", "an absent
 `config/sources.yaml` key", "a documented CLI verb that is not implemented", "no fixture for this
