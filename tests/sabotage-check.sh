@@ -1220,6 +1220,10 @@ run_sabotage "SMTP stops masking the base64 form of the password" \
   src/php/Core/Notify/SmtpTransport.php \
   's%\$out\[\] = base64_encode(\$value);%%'
 
+run_sabotage "a body line starting with a dot stops being stuffed (RFC 5321)" \
+  src/php/Core/Notify/SmtpTransport.php \
+  "s%'\\.\\.'%'.'%"
+
 printf '\n  %d sabotage(s) detected, %d undetected\n' "$pass" "$fail"
 
 if (( fail > 0 )); then

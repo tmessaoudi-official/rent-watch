@@ -534,3 +534,34 @@ A changelog that overstates is worse than one that omits, because the next sessi
      `ChannelError` directly with the literals, so it proves `Redact` works and proves nothing about
      `SmtpTransport::secrets()` actually passing them. Same shape as the `mixed_tenure` guard that
      was decorative: the test asserts the mechanism, not the wiring.
+- [2026-08-12 — session start] THE FOUR TEST GAPS ARE CLOSED, and the closing found a fifth. What
+  was built, all verified by a targeted sabotage mini-run going 7/7 red before the full run:
+  1. **honest User-Agent** — `testTheUserAgentIdentifiesHonestlyRatherThanDisguising` pins the
+     shape: `rent-watch/` leads, a contact route is present, and no browser family token
+     (mozilla/chrome/chromium/safari/firefox/gecko/applewebkit/edg//opera) appears at all.
+  2. **rent plausibility band** — `testAnOutOfBandFigureIsNotReadAsARent` drives a self-contained
+     temp mailbox (NOT the shared fixture dir, whose listing counts other tests assert) through the
+     real email path: an alert whose only currency-marked figures are 150 EUR (agency fee) and
+     245 000 EUR (sale price) must yield a null rent, and its five-digit `95240` must land in
+     `postcode`, never in rent.
+  3. **SMTP without STARTTLS** — `SmtpTransportWireTest` + `scripted-smtp-server.php` (a one-
+     connection scripted server the test forks; every socket wait bounded at 5 s; the OS picks the
+     port). `testAServerNotOfferingStarttlsGetsNoCredentialAtAll` proves the refusal happens BEFORE
+     any credential leaves the process — by asserting on the wire transcript, not on the exception.
+  4. **`secrets()` wiring** — `testARejectedLoginDoesNotLeakTheCredentialTheServerEchoes`: the fake
+     server echoes the base64 password back in its 535 (the `{LAST}` placeholder), exactly what a
+     real server does, so the test passes only if `SmtpTransport::secrets()` actually hands both
+     forms to `ChannelError`. The transcript additionally proves the credential really crossed the
+     wire, so the mask assertion cannot be vacuous.
+  Plus `testADeliveryDotStuffsTheBodyOnTheWire` (nothing exercised `send()`'s happy path or RFC
+  5321 dot-stuffing as transmitted) and a matching new sabotage case — 238 cases now.
+- [2026-08-12] FOUND BY THE MINI-RUN, the fifth gap: "block tags stop becoming newlines" STAYED
+  GREEN after its sed was fixed — the sed degrades `</p>` but the test only exercised `</li>`. A
+  correct rule tested on a subset of its surfaces, the recurring P0 shape. The test now iterates
+  EVERY member of the tag class (p, div, li, tr, td, h1–h6, and the three `<br>` spellings) and
+  asserts a real newline separates the communes, not merely non-collapse (a space would have
+  passed the old assertion).
+- [2026-08-12] Mini-run harness note for future targeted runs: a script extracted from
+  `tests/sabotage-check.sh` into scratch must pin `repo=` — the original computes it from
+  `BASH_SOURCE`, so the copy resolves to the scratch dir and every case FAILs with "could not
+  build the scratch copy".

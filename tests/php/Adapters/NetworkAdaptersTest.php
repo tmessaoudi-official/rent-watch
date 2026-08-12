@@ -7,6 +7,7 @@ namespace RentWatch\Tests\Adapters;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use RentWatch\Adapters\EmailAlertSource;
+use RentWatch\Adapters\Http\CurlHttpClient;
 use RentWatch\Adapters\Http\HttpClient;
 use RentWatch\Adapters\Http\HttpError;
 use RentWatch\Adapters\Http\HttpRequest;
@@ -253,6 +254,22 @@ final class NetworkAdaptersTest extends TestCase
         }
     }
 
+    public function testTheUserAgentIdentifiesHonestlyRatherThanDisguising(): void
+    {
+        // Hard rule 5: identify honestly in the User-Agent. This is the rule the project is most
+        // explicit about, and a sabotage run showed nothing asserted the string — a browser
+        // disguise left the whole suite green. The shape is pinned: the product name leads, a
+        // contact route is present, and no browser family token appears anywhere.
+        $agent = CurlHttpClient::USER_AGENT;
+
+        self::assertStringStartsWith('rent-watch/', $agent);
+        self::assertStringContainsString('contact', $agent);
+
+        foreach (['mozilla', 'chrome', 'chromium', 'safari', 'firefox', 'gecko', 'applewebkit', 'edg/', 'opera'] as $disguise) {
+            self::assertStringNotContainsStringIgnoringCase($disguise, $agent);
+        }
+    }
+
     // ---------------------------------------------------------------- MIME
 
     public function testALatin1MessageIsReadAsCp1252SoTheEuroSignSurvives(): void
@@ -299,13 +316,29 @@ final class NetworkAdaptersTest extends TestCase
     public function testAnHtmlOnlyMessageHasItsBlockTagsTurnedIntoNewlines(): void
     {
         // Otherwise `<li>Chatou</li><li>Houilles</li>` collapses into `ChatouHouilles`, which
-        // matches neither commune.
-        $raw = "Content-Type: text/html; charset=UTF-8\n\n<ul><li>Chatou</li><li>Houilles</li></ul>";
+        // matches neither commune. EVERY member of the tag class is exercised, not a sample: a
+        // sabotage degraded `</p>` alone and stayed green because only `</li>` was asserted —
+        // a correct rule tested on a subset of the surfaces it belongs on.
+        foreach (['p', 'div', 'li', 'tr', 'td', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6'] as $tag) {
+            $raw = "Content-Type: text/html; charset=UTF-8\n\n"
+                . sprintf('<%1$s>Chatou</%1$s><%1$s>Houilles</%1$s>', $tag);
 
-        $body = EmailMessage::parse($raw)->body;
+            self::assertMatchesRegularExpression(
+                '~Chatou\n+\s*Houilles~',
+                EmailMessage::parse($raw)->body,
+                sprintf('</%s> must become a newline, not vanish', $tag),
+            );
+        }
 
-        self::assertStringContainsString('Chatou', $body);
-        self::assertStringNotContainsString('ChatouHouilles', $body);
+        foreach (['<br>', '<br/>', '<br />'] as $br) {
+            $raw = "Content-Type: text/html; charset=UTF-8\n\nChatou" . $br . 'Houilles';
+
+            self::assertMatchesRegularExpression(
+                '~Chatou\n+\s*Houilles~',
+                EmailMessage::parse($raw)->body,
+                $br . ' must become a newline, not vanish',
+            );
+        }
     }
 
     public function testCrlfLineEndingsDoNotBreakTheHeaderBodySplit(): void
@@ -416,6 +449,48 @@ final class NetworkAdaptersTest extends TestCase
         // whichever source polls first would give each listing the wrong `mixed_tenure` flag —
         // which is the §1 switch.
         self::assertSame([], $this->emailSource(['from' => 'un-autre-portail.test'])->fetch());
+    }
+
+    public function testAnOutOfBandFigureIsNotReadAsARent(): void
+    {
+        // The plausibility band's job, exercised end to end: an alert whose only currency-marked
+        // figures are an agency fee (150 EUR) and a sale price (245 000 EUR) has NO rent, and both
+        // must be refused — one under the 200 floor, one over the 20000 ceiling. Without the band,
+        // the sale price parses as the rent; the shared fixture dir carries no such figure, which
+        // is why the sabotage that strips the band stayed green.
+        $dir = sys_get_temp_dir() . '/rentwatch-mailbox-' . bin2hex(random_bytes(6));
+        mkdir($dir);
+
+        file_put_contents($dir . '/alert.eml',
+            "From: alertes@sale-portal.test\r\n"
+            . "Subject: Nouvelle annonce correspondant a votre recherche\r\n"
+            . "Content-Type: text/plain; charset=UTF-8\r\n"
+            . "\r\n"
+            . "Maison a Chatou, ref. 95240.\r\n"
+            . "Prix de vente : 245 000 EUR. Frais de dossier : 150 EUR.\r\n"
+            . "https://sale-portal.test/annonce/95240\r\n");
+
+        try {
+            $definition = new SourceDefinition(
+                name: 'sale_portal',
+                enabled: true,
+                family: 'private',
+                type: 'email_alert',
+                mixedTenure: true,
+                params: ['from' => 'sale-portal.test', 'link_host' => 'sale-portal.test'],
+                map: new FieldMap(ref: ['url'], chargesIncluded: true),
+            );
+
+            $listings = (new EmailAlertSource($definition, $this->store(), new FileMailbox($dir)))->fetch();
+
+            self::assertCount(1, $listings);
+            self::assertNull($listings[0]->rentCc, '150 and 245000 are both outside the plausibility band');
+            self::assertNull($listings[0]->rentHc);
+            self::assertSame('95240', $listings[0]->postcode, 'the five-digit figure is a postcode, not a rent');
+        } finally {
+            @unlink($dir . '/alert.eml');
+            @rmdir($dir);
+        }
     }
 
     public function testAMissingMailboxDirectoryIsALoudFailure(): void

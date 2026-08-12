@@ -36,12 +36,13 @@ loop (it refuses rather than running unpaced — Q37), and no `html`-type adapte
 parser). `src/phorj/` is not written yet — it waits on the three phorj builds in
 `docs/PHORJ-REQUIREMENTS.md`.
 
-**Known open items from the last sabotage run (230 detected, 6 undetected)** — the first work of the
-next session, recorded in `docs/plans/milestone-1-pipeline.plan.md`: two sabotage sed expressions
-were fixed but NOT re-verified, and four genuine test gaps remain (no assertion on the honest
-User-Agent; no test at all for SMTP continuing without STARTTLS — the cleartext-credential path; the
-base64-masking test proves `Redact`, not `SmtpTransport::secrets()` wiring; the rent plausibility
-band is unexercised by any fixture).
+**The five sabotage gaps are closed as of 2026-08-12**, each verified individually by a targeted
+mini-run going 7/7 red (the two fixed sed expressions included): honest User-Agent pinned;
+SMTP-without-STARTTLS proven refused via a scripted loopback server and its wire transcript;
+`SmtpTransport::secrets()` wiring proven by a server that echoes the base64 credential back; the
+rent plausibility band exercised end to end; and a fifth found while closing them — the block-tag
+test covered `</li>` while the sabotage degraded `</p>`; it now iterates the whole tag class. The
+full-ledger count is recorded in `docs/plans/milestone-1-pipeline.plan.md` as each run completes.
 
 Anything below describing `enrich` or a real landlord endpoint is the **target**, not
 the present. Do not report findings against files that do not exist yet, and do not name `pytest` as
