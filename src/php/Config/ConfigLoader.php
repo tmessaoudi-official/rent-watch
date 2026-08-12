@@ -27,9 +27,10 @@ final class ConfigLoader
     /**
      * RFC 7230 token — the only characters legal in a header NAME. The same rule
      * `CurlHttpClient::HEADER_NAME_TOKEN` enforces at the funnel, applied here at load time so the
-     * operator learns immediately. See that constant for why a non-token name is a smuggling shape.
+     * operator learns immediately. See that constant for why a non-token name is a smuggling shape,
+     * and why the `D` modifier (no `$`-before-trailing-newline) is load-bearing.
      */
-    private const string HEADER_NAME_TOKEN = '/^[!#$%&\'*+.^_`|~0-9A-Za-z-]+$/';
+    private const string HEADER_NAME_TOKEN = '/^[!#$%&\'*+.^_`|~0-9A-Za-z-]+$/D';
 
     /**
      * Load criteria, applying a gitignored local override if one is present.

@@ -36,8 +36,13 @@ final readonly class CurlHttpClient implements HttpClient
      * demonstrated exactly that. A colon, space or control character can never appear in a valid
      * token, so refusing non-tokens closes the smuggling shape wholesale rather than one spelling
      * at a time. `ConfigLoader` applies the same rule at load time.
+     *
+     * The `D` modifier is not optional: without it PHP's `$` also matches just BEFORE a single
+     * trailing newline, so `"user-agent\n"` would pass the class AND dodge the equality check
+     * below (it no longer string-equals `user-agent`) — putting a raw LF into the request headers.
+     * `\z`-equivalent anchoring is what makes "no control character in a name" actually true.
      */
-    private const string HEADER_NAME_TOKEN = '/^[!#$%&\'*+.^_`|~0-9A-Za-z-]+$/';
+    private const string HEADER_NAME_TOKEN = '/^[!#$%&\'*+.^_`|~0-9A-Za-z-]+$/D';
 
     public function send(HttpRequest $request): HttpResponse
     {

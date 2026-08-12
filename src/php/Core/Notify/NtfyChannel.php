@@ -65,7 +65,13 @@ final readonly class NtfyChannel implements Channel
             'Content-Type: text/plain; charset=utf-8',
         ];
         if ($n->url !== null) {
-            $headers[] = 'Click: ' . $n->url;
+            // headerSafe, exactly as the Title above — the url is landlord-controlled (listing
+            // payload → ListingMapper → Notification), and a CRLF in it would start a second,
+            // attacker-chosen header on the POST to the user's own ntfy server. ntfy reads headers
+            // as controls (Attach, Actions, Email…), so an unsanitised Click url is a header-
+            // injection / SSRF vector. This channel calls libcurl directly, so CurlHttpClient's
+            // funnel guard never sees it — the discipline has to be repeated here.
+            $headers[] = 'Click: ' . self::headerSafe($n->url);
         }
 
         $handle = curl_init(rtrim($this->server, '/') . '/' . rawurlencode($this->topic));

@@ -351,6 +351,21 @@ final class NetworkAdaptersTest extends TestCase
         ));
     }
 
+    public function testATrailingNewlineInAHeaderNameIsRefusedAtTheFunnel(): void
+    {
+        // The token guard's own edge: PHP's `$` matches before a single trailing newline, so
+        // `"user-agent\n"` would pass a `$`-anchored class AND dodge the equality guard (it no
+        // longer string-equals `user-agent`), putting a raw LF into the request headers. The `D`
+        // modifier is what refuses it; this test is what proves the modifier stays.
+        $this->expectException(HttpError::class);
+        $this->expectExceptionMessageMatches('~not a valid HTTP token~');
+
+        (new CurlHttpClient())->send(new HttpRequest(
+            'http://127.0.0.1:1/never-reached',
+            headers: ["user-agent\n" => 'Mozilla/5.0 (evasion)'],
+        ));
+    }
+
     // ---------------------------------------------------------------- MIME
 
     public function testALatin1MessageIsReadAsCp1252SoTheEuroSignSurvives(): void

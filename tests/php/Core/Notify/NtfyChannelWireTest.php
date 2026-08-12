@@ -62,4 +62,63 @@ final class NtfyChannelWireTest extends TestCase
         self::assertStringNotContainsStringIgnoringCase('mozilla', $wire);
         self::assertStringContainsString('https://example.test/annonce/1', $wire, 'the body carries the link');
     }
+
+    public function testACrlfBearingUrlCannotSmuggleAHeaderOntoTheNtfyRequest(): void
+    {
+        // The url is landlord-controlled (listing payload → ListingMapper → Notification) and goes
+        // into the Click header. A CRLF in it would start a second, attacker-chosen ntfy control
+        // header (Attach, Actions, Email…) on the POST to the user's own server. NtfyChannel calls
+        // libcurl directly, so CurlHttpClient's funnel guard never sees this — headerSafe on the
+        // Click url is what closes it, and this test is what proves it stays closed.
+        $transcriptPath = sys_get_temp_dir() . '/rentwatch-ntfy-inj-' . bin2hex(random_bytes(6)) . '.txt';
+
+        $proc = proc_open(
+            [PHP_BINARY, __DIR__ . '/../../Adapters/scripted-http-server.php', $transcriptPath],
+            [1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
+            $pipes,
+        );
+        self::assertIsResource($proc, 'the scripted HTTP server must start');
+
+        try {
+            $name = fgets($pipes[1], 256);
+            self::assertIsString($name);
+            $port = (int) substr(strrchr(trim($name), ':') ?: ':0', 1);
+            self::assertGreaterThan(0, $port);
+
+            (new NtfyChannel('secret-topic-1234', 'http://127.0.0.1:' . $port, 5))->send(new Notification(
+                NotificationKind::MATCH,
+                Priority::HIGH,
+                'T4 a Chatou',
+                ['score 82'],
+                "https://example.test/a\r\nX-Smuggled: injected-by-listing\r\nAttach: https://evil.test/x",
+            ));
+        } finally {
+            foreach ($pipes as $pipe) {
+                @fclose($pipe);
+            }
+            proc_close($proc);
+        }
+
+        $wire = (string) @file_get_contents($transcriptPath);
+        @unlink($transcriptPath);
+
+        // Split header block from body: the body legitimately echoes the url as message text
+        // (POSTFIELDS, not a header — a line break there is harmless display), so the injection
+        // risk lives ENTIRELY in the header block, which ends at the Content-Length line.
+        $boundary = stripos($wire, 'Content-Length');
+        self::assertNotFalse($boundary, 'the request must carry a Content-Length header');
+        $headerBlock = substr($wire, 0, $boundary);
+
+        // The test of injection is not whether the string appears — headerSafe COLLAPSES the CRLF
+        // to a space, so `X-Smuggled` survives as harmless inline text inside the Click value —
+        // but whether it appears as its own header LINE. It must not.
+        foreach (explode("\n", $headerBlock) as $line) {
+            $lower = strtolower(trim($line));
+            self::assertFalse(str_starts_with($lower, 'x-smuggled'), 'no injected header line: ' . $line);
+            self::assertFalse(str_starts_with($lower, 'attach:'), 'no injected ntfy control header line: ' . $line);
+        }
+
+        // The Click header still carries the (collapsed, single-line) url.
+        self::assertMatchesRegularExpression('~Click: [^\r\n]*example\.test~', $headerBlock);
+    }
 }

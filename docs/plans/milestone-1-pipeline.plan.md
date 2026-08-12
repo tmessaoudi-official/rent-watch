@@ -629,3 +629,24 @@ A changelog that overstates is worse than one that omits, because the next sessi
      (Content-Length-bounded) so closing early cannot make a client report a broken transfer.
   Ledger now 247; all 8 guard cases verified individually red; suite 1277 tests / 4601 assertions
   green. Full 247-case run + panel round 3 follow on this commit.
+- [2026-08-12] ROUND-3 PANEL VERDICTS on f4770be: round-2 colon-smuggle fix confirmed dead at both
+  layers against every variant tried, but THREE findings (two distinct bugs), counter still reset:
+  1. (P1, resilience + completeness independently) `NtfyChannel` sanitised the landlord-controlled
+     `Title:` header via `headerSafe()` but concatenated the equally landlord-controlled `Click:`
+     url RAW — and that channel calls libcurl directly, so `CurlHttpClient`'s round-2 funnel guard
+     never sees it. Both reviewers demonstrated a source-supplied url with embedded CRLF smuggling
+     `X-Smuggled`/`Attach` as real headers on the POST to the user's ntfy server (SSRF / control-
+     header forgery). Closed: `Click:` now goes through `headerSafe()` too; `NtfyChannelWireTest`
+     grew a CRLF-url case asserting no injected header LINE reaches the header block (the collapsed
+     string surviving inline in the Click VALUE is harmless — the body echoes the url anyway); plus
+     a sabotage case.
+  2. (P1, correctness) The token guard's `$` anchor matched before a single trailing newline, so a
+     header NAME of `"user-agent\n"` passed the class AND dodged the equality guard, putting a raw
+     LF into the request headers. Closed with the `D` modifier on both copies of
+     HEADER_NAME_TOKEN; trailing-newline tests at both layers and a sabotage case per file pin it.
+  3. The prior full sabotage run (b6wc3pnuy) was VOID — launched against f4770be, then this
+     session edited src/tests while it was still copying per case, so 12 later cases hit parse
+     errors from half-applied edits. The charter's "author does not edit while a round runs"
+     applies to the full run too, not just the reviewer worktrees. Re-run cleanly post-commit.
+  Ledger now 250; all 6 round-3 cases verified individually red; suite 1280 tests / 4630 assertions
+  green. Clean full 250-case run + panel round 4 follow on this commit — with NO concurrent edits.

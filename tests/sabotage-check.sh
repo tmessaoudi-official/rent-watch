@@ -1200,6 +1200,18 @@ run_sabotage "a line break in a config header VALUE passes validation" \
   src/php/Config/ConfigLoader.php \
   's%if (preg_match(.~\[\\r\\n\]~., \$headerValue) === 1) {%if (false) {%'
 
+run_sabotage "the funnel token anchor stops rejecting a trailing newline in a name" \
+  src/php/Adapters/Http/CurlHttpClient.php \
+  "s%+\$/D';%+\$/';%"
+
+run_sabotage "config's token anchor stops rejecting a trailing newline in a name" \
+  src/php/Config/ConfigLoader.php \
+  "s%+\$/D';%+\$/';%"
+
+run_sabotage "the ntfy Click url stops being sanitised (header injection from a listing)" \
+  src/php/Core/Notify/NtfyChannel.php \
+  's%.Click: . . self::headerSafe(\$n->url)%"Click: " . $n->url%'
+
 run_sabotage "ISO-8859-1 stops being read as CP1252 (the euro sign vanishes)" \
   src/php/Adapters/Mail/EmailMessage.php \
   "s%? 'CP1252'%? 'ISO-8859-1'%"

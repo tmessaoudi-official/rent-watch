@@ -187,6 +187,17 @@ final class ConfigTest extends TestCase
         ConfigLoader::sourcesFromArray(self::minimalSource(['headers' => ['Referer' => "https://x.test/\r\nUser-Agent: Mozilla"]]));
     }
 
+    public function testATrailingNewlineInAHeaderNameIsRefusedInConfig(): void
+    {
+        // PHP's `$` matches before a single trailing newline, so `"user-agent\n"` would pass a
+        // `$`-anchored token class and dodge the User-Agent equality guard. The `D` modifier on
+        // HEADER_NAME_TOKEN refuses it; this pins the modifier in place.
+        $this->expectException(ConfigError::class);
+        $this->expectExceptionMessageMatches('~not a valid HTTP token~');
+
+        ConfigLoader::sourcesFromArray(self::minimalSource(['headers' => ["user-agent\n" => 'Mozilla/5.0']]));
+    }
+
     public function testAFloatIsNotAcceptedWhereAnIntegerIsSpecified(): void
     {
         $this->expectException(ConfigError::class);
