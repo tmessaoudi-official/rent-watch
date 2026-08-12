@@ -707,3 +707,27 @@ A changelog that overstates is worse than one that omits, because the next sessi
   fixes, then decide. Rationale: 0cd782f's fixes had only targeted-sabotage verification, not a full
   adversarial panel; a single bounded round gives fresh-eyes review of exactly that gap. Not a
   commitment to full two-consecutive-clean convergence — reassess after round 6.
+- [2026-08-12] ROUND-6 (confirming) VERDICTS on eabd4cf: correctness CLEAN; completeness CLEAN with
+  the explicit convergence signal ("the enumeration is complete; no real uncovered injection surface
+  remains"); resilience two P3s, both defense-in-depth/accuracy on unreachable paths. Isolated
+  255-case sabotage run: 255/255. Developer chose to fix both P3s and accept (no round 7).
+  1. (P3-1) `SmtpTransport::assertNoCrlf` echoed the raw header NAME (with its CRLF) in the error
+     message, contradicting its own comment. Not reachable (EmailChannel uses constant header
+     names), name is not a secret — a code-vs-comment inaccuracy / theoretical log-injection.
+  2. (P3-2) `SendmailTransport` (the default, sink = mail()) and `FileTransport` built header lines
+     with no CR/LF discipline of their own, relying on the EmailChannel funnel — so "closed at every
+     builder" was caller-dependent for them.
+  Both closed by extracting the guard into `Core/Notify/Headers::assertNoCrlf` (final readonly,
+  shared), wired into Smtp/Sendmail/File at each boundary. The header NAME is now checked with a
+  fixed label before being reused as the label for its own value, so a CRLF-bearing name is never
+  echoed (P3-1). Coverage: `testEveryMailTransportSelfProtectsAgainstACrlfHeader` (Sendmail + File
+  wiring), the SMTP test gained a header-name case asserting the error is newline-free, and four
+  sabotage cases — the shared guard plus per-transport wiring for Smtp/Sendmail/File. The
+  header/protocol-injection class is now literally closed at every builder, not caller-dependent.
+  Ledger 258; all 6 new/affected cases individually red; suite 1285 tests / 4666 assertions green.
+- [2026-08-12] CERTIFICATION CLOSED (developer-accepted). Six MAXIMAL rounds; the reachable
+  injection class is closed at every builder from external/operator input, each with discipline +
+  test + sabotage case, and rounds 5-6 drove the remaining items from P1 coverage gaps down to P3
+  accuracy/defense-in-depth, all now fixed. Correctness and completeness were clean in round 6 with
+  an explicit convergence signal. Accepted rather than pursuing a formal seventh round for the P3
+  fixes, on the developer's decision.

@@ -25,6 +25,7 @@ use RentWatch\Config\FieldMap;
 use RentWatch\Config\SourceDefinition;
 use RentWatch\Core\Notify\ChannelError;
 use RentWatch\Core\Notify\FileTransport;
+use RentWatch\Core\Notify\SendmailTransport;
 use RentWatch\Core\Notify\SmtpTransport;
 use RentWatch\Core\Outcome;
 use RentWatch\Core\Tenure;
@@ -691,6 +692,39 @@ final class NetworkAdaptersTest extends TestCase
         self::assertStringContainsString('SMTP_PASSWORD', (string) $problem);
     }
 
+    public function testEveryMailTransportSelfProtectsAgainstACrlfHeader(): void
+    {
+        // The class is closed at EVERY builder, not just SMTP: Sendmail (the default, whose sink is
+        // the injection-prone mail()) and File each apply the shared guard at their own boundary,
+        // so none depends on the EmailChannel caller to have sanitised.
+        $dir = sys_get_temp_dir() . '/rentwatch-transport-crlf-' . bin2hex(random_bytes(6));
+
+        $transports = [
+            'sendmail' => new SendmailTransport(),
+            'file' => new FileTransport($dir),
+        ];
+
+        foreach ($transports as $label => $transport) {
+            try {
+                $transport->send('moi@example.test', "Sujet\r\nBcc: attacker@evil.test", 'corps', []);
+                self::fail($label . ' must refuse a CR/LF in the subject');
+            } catch (ChannelError $e) {
+                self::assertStringContainsString('inject a header or command', $e->getMessage());
+            }
+
+            try {
+                $transport->send('moi@example.test', 'Sujet', 'corps', ['X-Custom' => "ok\r\nBcc: attacker@evil.test"]);
+                self::fail($label . ' must refuse a CR/LF in a header value');
+            } catch (ChannelError $e) {
+                self::assertStringContainsString('inject a header or command', $e->getMessage());
+            }
+        }
+
+        // The File transport must have written nothing — the refusal precedes the write.
+        self::assertSame([], glob($dir . '/*.eml') ?: []);
+        @rmdir($dir);
+    }
+
     public function testSmtpRefusesACrlfInTheEnvelopeOrAHeaderBeforeConnecting(): void
     {
         // In-transport CR/LF refusal, symmetric with ImapMailbox::quote(): a CR/LF in the
@@ -703,12 +737,16 @@ final class NetworkAdaptersTest extends TestCase
             ['victim@x.test' . "\r\n" . 'RCPT TO:<other@evil.test>', 'Sujet', []],
             ['moi@example.test', "Sujet\r\nBcc: attacker@evil.test", []],
             ['moi@example.test', 'Sujet', ['X-Custom' => "ok\r\nBcc: attacker@evil.test"]],
+            // A CRLF in the header NAME: refused, AND the raw name must not be echoed back into the
+            // error (the error message must itself be newline-free).
+            ['moi@example.test', 'Sujet', ["X\r\nBcc" => 'v']],
         ] as [$to, $subject, $headers]) {
             try {
                 $transport->send($to, $subject, 'corps', $headers);
                 self::fail('a CR/LF in an SMTP field must be refused before connecting');
             } catch (ChannelError $e) {
-                self::assertStringContainsString('inject an SMTP command', $e->getMessage());
+                self::assertStringContainsString('inject a header or command', $e->getMessage());
+                self::assertDoesNotMatchRegularExpression('~[\r\n]~', $e->getMessage(), 'the error must not echo the offending value');
             }
         }
     }

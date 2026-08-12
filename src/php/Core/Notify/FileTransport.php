@@ -41,6 +41,17 @@ final readonly class FileTransport implements MailTransport
             throw new ChannelError('email', $problem);
         }
 
+        // Self-protect at the boundary, symmetric with the other transports. An `.eml` on disk is
+        // the readable record of what WOULD be sent, so a CRLF-smuggled header here would both
+        // misrepresent that record and be re-injected verbatim if the file were ever replayed.
+        Headers::assertNoCrlf('recipient', $to);
+        Headers::assertNoCrlf('subject', $subject);
+        foreach ($headers as $name => $value) {
+            $name = (string) $name;
+            Headers::assertNoCrlf('a header name', $name);
+            Headers::assertNoCrlf('header ' . $name, (string) $value);
+        }
+
         $message = 'To: ' . $to . "\r\n" . 'Subject: ' . $subject . "\r\n";
         foreach ($headers as $name => $value) {
             $message .= $name . ': ' . $value . "\r\n";

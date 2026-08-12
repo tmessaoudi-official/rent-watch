@@ -19,8 +19,17 @@ final readonly class SendmailTransport implements MailTransport
 
     public function send(string $to, string $subject, string $body, array $headers): void
     {
+        // Self-protect at the boundary, symmetric with SmtpTransport — `mail()` is the most
+        // injection-prone sink of the three, so a CR/LF here must never reach it even though the
+        // EmailChannel caller already sanitises.
+        Headers::assertNoCrlf('recipient', $to);
+        Headers::assertNoCrlf('subject', $subject);
+
         $lines = [];
         foreach ($headers as $name => $value) {
+            $name = (string) $name;
+            Headers::assertNoCrlf('a header name', $name);
+            Headers::assertNoCrlf('header ' . $name, (string) $value);
             $lines[] = $name . ': ' . $value;
         }
 

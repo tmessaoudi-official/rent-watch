@@ -1228,9 +1228,21 @@ run_sabotage "the email sender check loses its D anchor (a trailing newline pass
   src/php/Core/Notify/EmailChannel.php \
   "s%@\[^@\\\\s\]+\$~D%@[^@\\\\s]+\$~%"
 
-run_sabotage "SMTP stops refusing a CR/LF in the envelope or a header" \
-  src/php/Core/Notify/SmtpTransport.php \
+run_sabotage "the shared transport CR/LF guard stops refusing (all mail transports)" \
+  src/php/Core/Notify/Headers.php \
   's%if (preg_match(.~\[\\r\\n\]~., \$value) === 1) {%if (false) {%'
+
+run_sabotage "SmtpTransport stops calling the shared CR/LF guard" \
+  src/php/Core/Notify/SmtpTransport.php \
+  's%Headers::assertNoCrlf(.recipient., \$to);%%'
+
+run_sabotage "SendmailTransport stops calling the shared CR/LF guard" \
+  src/php/Core/Notify/SendmailTransport.php \
+  's%Headers::assertNoCrlf(.header . . \$name, (string) \$value);%%'
+
+run_sabotage "FileTransport stops calling the shared CR/LF guard" \
+  src/php/Core/Notify/FileTransport.php \
+  's%Headers::assertNoCrlf(.header . . \$name, (string) \$value);%%'
 
 run_sabotage "ISO-8859-1 stops being read as CP1252 (the euro sign vanishes)" \
   src/php/Adapters/Mail/EmailMessage.php \
