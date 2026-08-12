@@ -41,12 +41,15 @@
       claiming works (paste the real stdout). Where a generated artefact IS the deliverable, the
       capture-is-not-delivery rule still holds: `var/` is gitignored and the container is reclaimed,
       so send it with `SendUserFile` in the same turn.
-    • THE EXECUTABLE SURFACE IS PHP, AND PARTLY BUILT. As of 2026-08-06 the repo carries a PHP 8.5
-      pure core at `src/php/Core/` with a PHPUnit suite (`php tools/phpunit.phar`) and a classifier
-      corpus. There is still no `config/`, no adapter and no CI. Rule 7's "tests MUST be executed"
-      is therefore satisfiable and REQUIRED — run the suite and paste its output. Never name
-      `pytest` as if it were wired; the PHP suite is the only runner here. Verify the current shape
-      with `git ls-files src/ config/ tests/` rather than trusting this paragraph.
+    • THE EXECUTABLE SURFACE IS PHP, AND MOSTLY BUILT. As of 2026-08-12 the repo carries a PHP 8.5
+      pure core at `src/php/Core/`, the SQLite store, the `config/` layer, the adapters
+      (HTTP/IMAP/SMTP, tested offline against fakes), the `scout` CLI, a PHPUnit suite
+      (`php tools/phpunit.phar`), a classifier corpus and CI (`.github/workflows/ci.yml`). What is
+      still missing is a live source URL (an input, not code), the `--watch` loop and the
+      `html`-type adapter. Rule 7's "tests MUST be executed" is therefore satisfiable and REQUIRED —
+      run the suite and paste its output. Never name `pytest` as if it were wired; the PHP suite is
+      the only runner here. Verify the current shape with `git ls-files src/ config/ tests/` rather
+      than trusting this paragraph.
     • ELIGIBILITY IS A CORRECTNESS PROPERTY, NOT A PREFERENCE. The project's one non-negotiable rule
       (CLAUDE.md §1) is that `logement social` — PLAI, PLUS, `conventionné`/ANRU/ANAH — must never be
       surfaced as a match. Treat any doubt as fail-closed, and treat a change that could re-enable an
