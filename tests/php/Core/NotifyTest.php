@@ -453,4 +453,21 @@ final class NotifyTest extends TestCase
         }
         @rmdir($dir);
     }
+
+    public function testASenderWithATrailingNewlineIsRejected(): void
+    {
+        // The sender check must use the `D` anchor: without it PHP's `$` matches before a trailing
+        // newline, so `"rent-watch@localhost\n"` would pass validation and reach `MAIL FROM:<…>` as
+        // a bare LF on the SMTP command line — the same trailing-newline hole closed for the header
+        // token in the HTTP guards.
+        $problem = (new EmailChannel(
+            'moi@example.test',
+            "rent-watch@localhost\n",
+            '[rent-watch]',
+            new FileTransport(sys_get_temp_dir() . '/rentwatch-unused-' . bin2hex(random_bytes(4))),
+        ))->check();
+
+        self::assertNotNull($problem);
+        self::assertStringContainsString('sender address is not valid', (string) $problem);
+    }
 }

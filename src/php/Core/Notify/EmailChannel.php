@@ -51,7 +51,11 @@ final readonly class EmailChannel implements Channel
         // obvious default for a self-hosted tool — failed it, and the shipped default silently
         // DISABLED the email channel. Found by running `test-notify`, which is what that verb is
         // for. The recipient keeps the strict check: a typo there means mail goes nowhere.
-        if (preg_match('~^[^@\s]+@[^@\s]+$~', $this->from) !== 1) {
+        // The `D` modifier is not optional here, for the reason CurlHttpClient's own docblock gives:
+        // PHP's `$` matches before a single trailing newline, so `"evil@x.com\n"` would pass this
+        // loose check and then reach `MAIL FROM:<…>` as a bare LF on the SMTP command line. `\s`
+        // rejects an interior newline, but only `D` rejects a trailing one.
+        if (preg_match('~^[^@\s]+@[^@\s]+$~D', $this->from) !== 1) {
             return 'the sender address is not valid: ' . var_export($this->from, true);
         }
         return $this->transport->check();

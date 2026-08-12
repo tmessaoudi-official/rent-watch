@@ -69,6 +69,20 @@ final readonly class SmtpTransport implements MailTransport
             throw new ChannelError('email', $problem, null, $this->secrets());
         }
 
+        // In-transport CR/LF refusal, symmetric with ImapMailbox::quote(). The caller
+        // (EmailChannel) sanitises the subject and headers it builds, but a transport must not
+        // depend on that — a CR or LF in the envelope (`MAIL FROM`/`RCPT TO`) or a header line
+        // would inject a second SMTP command or header (Bcc, an extra RCPT). These values are
+        // operator/caller-controlled, so this is defense-in-depth, but the SMTP grammar forbids a
+        // bare CR/LF in a command regardless.
+        self::assertNoCrlf('recipient', $to);
+        self::assertNoCrlf('sender', $this->from);
+        self::assertNoCrlf('subject', $subject);
+        foreach ($headers as $name => $value) {
+            self::assertNoCrlf('header ' . $name, (string) $name);
+            self::assertNoCrlf('header ' . $name, (string) $value);
+        }
+
         $socket = $this->connect();
 
         try {
@@ -251,6 +265,15 @@ final readonly class SmtpTransport implements MailTransport
     private static function dotStuff(string $body): string
     {
         return preg_replace('~^\.~m', '..', str_replace(["\r\n", "\r", "\n"], "\r\n", $body)) ?? $body;
+    }
+
+    private static function assertNoCrlf(string $what, string $value): void
+    {
+        if (preg_match('~[\r\n]~', $value) === 1) {
+            // No secrets here — $what is a fixed field label, never the value — so this throws
+            // without the secrets() literals; the offending value is deliberately not echoed.
+            throw new ChannelError('email', 'a CR or LF in the ' . $what . ' would inject an SMTP command — refusing to send');
+        }
     }
 
     private static function isLoopback(string $host): bool

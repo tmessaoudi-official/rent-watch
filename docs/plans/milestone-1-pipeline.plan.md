@@ -674,3 +674,32 @@ A changelog that overstates is worse than one that omits, because the next sessi
   Round 4 is NOT clean → the two-consecutive-clean counter resets. Round 5 is the cap (5): if it is
   clean it is only the FIRST consecutive clean, so the gate's two-clean bar cannot be met within the
   cap — at that point the ladder requires asking the developer rather than silently proceeding.
+- [2026-08-12] FULL SABOTAGE RUN at 5236049 (isolated worktree): 252 cases, all detected.
+  [recorded when it completed]
+- [2026-08-12] ROUND-5 PANEL VERDICTS on 5236049 (the cap round): correctness CLEAN; resilience and
+  completeness EACH found one more surface of the same injection class — the class was still not
+  fully enumerated. Both fixed:
+  1. (P1, completeness) The ntfy `Title:` headerSafe guard — the ORIGINAL guard whose presence made
+     the round-3 Click finding visible — had itself never had a test or sabotage case. Removing it
+     left the suite green. Closed: `NtfyChannelWireTest` now injects a CRLF payload through the
+     TITLE as well as the url and asserts no `Actions:`/`X-Smuggled:`/`Attach:` header LINE; plus a
+     sabotage case on the Title headerSafe.
+  2. (P2, resilience) `SmtpTransport` built `MAIL FROM`/`RCPT TO`/DATA headers with no CR/LF
+     discipline of its own (caller-reliance, which the round-4 message overstated as "covered"), and
+     `EmailChannel::check()`'s sender regex `~^[^@\s]+@[^@\s]+$~` LACKED the `D` modifier — the same
+     trailing-newline hole fixed for the header token in round 3, in a different regex, so a
+     `SMTP_FROM` ending in `\n` reached `MAIL FROM:<…>` as a bare LF. Closed: `SmtpTransport` refuses
+     CR/LF in recipient/sender/subject/headers before connecting (symmetric with `ImapMailbox::quote`),
+     the sender regex gained `D`, and both are pinned by a test + sabotage case each.
+  The injection class is now enumerated and closed at EVERY builder from external/operator input:
+  HTTP name/value/UA, ntfy Title+Click, email Subject/From, SMTP envelope+headers, IMAP quote — each
+  with discipline + test + sabotage case. Ledger now 255; all 4 new/affected cases individually red;
+  suite 1284 tests / 4656 assertions green.
+- [2026-08-12] CERTIFICATION CAP REACHED. Five MAXIMAL rounds run; each found real findings (a
+  genuine escalating chain: config UA override → colon-name smuggle → trailing-newline anchor + ntfy
+  Click → EmailChannel/IMAP coverage twins → ntfy Title + SMTP/EmailChannel-D). The two-consecutive-
+  clean bar was never met, so per the ladder + CLAUDE.md the 5-round cap escalates to the developer
+  rather than proceeding silently. State at escalation: all findings from all five rounds fixed and
+  committed; attacker-reachable surfaces have been clean since round 3; the last two rounds' findings
+  were coverage-of-correct-guards and operator-input defense-in-depth, not live attacker-reachable
+  bugs. Decision pending: accept current state as certified, or authorise further rounds.

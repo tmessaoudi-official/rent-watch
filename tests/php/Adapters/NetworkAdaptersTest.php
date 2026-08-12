@@ -691,6 +691,28 @@ final class NetworkAdaptersTest extends TestCase
         self::assertStringContainsString('SMTP_PASSWORD', (string) $problem);
     }
 
+    public function testSmtpRefusesACrlfInTheEnvelopeOrAHeaderBeforeConnecting(): void
+    {
+        // In-transport CR/LF refusal, symmetric with ImapMailbox::quote(): a CR/LF in the
+        // recipient, sender, subject or a header value would inject a second SMTP command or header
+        // (an extra RCPT, a Bcc). The guard fires before any socket, so no server is needed. These
+        // are caller/operator-controlled — defense-in-depth — but the grammar forbids it regardless.
+        $transport = new SmtpTransport('127.0.0.1', 1025, security: 'none');
+
+        foreach ([
+            ['victim@x.test' . "\r\n" . 'RCPT TO:<other@evil.test>', 'Sujet', []],
+            ['moi@example.test', "Sujet\r\nBcc: attacker@evil.test", []],
+            ['moi@example.test', 'Sujet', ['X-Custom' => "ok\r\nBcc: attacker@evil.test"]],
+        ] as [$to, $subject, $headers]) {
+            try {
+                $transport->send($to, $subject, 'corps', $headers);
+                self::fail('a CR/LF in an SMTP field must be refused before connecting');
+            } catch (ChannelError $e) {
+                self::assertStringContainsString('inject an SMTP command', $e->getMessage());
+            }
+        }
+    }
+
     public function testAnSmtpErrorMasksThePasswordInBothItsForms(): void
     {
         // The base64 form is what actually goes on the wire and what a server echoes back in a

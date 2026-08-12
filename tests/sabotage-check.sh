@@ -1220,6 +1220,18 @@ run_sabotage "an IMAP argument stops refusing an embedded CR/LF" \
   src/php/Adapters/Mail/ImapMailbox.php \
   's%if (preg_match(.~\[\\r\\n\]~., \$value) === 1) {%if (false) {%'
 
+run_sabotage "the ntfy Title stops being header-safed (injection from a listing title)" \
+  src/php/Core/Notify/NtfyChannel.php \
+  's%.Title: . . self::headerSafe(\$n->title)%"Title: " . $n->title%'
+
+run_sabotage "the email sender check loses its D anchor (a trailing newline passes)" \
+  src/php/Core/Notify/EmailChannel.php \
+  "s%@\[^@\\\\s\]+\$~D%@[^@\\\\s]+\$~%"
+
+run_sabotage "SMTP stops refusing a CR/LF in the envelope or a header" \
+  src/php/Core/Notify/SmtpTransport.php \
+  's%if (preg_match(.~\[\\r\\n\]~., \$value) === 1) {%if (false) {%'
+
 run_sabotage "ISO-8859-1 stops being read as CP1252 (the euro sign vanishes)" \
   src/php/Adapters/Mail/EmailMessage.php \
   "s%? 'CP1252'%? 'ISO-8859-1'%"

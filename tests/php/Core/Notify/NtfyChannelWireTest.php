@@ -88,7 +88,10 @@ final class NtfyChannelWireTest extends TestCase
             (new NtfyChannel('secret-topic-1234', 'http://127.0.0.1:' . $port, 5))->send(new Notification(
                 NotificationKind::MATCH,
                 Priority::HIGH,
-                'T4 a Chatou',
+                // BOTH the title and the url carry an injection payload: the title is the header
+                // whose guard made the round-3 Click finding visible, yet had no coverage of its
+                // own until round 5. Both are landlord-controlled.
+                "T4 a Chatou\r\nActions: view, Ouvrir, https://evil.test/pwn",
                 ['score 82'],
                 "https://example.test/a\r\nX-Smuggled: injected-by-listing\r\nAttach: https://evil.test/x",
             ));
@@ -116,9 +119,11 @@ final class NtfyChannelWireTest extends TestCase
             $lower = strtolower(trim($line));
             self::assertFalse(str_starts_with($lower, 'x-smuggled'), 'no injected header line: ' . $line);
             self::assertFalse(str_starts_with($lower, 'attach:'), 'no injected ntfy control header line: ' . $line);
+            self::assertFalse(str_starts_with($lower, 'actions:'), 'no injected Actions header from the title: ' . $line);
         }
 
-        // The Click header still carries the (collapsed, single-line) url.
+        // Both headers still carry their (collapsed, single-line) content.
         self::assertMatchesRegularExpression('~Click: [^\r\n]*example\.test~', $headerBlock);
+        self::assertMatchesRegularExpression('~Title: [^\r\n]*Chatou~', $headerBlock);
     }
 }
