@@ -31,10 +31,12 @@ today. The network adapters exist too — `HttpJsonSource` + `Robots`, `EmailAle
 `ImapMailbox`/`FileMailbox`, `SmtpTransport`/`FileTransport` — all tested offline against fakes,
 with `.env` swapping the real thing in. **What is missing is not code but two INPUTS**: a DevTools
 cURL capture to replace a `REMPLACER` URL in `config/sources.json` (hard rule 1 forbids writing one
-from memory), and the `plafonds` figures for classifier tier 4. There is still no CI, no `--watch`
-loop (it refuses rather than running unpaced — Q37), and no `html`-type adapter (needs a CSS-selector
-parser). `src/phorj/` is not written yet — it waits on the three phorj builds in
-`docs/PHORJ-REQUIREMENTS.md`.
+from memory), and the `plafonds` figures for classifier tier 4. CI now exists
+(`.github/workflows/ci.yml`): the fast job runs the PHPUnit suite, the tenure tripwire and
+runner-fetch self-tests, the drift scan, shell syntax and the bootstrap self-tests on every push and
+PR; the sabotage ledger runs nightly and on demand. Still missing: the `--watch` loop (it refuses
+rather than running unpaced — Q37) and the `html`-type adapter (needs a CSS-selector parser).
+`src/phorj/` is not written yet — it waits on the three phorj builds in `docs/PHORJ-REQUIREMENTS.md`.
 
 **The five sabotage gaps are closed as of 2026-08-12**, each verified individually by a targeted
 mini-run going 7/7 red (the two fixed sed expressions included): honest User-Agent pinned;
@@ -359,6 +361,7 @@ php tools/phpunit.phar                  # the core suite — must stay green
 bash tests/sabotage-check.sh            # proves the suite would CATCH a broken classifier
 bash tests/test-tenure-guard.sh         # proves the §1 tripwire still fires, and stays quiet on PHP
 bash tests/test-fetch-phpunit.sh        # proves the runner fetch refuses a bad signature
+bash tests/test-ci-workflow.sh          # proves ci.yml still wires every step CLAUDE.md claims
 bash .claude/skills/repair/drift-scan.sh                         # config/doc drift; exit 1 on P0/P1
 bash scripts/claude-bootstrap/hooks/test-precompact-handoff.sh   # 35 tests, must stay green
 bash scripts/claude-bootstrap/test-install.sh                    # 17 tests, must stay green
@@ -468,6 +471,7 @@ tools/fetch-phpunit.sh      Fetches the runner; pinned SHA-256, refuses to insta
 tools/phpunit.phar          Test runner (gitignored — see README § Getting started)
 var/claude/                 Reports, handoffs — gitignored, container-lifetime
 .claude/                    Project skills, reviewer agents, hooks, settings
+.github/workflows/ci.yml    CI — suite+guards every push/PR, sabotage ledger nightly+dispatch
 scripts/claude-bootstrap/   Reinstalls ~/.claude/ at SessionStart (cloud container)
 ```
 
@@ -573,6 +577,8 @@ tests/test-tenure-guard.sh         Sabotage test FOR that hook — must-fire and
 .claude/skills/repair/drift-scan.sh  The mechanical half of /repair — run it in a gate
 tests/sabotage-check.sh            Breaks the classifier many ways; the suite must catch every one
 tests/test-fetch-phpunit.sh        Proves the runner fetch refuses a bad signature
+tests/test-ci-workflow.sh          Proves ci.yml still wires every step this file claims CI runs
+.github/workflows/ci.yml           CI: suite+guards on every push/PR; sabotage ledger nightly+dispatch
 scripts/claude-bootstrap/          SessionStart reinstall of ~/.claude/ + PreCompact handoff
 ```
 

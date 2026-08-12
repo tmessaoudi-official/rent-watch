@@ -1,0 +1,104 @@
+name: CI
+
+# Runs the discipline this repo already carries but never enforced automatically: the PHPUnit
+# suite, the §1 tenure tripwire's own self-test, the runner-fetch signature check, the config/doc
+# drift scan, shell-script syntax, and the bootstrap self-tests — on every push and PR. The
+# sabotage ledger (~13 min: every seeded regression must still be caught) runs nightly and on
+# demand rather than on every push, because it re-runs the whole suite once per seeded break.
+#
+# Toolchain notes, all forced by this repo (see CLAUDE.md § Gotchas):
+#   - PHP is 8.5, no Composer runtime deps. `composer dump-autoload --dev` generates the PSR-4
+#     autoloader (the `--dev` is load-bearing: without it the corpus suite errors "Class not found").
+#   - The runner is PHPUnit's official PHAR, fetched by tools/fetch-phpunit.sh against a pinned
+#     SHA-256 (and a PGP signature when a keyserver is reachable — which it is on a GitHub runner,
+#     so CI gets full signature verification). vendor/ and the PHAR are both gitignored.
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+  schedule:
+    # Nightly, for the sabotage ledger only.
+    - cron: '0 3 * * *'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: suite + guards
+    runs-on: ubuntu-latest
+    # The fast gate: everything except the nightly-only sabotage run.
+    if: github.event_name != 'schedule'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up PHP 8.5
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.5'
+          extensions: mbstring, curl, iconv, pdo_sqlite, sqlite3, openssl
+          coverage: none
+          tools: composer
+
+      - name: Generate the PSR-4 autoloader (--dev — the corpus suite needs it)
+        run: composer dump-autoload --dev --optimize --no-interaction
+
+      - name: Fetch the pinned PHPUnit runner
+        run: bash tools/fetch-phpunit.sh
+
+      - name: PHPUnit suite
+        run: php tools/phpunit.phar --colors=never
+
+      - name: CI workflow self-test
+        run: bash tests/test-ci-workflow.sh
+
+      - name: Tenure §1 tripwire self-test
+        run: bash tests/test-tenure-guard.sh
+
+      - name: Runner fetch refuses a bad signature
+        run: bash tests/test-fetch-phpunit.sh
+
+      - name: Config/doc drift scan (fails on P0/P1)
+        run: bash .claude/skills/repair/drift-scan.sh
+
+      - name: Shell script syntax
+        run: |
+          find .claude/hooks tests tools scripts/claude-bootstrap \
+            -type f -name '*.sh' -print0 | xargs -0 -n1 bash -n
+
+      - name: Bootstrap PreCompact handoff self-test
+        run: bash scripts/claude-bootstrap/hooks/test-precompact-handoff.sh
+
+      - name: Bootstrap install self-test
+        run: bash scripts/claude-bootstrap/test-install.sh
+
+  sabotage:
+    name: sabotage ledger (detection proof)
+    runs-on: ubuntu-latest
+    # Heavy (~13 min): re-runs the whole suite once per seeded regression. Nightly + on demand,
+    # not per-push — the fast job above catches ordinary breakage on every push.
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up PHP 8.5
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.5'
+          extensions: mbstring, curl, iconv, pdo_sqlite, sqlite3, openssl
+          coverage: none
+          tools: composer
+
+      - name: Generate the PSR-4 autoloader (--dev)
+        run: composer dump-autoload --dev --optimize --no-interaction
+
+      - name: Fetch the pinned PHPUnit runner
+        run: bash tools/fetch-phpunit.sh
+
+      - name: Sabotage ledger — every seeded regression must be caught
+        run: bash tests/sabotage-check.sh

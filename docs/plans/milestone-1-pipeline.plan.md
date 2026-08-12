@@ -731,3 +731,16 @@ A changelog that overstates is worse than one that omits, because the next sessi
   accuracy/defense-in-depth, all now fixed. Correctness and completeness were clean in round 6 with
   an explicit convergence signal. Accepted rather than pursuing a formal seventh round for the P3
   fixes, on the developer's decision.
+- [2026-08-12] CI added (`.github/workflows/ci.yml`), on the developer's request. Two jobs:
+  `test` (fast, every push/PR/dispatch) runs `composer dump-autoload --dev`, fetches the pinned
+  PHPUnit PHAR, then the suite + `test-ci-workflow.sh` + `test-tenure-guard.sh` +
+  `test-fetch-phpunit.sh` + drift-scan + shell `bash -n` + the two bootstrap self-tests; `sabotage`
+  (schedule nightly 03:00 UTC + workflow_dispatch, NOT per-push — it re-runs the whole suite once
+  per seeded break, ~13 min) runs the 258-case ledger. Toolchain honoured: PHP 8.5 via
+  shivammathur/setup-php, `--dev` autoloader (without it the corpus suite errors), vendor/ and the
+  PHAR both regenerated/fetched (gitignored). fetch-phpunit is CI-safe — SHA-256 is the always-run
+  gate and `unverifiable` is non-fatal on a match, and on a runner with keyserver access CI gets
+  full PGP verification. Added `tests/test-ci-workflow.sh` (grep-based structural self-test, matching
+  the repo's every-executable-has-a-self-test culture) so a step silently dropped from the workflow
+  fails a test rather than passing unnoticed. Every workflow command dry-run green locally before
+  commit; CLAUDE.md's "still no CI" line and the two file-layout listings updated.
