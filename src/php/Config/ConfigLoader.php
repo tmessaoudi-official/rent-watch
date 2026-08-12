@@ -25,6 +25,13 @@ final class ConfigLoader
     public const string UNVERIFIED_URL = 'REMPLACER';
 
     /**
+     * RFC 7230 token — the only characters legal in a header NAME. The same rule
+     * `CurlHttpClient::HEADER_NAME_TOKEN` enforces at the funnel, applied here at load time so the
+     * operator learns immediately. See that constant for why a non-token name is a smuggling shape.
+     */
+    private const string HEADER_NAME_TOKEN = '/^[!#$%&\'*+.^_`|~0-9A-Za-z-]+$/';
+
+    /**
      * Load criteria, applying a gitignored local override if one is present.
      *
      * The override exists so genuinely personal tuning never has to enter git (Q11): the committed
@@ -304,8 +311,30 @@ final class ConfigLoader
         $headers = self::stringMap($r->optObject('headers'));
         $params = self::stringMap($r->optObject('params'));
 
-        foreach (array_keys($headers) as $headerName) {
-            if (strtolower(trim($headerName)) === 'user-agent') {
+        foreach ($headers as $headerName => $headerValue) {
+            // A name that is not a token is how the User-Agent refusal below gets smuggled past:
+            // libcurl reads the header name from the text before the first colon, so a KEY of
+            // `user-agent: Mozilla` would clear an equality check and still disguise the request.
+            // A colon can never appear in a valid token, so refusing non-tokens closes every
+            // spelling of that shape at once.
+            if (preg_match(self::HEADER_NAME_TOKEN, (string) $headerName) !== 1) {
+                throw ConfigError::at(
+                    $where . '.headers',
+                    'header name ' . var_export($headerName, true) . ' is not a valid HTTP token '
+                        . '(letters, digits and !#$%&\'*+-.^_`|~ only — no colon, space or '
+                        . 'control character)',
+                );
+            }
+
+            if (preg_match('~[\r\n]~', $headerValue) === 1) {
+                throw ConfigError::at(
+                    $where . '.headers',
+                    'the value of header ' . $headerName . ' contains a line break — that is HTTP '
+                        . 'header injection, not a header',
+                );
+            }
+
+            if (strtolower((string) $headerName) === 'user-agent') {
                 // In cURL, a User-Agent entry in CURLOPT_HTTPHEADER silently overrides
                 // CURLOPT_USERAGENT — so this one config key would disguise every request from the
                 // source, which is the browser impersonation hard rule 5 forbids outright. Refused

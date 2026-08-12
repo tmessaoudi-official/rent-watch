@@ -42,13 +42,36 @@ if ($conn === false) {
 
 stream_set_timeout($conn, 5);
 
-// The request head ends at the first blank line; a GET has no body to read.
+// The request head ends at the first blank line.
 while (($line = @fgets($conn, 8192)) !== false) {
     $line = rtrim($line, "\r\n");
     if ($line === '') {
         break;
     }
     $transcript[] = $line;
+}
+
+// A POST carries a body after the blank line, and closing without reading it makes some clients
+// report a broken transfer instead of accepting the response. Read exactly what Content-Length
+// announces and put it in the transcript — the ntfy wire test asserts on it.
+$announced = 0;
+foreach ($transcript as $line) {
+    if (preg_match('~^Content-Length:\s*(\d+)$~i', $line, $m) === 1) {
+        $announced = min((int) $m[1], 1024 * 1024);
+    }
+}
+
+$received = '';
+while (strlen($received) < $announced) {
+    $chunk = @fread($conn, $announced - strlen($received));
+    if ($chunk === false || $chunk === '') {
+        break;
+    }
+    $received .= $chunk;
+}
+
+if ($received !== '') {
+    $transcript[] = $received;
 }
 
 $body = '{"results":{"items":[]}}';

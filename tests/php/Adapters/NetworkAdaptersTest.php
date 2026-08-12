@@ -323,6 +323,34 @@ final class NetworkAdaptersTest extends TestCase
         ));
     }
 
+    public function testAColonSmuggledHeaderNameIsRefusedAtTheFunnel(): void
+    {
+        // The round-2 bypass: libcurl reads the header NAME from the text before the first colon,
+        // so a KEY of `User-Agent: Mozilla…` cleared the equality guard and put a browser UA on
+        // the wire. A colon can never appear in an RFC 7230 token, so the token check refuses
+        // every spelling of that shape at once.
+        $this->expectException(HttpError::class);
+        $this->expectExceptionMessageMatches('~not a valid HTTP token~');
+
+        (new CurlHttpClient())->send(new HttpRequest(
+            'http://127.0.0.1:1/never-reached',
+            headers: ['User-Agent: Mozilla/5.0 (evasion)' => 'x'],
+        ));
+    }
+
+    public function testALineBreakInAHeaderValueIsRefusedAtTheFunnel(): void
+    {
+        // Same defect class arriving through the VALUE: a CRLF inside it starts a second header
+        // line of the attacker's choosing. Refused before anything reaches libcurl.
+        $this->expectException(HttpError::class);
+        $this->expectExceptionMessageMatches('~header injection~');
+
+        (new CurlHttpClient())->send(new HttpRequest(
+            'http://127.0.0.1:1/never-reached',
+            headers: ['X-Custom' => "benign\r\nUser-Agent: Mozilla/5.0"],
+        ));
+    }
+
     // ---------------------------------------------------------------- MIME
 
     public function testALatin1MessageIsReadAsCp1252SoTheEuroSignSurvives(): void

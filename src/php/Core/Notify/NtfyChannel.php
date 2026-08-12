@@ -89,7 +89,9 @@ final readonly class NtfyChannel implements Channel
         $response = curl_exec($handle);
         $status = (int) curl_getinfo($handle, CURLINFO_RESPONSE_CODE);
         $error = curl_error($handle);
-        curl_close($handle);
+        // No curl_close(): deprecated in PHP 8.5, a no-op since 8.0 — the handle is freed when it
+        // goes out of scope. Found in CurlHttpClient by the first wire test; carried here because
+        // a deprecated call removed from one member of a class of things must leave none behind.
 
         if ($response === false || $error !== '') {
             throw new ChannelError($this->name(), 'POST failed: ' . $error, null, [$this->topic]);

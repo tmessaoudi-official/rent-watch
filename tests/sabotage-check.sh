@@ -1178,11 +1178,27 @@ run_sabotage "the honest User-Agent constant is BYPASSED at the wiring point" \
 
 run_sabotage "a request header is allowed to override the honest User-Agent" \
   src/php/Adapters/Http/CurlHttpClient.php \
-  "s%if (strtolower(trim(\\\$name)) === 'user-agent') {%if (false) {%"
+  "s%if (strtolower(\\\$name) === 'user-agent') {%if (false) {%"
 
 run_sabotage "config regains the power to disguise a source's User-Agent" \
   src/php/Config/ConfigLoader.php \
-  "s%if (strtolower(trim(\\\$headerName)) === 'user-agent') {%if (false) {%"
+  "s%if (strtolower((string) \\\$headerName) === 'user-agent') {%if (false) {%"
+
+run_sabotage "a colon-smuggled header NAME slips past the funnel's token check" \
+  src/php/Adapters/Http/CurlHttpClient.php \
+  's%if (preg_match(self::HEADER_NAME_TOKEN, \$name) !== 1) {%if (false) {%'
+
+run_sabotage "a colon-smuggled header NAME slips past config validation" \
+  src/php/Config/ConfigLoader.php \
+  's%if (preg_match(self::HEADER_NAME_TOKEN, (string) \$headerName) !== 1) {%if (false) {%'
+
+run_sabotage "a line break in a header VALUE reaches the wire (header injection)" \
+  src/php/Adapters/Http/CurlHttpClient.php \
+  's%if (preg_match(.~\[\\r\\n\]~., (string) \$value) === 1) {%if (false) {%'
+
+run_sabotage "a line break in a config header VALUE passes validation" \
+  src/php/Config/ConfigLoader.php \
+  's%if (preg_match(.~\[\\r\\n\]~., \$headerValue) === 1) {%if (false) {%'
 
 run_sabotage "ISO-8859-1 stops being read as CP1252 (the euro sign vanishes)" \
   src/php/Adapters/Mail/EmailMessage.php \

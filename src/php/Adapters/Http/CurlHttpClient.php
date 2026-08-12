@@ -27,6 +27,18 @@ final readonly class CurlHttpClient implements HttpClient
     /** 8 MB. A listing page that large is a misconfiguration, and reading it unbounded is a DoS on ourselves. */
     private const int MAX_BODY_BYTES = 8 * 1024 * 1024;
 
+    /**
+     * RFC 7230 token — the only characters legal in a header NAME.
+     *
+     * Load-bearing for the User-Agent guard below: libcurl derives the header name from the text
+     * before the first colon in the `CURLOPT_HTTPHEADER` entry, so a NAME of `user-agent: Mozilla`
+     * would clear an equality check and still put a browser User-Agent on the wire — a review
+     * demonstrated exactly that. A colon, space or control character can never appear in a valid
+     * token, so refusing non-tokens closes the smuggling shape wholesale rather than one spelling
+     * at a time. `ConfigLoader` applies the same rule at load time.
+     */
+    private const string HEADER_NAME_TOKEN = '/^[!#$%&\'*+.^_`|~0-9A-Za-z-]+$/';
+
     public function send(HttpRequest $request): HttpResponse
     {
         if (!extension_loaded('curl')) {
@@ -40,7 +52,24 @@ final readonly class CurlHttpClient implements HttpClient
 
         $headers = [];
         foreach ($request->headers as $name => $value) {
-            if (strtolower(trim($name)) === 'user-agent') {
+            $name = (string) $name;
+
+            if (preg_match(self::HEADER_NAME_TOKEN, $name) !== 1) {
+                throw new HttpError(
+                    'header name ' . var_export($name, true) . ' is not a valid HTTP token — a '
+                        . 'colon, space or control character in a name smuggles a different header '
+                        . 'onto the wire than the one the guards below inspected',
+                );
+            }
+
+            if (preg_match('~[\r\n]~', (string) $value) === 1) {
+                throw new HttpError(
+                    'header ' . $name . ' carries a line break in its value — refusing HTTP '
+                        . 'header injection',
+                );
+            }
+
+            if (strtolower($name) === 'user-agent') {
                 // The docblock's promise, made real: in cURL, a User-Agent entry in
                 // CURLOPT_HTTPHEADER silently overrides CURLOPT_USERAGENT, so without this check
                 // any caller could disguise the poller while the honest constant sat unread.

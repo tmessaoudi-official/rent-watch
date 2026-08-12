@@ -168,6 +168,25 @@ final class ConfigTest extends TestCase
         ConfigLoader::sourcesFromArray(self::minimalSource(['headers' => ['USER-AGENT' => 'Mozilla/5.0']]));
     }
 
+    public function testAColonSmuggledHeaderNameIsRefusedInConfig(): void
+    {
+        // The round-2 bypass of the refusal above: libcurl reads the header NAME from the text
+        // before the first colon, so a JSON key of "user-agent: Mozilla…" cleared the equality
+        // guard and still disguised the request. A colon can never appear in an RFC 7230 token.
+        $this->expectException(ConfigError::class);
+        $this->expectExceptionMessageMatches('~not a valid HTTP token~');
+
+        ConfigLoader::sourcesFromArray(self::minimalSource(['headers' => ['user-agent: Mozilla/5.0' => 'x']]));
+    }
+
+    public function testALineBreakInAHeaderValueIsRefusedInConfig(): void
+    {
+        $this->expectException(ConfigError::class);
+        $this->expectExceptionMessageMatches('~header injection~');
+
+        ConfigLoader::sourcesFromArray(self::minimalSource(['headers' => ['Referer' => "https://x.test/\r\nUser-Agent: Mozilla"]]));
+    }
+
     public function testAFloatIsNotAcceptedWhereAnIntegerIsSpecified(): void
     {
         $this->expectException(ConfigError::class);

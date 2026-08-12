@@ -603,3 +603,29 @@ A changelog that overstates is worse than one that omits, because the next sessi
      path under the suite until the wire test did. Removed per global Rule 9.
   Ledger now 243 cases; all 12 new/affected cases verified individually red; suite 1272 tests /
   4584 assertions green. Full 243-case run + panel round 2 follow on the fix commit.
+- [2026-08-12] FULL SABOTAGE RUN at ed62878: **243 cases, 243 detected, 0 undetected, exit 0.**
+- [2026-08-12] ROUND-2 PANEL VERDICTS on ed62878: round-1 fixes all confirmed genuinely closed
+  (each reviewer re-ran its own round-1 probe and watched it go red), but FOUR new findings,
+  counter reset again:
+  1. (P1 resilience / P3 correctness, found independently by both) Both User-Agent guards compared
+     the header NAME for equality — and libcurl derives the name from the text before the first
+     colon in a CURLOPT_HTTPHEADER entry, so a KEY of `user-agent:` cleared both guards and put a
+     Mozilla UA on the wire (demonstrated with a loopback transcript). Closed by refusing any
+     header name that is not an RFC 7230 token, at load time AND at the funnel — a colon, space or
+     control character can never appear in a token, so every spelling of the smuggle dies at once.
+     A line break in a header VALUE (the same defect class, other side) is refused too. Four tests,
+     four sabotage cases.
+  2. (P2 completeness) The `curl_close()` removal was not carried to its only other caller,
+     `NtfyChannel` — the full-set-coverage rule violated inside a fix commit. Removed there too,
+     and the path is no longer un-driven: `NtfyChannelWireTest` sends a real notification through
+     real libcurl to the scripted responder and asserts the topic-in-path, the Title header, the
+     honest User-Agent and the body link on the wire; `failOnDeprecation` then guards the path.
+  3. (P2 completeness) `/add-source` step 1 told the operator to keep the capture's "minimum
+     headers that make it work" — which for a UA-gated endpoint includes the browser User-Agent
+     the loader now refuses. The step now says to drop it and why (committed separately, fad2452).
+  4. Two of the four new CRLF sabotage seds were no-ops on first write (over-escaped `\\\\r` —
+     matches two backslashes, the source has one); the harness's no-op guard caught both, fixed
+     and re-verified red. The scripted HTTP responder also learnt to read a POST body
+     (Content-Length-bounded) so closing early cannot make a client report a broken transfer.
+  Ledger now 247; all 8 guard cases verified individually red; suite 1277 tests / 4601 assertions
+  green. Full 247-case run + panel round 3 follow on this commit.
