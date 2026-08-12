@@ -68,8 +68,12 @@ Ask the developer to do the DevTools capture — they have a browser, you do not
 > DevTools → Network → Fetch/XHR → re-run the search. Copy the request as cURL and paste it here.
 
 From the cURL, extract: method, URL, query params or JSON body, and the **minimum** headers that make it
-work. Drop cookies and tracking headers; keep `Referer` and `Content-Type` if required. If the endpoint
-needs an authenticated session (AL'in typically does), say so explicitly rather than half-building it.
+work. Drop cookies and tracking headers; keep `Referer` and `Content-Type` if required. **Drop
+`User-Agent` always — the loader refuses it** (hard rule 5: the client pins its own honest one, and a
+DevTools capture's browser UA in config would be impersonation). If the endpoint only answers to a
+browser UA, that source is telling you it blocks plain clients: use the email-alert route, never a
+disguise. If the endpoint needs an authenticated session (AL'in typically does), say so explicitly
+rather than half-building it.
 
 ## Step 2 — Write a minimal block, then iterate with `scout dump`
 
