@@ -703,3 +703,7 @@ A changelog that overstates is worse than one that omits, because the next sessi
   committed; attacker-reachable surfaces have been clean since round 3; the last two rounds' findings
   were coverage-of-correct-guards and operator-input defense-in-depth, not live attacker-reachable
   bugs. Decision pending: accept current state as certified, or authorise further rounds.
+- [2026-08-12] CAP DECISION (developer): run ONE more confirming round (round 6) on the round-5
+  fixes, then decide. Rationale: 0cd782f's fixes had only targeted-sabotage verification, not a full
+  adversarial panel; a single bounded round gives fresh-eyes review of exactly that gap. Not a
+  commitment to full two-consecutive-clean convergence — reassess after round 6.
