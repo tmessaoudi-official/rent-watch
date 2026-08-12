@@ -1212,6 +1212,14 @@ run_sabotage "the ntfy Click url stops being sanitised (header injection from a 
   src/php/Core/Notify/NtfyChannel.php \
   's%.Click: . . self::headerSafe(\$n->url)%"Click: " . $n->url%'
 
+run_sabotage "the email Subject stops being header-safed (Bcc injection from a listing)" \
+  src/php/Core/Notify/EmailChannel.php \
+  's%\$subject = self::headerSafe(\$this->subjectPrefix . . . . \$n->title);%$subject = $this->subjectPrefix . " " . $n->title;%'
+
+run_sabotage "an IMAP argument stops refusing an embedded CR/LF" \
+  src/php/Adapters/Mail/ImapMailbox.php \
+  's%if (preg_match(.~\[\\r\\n\]~., \$value) === 1) {%if (false) {%'
+
 run_sabotage "ISO-8859-1 stops being read as CP1252 (the euro sign vanishes)" \
   src/php/Adapters/Mail/EmailMessage.php \
   "s%? 'CP1252'%? 'ISO-8859-1'%"

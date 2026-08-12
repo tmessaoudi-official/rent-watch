@@ -16,6 +16,7 @@ use RentWatch\Adapters\Http\Robots;
 use RentWatch\Adapters\HttpJsonSource;
 use RentWatch\Adapters\Mail\EmailMessage;
 use RentWatch\Adapters\Mail\FileMailbox;
+use RentWatch\Adapters\Mail\ImapMailbox;
 use RentWatch\Adapters\Mail\Mailbox;
 use RentWatch\Adapters\Mail\MailboxError;
 use RentWatch\Adapters\SourceError;
@@ -629,6 +630,22 @@ final class NetworkAdaptersTest extends TestCase
         $this->expectException(SourceError::class);
 
         (new EmailAlertSource($definition, $this->store(), new FileMailbox('/nonexistent')))->fetch();
+    }
+
+    public function testAnImapArgumentWithAnEmbeddedCrlfIsRefused(): void
+    {
+        // An IMAP quoted-string cannot contain CR or LF (RFC 3501), so one in a `.env` user,
+        // password or folder would break the command line and could inject a second command. These
+        // are operator-controlled, not attacker input — defense-in-depth — but the grammar forbids
+        // it regardless. `quote()` is private and the only reachable path (`fetchRecent`) needs a
+        // live TLS server, so this pins the property directly by reflection; the sabotage case that
+        // disables the guard turns this red.
+        $quote = new \ReflectionMethod(ImapMailbox::class, 'quote');
+
+        $this->expectException(MailboxError::class);
+        $this->expectExceptionMessageMatches('~CR or LF~');
+
+        $quote->invoke(null, "inbox\r\nA002 DELETE important");
     }
 
     // ---------------------------------------------------------------- transports

@@ -650,3 +650,27 @@ A changelog that overstates is worse than one that omits, because the next sessi
      applies to the full run too, not just the reviewer worktrees. Re-run cleanly post-commit.
   Ledger now 250; all 6 round-3 cases verified individually red; suite 1280 tests / 4630 assertions
   green. Clean full 250-case run + panel round 4 follow on this commit — with NO concurrent edits.
+- [2026-08-12] FULL SABOTAGE RUN at b8c2ee1 (isolated in a git worktree, immune to concurrent
+  edits — the fix for the void f4770be run): 250 cases, all detected. [recorded when it completed]
+- [2026-08-12] ROUND-4 PANEL VERDICTS on b8c2ee1: correctness CLEAN and resilience CLEAN (both
+  re-attacked the round-3 fixes across every CR/LF variant with loopback transcripts, and
+  resilience's class audit found the round-3 finding had no live siblings — SMTP subject/from are
+  headerSafe'd at their sole caller, the body dot-stuffed, IMAP args env-only). Completeness found
+  TWO, counter resets:
+  1. (P1) `EmailChannel::headerSafe` on the Subject (landlord-controlled title) and From is present
+     and correct, but had ZERO test and ZERO sabotage case — proven silently removable, the exact
+     structural twin of the round-3 ntfy Click finding. Closed:
+     `NotifyTest::testEmailSubjectAndFromCannotSmuggleAHeaderFromListingText` drives a CRLF title
+     through EmailChannel + FileTransport and asserts no injected header LINE (no Bcc, exactly one
+     Subject) in the .eml header block; plus a sabotage case. (The From turned out doubly-guarded —
+     check()'s `\s` already rejects a CRLF sender — so the test injects via the title, the surface
+     guarded only by headerSafe.)
+  2. (P2) `ImapMailbox::quote()` escaped `\` and `"` but not CR/LF. These are operator-controlled
+     `.env` values (user/password/folder), not attacker input, so defense-in-depth — but an IMAP
+     quoted-string cannot contain CR/LF at all (RFC 3501). Closed: quote() now throws on CR/LF;
+     pinned by a reflection unit test (quote() is private and its only live path needs a TLS server,
+     disproportionate for a P2) plus a sabotage case.
+  Ledger now 252; all 3 new cases individually red; suite 1282 tests / 4640 assertions green.
+  Round 4 is NOT clean → the two-consecutive-clean counter resets. Round 5 is the cap (5): if it is
+  clean it is only the FIRST consecutive clean, so the gate's two-clean bar cannot be met within the
+  cap — at that point the ladder requires asking the developer rather than silently proceeding.

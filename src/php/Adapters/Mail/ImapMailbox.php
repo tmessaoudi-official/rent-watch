@@ -276,6 +276,15 @@ final class ImapMailbox implements Mailbox, MutableByDesign
      */
     private static function quote(string $value): string
     {
+        if (preg_match('~[\r\n]~', $value) === 1) {
+            // A CR or LF cannot be represented in an IMAP quoted string at all (RFC 3501: a
+            // quoted-string excludes CR and LF), so one here would break the command line and
+            // could inject a second protocol command. These values are operator-controlled `.env`
+            // config, not attacker input — so this is defense-in-depth — but the quoted-string
+            // grammar forbids it regardless, and refusing loudly beats emitting a malformed command.
+            throw new MailboxError('a CR or LF in an IMAP argument cannot be quoted — refusing to send it');
+        }
+
         return '"' . str_replace(['\\', '"'], ['\\\\', '\\"'], $value) . '"';
     }
 }

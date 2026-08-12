@@ -8,6 +8,8 @@ use PHPUnit\Framework\TestCase;
 use RentWatch\Core\Notify\Channel;
 use RentWatch\Core\Notify\ChannelError;
 use RentWatch\Core\Notify\ConsoleChannel;
+use RentWatch\Core\Notify\EmailChannel;
+use RentWatch\Core\Notify\FileTransport;
 use RentWatch\Core\Notify\Formatter;
 use RentWatch\Core\Notify\Notification;
 use RentWatch\Core\Notify\NotificationKind;
@@ -402,5 +404,53 @@ final class NotifyTest extends TestCase
                 throw new ChannelError($this->n, 'the network went away');
             }
         };
+    }
+
+    public function testEmailSubjectAndFromCannotSmuggleAHeaderFromListingText(): void
+    {
+        // The structural twin of the ntfy Click finding: EmailChannel builds the Subject from the
+        // landlord-controlled title and the From from config, both through headerSafe — but nothing
+        // exercised that guard, so it was silently removable (a round-4 panel finding). The
+        // transports (Smtp/File/Sendmail) build header lines raw and rely on this funnel. A CRLF in
+        // the title is the classic Bcc-injection vector; it must not become its own header line.
+        $dir = sys_get_temp_dir() . '/rentwatch-email-inj-' . bin2hex(random_bytes(6));
+
+        // The From is separately validated by check() (its `\s` rejects a CRLF sender), so the
+        // real injection surface is the Subject, built from the landlord-controlled title and
+        // guarded ONLY by headerSafe. That is the guard under test.
+        $channel = new EmailChannel(
+            'moi@example.test',
+            'rent-watch@localhost',
+            '[rent-watch]',
+            new FileTransport($dir),
+        );
+
+        $channel->send(new Notification(
+            NotificationKind::MATCH,
+            Priority::HIGH,
+            "T4 a Chatou\r\nBcc: attacker@example.test\r\nSubject: forged",
+            ['score 82'],
+            'https://example.test/annonce/1',
+        ));
+
+        $files = glob($dir . '/*.eml') ?: [];
+        self::assertCount(1, $files);
+        $eml = (string) file_get_contents($files[0]);
+
+        // Header block ends at the first blank line; the body may legitimately carry anything.
+        $headerBlock = substr($eml, 0, strpos($eml, "\r\n\r\n") ?: strlen($eml));
+
+        // A real injection would create its own header LINE; the collapse leaves the forged text as
+        // harmless inline content of the one Subject line, so line-start is the right test.
+        foreach (explode("\r\n", $headerBlock) as $line) {
+            self::assertFalse(str_starts_with(strtolower(trim($line)), 'bcc:'), 'no injected Bcc header line: ' . $line);
+        }
+        // Exactly one Subject line — a smuggled `Subject:` continuation would make two.
+        self::assertSame(1, preg_match_all('~^Subject: ~m', str_replace("\r\n", "\n", $headerBlock)));
+
+        foreach ($files as $file) {
+            @unlink($file);
+        }
+        @rmdir($dir);
     }
 }
