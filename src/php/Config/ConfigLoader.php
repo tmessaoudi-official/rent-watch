@@ -304,6 +304,22 @@ final class ConfigLoader
         $headers = self::stringMap($r->optObject('headers'));
         $params = self::stringMap($r->optObject('params'));
 
+        foreach (array_keys($headers) as $headerName) {
+            if (strtolower(trim($headerName)) === 'user-agent') {
+                // In cURL, a User-Agent entry in CURLOPT_HTTPHEADER silently overrides
+                // CURLOPT_USERAGENT — so this one config key would disguise every request from the
+                // source, which is the browser impersonation hard rule 5 forbids outright. Refused
+                // here so the operator learns at load time; `CurlHttpClient` refuses it again at
+                // the funnel, because config is not the only way a header reaches a request.
+                throw ConfigError::at(
+                    $where . '.headers',
+                    'a User-Agent header is not configurable. CLAUDE.md hard rule 5: this tool '
+                        . 'identifies honestly, with one fixed User-Agent. If the source blocks '
+                        . 'plain clients, use the email-alert route instead',
+                );
+            }
+        }
+
         $mapReader = $r->optObject('map');
         $map = $mapReader === null ? new FieldMap(ref: ['id']) : FieldMap::fromReader($mapReader);
 

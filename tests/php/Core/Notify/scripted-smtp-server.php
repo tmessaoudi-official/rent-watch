@@ -78,6 +78,16 @@ foreach ($replies as $i => $reply) {
     @fwrite($conn, str_replace(['{LAST}', "\n"], [$last, "\r\n"], (string) $reply) . "\r\n");
 }
 
+// DRAIN before exiting: everything the client wrote after the last scripted read still lands in
+// the transcript. Without this, "no credential crossed the wire" was only proven for the FIRST
+// client line — a review demonstrated a blind post-EHLO credential write the assertions never saw,
+// because the server had stopped reading. TCP delivers buffered data then EOF after the peer
+// closes, and the client always closes (its `finally`), so this loop ends promptly; the 5-second
+// read timeout bounds a client that neither writes nor closes.
+while (($line = @fgets($conn, 8192)) !== false) {
+    $transcript[] = rtrim($line, "\r\n");
+}
+
 $flush();
 @fclose($conn);
 exit(0);

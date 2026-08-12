@@ -270,6 +270,59 @@ final class NetworkAdaptersTest extends TestCase
         }
     }
 
+    public function testTheHonestUserAgentIsWhatActuallyCrossesTheWire(): void
+    {
+        // The constant test above cannot see the WIRING: cURL sends whatever CURLOPT_USERAGENT
+        // received, and a review demonstrated a disguise at that one line — constant left honest,
+        // every test green. So this test IS the server, on loopback, and asserts on the request
+        // head it actually received from real libcurl.
+        $transcriptPath = sys_get_temp_dir() . '/rentwatch-http-transcript-' . bin2hex(random_bytes(6)) . '.txt';
+
+        $proc = proc_open(
+            [PHP_BINARY, __DIR__ . '/scripted-http-server.php', $transcriptPath],
+            [1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
+            $pipes,
+        );
+        self::assertIsResource($proc, 'the scripted HTTP server must start');
+
+        try {
+            $name = fgets($pipes[1], 256);
+            self::assertIsString($name, 'the server must report the port it chose');
+            $port = (int) substr(strrchr(trim($name), ':') ?: ':0', 1);
+            self::assertGreaterThan(0, $port);
+
+            $response = (new CurlHttpClient())
+                ->send(new HttpRequest('http://127.0.0.1:' . $port . '/items.json', timeoutSeconds: 5));
+            self::assertSame(200, $response->status);
+        } finally {
+            foreach ($pipes as $pipe) {
+                @fclose($pipe);
+            }
+            proc_close($proc);
+        }
+
+        $head = (string) @file_get_contents($transcriptPath);
+        @unlink($transcriptPath);
+
+        self::assertStringContainsString('User-Agent: ' . CurlHttpClient::USER_AGENT, $head);
+        self::assertStringNotContainsStringIgnoringCase('mozilla', $head);
+    }
+
+    public function testAUserAgentHeaderCannotOverrideTheHonestOne(): void
+    {
+        // In cURL, a User-Agent entry in CURLOPT_HTTPHEADER silently overrides CURLOPT_USERAGENT —
+        // so without the funnel guard, one request header (from config or from any future caller)
+        // would disguise the poller while the honest constant sat unread. Lowercase on purpose:
+        // the guard must be case-insensitive, because HTTP header names are.
+        $this->expectException(HttpError::class);
+        $this->expectExceptionMessageMatches('~User-Agent header cannot be overridden~');
+
+        (new CurlHttpClient())->send(new HttpRequest(
+            'http://127.0.0.1:1/never-reached',
+            headers: ['user-agent' => 'Mozilla/5.0 (disguise)'],
+        ));
+    }
+
     // ---------------------------------------------------------------- MIME
 
     public function testALatin1MessageIsReadAsCp1252SoTheEuroSignSurvives(): void
@@ -330,7 +383,7 @@ final class NetworkAdaptersTest extends TestCase
             );
         }
 
-        foreach (['<br>', '<br/>', '<br />'] as $br) {
+        foreach (['<br>', '<br/>', '<br />', '</br>'] as $br) {
             $raw = "Content-Type: text/html; charset=UTF-8\n\nChatou" . $br . 'Houilles';
 
             self::assertMatchesRegularExpression(
@@ -453,21 +506,32 @@ final class NetworkAdaptersTest extends TestCase
 
     public function testAnOutOfBandFigureIsNotReadAsARent(): void
     {
-        // The plausibility band's job, exercised end to end: an alert whose only currency-marked
-        // figures are an agency fee (150 EUR) and a sale price (245 000 EUR) has NO rent, and both
-        // must be refused — one under the 200 floor, one over the 20000 ceiling. Without the band,
-        // the sale price parses as the rent; the shared fixture dir carries no such figure, which
-        // is why the sabotage that strips the band stayed green.
+        // The plausibility band, with EACH half exercised independently. `rentIn()` evaluates only
+        // the FIRST match per pattern, so one message carrying both figures tests only whichever
+        // comes first — a review demonstrated the 200 floor deleted outright with every test still
+        // green, because the ceiling alone rejected the fixture. Hence two messages: one whose only
+        // currency-marked figure is an agency fee under the floor, one whose only figure is a sale
+        // price over the ceiling. Neither is a rent, and each must be refused by ITS half of the
+        // band. The shared fixture dir carries no such figure, which is why the original sabotage
+        // stayed green.
         $dir = sys_get_temp_dir() . '/rentwatch-mailbox-' . bin2hex(random_bytes(6));
         mkdir($dir);
 
-        file_put_contents($dir . '/alert.eml',
+        file_put_contents($dir . '/floor.eml',
+            "From: alertes@sale-portal.test\r\n"
+            . "Subject: Frais de dossier\r\n"
+            . "Content-Type: text/plain; charset=UTF-8\r\n"
+            . "\r\n"
+            . "Frais de dossier : 150 EUR pour constituer votre dossier.\r\n"
+            . "https://sale-portal.test/annonce/11111\r\n");
+
+        file_put_contents($dir . '/ceiling.eml',
             "From: alertes@sale-portal.test\r\n"
             . "Subject: Nouvelle annonce correspondant a votre recherche\r\n"
             . "Content-Type: text/plain; charset=UTF-8\r\n"
             . "\r\n"
             . "Maison a Chatou, ref. 95240.\r\n"
-            . "Prix de vente : 245 000 EUR. Frais de dossier : 150 EUR.\r\n"
+            . "Prix de vente : 245 000 EUR.\r\n"
             . "https://sale-portal.test/annonce/95240\r\n");
 
         try {
@@ -482,13 +546,20 @@ final class NetworkAdaptersTest extends TestCase
             );
 
             $listings = (new EmailAlertSource($definition, $this->store(), new FileMailbox($dir)))->fetch();
+            self::assertCount(2, $listings);
 
-            self::assertCount(1, $listings);
-            self::assertNull($listings[0]->rentCc, '150 and 245000 are both outside the plausibility band');
-            self::assertNull($listings[0]->rentHc);
-            self::assertSame('95240', $listings[0]->postcode, 'the five-digit figure is a postcode, not a rent');
+            foreach ($listings as $listing) {
+                $half = str_contains($listing->externalId, '11111') ? '150 is under the 200 floor' : '245000 is over the 20000 ceiling';
+                self::assertNull($listing->rentCc, $half);
+                self::assertNull($listing->rentHc, $half);
+
+                if (str_contains($listing->externalId, '95240')) {
+                    self::assertSame('95240', $listing->postcode, 'the five-digit figure is a postcode, not a rent');
+                }
+            }
         } finally {
-            @unlink($dir . '/alert.eml');
+            @unlink($dir . '/floor.eml');
+            @unlink($dir . '/ceiling.eml');
             @rmdir($dir);
         }
     }

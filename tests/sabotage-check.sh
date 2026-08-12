@@ -1172,6 +1172,18 @@ run_sabotage "the honest User-Agent is dropped for a browser disguise (hard rule
   src/php/Adapters/Http/CurlHttpClient.php \
   "s%USER_AGENT = 'rent-watch%USER_AGENT = 'Mozilla/5.0 rent-watch%"
 
+run_sabotage "the honest User-Agent constant is BYPASSED at the wiring point" \
+  src/php/Adapters/Http/CurlHttpClient.php \
+  "s%CURLOPT_USERAGENT => self::USER_AGENT,%CURLOPT_USERAGENT => 'Mozilla/5.0 (Windows NT 10.0)',%"
+
+run_sabotage "a request header is allowed to override the honest User-Agent" \
+  src/php/Adapters/Http/CurlHttpClient.php \
+  "s%if (strtolower(trim(\\\$name)) === 'user-agent') {%if (false) {%"
+
+run_sabotage "config regains the power to disguise a source's User-Agent" \
+  src/php/Config/ConfigLoader.php \
+  "s%if (strtolower(trim(\\\$headerName)) === 'user-agent') {%if (false) {%"
+
 run_sabotage "ISO-8859-1 stops being read as CP1252 (the euro sign vanishes)" \
   src/php/Adapters/Mail/EmailMessage.php \
   "s%? 'CP1252'%? 'ISO-8859-1'%"
@@ -1187,6 +1199,10 @@ run_sabotage "the text/plain part stops being preferred over HTML" \
 run_sabotage "block tags stop becoming newlines when HTML is stripped" \
   src/php/Adapters/Mail/EmailMessage.php \
   's%(p|div|br|li|tr|h%(XX|div|br|li|tr|h%'
+
+run_sabotage "the closing </br> form drops out of the block-tag alternation" \
+  src/php/Adapters/Mail/EmailMessage.php \
+  's%|br|li%|li%'
 
 run_sabotage "tracking parameters stop being stripped from an alert link id" \
   src/php/Adapters/EmailAlertSource.php \
@@ -1207,6 +1223,14 @@ run_sabotage "a mailbox failure becomes an empty list instead of a source failur
 run_sabotage "the rent plausibility band is removed (a postcode parses as a rent)" \
   src/php/Adapters/EmailAlertSource.php \
   's%\$value >= 200 \&\& \$value <= 20000%$value !== null%'
+
+run_sabotage "only the band's 200 FLOOR is removed (an agency fee parses as a rent)" \
+  src/php/Adapters/EmailAlertSource.php \
+  's%\$value >= 200 \&\& %%'
+
+run_sabotage "only the band's 20000 CEILING is removed (a sale price parses as a rent)" \
+  src/php/Adapters/EmailAlertSource.php \
+  's% \&\& \$value <= 20000%%'
 
 run_sabotage "SMTP permits plaintext credentials to a remote host" \
   src/php/Core/Notify/SmtpTransport.php \

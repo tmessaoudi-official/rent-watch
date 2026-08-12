@@ -40,6 +40,19 @@ final readonly class CurlHttpClient implements HttpClient
 
         $headers = [];
         foreach ($request->headers as $name => $value) {
+            if (strtolower(trim($name)) === 'user-agent') {
+                // The docblock's promise, made real: in cURL, a User-Agent entry in
+                // CURLOPT_HTTPHEADER silently overrides CURLOPT_USERAGENT, so without this check
+                // any caller could disguise the poller while the honest constant sat unread.
+                // `ConfigLoader` refuses the same key at load time; this is the funnel, and it
+                // refuses too, because config is not the only path a header can arrive by.
+                throw new HttpError(
+                    'a User-Agent header cannot be overridden — hard rule 5: one honest '
+                        . 'User-Agent, no browser impersonation. Remove the header; if the source '
+                        . 'blocks plain clients, use the email-alert route',
+                );
+            }
+
             $headers[] = $name . ': ' . $value;
         }
 
@@ -77,7 +90,9 @@ final readonly class CurlHttpClient implements HttpClient
         $body = curl_exec($handle);
         $status = (int) curl_getinfo($handle, CURLINFO_RESPONSE_CODE);
         $error = curl_error($handle);
-        curl_close($handle);
+        // No curl_close(): deprecated in PHP 8.5, a no-op since 8.0 — the handle is an object,
+        // freed when it goes out of scope. The wire test is what first executed this path and
+        // surfaced the deprecation; nothing before it drove real libcurl.
 
         if ($body === false || $error !== '') {
             // A TRANSPORT failure. Distinct from a non-2xx answer on purpose: a 403 is a source

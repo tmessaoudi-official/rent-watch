@@ -156,6 +156,18 @@ final class ConfigTest extends TestCase
         ConfigLoader::sourcesFromArray(self::minimalSource(['mixed_tenure' => 'true']));
     }
 
+    public function testAUserAgentHeaderInSourceConfigIsRefused(): void
+    {
+        // In cURL, a User-Agent entry in CURLOPT_HTTPHEADER silently overrides CURLOPT_USERAGENT,
+        // so this one config key would disguise every request from the source — the browser
+        // impersonation hard rule 5 forbids. Refused at load time, case-insensitively, because
+        // HTTP header names are.
+        $this->expectException(ConfigError::class);
+        $this->expectExceptionMessageMatches('~User-Agent header is not configurable~');
+
+        ConfigLoader::sourcesFromArray(self::minimalSource(['headers' => ['USER-AGENT' => 'Mozilla/5.0']]));
+    }
+
     public function testAFloatIsNotAcceptedWhereAnIntegerIsSpecified(): void
     {
         $this->expectException(ConfigError::class);

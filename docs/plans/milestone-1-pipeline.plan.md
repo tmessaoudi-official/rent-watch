@@ -554,7 +554,9 @@ A changelog that overstates is worse than one that omits, because the next sessi
      forms to `ChannelError`. The transcript additionally proves the credential really crossed the
      wire, so the mask assertion cannot be vacuous.
   Plus `testADeliveryDotStuffsTheBodyOnTheWire` (nothing exercised `send()`'s happy path or RFC
-  5321 dot-stuffing as transmitted) and a matching new sabotage case — 238 cases now.
+  5321 dot-stuffing as transmitted) and a matching new sabotage case — 237 cases at d9f4263 (an
+  earlier draft of this entry said 238; the extra grep hit was the function definition, a round-1
+  panel finding).
 - [2026-08-12] FOUND BY THE MINI-RUN, the fifth gap: "block tags stop becoming newlines" STAYED
   GREEN after its sed was fixed — the sed degrades `</p>` but the test only exercised `</li>`. A
   correct rule tested on a subset of its surfaces, the recurring P0 shape. The test now iterates
@@ -565,3 +567,39 @@ A changelog that overstates is worse than one that omits, because the next sessi
   `tests/sabotage-check.sh` into scratch must pin `repo=` — the original computes it from
   `BASH_SOURCE`, so the copy resolves to the scratch dir and every case FAILs with "could not
   build the scratch copy".
+- [2026-08-12] FULL SABOTAGE RUN at d9f4263: **237 cases, 237 detected, 0 undetected, exit 0** —
+  the ledger's first fully-clean run. The previous run's six undetected are all red.
+- [2026-08-12] ROUND-1 PANEL VERDICTS on d9f4263 (MAXIMAL, three lenses, pinned worktrees): SEVEN
+  findings, counter reset. What each was and what closed it:
+  1. (P1, resilience) The User-Agent test pinned the CONSTANT; a disguise at the wiring point
+     (`CURLOPT_USERAGENT => 'Mozilla/5.0…'`, constant left honest) left all 1269 tests green.
+     Closed by `testTheHonestUserAgentIsWhatActuallyCrossesTheWire` — a scripted one-request HTTP
+     responder (`tests/php/Adapters/scripted-http-server.php`) receives a REAL libcurl request on
+     loopback and the test asserts on the request head it recorded. Feasible here because
+     `no_proxy` covers 127.0.0.1 and lowercase `http_proxy` is unset. Plus a wiring-bypass
+     sabotage case.
+  2. (P1, resilience) `"headers": {"User-Agent": …}` in config silently overrides
+     `CURLOPT_USERAGENT` in cURL — a hard-rule-5 bypass needing no code change. Closed at BOTH
+     ends: `ConfigLoader` refuses the key at load time (case-insensitive) and `CurlHttpClient`
+     refuses it again at the funnel, because config is not the only path a header arrives by.
+     One test and one sabotage case per guard.
+  3. (P1, correctness) The band test's two figures sat in ONE message and `rentIn()` takes only
+     the first match — so the 200 floor was exercised by NOTHING; deleting it left the full suite
+     green. Closed by splitting into two messages (fee-only → floor; sale-price-only → ceiling)
+     and TWO new sabotage cases, floor-only and ceiling-only removal.
+  4. (P2, resilience) The scripted SMTP server read exactly one line per reply, so "no credential
+     crossed the wire" was proven only for the FIRST client line — a blind post-EHLO credential
+     write escaped the transcript. Closed: the server now DRAINS all remaining client input before
+     writing the transcript; the reviewer's exact probe re-run afterwards goes red on the leaked
+     base64 line.
+  5. (P2, both lenses independently) The plan entry said "238 cases"; the ledger had 237 — the
+     238th grep hit was the `run_sabotage()` function definition. Corrected in place.
+  6. (P3, correctness) `</br>` is in the implementation's block-tag alternation but was not in the
+     test's tag class. Closed: added to the br loop, plus a sabotage case removing `br` from the
+     alternation (which only the `</br>` case can catch — the second alternation still handles
+     `<br>`/`<br/>`).
+  7. (found by the new wire test, not the panel) `curl_close()` is deprecated in PHP 8.5 and a
+     no-op since 8.0 — latent in `CurlHttpClient` because NOTHING had ever executed the real curl
+     path under the suite until the wire test did. Removed per global Rule 9.
+  Ledger now 243 cases; all 12 new/affected cases verified individually red; suite 1272 tests /
+  4584 assertions green. Full 243-case run + panel round 2 follow on the fix commit.
