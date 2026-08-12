@@ -27,12 +27,23 @@ corpus at `tests/fixtures/tenure/corpus.json`, the seen-set / price-history / ru
 PHPUnit suite. `scout run --once` is demonstrable end to end today against a frozen payload.
 
 `scout doctor`, `scout dump`, `scout run --once/--seed` and `scout test-notify` all work end to end
-today. There is still no CI, no `--watch` loop (it refuses rather than running unpaced — Q37), no
-IMAP adapter and no HTTP adapter. **The first NETWORK adapter is blocked on an input rather than a
-decision**: no endpoint here has been verified, and hard rule 1 forbids writing one from memory. `src/phorj/` is not written
-yet — it waits on the three phorj builds in `docs/PHORJ-REQUIREMENTS.md`.
+today. The network adapters exist too — `HttpJsonSource` + `Robots`, `EmailAlertSource` +
+`ImapMailbox`/`FileMailbox`, `SmtpTransport`/`FileTransport` — all tested offline against fakes,
+with `.env` swapping the real thing in. **What is missing is not code but two INPUTS**: a DevTools
+cURL capture to replace a `REMPLACER` URL in `config/sources.json` (hard rule 1 forbids writing one
+from memory), and the `plafonds` figures for classifier tier 4. There is still no CI, no `--watch`
+loop (it refuses rather than running unpaced — Q37), and no `html`-type adapter (needs a CSS-selector
+parser). `src/phorj/` is not written yet — it waits on the three phorj builds in
+`docs/PHORJ-REQUIREMENTS.md`.
 
-Anything below describing `enrich`, the IMAP path or a real landlord endpoint is the **target**, not
+**Known open items from the last sabotage run (230 detected, 6 undetected)** — the first work of the
+next session, recorded in `docs/plans/milestone-1-pipeline.plan.md`: two sabotage sed expressions
+were fixed but NOT re-verified, and four genuine test gaps remain (no assertion on the honest
+User-Agent; no test at all for SMTP continuing without STARTTLS — the cleartext-credential path; the
+base64-masking test proves `Redact`, not `SmtpTransport::secrets()` wiring; the rent plausibility
+band is unexercised by any fixture).
+
+Anything below describing `enrich` or a real landlord endpoint is the **target**, not
 the present. Do not report findings against files that do not exist yet, and do not name `pytest` as
 though it were wired — the PHP suite is the only test runner here.
 
