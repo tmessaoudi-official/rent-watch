@@ -32,9 +32,9 @@ VERSION="${PHPUNIT_VERSION:-13}"
 URL="https://phar.phpunit.de/phpunit-${VERSION}.phar"
 DEST="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/phpunit.phar"
 
-# Pinned for phpunit-13.phar as fetched 2026-08-06 (PHPUnit 13.2.6). Bump deliberately, in a commit
+# Pinned for phpunit-13.phar as fetched 2026-08-18 (PHPUnit 13.3.1). Bump deliberately, in a commit
 # that says which release it moved to — `phpunit-13.phar` is a MOVING tag and will change under us.
-EXPECTED_SHA256="292ccbd5b1890a42ecc2ab3567a4279f4088332c4e82e2fd56d81c6490947e29"
+EXPECTED_SHA256="7385843527093db1fb2deeb439ad84c35b3249e73eb4632d1eb83be5b69acd58"
 EXPECTED_KEY="D8406D0D82947747293778314AA394086372C20A"
 
 tmp="$(mktemp -d)"
