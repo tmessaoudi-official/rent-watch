@@ -34,7 +34,7 @@ user-invocable: true
 
   ADAPTATIONS: the lean-mode interlock is removed (no lean mode here). `--apply` no longer means
   "without prompting" — see § "What is never auto-fixed". Questions use `AskUserQuestion`
-  (`.claude/skills/ask-human/SKILL.md`, re-inverted 2026-08-18). Reports go to
+  (`.claude/skills/rw-ask-human/SKILL.md`, re-inverted 2026-08-18). Reports go to
   `var/claude/rw-repair/` (gitignored), never `~/.claude/projects/…`.
 ═══════════════════════════════════════════════════════════════════════════════════ -->
 
@@ -84,7 +84,7 @@ Cross-check both directions and report each mismatch as **P0**:
 - a skill in the "As built" list with **no directory** → a session will try to invoke nothing.
 
 Do the same for the agents named in `§ "Certification ladder"` of `CLAUDE.md` and the reviewer names
-in `.claude/skills/converge/SKILL.md` — a `/converge` run that spawns an agent by a name with no
+in the reviewer agent charters (`.claude/agents/`) — a `/converge` run that spawns an agent by a name with no
 definition fails at the gate that is supposed to catch failures.
 
 ## Section 2 — POINTERS THAT GO NOWHERE

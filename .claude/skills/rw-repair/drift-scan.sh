@@ -69,7 +69,7 @@ PY
 
 # ── S1b: reviewer agents named vs defined ────────────────────────────────────────────────────────
 say "── S1b reviewer agents"
-for a in $(grep -rhoE '`[a-z-]+-reviewer`' CLAUDE.md .claude/skills/converge/SKILL.md 2>/dev/null \
+for a in $(grep -rhoE '`[a-z-]+-reviewer`' CLAUDE.md 2>/dev/null \
             | tr -d '`' | sort -u); do
   [[ -f ".claude/agents/$a.md" ]] || printf 'P0  agent %s is named in CLAUDE.md/converge but .claude/agents/%s.md does not exist — /converge would spawn nothing at the gate meant to catch failures\n' "$a" "$a" >>"$FINDINGS"
 done

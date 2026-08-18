@@ -1,5 +1,5 @@
 ---
-name: ask-human
+name: rw-ask-human
 description: >
   Question protocol — AskUserQuestion with this repo's extra rules. Context, a minimal
   concrete example, clear options, the recommended option first with its reason, a visible
@@ -30,7 +30,7 @@ user-invocable: true
 > If ARGUMENTS contains `--help`: output the text below verbatim, then STOP — do not execute any other steps.
 >
 > ```
-> /ask-human — Question protocol: AskUserQuestion with context + a minimal example,
+> /rw-ask-human — Question protocol: AskUserQuestion with context + a minimal example,
 >              recommended option first with its reason, a visible "none of these /
 >              challenge the premise" escape, then stop and wait.
 >

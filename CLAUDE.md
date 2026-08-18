@@ -107,7 +107,8 @@ in prose drifts, so none is written here.
 
 Questions to the developer use the **`AskUserQuestion` tool**, per the global framework: options with
 the recommended one FIRST (labelled, with its reason) and a visible *"none of these / challenge the
-premise"* escape. Protocol details: `.claude/skills/ask-human/SKILL.md`.
+premise"* escape. Protocol details: `.claude/skills/rw-ask-human/SKILL.md` (renamed from
+`ask-human` 2026-08-18 — a repo skill may not share a global skill's name).
 
 > The container-era plain-text protocol and the `❓`/`⏹` end-of-reply markers are **RETIRED**
 > (2026-08-18). They existed because `AskUserQuestion` timed out in the dead cloud container; on this
@@ -251,7 +252,8 @@ read-only, adversarial reviewer subagents** in `.claude/agents/`. Three lenses, 
 | completeness + blast-radius | `completeness-reviewer` |
 
 Each reviewer **reads the actual diff, code and tests itself** — never certify from the author's
-narrative — and is chartered to REFUTE, not approve. `/converge` runs the panel mechanically.
+narrative — and is chartered to REFUTE, not approve. The global `/converge` runs the panel
+mechanically — invoke it with `--auto` (no-interrupts directive) after loading `/rw-lenses`.
 
 **Tier: MAXIMAL by default** — all three lenses, **two consecutive fully-clean rounds**, any finding
 resets the counter, cap 5 rounds → then ask via `AskUserQuestion` (never silently proceed). Rationale: a
@@ -576,9 +578,16 @@ tests/test-ci-workflow.sh          Proves ci.yml still wires every step this fil
 .claude/hooks/tests/test-precompact-handoff.sh  42-assertion suite for that hook — run it directly
 ```
 
-Beyond the ported set: `/add-source` (onboard a landlord or portal, config-only) and `/ask-human`
-(the question protocol — `AskUserQuestion` with this repo's extra rules; it **shadows** the global
-skill of the same name — project scope wins).
+The repo carries exactly FOUR skills, all repo-specific by name and content (global-is-reference
+ruling, 2026-08-18 — a repo may not duplicate anything that exists in `~/.claude/`): `/add-source`
+(onboard a landlord or portal, config-only), `/rw-ask-human` (the question protocol with this
+repo's extra rules), `/rw-lenses` (the mandatory review dimensions + sleuth lens K), and
+`/rw-repair` (the drift gate). Every other skill — `/sweep`, `/sleuth`, `/inspect`, `/gaps`,
+`/forge`, `/cross-check`, `/converge`, `/pre-commit`, `/aggregate-findings`, `/handoff`,
+`/retrospective`, `/expanding-context` — comes from the developer's global install. **Before
+running ANY of those global review skills here, load `/rw-lenses` first**: it carries the
+rent-watch dimensions, lens K and the repo conventions (reports under `var/claude/`,
+non-blocking closes, project scope only) that the deleted repo-local copies used to enforce.
 
 `/rw-repair` (renamed from the bundle's `/repair` — global-is-reference ruling, 2026-08-18) detects drift between what this config *claims* and what exists. Its mechanical half is
 `bash .claude/skills/rw-repair/drift-scan.sh` — exit 1 on any P0/P1, so it works as a gate. Run it after

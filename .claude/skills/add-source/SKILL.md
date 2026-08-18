@@ -13,7 +13,7 @@ user-invocable: true
   requirement, and §14 makes "verify every endpoint live" a hard rule. Both are easy to
   violate one convenient shortcut at a time, so the workflow is written down.
 
-  Questions here follow `.claude/skills/ask-human/SKILL.md`: `AskUserQuestion`, options with
+  Questions here follow `.claude/skills/rw-ask-human/SKILL.md`: `AskUserQuestion`, options with
   the recommended one first and a visible challenge escape (re-inverted 2026-08-18).
 ═══════════════════════════════════════════════════════════════════════════════════ -->
 
