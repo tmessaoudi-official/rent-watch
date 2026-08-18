@@ -335,11 +335,14 @@ the entry cannot creep back in a later port from a sibling repo.
 
 Every plan or spec produced here is persisted at **`docs/plans/<topic>.plan.md`**, each carrying its own
 `## Decisions Log` (`- [YYYY-MM-DD HH:MM] AGREED: <one-sentence decision>`), appended in the same change
-as the ruling. The container is reclaimed and only committed state survives, so an out-of-repo plan file
-is never the record of truth. There is no plan-location sentinel to ask about.
+as the ruling. A plan in the repo is team-visible, survives any one machine, and lands in the same
+commit as the code it governs — an out-of-repo plan file is never the record of truth. There is no
+plan-location sentinel to ask about.
 
-Reports and handoffs go to `var/claude/**` (gitignored). **Never** `~/.claude/projects/…` — that is
-wiped when the container is reclaimed.
+Reports and review outputs go to `var/claude/**` (gitignored scratch). Session handoffs are the
+GLOBAL PreCompact hook's job — `~/.claude/hooks/precompact-handoff.sh` writes them into the
+developer's memory pipeline (`~/.claude/projects/<slug>/memory/sessions/`), which SessionStart
+reads back. No repo copy of that hook exists: global-is-reference ruling, 2026-08-18.
 
 ---
 
@@ -459,7 +462,8 @@ tests/test-tenure-guard.sh  Proves the §1 tripwire fires, and stays quiet on or
 tests/test-fetch-phpunit.sh Proves the runner fetch refuses a bad signature
 tools/fetch-phpunit.sh      Fetches the runner; pinned SHA-256, refuses to install on a mismatch
 tools/phpunit.phar          Test runner (gitignored — see README § Getting started)
-var/claude/                 Reports, handoffs — gitignored, container-lifetime
+var/claude/                 Reports, review outputs — gitignored scratch (handoffs are the
+                            global PreCompact hook's job, not the repo's)
 .claude/                    Project skills, reviewer agents, hooks, settings
 .github/workflows/ci.yml    CI — suite+guards every push/PR, sabotage ledger nightly+dispatch
 ```
@@ -571,11 +575,10 @@ tests/sabotage-check.sh            Breaks the classifier many ways; the suite mu
 tests/test-fetch-phpunit.sh        Proves the runner fetch refuses a bad signature
 tests/test-ci-workflow.sh          Proves ci.yml still wires every step this file claims CI runs
 .github/workflows/ci.yml           CI: suite+guards on every push/PR; sabotage ledger nightly+dispatch
-.claude/hooks/precompact-handoff.sh  PreCompact -> var/claude/handoff/latest.md; refuses to overwrite
-                                     a hand-written one marked `<!-- manual -->`. Vendored from /stack
-                                     2026-08-18 (the four siblings had NO working handoff after the
-                                     bootstrap removal). Registration lives in .claude/settings.json
-.claude/hooks/tests/test-precompact-handoff.sh  42-assertion suite for that hook — run it directly
+(PreCompact handoffs: the GLOBAL ~/.claude/hooks/precompact-handoff.sh handles them — writes to
+                                     ~/.claude/projects/<slug>/memory/sessions/. The repo briefly
+                                     vendored its own copy on 2026-08-18; removed the same day
+                                     under the global-is-reference ruling)
 ```
 
 The repo carries exactly FOUR skills, all repo-specific by name and content (global-is-reference
