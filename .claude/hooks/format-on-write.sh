@@ -11,7 +11,7 @@ set -uo pipefail
 # that runs unattended logs state-changing actions and errors to var/claude/logs/ IN THE REPO. Sourced
 # rather than reimplemented so there is one log format and one destination. Never fatal — a logging
 # failure must not take down the hook that is logging, hence the `|| true` and the no-op fallback.
-_HELPERS="${CLAUDE_PROJECT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}/.claude/hooks/log-helpers.sh"
+_HELPERS="$HOME/.claude/hooks/log-helpers.sh"
 # shellcheck disable=SC1090
 [[ -f "$_HELPERS" ]] && source "$_HELPERS" 2>/dev/null || true
 declare -F log_obs >/dev/null 2>&1 || log_obs() { :; }

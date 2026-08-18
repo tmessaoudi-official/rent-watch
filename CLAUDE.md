@@ -557,9 +557,9 @@ CLAUDE.md                          This file — project scope, wins on any conf
 tests/test-tenure-guard.sh         Sabotage test FOR that hook — must-fire and must-stay-silent halves
 .claude/hooks/lint-on-write.sh     Lints the file just written (ruff / yamllint / shellcheck / json)
 .claude/hooks/format-on-write.sh   Reports formatting drift; never rewrites behind Claude's back
-.claude/hooks/log-helpers.sh       log_obs() — SOURCED by the three hooks above, not itself a hook
-                                     (so it is unregistered and mode 644 by design). Vendored here
-                                     2026-08-18 when scripts/claude-bootstrap/ was removed
+(log_obs(): the three hooks above source the GLOBAL ~/.claude/hooks/log-helpers.sh when it
+                                     exists and degrade to a no-op stub otherwise — CI, fresh machines.
+                                     No repo copy: global-is-reference ruling, 2026-08-18)
 .claude/agents/tenure-correctness-reviewer.md    correctness + regression lens
 .claude/agents/source-resilience-reviewer.md    resilience + legal posture + secrets lens
 .claude/agents/completeness-reviewer.md         completeness + blast-radius lens

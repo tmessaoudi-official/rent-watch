@@ -158,16 +158,8 @@ import json
 d = json.load(open('.claude/settings.json'))
 print('\n'.join(h['command'].split('/')[-1]
       for g in d['hooks'].values() for e in g for h in e['hooks']))" 2>/dev/null)"
-# log-helpers.sh is a SOURCED LIBRARY, not a hook: it is never registered in settings.json, is
-# never executed directly (so mode 644 is correct, not a fresh-clone defect), and it DEFINES
-# log_obs() rather than calling it. Vendored into .claude/hooks/ on 2026-08-18 when the
-# container-era scripts/claude-bootstrap/ was removed. Exempt it from all three hook checks
-# below, or every run reports three findings that are all false.
-HOOK_LIBS='log-helpers.sh'
-
 for f in .claude/hooks/*.sh; do
   b="$(basename "$f")"
-  grep -qx "$b" <<<"$HOOK_LIBS" && continue
   grep -qx "$b" <<<"$REG" \
     || printf 'P2  %s is on disk but not registered in .claude/settings.json — dead code\n' "$b" >>"$FINDINGS"
   grep -q 'log_obs' "$f" \
@@ -179,7 +171,6 @@ while read -r b; do
     || printf "P1  settings.json registers '%s' but no such script exists — the hook silently never runs\n" "$b" >>"$FINDINGS"
 done <<<"$REG"
 while read -r mode path; do
-  grep -qx "$(basename "$path")" <<<"$HOOK_LIBS" && continue
   [[ "$mode" == "100755" ]] \
     || printf 'P1  %s is mode %s in git — it will not execute after a fresh clone\n' "$path" "$mode" >>"$FINDINGS"
 done < <(git ls-files -s .claude/hooks/ 2>/dev/null | awk '$4 ~ /\.sh$/ {print $1, $4}')
