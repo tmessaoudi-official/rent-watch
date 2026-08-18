@@ -3,7 +3,6 @@ name: inspect
 spotlight: true
 description: Use when performing a full project health inspection across security, dead code, deprecations, error handling, documentation, tests, configuration, code quality, performance, and tech debt. Use when you need a structured report with P0–P3 severity rankings. Add --vision for improvement proposals.
 user-invocable: true
-disallowed-tools: AskUserQuestion
 ---
 
 <!-- ═══════════════════════════════════════════════════════════════════════════════════
@@ -18,26 +17,28 @@ disallowed-tools: AskUserQuestion
   source breakage, cross-portal dedup correctness, the legal/ToS posture on scraping, and secrets
   hygiene for the alert mailbox. These deltas OVERRIDE the body below wherever they conflict:
 
-  1. QUESTIONS ARE PLAIN TEXT. `AskUserQuestion` TIMES OUT in this cloud container, so a gate that
-     "asks" cannot fire. Every "invoke ask-human" below means: print the question, a minimal
-     concrete example, numbered options, and the recommended option FIRST with its reason, as
-     ordinary prose — then STOP and wait. Protocol: `.claude/skills/ask-human/SKILL.md`.
-  2. NO `advisor()` HERE — the tool does not exist in this environment. Independent certification =
+  1. QUESTIONS USE `AskUserQuestion` (re-inverted 2026-08-18 — the cloud container in which it
+     timed out is dead; on this machine it works and the global Stop hook requires it). Every
+     "invoke ask-human" below means: call `AskUserQuestion` — options with the recommended one
+     FIRST and its reason, and a visible "none of these / challenge the premise" escape.
+     Protocol: `.claude/skills/ask-human/SKILL.md`.
+  2. `advisor()` IS AVAILABLE on this machine (verified 2026-08-18) and is the FIRST rung of
+     certification. The panel of record remains the
      fresh-context read-only reviewer subagents, run as the three rent-watch lenses
      (`tenure-correctness-reviewer`, `source-resilience-reviewer`, `completeness-reviewer` — see
      `/converge`). All three are REAL agent definitions in `.claude/agents/` — spawn them by name
      via the Agent tool rather than re-describing their charter inline, so each lens's attack surface
      stays in one place. Self-grading is the last resort and MUST be disclosed as self-graded.
   3. REPORTS GO TO `var/claude/…` in the repo — gitignored via `/var`, survives
-     compaction inside the session, never committed. NOT `~/.claude/projects/…`: that is wiped when
-     the container is reclaimed, so a report written there is lost. Never `git add` a report regardless
+     compaction inside the session, never committed. NOT `~/.claude/projects/…`: in-repo reports stay next to the code they describe. Never `git add` a report regardless
      — being ignored is what keeps them out of history, not what makes staging them harmless.
-  4. `--scope=global|both` IS REMOVED wherever it appears: `~/.claude/` in this container is
-     GENERATED from repo files by `scripts/claude-bootstrap/install.sh`, so auditing it audits a copy.
+  4. `--scope=global|both` IS AVAILABLE AGAIN: `~/.claude/` is the developer's real, persistent
+     install (the container-era generated copy died with `scripts/claude-bootstrap/`, removed
+     2026-08-18), so auditing it audits the real thing.
   5. ≤5 concurrent subagents (10 caused ~50% rate-limit failures upstream). Every pipeline agent
      writes its raw output to `var/claude/<stage>/raw/` BEFORE returning — autocompact fires at 80%
      here and in-conversation results do not survive it.
-  6. PROJECT RULES WIN on any conflict: `/home/user/rent-watch/CLAUDE.md`. It EXISTS and is
+  6. PROJECT RULES WIN on any conflict: `this repo's `CLAUDE.md``. It EXISTS and is
      authoritative — READ IT. It carries the social-housing exclusion (the one non-negotiable rule),
      the domain glossary, the certification ladder, the git-autonomy override, the adapter-contract
      rules, and the in-repo plan home (`docs/plans/<topic>.plan.md`, each plan carrying its own
@@ -48,7 +49,7 @@ disallowed-tools: AskUserQuestion
      implementation: `spec/PROJECT_BRIEF.md` (the source of truth — mandatory reading before any
      application code), `prototype/scout.py` + `prototype/sources.yaml` (a pre-existing single-file
      prototype, reference material only), `CLAUDE.md`, `README.md`, `docs/OPEN-QUESTIONS.md`,
-     `.claude/` and `scripts/claude-bootstrap/`.
+     `.claude/`.
      **PRESENT since 2026-08-06: `src/php/Core/` (models + the tenure classifier + `SourceHealth`/
      `SourceStatus`), `src/php/Store/` (the SQLite seen-set, price history and run log, added
      2026-08-07), `tests/php/`, `tests/fixtures/tenure/corpus.json`, `composer.json`, and a
@@ -106,7 +107,7 @@ disallowed-tools: AskUserQuestion
 
 Explore the project and surface issues, tech debt, and improvement opportunities. **Never auto-applies anything — this command only reads and reports.**
 
-Use `--quick` (security + deprecations + error handling only), `--focus=<A|B|C|D|E|F|G|H|I|J>` (single lens), `--target=<path>` (analyze a specific directory), `--output=<file>` (explicit report path), `--vision` (after health agents complete, also spawn 10 vision proposal agents VA–VJ and append proposals to the same report). **`--scope=global|both` is REMOVED here** (adaptation): `~/.claude/` in this container is generated from repo files by `scripts/claude-bootstrap/install.sh`, so auditing it audits a copy.
+Use `--quick` (security + deprecations + error handling only), `--focus=<A|B|C|D|E|F|G|H|I|J>` (single lens), `--target=<path>` (analyze a specific directory), `--output=<file>` (explicit report path), `--vision` (after health agents complete, also spawn 10 vision proposal agents VA–VJ and append proposals to the same report). **`--scope=global|both` is available again** (re-enabled 2026-08-18): `~/.claude/` is the developer's real persistent install, so auditing it audits the real thing.
 
 ---
 
@@ -115,8 +116,8 @@ Use `--quick` (security + deprecations + error handling only), `--focus=<A|B|C|D
 ```bash
 # --target picks the directory to inspect; there is no --scope here (see adaptation above).
 TARGET="${target_arg:-${CLAUDE_PROJECT_DIR:-$PWD}}"
-# Reports live in the REPO under var/ (gitignored, survives compaction) — never in ~/.claude,
-# which is wiped when the container is reclaimed. Never commit them.
+# Reports live in the REPO under var/ (gitignored, survives compaction) — in-repo reports
+# stay next to the code they describe. Never commit them.
 REPO_ROOT="${CLAUDE_PROJECT_DIR:-$PWD}"
 INSPECT_DIR="$REPO_ROOT/var/claude/inspections"
 mkdir -p "$INSPECT_DIR"
@@ -154,7 +155,7 @@ for M in pyproject.toml requirements.txt setup.cfg package.json; do find "$TARGE
 
 Summarize the tech stack in one sentence and **name what is actually present**: a specification (`spec/`), a single-file prototype (`prototype/`), the PHP pure core (`src/php/Core/`) and the SQLite store (`src/php/Store/`) with their PHPUnit suite, and — once they exist — `config/`, the adapters and the CLI. Pass this to each agent as `PROJECT_TYPE`. Where a manifest exists, read it for the real script names instead of assuming them; where none exists, say so rather than naming `pytest` or `ruff` from memory.
 
-**Partial-greenfield degradation — was the common case; the tree is now mostly built.** As of 2026-08-12 rent-watch HAS `src/php/Core/` (models + the tenure classifier + source health + dedup), `src/php/Store/` (the SQLite seen-set, price history and run log), `config/` (committed criteria + sources), the adapters (`src/php/Adapters/` — HTTP/IMAP/SMTP, tested offline against fakes), the `scout` CLI (`src/php/Cli/`), `tests/php/`, `composer.json`, a PHPUnit runner and CI (`.github/workflows/ci.yml`); what it still lacks is a live source URL (an input), the `--watch` loop and the `html`-type adapter. Confirm with `git ls-files src/ config/ tests/` before asserting anything is missing — this paragraph claimed the opposite for a while. What DOES exist and is fair game: `spec/PROJECT_BRIEF.md` (the specification — a gap between spec and reality is a legitimate finding, and right now it is most of them), `prototype/scout.py` and `prototype/sources.yaml` (real, runnable code with real defects — notably no tenure classifier at all, a substring commune match, and `REMPLACER` placeholder endpoints), `CLAUDE.md`, `.claude/**` and `scripts/claude-bootstrap/**` (shell and markdown, reviewable as such). So a legitimate `/inspect` run reports on those and states plainly what does not exist — it must NOT report an empty tree, and it must NOT invent findings about `src/core/tenure.py`, a path that has never existed here — the classifier is `src/php/Core/TenureClassifier.php` and it is real, so findings about IT are fair game.
+**Partial-greenfield degradation — was the common case; the tree is now mostly built.** As of 2026-08-12 rent-watch HAS `src/php/Core/` (models + the tenure classifier + source health + dedup), `src/php/Store/` (the SQLite seen-set, price history and run log), `config/` (committed criteria + sources), the adapters (`src/php/Adapters/` — HTTP/IMAP/SMTP, tested offline against fakes), the `scout` CLI (`src/php/Cli/`), `tests/php/`, `composer.json`, a PHPUnit runner and CI (`.github/workflows/ci.yml`); what it still lacks is a live source URL (an input), the `--watch` loop and the `html`-type adapter. Confirm with `git ls-files src/ config/ tests/` before asserting anything is missing — this paragraph claimed the opposite for a while. What DOES exist and is fair game: `spec/PROJECT_BRIEF.md` (the specification — a gap between spec and reality is a legitimate finding, and right now it is most of them), `prototype/scout.py` and `prototype/sources.yaml` (real, runnable code with real defects — notably no tenure classifier at all, a substring commune match, and `REMPLACER` placeholder endpoints), `CLAUDE.md` and `.claude/**` (shell and markdown, reviewable as such). So a legitimate `/inspect` run reports on those and states plainly what does not exist — it must NOT report an empty tree, and it must NOT invent findings about `src/core/tenure.py`, a path that has never existed here — the classifier is `src/php/Core/TenureClassifier.php` and it is real, so findings about IT are fair game.
 
 ## Step 2: Spawn Analysis Agents
 

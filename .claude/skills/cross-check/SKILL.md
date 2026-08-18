@@ -3,7 +3,6 @@ name: cross-check
 description: Deep standalone validation of a spec or doc — hunts contradictions, undefined terms, unstated assumptions, missing sections and ambiguities, then certifies the analysis with fresh-context reviewer subagents. Use it on a doc before building from it, or to detect doc-vs-reality drift.
 user-invocable: true
 args: "<spec-file> [--drift] [--dry-run]"
-disallowed-tools: AskUserQuestion
 ---
 
 <!-- ═══════════════════════════════════════════════════════════════════════════════════
@@ -14,19 +13,19 @@ disallowed-tools: AskUserQuestion
   and later detecting drift between it and a real `src/` — is exactly this skill's job. These deltas
   OVERRIDE the body below wherever they conflict:
 
-  1. QUESTIONS ARE PLAIN TEXT. `AskUserQuestion` TIMES OUT in this container, so a gate that "asks"
-     cannot fire. Every "invoke ask-human" below means: print the question, a minimal concrete example,
-     numbered options and the recommendation as ordinary prose, then STOP and wait. Protocol:
-     `.claude/skills/ask-human/SKILL.md`. Every reply ends with a `❓ QUESTION` / `⏹ NO QUESTION`
-     marker as its literal last line.
-  2. NO `advisor()` HERE. Independent certification = fresh-context read-only reviewer subagents —
+  1. QUESTIONS USE `AskUserQuestion` (re-inverted 2026-08-18 — the cloud container in which it
+     timed out is dead). Every "invoke ask-human" below means: call `AskUserQuestion` — options,
+     recommended first with its reason, a visible "none of these / challenge the premise" escape.
+     Protocol: `.claude/skills/ask-human/SKILL.md`. The `❓`/`⏹` end-of-reply markers are retired.
+  2. `advisor()` IS AVAILABLE on this machine (verified 2026-08-18) and is the first rung of
+     certification. The panel of record = fresh-context read-only reviewer subagents —
      the three rent-watch lenses in `.claude/agents/` (`tenure-correctness-reviewer`,
      `source-resilience-reviewer`, `completeness-reviewer`). Spawn them by name rather than
      re-describing their charter inline. Self-grading is the last resort and MUST be DISCLOSED as
      self-graded in the output.
   3. REPORTS GO TO `var/claude/…` in the repo — gitignored by the blanket `/var` rule, survives
-     compaction inside the session, never committed. NOT `~/.claude/projects/…`, which is wiped when
-     the container is reclaimed.
+     compaction inside the session, never committed. NOT `~/.claude/projects/…` — in-repo reports
+     stay next to the code they describe.
   4. THE JIRA MODE IS DELETED (inherited from the `stack` port). There is no Jira and no Jira MCP
      server here, so the mode could never run — a documented mode that cannot execute is worse than an
      absent one. `--drift` is the check this project actually needs.
@@ -37,7 +36,7 @@ disallowed-tools: AskUserQuestion
      not a finding — it is the brief being disagreed with (see `/forge`'s Chesterton gate).
      `docs/OPEN-QUESTIONS.md` is the brief's inverse: what is listed there is explicitly NOT decided,
      so an ambiguity already recorded there is not a new finding — cite it and move on.
-  6. PROJECT RULES WIN on any conflict: `/home/user/rent-watch/CLAUDE.md`.
+  6. PROJECT RULES WIN on any conflict: `this repo's `CLAUDE.md``.
 ═══════════════════════════════════════════════════════════════════════════════════ -->
 
 ## --help
@@ -71,8 +70,8 @@ Parse `$ARGUMENTS`:
 If `<spec-file>` is not provided: report the error and stop.
 
 Natural targets in this repo: `CLAUDE.md`, `templates/tips/env-update.md`, `templates/tips/env-scan.md`,
-`templates/tips/file-layout.md`, `README.md`, `TODO.md`, `docs/**`, any `docs/plans/*.plan.md`, and
-`scripts/claude-bootstrap/README.md`.
+`templates/tips/file-layout.md`, `README.md`, `TODO.md`, `docs/**`, and any
+`docs/plans/*.plan.md`.
 
 ---
 
@@ -86,9 +85,10 @@ exists for.
 
 ### Step 2 — Independent check
 
-Investigate the three angles yourself, then certify with **fresh-context read-only reviewer subagents**
-that read the doc themselves (`advisor()` does not exist here). Loop: investigate → certify → repeat
-until a round raises nothing new; cap at 5 rounds, then ask in plain text — never silently proceed.
+Investigate the three angles yourself, then certify — `advisor()` first (available on this machine
+as of 2026-08-18), plus **fresh-context read-only reviewer subagents** that read the doc themselves.
+Loop: investigate → certify → repeat until a round raises nothing new; cap at 5 rounds, then ask via
+`/ask-human` (`AskUserQuestion`) — never silently proceed.
 
 - **Angle 1** (expanding-context): Are there implicit requirements not explicitly stated? Assumed
   context a reader might not share?

@@ -18,7 +18,7 @@
 
 set -uo pipefail
 
-# Rule 13 observability (global CLAUDE.md, shipped by scripts/claude-bootstrap/install.sh): a hook
+# Rule 13 observability (global CLAUDE.md): a hook
 # that runs unattended logs state-changing actions and errors to var/claude/logs/ IN THE REPO. Sourced
 # rather than reimplemented so there is one log format and one destination. Never fatal — a logging
 # failure must not take down the hook that is logging, hence the `|| true` and the no-op fallback.

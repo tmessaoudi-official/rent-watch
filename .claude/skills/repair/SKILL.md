@@ -6,7 +6,6 @@ description: >
   keys, fixtures, documented commands. Run after adding a skill/agent/hook, after a port from a
   sibling repo, or any time the config might be stale. Never weakens an invariant.
 user-invocable: true
-disallowed-tools: AskUserQuestion
 ---
 
 <!-- ═══════════════════════════════════════════════════════════════════════════════════
@@ -34,8 +33,8 @@ disallowed-tools: AskUserQuestion
   framework that lies about the repo. That check is § 1 below and it runs first.
 
   ADAPTATIONS: the lean-mode interlock is removed (no lean mode here). `--apply` no longer means
-  "without prompting" — see § "What is never auto-fixed". Questions are plain text
-  (`.claude/skills/ask-human/SKILL.md`); `AskUserQuestion` is forbidden project-wide. Reports go to
+  "without prompting" — see § "What is never auto-fixed". Questions use `AskUserQuestion`
+  (`.claude/skills/ask-human/SKILL.md`, re-inverted 2026-08-18). Reports go to
   `var/claude/repair/` (gitignored), never `~/.claude/projects/…`.
 ═══════════════════════════════════════════════════════════════════════════════════ -->
 
@@ -66,17 +65,15 @@ and before a milestone boundary.
 
 ## Section 1 — THE SHIPPED FRAMEWORK (run this first; it is the one with teeth)
 
-`scripts/claude-bootstrap/install.sh` copies `CLAUDE-global.md` to `~/.claude/CLAUDE.md`
-**unconditionally, every SessionStart**. So a wrong claim in that file is not a doc bug — it becomes
-the next session's own instructions. This is the highest-severity drift this repo can carry and it is
-invisible to every other check.
+**De-containerized 2026-08-18**: the repo no longer ships a framework copy — `~/.claude/` is the
+developer's own persistent install and `scripts/claude-bootstrap/` is gone. `drift-scan.sh` § S1
+therefore **cleanly skips** when the shipped file is absent (a guarded `sys.exit(0)`, not drift).
+The section stays documented because the check re-arms automatically if a framework copy ever
+reappears.
 
 ```bash
 # Ground truth
 ls .claude/skills/ | sort
-# What the shipped framework says is "As built" vs "NOT installed here"
-grep -n 'As built:' -A2 scripts/claude-bootstrap/CLAUDE-global.md
-grep -n 'NOT installed here' scripts/claude-bootstrap/CLAUDE-global.md
 ```
 
 Cross-check both directions and report each mismatch as **P0**:
@@ -125,12 +122,11 @@ finding.
 
 ## Section 3 — INVENTORY TABLES
 
-`CLAUDE.md` § "Claude config in this repo" and `scripts/claude-bootstrap/README.md` § "What's here"
-both enumerate files. Diff each against `ls`:
+`CLAUDE.md` § "Claude config in this repo" enumerates files. Diff it against `ls`:
 
 ```bash
-ls .claude/hooks/ .claude/agents/ .claude/skills/ scripts/claude-bootstrap/ scripts/claude-bootstrap/hooks/
-grep -n '\.claude/\|scripts/claude-bootstrap/' CLAUDE.md | sed -n '/Claude config in this repo/,$p'
+ls .claude/hooks/ .claude/agents/ .claude/skills/
+grep -n '\.claude/' CLAUDE.md | sed -n '/Claude config in this repo/,$p'
 ```
 
 A file added without updating the table is **P2**; a table row naming a deleted file is **P1** (a
@@ -144,7 +140,7 @@ A hook has to be on disk, registered, executable, and observable. Check all four
 ls .claude/hooks/*.sh
 python3 -c "import json;d=json.load(open('.claude/settings.json'));
 print([h['command'] for g in d['hooks'].values() for e in g for h in e['hooks']])"
-git ls-files -s .claude/hooks/ scripts/claude-bootstrap/          # 100755 expected on scripts
+git ls-files -s .claude/hooks/                                   # 100755 expected on scripts
 grep -l 'log_obs' .claude/hooks/*.sh                             # Rule 13 — all of them
 ```
 
@@ -207,10 +203,10 @@ report to `var/claude/repair/<YYYY-MM-DD-HHMMSS>.md` (gitignored) and summarise 
 ```
 /repair — N findings (P0:a P1:b P2:c) · M checks clean · K pending-adaptation
 
-P0  scripts/claude-bootstrap/CLAUDE-global.md:538
-    lists /cross-check as NOT installed; .claude/skills/cross-check/ exists.
-    install.sh ships this file to ~/.claude/CLAUDE.md unconditionally, so the next
-    session is told it lacks the skill.
+P1  CLAUDE.md § "Claude config in this repo" lists a hook that .claude/hooks/
+    does not contain — a future session will look for it and find nothing.
+    (Historical P0 example — the shipped-framework drift class — retired with the
+    container-era bootstrap on 2026-08-18.)
     proof: ls .claude/skills/ | grep cross-check  →  cross-check
     fix:   move it to the "As built" list
 ```
@@ -231,7 +227,7 @@ line, a stale tool claim, an exec bit. These are documentation catching up with 
 - a spec change. `spec/PROJECT_BRIEF.md` is a ruling set; if reality contradicts it, reality is what
   needs explaining.
 
-If a fix would touch one of these, state it in plain text with numbered options per `/ask-human` and
+If a fix would touch one of these, ask via `/ask-human` (`AskUserQuestion`, recommended option first) and
 **stop** — do not proceed on a default.
 
 ## `--check` mode

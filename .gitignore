@@ -16,7 +16,7 @@
 
 # ── Runtime state ───────────────────────────────────────────────────────────────
 # The seen-set and the listings DB. Deleting these makes the next run RE-NOTIFY
-# EVERYTHING and loses price history for good — see scripts/claude-bootstrap/BLAST-RADIUS.md.
+# EVERYTHING and loses price history for good — see CLAUDE.md § "Credentials & stateful data".
 seen.json
 # The default RENT_WATCH_DB location. Deliberately NOT under /var/, which is documented two blocks
 # down as container-lifetime scratch — the seen-set is the opposite of scratch.

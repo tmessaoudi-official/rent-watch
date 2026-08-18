@@ -3,7 +3,6 @@ name: pre-commit
 description: Use before every git commit — analyses staged changes for blast-radius, produces the four-dimension evidence table (Coverage, Docs, Config, Blast radius) from the global framework's Rule 6, then presents the exact git commit command for manual execution.
 user-invocable: true
 args: "[--message=<draft-message>]"
-disallowed-tools: AskUserQuestion
 ---
 
 <!-- ═══════════════════════════════════════════════════════════════════════════════════
@@ -18,26 +17,28 @@ disallowed-tools: AskUserQuestion
   source breakage, cross-portal dedup correctness, the legal/ToS posture on scraping, and secrets
   hygiene for the alert mailbox. These deltas OVERRIDE the body below wherever they conflict:
 
-  1. QUESTIONS ARE PLAIN TEXT. `AskUserQuestion` TIMES OUT in this cloud container, so a gate that
-     "asks" cannot fire. Every "invoke ask-human" below means: print the question, a minimal
-     concrete example, numbered options, and the recommended option FIRST with its reason, as
-     ordinary prose — then STOP and wait. Protocol: `.claude/skills/ask-human/SKILL.md`.
-  2. NO `advisor()` HERE — the tool does not exist in this environment. Independent certification =
+  1. QUESTIONS USE `AskUserQuestion` (re-inverted 2026-08-18 — the cloud container in which it
+     timed out is dead; on this machine it works and the global Stop hook requires it). Every
+     "invoke ask-human" below means: call `AskUserQuestion` — options with the recommended one
+     FIRST and its reason, and a visible "none of these / challenge the premise" escape.
+     Protocol: `.claude/skills/ask-human/SKILL.md`.
+  2. `advisor()` IS AVAILABLE on this machine (verified 2026-08-18) and is the FIRST rung of
+     certification. The panel of record remains the
      fresh-context read-only reviewer subagents, run as the three rent-watch lenses
      (`tenure-correctness-reviewer`, `source-resilience-reviewer`, `completeness-reviewer` — see
      `/converge`). All three are REAL agent definitions in `.claude/agents/` — spawn them by name
      via the Agent tool rather than re-describing their charter inline, so each lens's attack surface
      stays in one place. Self-grading is the last resort and MUST be disclosed as self-graded.
   3. REPORTS GO TO `var/claude/…` in the repo — gitignored via `/var`, survives
-     compaction inside the session, never committed. NOT `~/.claude/projects/…`: that is wiped when
-     the container is reclaimed, so a report written there is lost. Never `git add` a report regardless
+     compaction inside the session, never committed. NOT `~/.claude/projects/…`: in-repo reports stay next to the code they describe. Never `git add` a report regardless
      — being ignored is what keeps them out of history, not what makes staging them harmless.
-  4. `--scope=global|both` IS REMOVED wherever it appears: `~/.claude/` in this container is
-     GENERATED from repo files by `scripts/claude-bootstrap/install.sh`, so auditing it audits a copy.
+  4. `--scope=global|both` IS AVAILABLE AGAIN: `~/.claude/` is the developer's real, persistent
+     install (the container-era generated copy died with `scripts/claude-bootstrap/`, removed
+     2026-08-18), so auditing it audits the real thing.
   5. ≤5 concurrent subagents (10 caused ~50% rate-limit failures upstream). Every pipeline agent
      writes its raw output to `var/claude/<stage>/raw/` BEFORE returning — autocompact fires at 80%
      here and in-conversation results do not survive it.
-  6. PROJECT RULES WIN on any conflict: `/home/user/rent-watch/CLAUDE.md`. It EXISTS and is
+  6. PROJECT RULES WIN on any conflict: `this repo's `CLAUDE.md``. It EXISTS and is
      authoritative — READ IT. It carries the social-housing exclusion (the one non-negotiable rule),
      the domain glossary, the certification ladder, the git-autonomy override, the adapter-contract
      rules, and the in-repo plan home (`docs/plans/<topic>.plan.md`, each plan carrying its own
@@ -48,7 +49,7 @@ disallowed-tools: AskUserQuestion
      implementation: `spec/PROJECT_BRIEF.md` (the source of truth — mandatory reading before any
      application code), `prototype/scout.py` + `prototype/sources.yaml` (a pre-existing single-file
      prototype, reference material only), `CLAUDE.md`, `README.md`, `docs/OPEN-QUESTIONS.md`,
-     `.claude/` and `scripts/claude-bootstrap/`.
+     `.claude/`.
      **PRESENT since 2026-08-06: `src/php/Core/` (models + the tenure classifier + `SourceHealth`/
      `SourceStatus`), `src/php/Store/` (the SQLite seen-set, price history and run log, added
      2026-08-07), `tests/php/`, `tests/fixtures/tenure/corpus.json`, `composer.json`, and a
@@ -119,7 +120,7 @@ This repo's standing directive is no interrupts, and `git add` / `git commit` / 
 and the blast-radius check, never asking permission. State the task size in one line and continue.
 
 **When this skill DOES stop**: only if an evidence row comes back INCOMPLETE (Step 5) — that is a real
-finding, not a check-in, and it is reported in plain text per `/ask-human`.
+finding, not a check-in, and it is raised via `/ask-human` (`AskUserQuestion`).
 
 **Git checks** (in order; stop at first failure):
 1. Verify `git` is installed: `command -v git` — if not found, report `ERROR: git not found in PATH — cannot run /pre-commit` and stop.
@@ -163,7 +164,7 @@ Three rent-watch classifications that outrank the rest when they apply:
 
 For each file in the **Public interface** or **Config/infra** categories:
 1. Extract the changed symbol, flag, function name, or path from the diff
-2. Search all references **in the repo** — not `~/.claude/`, which is generated from repo files by `scripts/claude-bootstrap/install.sh` (adaptation delta 4) and would only echo the copy:
+2. Search all references **in the repo** (and `~/.claude/` too when the change touches something the global framework names — it is the developer's real install as of 2026-08-18):
    `git grep -l -- "<symbol>" 2>/dev/null` (falls back to `grep -rl -- "<symbol>" "${CLAUDE_PROJECT_DIR:-$PWD}" --exclude-dir={.git,vendor,node_modules,var,build}`)
    For a config key, search `config/**` and every source block that might set it; for a `map:` field name, search the fixtures under `tests/fixtures/**` too — a renamed key that no fixture exercises fails silently at runtime rather than in a test.
 3. For each hit, read the relevant line and determine if it is a caller, doc reference, or config entry that may need updating
@@ -175,7 +176,7 @@ If a staged file is a deletion: note that all remaining callers are blast-radius
 
 ## Step 3 — Four-dimension evidence table
 
-Produce the completion gate table from CLAUDE.md Rule 6 — the reasoning framework installed by `scripts/claude-bootstrap/install.sh`, whose source of truth in this repo is `scripts/claude-bootstrap/CLAUDE-global.md` § 6. The project-level `CLAUDE.md` wins on any conflict; read its § "Hard rules for this repo" before staging, and if the diff touches tenure, add the **Tenure** row below the four standard ones:
+Produce the completion gate table from the global framework's Rule 6 (`~/.claude/CLAUDE.md` — the developer's own install). The project-level `CLAUDE.md` wins on any conflict; read its § "Hard rules for this repo" before staging, and if the diff touches tenure, add the **Tenure** row below the four standard ones:
 
 ```
 | Dimension    | Status | Evidence |

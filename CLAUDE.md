@@ -95,35 +95,24 @@ Concretely, when working in this repo:
 ## Routing
 
 Work here is handled with the **global reasoning framework** (`~/.claude/CLAUDE.md`) — the 8-phase
-workflow, the four-dimension Completion Gate, evidence grades, the anti-bandaid gate. A cloud session
-gets a fresh `~/.claude/` every time and never reads the developer's own, so the framework travels in
-this repo and is reinstalled at session start by `scripts/claude-bootstrap/install.sh` (a SessionStart
-hook). See [`scripts/claude-bootstrap/README.md`](scripts/claude-bootstrap/README.md). On any conflict,
-**this file wins**.
+workflow, the four-dimension Completion Gate, evidence grades, the anti-bandaid gate. That framework
+is the developer's own persistent install; this repo never writes it — the container-era
+`scripts/claude-bootstrap/` reinstaller was removed 2026-08-18. On any conflict, **this file wins**.
 
 Repo-native slash skills live in `.claude/skills/` and reviewer agents in `.claude/agents/`; both are
 read in place, nothing is installed. `ls .claude/skills/` is the authoritative list — a count written
 in prose drifts, so none is written here.
 
-## Questions are plain text — `AskUserQuestion` is FORBIDDEN
+## Questions — `AskUserQuestion`, sparingly
 
-`AskUserQuestion` **times out in the cloud container**, so a question asked that way can hang the turn
-and be lost — a gate that cannot fire is worse than no gate. Every question to the developer is
-ordinary prose: context, a minimal concrete example, numbered options, the **recommended option first
-with its reason**, and a visible *"none of these / challenge the premise"* escape — then STOP and wait.
-Protocol: `.claude/skills/ask-human/SKILL.md`.
+Questions to the developer use the **`AskUserQuestion` tool**, per the global framework: options with
+the recommended one FIRST (labelled, with its reason) and a visible *"none of these / challenge the
+premise"* escape. Protocol details: `.claude/skills/ask-human/SKILL.md`.
 
-Partial mechanical backing: every skill in `.claude/skills/` declares
-`disallowed-tools: AskUserQuestion`, which removes the tool from the pool while that skill is active.
-The grant clears on the next user message, so outside a skill the discipline is yours.
-
-**EVERY reply ends with ONE of exactly two markers.** Without one, the developer cannot tell a question
-from a pause, and both look like prose that stopped. No exceptions, including short replies:
-
-- `❓ QUESTION — <one line>` followed by the numbered options. **I am blocked and waiting on a decision.**
-- `⏹ NO QUESTION — <what I am waiting on, or why I stopped>`. **Nothing is being asked of the developer.**
-
-The marker is the LAST line. If a reply would end without one, it is unfinished.
+> The container-era plain-text protocol and the `❓`/`⏹` end-of-reply markers are **RETIRED**
+> (2026-08-18). They existed because `AskUserQuestion` timed out in the dead cloud container; on this
+> machine it works, `askUserQuestionTimeout` is `"never"` globally, and the marker's rationale
+> (a prose question being indistinguishable from a pause) dies with the prose protocol.
 
 **Do not ask about routine work.** The standing directive for this repo is *no interrupts*: announce
 the task size and the plan, then build it. Asking is reserved for the cases in
@@ -251,9 +240,9 @@ this way" is never authority, and extending it in place contradicts the brief.
 
 ## Certification ladder — governs every 3C/6C gate
 
-`advisor()` does not exist in this environment, so independent certification comes from
-**fresh-context, read-only, adversarial reviewer subagents** in `.claude/agents/` — that is the TOP
-rung here, not a fallback. Three lenses, one agent each:
+`advisor()` **is available on this machine** (verified 2026-08-18) and is the FIRST rung: call it
+per the global framework. The panel of record for gate rounds is the set of **fresh-context,
+read-only, adversarial reviewer subagents** in `.claude/agents/`. Three lenses, one agent each:
 
 | Lens | Agent |
 |---|---|
@@ -265,7 +254,7 @@ Each reviewer **reads the actual diff, code and tests itself** — never certify
 narrative — and is chartered to REFUTE, not approve. `/converge` runs the panel mechanically.
 
 **Tier: MAXIMAL by default** — all three lenses, **two consecutive fully-clean rounds**, any finding
-resets the counter, cap 5 rounds → then ask in plain text (never silently proceed). Rationale: a
+resets the counter, cap 5 rounds → then ask via `AskUserQuestion` (never silently proceed). Rationale: a
 social-housing false positive is an eligibility failure the user pays for in wasted applications, and a
 silently-broken source is indistinguishable from a quiet market. Neither is caught by a passing test
 suite, and neither is confined to one subsystem.
@@ -288,8 +277,9 @@ uncommitted work — one commit away from a deliberate sabotage landing on `mast
 location and a symlink points it back at the pristine `src/`, which silently reports every sabotage
 as undetected. The full recipe is in each agent charter under § "Probe in a worktree".
 
-Availability chain: reviewer subagents → (if subagents are unavailable) three distinct-lens self-passes
-**with mandatory disclosure that certification was self-graded**. Never silently skip a gate.
+Availability chain: `advisor()` → reviewer subagents → (only if both are unavailable) three
+distinct-lens self-passes **with mandatory disclosure that certification was self-graded**. Never
+silently skip a gate.
 
 ---
 
@@ -470,7 +460,6 @@ tools/phpunit.phar          Test runner (gitignored — see README § Getting st
 var/claude/                 Reports, handoffs — gitignored, container-lifetime
 .claude/                    Project skills, reviewer agents, hooks, settings
 .github/workflows/ci.yml    CI — suite+guards every push/PR, sabotage ledger nightly+dispatch
-scripts/claude-bootstrap/   Reinstalls ~/.claude/ at SessionStart (cloud container)
 ```
 
 ## Gotchas & pitfalls
@@ -547,8 +536,8 @@ mailbox it failed on. `Store::recordRun()` persists that text and `Store::health
 into a user-facing detail, so `RentWatch\Core\Redact` masks it at that single funnel. Do not bypass
 `Redact::text()` when adding an adapter, and do not add a second, per-adapter copy of it.
 
-Stateful data that must not be casually deleted — see
-[`scripts/claude-bootstrap/BLAST-RADIUS.md`](scripts/claude-bootstrap/BLAST-RADIUS.md):
+Stateful data that must not be casually deleted (the container-era `BLAST-RADIUS.md` that
+documented this left with `scripts/claude-bootstrap/` on 2026-08-18 — this list is now the record):
 
 - the seen-set / listings DB (`RENT_WATCH_DB`, default `state/rent-watch.sqlite3` — deliberately NOT
   under `var/`, which this file documents as container-lifetime scratch) — deleting it makes the next
@@ -580,11 +569,16 @@ tests/sabotage-check.sh            Breaks the classifier many ways; the suite mu
 tests/test-fetch-phpunit.sh        Proves the runner fetch refuses a bad signature
 tests/test-ci-workflow.sh          Proves ci.yml still wires every step this file claims CI runs
 .github/workflows/ci.yml           CI: suite+guards on every push/PR; sabotage ledger nightly+dispatch
-scripts/claude-bootstrap/          SessionStart reinstall of ~/.claude/ + PreCompact handoff
+.claude/hooks/precompact-handoff.sh  PreCompact -> var/claude/handoff/latest.md; refuses to overwrite
+                                     a hand-written one marked `<!-- manual -->`. Vendored from /stack
+                                     2026-08-18 (the four siblings had NO working handoff after the
+                                     bootstrap removal). Registration lives in .claude/settings.json
+.claude/hooks/tests/test-precompact-handoff.sh  42-assertion suite for that hook — run it directly
 ```
 
-Beyond the ported set: `/add-source` (onboard a landlord or portal, config-only) and `/ask-human` (the
-plain-text question protocol, which **shadows** the global skill of the same name — project scope wins).
+Beyond the ported set: `/add-source` (onboard a landlord or portal, config-only) and `/ask-human`
+(the question protocol — `AskUserQuestion` with this repo's extra rules; it **shadows** the global
+skill of the same name — project scope wins).
 
 `/repair` detects drift between what this config *claims* and what exists. Its mechanical half is
 `bash .claude/skills/repair/drift-scan.sh` — exit 1 on any P0/P1, so it works as a gate. Run it after

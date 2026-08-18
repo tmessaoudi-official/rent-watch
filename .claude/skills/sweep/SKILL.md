@@ -3,7 +3,6 @@ name: sweep
 spotlight: true
 description: Use when running a Phase 6 second sweep on uncommitted changes before committing, or reviewing code written outside the standard agent workflow.
 user-invocable: true
-disallowed-tools: AskUserQuestion
 ---
 
 <!-- ═══════════════════════════════════════════════════════════════════════════════════
@@ -18,26 +17,28 @@ disallowed-tools: AskUserQuestion
   source breakage, cross-portal dedup correctness, the legal/ToS posture on scraping, and secrets
   hygiene for the alert mailbox. These deltas OVERRIDE the body below wherever they conflict:
 
-  1. QUESTIONS ARE PLAIN TEXT. `AskUserQuestion` TIMES OUT in this cloud container, so a gate that
-     "asks" cannot fire. Every "invoke ask-human" below means: print the question, a minimal
-     concrete example, numbered options, and the recommended option FIRST with its reason, as
-     ordinary prose — then STOP and wait. Protocol: `.claude/skills/ask-human/SKILL.md`.
-  2. NO `advisor()` HERE — the tool does not exist in this environment. Independent certification =
+  1. QUESTIONS USE `AskUserQuestion` (re-inverted 2026-08-18 — the cloud container in which it
+     timed out is dead; on this machine it works and the global Stop hook requires it). Every
+     "invoke ask-human" below means: call `AskUserQuestion` — options with the recommended one
+     FIRST and its reason, and a visible "none of these / challenge the premise" escape.
+     Protocol: `.claude/skills/ask-human/SKILL.md`.
+  2. `advisor()` IS AVAILABLE on this machine (verified 2026-08-18) and is the FIRST rung of
+     certification. The panel of record remains the
      fresh-context read-only reviewer subagents, run as the three rent-watch lenses
      (`tenure-correctness-reviewer`, `source-resilience-reviewer`, `completeness-reviewer` — see
      `/converge`). All three are REAL agent definitions in `.claude/agents/` — spawn them by name
      via the Agent tool rather than re-describing their charter inline, so each lens's attack surface
      stays in one place. Self-grading is the last resort and MUST be disclosed as self-graded.
   3. REPORTS GO TO `var/claude/…` in the repo — gitignored via `/var`, survives
-     compaction inside the session, never committed. NOT `~/.claude/projects/…`: that is wiped when
-     the container is reclaimed, so a report written there is lost. Never `git add` a report regardless
+     compaction inside the session, never committed. NOT `~/.claude/projects/…`: in-repo reports stay next to the code they describe. Never `git add` a report regardless
      — being ignored is what keeps them out of history, not what makes staging them harmless.
-  4. `--scope=global|both` IS REMOVED wherever it appears: `~/.claude/` in this container is
-     GENERATED from repo files by `scripts/claude-bootstrap/install.sh`, so auditing it audits a copy.
+  4. `--scope=global|both` IS AVAILABLE AGAIN: `~/.claude/` is the developer's real, persistent
+     install (the container-era generated copy died with `scripts/claude-bootstrap/`, removed
+     2026-08-18), so auditing it audits the real thing.
   5. ≤5 concurrent subagents (10 caused ~50% rate-limit failures upstream). Every pipeline agent
      writes its raw output to `var/claude/<stage>/raw/` BEFORE returning — autocompact fires at 80%
      here and in-conversation results do not survive it.
-  6. PROJECT RULES WIN on any conflict: `/home/user/rent-watch/CLAUDE.md`. It EXISTS and is
+  6. PROJECT RULES WIN on any conflict: `this repo's `CLAUDE.md``. It EXISTS and is
      authoritative — READ IT. It carries the social-housing exclusion (the one non-negotiable rule),
      the domain glossary, the certification ladder, the git-autonomy override, the adapter-contract
      rules, and the in-repo plan home (`docs/plans/<topic>.plan.md`, each plan carrying its own
@@ -48,7 +49,7 @@ disallowed-tools: AskUserQuestion
      implementation: `spec/PROJECT_BRIEF.md` (the source of truth — mandatory reading before any
      application code), `prototype/scout.py` + `prototype/sources.yaml` (a pre-existing single-file
      prototype, reference material only), `CLAUDE.md`, `README.md`, `docs/OPEN-QUESTIONS.md`,
-     `.claude/` and `scripts/claude-bootstrap/`.
+     `.claude/`.
      **PRESENT since 2026-08-06: `src/php/Core/` (models + the tenure classifier + `SourceHealth`/
      `SourceStatus`), `src/php/Store/` (the SQLite seen-set, price history and run log, added
      2026-08-07), `tests/php/`, `tests/fixtures/tenure/corpus.json`, `composer.json`, and a

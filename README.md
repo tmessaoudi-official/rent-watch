@@ -31,7 +31,7 @@ adapter, no notification channel and no CLI yet.
 | `tests/fixtures/tenure/corpus.json` | 114 hand-labelled listing texts — the classifier's ground truth, and language-neutral so the phorj port reads the same file. **All 114 are synthetic**: `spec/PROJECT_BRIEF.md` §4 asks for *real* texts, and capturing those needs a source endpoint that does not exist yet. Every case declares its `provenance` and a test asserts the counts, so the gap is data rather than a promise |
 | `prototype/` | A pre-existing single-file prototype, kept as reference. **Not** the shipping implementation — it has no tenure classifier at all |
 | [`CLAUDE.md`](CLAUDE.md) | How code gets delivered here: rules, gates, the eligibility boundary |
-| `.claude/` · `scripts/claude-bootstrap/` | Claude Code configuration ([details](scripts/claude-bootstrap/README.md)) |
+| `.claude/` | Claude Code configuration ([details](CLAUDE.md#claude-config-in-this-repo)) |
 
 ## Getting started
 

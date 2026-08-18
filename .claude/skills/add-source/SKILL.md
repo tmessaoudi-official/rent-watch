@@ -5,7 +5,6 @@ description: >
   discovery, field-map building, fixture capture, tenure labelling and the health baseline so that
   adding a source stays config-only.
 user-invocable: true
-disallowed-tools: AskUserQuestion
 ---
 
 <!-- ═══════════════════════════════════════════════════════════════════════════════════
@@ -14,8 +13,8 @@ disallowed-tools: AskUserQuestion
   requirement, and §14 makes "verify every endpoint live" a hard rule. Both are easy to
   violate one convenient shortcut at a time, so the workflow is written down.
 
-  Questions here follow `.claude/skills/ask-human/SKILL.md`: plain text, numbered options,
-  recommended first. `AskUserQuestion` is forbidden project-wide.
+  Questions here follow `.claude/skills/ask-human/SKILL.md`: `AskUserQuestion`, options with
+  the recommended one first and a visible challenge escape (re-inverted 2026-08-18).
 ═══════════════════════════════════════════════════════════════════════════════════ -->
 
 ## --help

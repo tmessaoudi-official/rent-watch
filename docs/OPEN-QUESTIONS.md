@@ -1102,3 +1102,10 @@ start another.
   that left every source publishing relative hrefs with no documented key **and** a documented hard
   failure. Restored, with `item_selector` added for `type: html`.
 
+- [2026-08-18] AGREED (supersedes the 2026-08-06 `AskUserQuestion` ban): questions use
+  **`AskUserQuestion` again**. The ban's sole rationale was the tool timing out in the Claude Code
+  cloud container; that environment is dead and work happens on the developer's own machine, where
+  the tool works (`askUserQuestionTimeout: "never"` globally, answered calls verified 2026-08-18)
+  and the global Stop hook mechanically requires it. The `❓`/`⏹` end-of-reply markers retire with
+  the plain-text protocol. Question QUALITY rules (five parts, recommendation first, after-states,
+  visible escape) are unchanged — see `.claude/skills/ask-human/SKILL.md`.
