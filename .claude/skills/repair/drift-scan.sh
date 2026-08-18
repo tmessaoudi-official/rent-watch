@@ -150,11 +150,6 @@ for f in .claude/hooks/*.sh .claude/agents/*.md; do
   grep -q "$(basename "$f")" CLAUDE.md \
     || printf "P2  %s is not listed in CLAUDE.md § 'Claude config in this repo'\n" "$(basename "$f")" >>"$FINDINGS"
 done
-for f in scripts/claude-bootstrap/*.sh scripts/claude-bootstrap/hooks/*.sh; do
-  [[ -e "$f" ]] || continue
-  grep -q "$(basename "$f")" scripts/claude-bootstrap/README.md \
-    || printf 'P2  %s is not listed in scripts/claude-bootstrap/README.md § What is here\n' "$(basename "$f")" >>"$FINDINGS"
-done
 
 # ── S4: hook wiring, four ways ───────────────────────────────────────────────────────────────────
 say "── S4 hook wiring"
@@ -180,7 +175,7 @@ for f in .claude/hooks/*.sh; do
 done
 while read -r b; do
   [[ -z "$b" ]] && continue
-  [[ -f ".claude/hooks/$b" || -f "scripts/claude-bootstrap/$b" || -f "scripts/claude-bootstrap/hooks/$b" ]] \
+  [[ -f ".claude/hooks/$b" ]] \
     || printf "P1  settings.json registers '%s' but no such script exists — the hook silently never runs\n" "$b" >>"$FINDINGS"
 done <<<"$REG"
 while read -r mode path; do
