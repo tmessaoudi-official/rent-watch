@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # test-ci-workflow.sh — the CI workflow's own self-test.
 #
-# Every other executable thing in this repo has one (test-tenure-guard.sh, test-fetch-phpunit.sh,
-# test-install.sh, test-precompact-handoff.sh); the CI workflow is a claim surface too. This asserts
+# Every other executable thing in this repo has one (test-tenure-guard.sh, test-fetch-phpunit.sh);
+# the CI workflow is a claim surface too. This asserts
 # the workflow exists, parses as YAML, and still wires the exact discipline CLAUDE.md says CI runs —
 # so a step silently dropped from the workflow (the classic way "CI is green" stops meaning what it
 # claims) fails a test rather than passing unnoticed.
@@ -56,8 +56,6 @@ check "runs the PHPUnit suite"               has "tools/phpunit.phar"
 check "runs the tenure §1 tripwire test"     has "tests/test-tenure-guard.sh"
 check "runs the runner-fetch signature test" has "tests/test-fetch-phpunit.sh"
 check "runs the config/doc drift scan"       has "drift-scan.sh"
-check "runs the bootstrap handoff test"      has "test-precompact-handoff.sh"
-check "runs the bootstrap install test"      has "scripts/claude-bootstrap/test-install.sh"
 check "runs the sabotage ledger"             has "tests/sabotage-check.sh"
 
 # The sabotage ledger must NOT be on the per-push fast path — it re-runs the whole suite once per

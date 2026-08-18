@@ -37,7 +37,10 @@ import pathlib, re, sys
 have = {p.parent.name for p in pathlib.Path('.claude/skills').glob('*/SKILL.md')}
 g = pathlib.Path('scripts/claude-bootstrap/CLAUDE-global.md')
 if not g.is_file():
-    print("P1  scripts/claude-bootstrap/CLAUDE-global.md missing — install.sh would ship nothing")
+    # De-containerized 2026-08-18: the repo no longer ships a framework copy, because
+    # ~/.claude/ is now the developer's own persistent install rather than an ephemeral
+    # container rebuilt each session. With no shipped framework there is nothing for S1
+    # to compare against, so this is a clean skip, not drift.
     sys.exit(0)
 m = re.search(r'As built:(.*?)Anything else named in this framework\s*\((.*?)\)\s*is \*\*NOT installed here\*\*',
               g.read_text(), re.S)
