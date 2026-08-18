@@ -1,5 +1,5 @@
 ---
-name: repair
+name: rw-repair
 description: >
   Detect and repair drift between what CLAUDE.md, the shipped global framework and .claude/ CLAIM
   exists, and what actually exists — skills, agents, hooks, settings entries, plan pointers, config
@@ -35,7 +35,7 @@ user-invocable: true
   ADAPTATIONS: the lean-mode interlock is removed (no lean mode here). `--apply` no longer means
   "without prompting" — see § "What is never auto-fixed". Questions use `AskUserQuestion`
   (`.claude/skills/ask-human/SKILL.md`, re-inverted 2026-08-18). Reports go to
-  `var/claude/repair/` (gitignored), never `~/.claude/projects/…`.
+  `var/claude/rw-repair/` (gitignored), never `~/.claude/projects/…`.
 ═══════════════════════════════════════════════════════════════════════════════════ -->
 
 ## --help
@@ -43,7 +43,7 @@ user-invocable: true
 > If ARGUMENTS contains `--help`: output the text below verbatim, then STOP.
 >
 > ```
-> /repair — Detect and repair drift between what the config CLAIMS and what exists.
+> /rw-repair — Detect and repair drift between what the config CLAIMS and what exists.
 >
 >   (none)     Scan, report, fix what is safely fixable, state what is not
 >   --check    Scan only, no writes. Exit 0 = clean, 1 = drift found. Use in a gate.
@@ -52,7 +52,7 @@ user-invocable: true
 
 ---
 
-# /repair — drift between claim and reality
+# /rw-repair — drift between claim and reality
 
 Every check below answers one question: **does something this repo asserts still match the
 filesystem?** A stale claim is worse than a missing one, because it is trusted — and in this repo one
@@ -198,10 +198,10 @@ and never fill one by guessing.
 ## Report
 
 Group by severity, and for every finding give the command whose output proves it. Write the full
-report to `var/claude/repair/<YYYY-MM-DD-HHMMSS>.md` (gitignored) and summarise inline:
+report to `var/claude/rw-repair/<YYYY-MM-DD-HHMMSS>.md` (gitignored) and summarise inline:
 
 ```
-/repair — N findings (P0:a P1:b P2:c) · M checks clean · K pending-adaptation
+/rw-repair — N findings (P0:a P1:b P2:c) · M checks clean · K pending-adaptation
 
 P1  CLAUDE.md § "Claude config in this repo" lists a hook that .claude/hooks/
     does not contain — a future session will look for it and find nothing.

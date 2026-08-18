@@ -15,7 +15,7 @@
 # and still exited 0. That is the "alert computed but never sent" failure this repo's own source-health
 # rule exists to prevent, and it was found by sabotage-verification rather than by review.
 #
-# Usage: bash .claude/skills/repair/drift-scan.sh [--quiet]
+# Usage: bash .claude/skills/rw-repair/drift-scan.sh [--quiet]
 # Exit:  0 = no P0/P1 drift, 1 = drift found.
 set -uo pipefail
 

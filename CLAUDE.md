@@ -352,7 +352,7 @@ bash tests/sabotage-check.sh            # proves the suite would CATCH a broken 
 bash tests/test-tenure-guard.sh         # proves the §1 tripwire still fires, and stays quiet on PHP
 bash tests/test-fetch-phpunit.sh        # proves the runner fetch refuses a bad signature
 bash tests/test-ci-workflow.sh          # proves ci.yml still wires every step CLAUDE.md claims
-bash .claude/skills/repair/drift-scan.sh                         # config/doc drift; exit 1 on P0/P1
+bash .claude/skills/rw-repair/drift-scan.sh                         # config/doc drift; exit 1 on P0/P1
 bash -n .claude/hooks/*.sh tests/*.sh tools/*.sh
 python3 prototype/scout.py --help       # the superseded prototype, reference only
 ```
@@ -564,7 +564,7 @@ tests/test-tenure-guard.sh         Sabotage test FOR that hook — must-fire and
 .claude/agents/source-resilience-reviewer.md    resilience + legal posture + secrets lens
 .claude/agents/completeness-reviewer.md         completeness + blast-radius lens
 .claude/skills/                    Repo-native slash skills; `ls` is the authoritative list
-.claude/skills/repair/drift-scan.sh  The mechanical half of /repair — run it in a gate
+.claude/skills/rw-repair/drift-scan.sh  The mechanical half of /rw-repair — run it in a gate
 tests/sabotage-check.sh            Breaks the classifier many ways; the suite must catch every one
 tests/test-fetch-phpunit.sh        Proves the runner fetch refuses a bad signature
 tests/test-ci-workflow.sh          Proves ci.yml still wires every step this file claims CI runs
@@ -580,7 +580,7 @@ Beyond the ported set: `/add-source` (onboard a landlord or portal, config-only)
 (the question protocol — `AskUserQuestion` with this repo's extra rules; it **shadows** the global
 skill of the same name — project scope wins).
 
-`/repair` detects drift between what this config *claims* and what exists. Its mechanical half is
-`bash .claude/skills/repair/drift-scan.sh` — exit 1 on any P0/P1, so it works as a gate. Run it after
+`/rw-repair` (renamed from the bundle's `/repair` — global-is-reference ruling, 2026-08-18) detects drift between what this config *claims* and what exists. Its mechanical half is
+`bash .claude/skills/rw-repair/drift-scan.sh` — exit 1 on any P0/P1, so it works as a gate. Run it after
 adding a skill, agent or hook, and after any port from a sibling repo. It exists because one session
 found five such defects by hand, including a shipped framework that denied having a skill it had.
