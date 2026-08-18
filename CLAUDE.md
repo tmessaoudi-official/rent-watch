@@ -363,9 +363,7 @@ bash tests/test-tenure-guard.sh         # proves the §1 tripwire still fires, a
 bash tests/test-fetch-phpunit.sh        # proves the runner fetch refuses a bad signature
 bash tests/test-ci-workflow.sh          # proves ci.yml still wires every step CLAUDE.md claims
 bash .claude/skills/repair/drift-scan.sh                         # config/doc drift; exit 1 on P0/P1
-bash scripts/claude-bootstrap/hooks/test-precompact-handoff.sh   # 35 tests, must stay green
-bash scripts/claude-bootstrap/test-install.sh                    # 17 tests, must stay green
-bash -n .claude/hooks/*.sh tests/*.sh tools/*.sh scripts/claude-bootstrap/**/*.sh
+bash -n .claude/hooks/*.sh tests/*.sh tools/*.sh
 python3 prototype/scout.py --help       # the superseded prototype, reference only
 ```
 
@@ -570,6 +568,9 @@ CLAUDE.md                          This file — project scope, wins on any conf
 tests/test-tenure-guard.sh         Sabotage test FOR that hook — must-fire and must-stay-silent halves
 .claude/hooks/lint-on-write.sh     Lints the file just written (ruff / yamllint / shellcheck / json)
 .claude/hooks/format-on-write.sh   Reports formatting drift; never rewrites behind Claude's back
+.claude/hooks/log-helpers.sh       log_obs() — SOURCED by the three hooks above, not itself a hook
+                                     (so it is unregistered and mode 644 by design). Vendored here
+                                     2026-08-18 when scripts/claude-bootstrap/ was removed
 .claude/agents/tenure-correctness-reviewer.md    correctness + regression lens
 .claude/agents/source-resilience-reviewer.md    resilience + legal posture + secrets lens
 .claude/agents/completeness-reviewer.md         completeness + blast-radius lens
