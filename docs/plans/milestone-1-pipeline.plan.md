@@ -1044,3 +1044,9 @@ from the diff — so they are written here rather than left for a later session 
   be "fixed" by marking members notified on delivery: that is group-scoped suppression, and an
   over-merge would then hide a real flat permanently and silently. `--seed` marks every member and is
   not an exception to this — seeding is about listings that are currently published, not about groups.
+
+**Full ledger: LAUNCHED, NOT YET COUNTED.** Started against `15c3303` (clean tree) on 2026-08-19,
+logging to `var/claude/ledger-15c3303.log`; the run takes 2–3 h and outlives the session that started
+it. The count is recorded here on completion, per repo convention — until that line exists, the
+ledger for schema v4 is unfinished, whatever the filtered 8/8 run said. The filtered run covered the
+seven new cases plus the `SCHEMA_VERSION` case the bump had disarmed; it is not a ledger result.
