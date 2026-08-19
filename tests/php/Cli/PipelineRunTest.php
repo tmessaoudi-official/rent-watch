@@ -416,19 +416,121 @@ final class PipelineRunTest extends TestCase
         );
     }
 
+    // ---------------------------------------------------------------- cross-portal group (v4)
+
+    /**
+     * EVERY harvested listing gets a row, not just the cluster survivor.
+     *
+     * Before schema v4 the pipeline clustered BEFORE recording and iterated survivors only, so a
+     * duplicate member never reached `Store::record()` and had no row at all. A `group_key` on top
+     * of that would only ever describe groups of one — the overlay would ship inert and look fine.
+     */
+    public function testEveryHarvestedListingIsRecordedNotJustTheSurvivor(): void
+    {
+        $store = $this->store();
+
+        $this->pipeline($store)->runOnce([
+            new FakeSource('alpha', [$this->listing('a1', ['source' => 'alpha'])]),
+            new FakeSource('beta', [$this->listing('b1', ['source' => 'beta'])]),
+        ], self::NOW);
+
+        $rows = (new \PDO('sqlite:' . (string) $this->dbPath))
+            ->query('SELECT source FROM listings ORDER BY source')->fetchAll(\PDO::FETCH_COLUMN);
+
+        self::assertSame(['alpha', 'beta'], $rows, 'the absorbed duplicate was never stored');
+    }
+
+    /** The members of one cluster share a group; the group is what the joined history reads. */
+    public function testTheMembersOfAClusterShareAGroupKey(): void
+    {
+        $store = $this->store();
+
+        $this->pipeline($store)->runOnce([
+            new FakeSource('alpha', [$this->listing('a1', ['source' => 'alpha'])]),
+            new FakeSource('beta', [$this->listing('b1', ['source' => 'beta'])]),
+        ], self::NOW);
+
+        $groups = (new \PDO('sqlite:' . (string) $this->dbPath))
+            ->query('SELECT group_key FROM listings')->fetchAll(\PDO::FETCH_COLUMN);
+
+        self::assertCount(2, $groups);
+        self::assertNotNull($groups[0]);
+        self::assertSame($groups[0], $groups[1], 'the two portals were not tied together');
+    }
+
+    /**
+     * Members are CLASSIFIED, because `tenure IS NULL` already means something else.
+     *
+     * `Store::staleVerdicts()` selects `tenure IS NULL` and its docblock pins that to one meaning:
+     * "stored before schema v3, deliberately not backfilled". Storing member rows unclassified would
+     * give NULL a second meaning and silently enlarge the population `scout reclassify` re-announces.
+     */
+    public function testAnAbsorbedMemberIsClassifiedSoNullKeepsItsMeaning(): void
+    {
+        $store = $this->store();
+
+        $this->pipeline($store)->runOnce([
+            new FakeSource('alpha', [$this->listing('a1', ['source' => 'alpha'])]),
+            new FakeSource('beta', [$this->listing('b1', ['source' => 'beta'])]),
+        ], self::NOW);
+
+        $tenures = (new \PDO('sqlite:' . (string) $this->dbPath))
+            ->query('SELECT tenure FROM listings')->fetchAll(\PDO::FETCH_COLUMN);
+
+        self::assertCount(2, $tenures);
+        self::assertNotContains(null, $tenures, 'an absorbed member was left unclassified');
+        self::assertSame([], $store->staleVerdicts(['UNKNOWN']), 'members leaked into reclassify');
+    }
+
+    /**
+     * `--seed` marks EVERY member notified, not just the survivor.
+     *
+     * The seed contract is "everything currently published is already seen AND already told about".
+     * An absorbed member is currently published. Before it had a row the gap could not be observed;
+     * now it can, and the first pass whose shuffle flips survivorship would notify it.
+     */
+    public function testSeedMarksEveryMemberNotifiedNotOnlyTheSurvivor(): void
+    {
+        $store = $this->store();
+
+        $this->pipeline($store)->runOnce([
+            new FakeSource('alpha', [$this->listing('a1', ['source' => 'alpha'])]),
+            new FakeSource('beta', [$this->listing('b1', ['source' => 'beta'])]),
+        ], self::NOW, seedOnly: true);
+
+        $unnotified = (new \PDO('sqlite:' . (string) $this->dbPath))
+            ->query('SELECT COUNT(*) FROM listings WHERE notified_at IS NULL')->fetchColumn();
+
+        self::assertSame(0, (int) $unnotified, 'a seeded member would be notified on a later pass');
+    }
+
+    /** Recording the members does not notify them — one flat is still one notification. */
+    public function testAnAbsorbedMemberIsNotSeparatelyNotified(): void
+    {
+        $store = $this->store();
+        $channel = new RecordingChannel();
+
+        $this->pipeline($store, new Notifier([$channel]))->runOnce([
+            new FakeSource('alpha', [$this->listing('a1', ['source' => 'alpha'])]),
+            new FakeSource('beta', [$this->listing('b1', ['source' => 'beta'])]),
+        ], self::NOW);
+
+        self::assertCount(1, $channel->sent, 'the absorbed duplicate produced its own notification');
+    }
+
     // ---------------------------------------------------------------- schema
 
-    public function testTheSchemaVersionIsThree(): void
+    public function testTheSchemaVersionIsFour(): void
     {
         // A bare constant assertion, and it earns its place: lowering `SCHEMA_VERSION` makes
         // `migrate()` return early on an EXISTING database, so an older one opens cleanly and then
         // throws `no such column` on the first write. A fresh database hides it entirely, because
         // `CREATE TABLE IF NOT EXISTS` always writes the current DDL.
-        self::assertSame(3, Store::SCHEMA_VERSION);
-        self::assertSame(3, $this->store()->schemaVersion());
+        self::assertSame(4, Store::SCHEMA_VERSION);
+        self::assertSame(4, $this->store()->schemaVersion());
     }
 
-    public function testAVersionOneDatabaseIsUpgradedToCarryTheV3Columns(): void
+    public function testAVersionOneDatabaseIsUpgradedToCarryTheV4Columns(): void
     {
         // The path a fresh database cannot exercise. The seen-set cannot be rebuilt from anywhere,
         // so an upgrade that silently skipped its columns would be discovered as a runtime error on
@@ -443,15 +545,15 @@ final class PipelineRunTest extends TestCase
         unset($pdo, $store);
 
         $reopened = Store::open((string) $this->dbPath);
-        self::assertSame(3, $reopened->schemaVersion());
+        self::assertSame(4, $reopened->schemaVersion());
 
         $columns = array_column(
             (new \PDO('sqlite:' . (string) $this->dbPath))->query('PRAGMA table_info(listings)')->fetchAll(\PDO::FETCH_ASSOC),
             'name',
         );
 
-        foreach (['seen_epoch', 'tenure', 'confidence_bp', 'signals_json'] as $column) {
-            self::assertContains($column, $columns, "the v1 -> v3 upgrade did not add `{$column}`");
+        foreach (['seen_epoch', 'tenure', 'confidence_bp', 'signals_json', 'group_key'] as $column) {
+            self::assertContains($column, $columns, "the v1 -> v4 upgrade did not add `{$column}`");
         }
     }
 

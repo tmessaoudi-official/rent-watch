@@ -961,6 +961,45 @@ start another.
 
 ---
 
+## Part 2f — Raised by schema v4, the cross-portal group (2026-08-19)
+
+### Q38 — should a cluster member's tenure be able to VETO the survivor's notification?
+
+**UNANSWERED. Default if it stays unanswered: no — the notification gate keeps consulting only the
+survivor's verdict, exactly as it does today.** One line reverses it: *"a member classified as
+excluded blocks the whole group."*
+
+This became askable only on 2026-08-19. Before schema v4 the pipeline clustered before recording and
+iterated survivors only, so an absorbed duplicate was never classified — the question had no data to
+be asked about. Now every member is classified at record time, and the store can hold a fact the
+notifier does not look at:
+
+    inli:id:A-1    "T3 Sartrouville — logement locatif intermédiaire"   LLI, 0.94   ← survivor, notified
+    cdc:id:B-9     "T3 Sartrouville — financement PLUS"                 PLUS, 0.91  ← same flat, silent
+
+Both rows describe one flat. One portal says LLI and the other says PLUS. Today the user is notified
+on the survivor's verdict and never learns the second row disagrees.
+
+It is genuinely two-sided, which is why it is written down rather than decided:
+
+- **For a veto.** §1 is an ELIGIBILITY rule, and eligibility is a property of the flat, not of the
+  page that described it. If any portal says PLUS, the flat plausibly is PLUS and the application is
+  wasted — which is the cost §1 exists to avoid. Biasing an ambiguous case toward not notifying is
+  the standing instruction.
+- **Against a veto.** A cluster is a GUESS. `Dedup`'s tolerances are pairwise and fuzzy, and the
+  ruling that created the group accepted over-merge as a live possibility whose blast radius is
+  confined to one presentation view. A veto would take it out of that confinement and let a bad
+  cluster suppress a real LLI match — silently, which is the failure direction §1 itself forbids.
+  A landlord mixing social and intermediate stock on one result page is also normal, so two rows
+  disagreeing is weak evidence about either.
+
+A third route exists and may beat both: notify the survivor as today, and put the disagreement IN the
+notification's `reasons[]` — "In'li dit LLI, CDC Habitat dit PLUS sur ce qui semble être le même
+bien". That satisfies §1's spirit (the user is not misled) without letting a fuzzy cluster suppress
+anything. It is the option to raise first if this is ever picked up.
+
+Not blocking. Nothing in milestone 1 depends on the answer.
+
 ## Decisions Log
 
 - [2026-08-06] AGREED: work on `master` only; no `claude/*` branch (developer instruction).

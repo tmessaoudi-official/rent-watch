@@ -944,3 +944,86 @@ A changelog that overstates is worse than one that omits, because the next sessi
   stalls silently is worse than one that reports a failure. No sabotage case covers the bound itself
   — removing it produces a hang, which the timeout reports as inconclusive, which is the honest
   verdict rather than a detection.
+
+- [2026-08-19 23:02] AGREED: cross-portal price history is keyed on a LOGICAL LISTING, and the
+  per-source rows are kept. A `listings.group_key` (schema v4) ties the members of a dedup cluster
+  together; `price_history` rows stay attached to the `dedup_key` of the source that observed them
+  and derive their group by JOIN, never by a second copy of the column that a later union could
+  leave stale. Rejected: one merged timeline per group, because a portal quoting hors charges then
+  manufactures a phantom drop and a late merge has to rewrite history recorded under two keys; and
+  a read-only join with no stored group, because a flat whose surviving portal changes loses its
+  history at exactly the seam worth notifying on.
+- [2026-08-19 23:02] AGREED: notification stays keyed on `dedup_key`, NOT on the group. A
+  group-scoped `wasNotified()` would permanently and silently suppress the second listing once two
+  members stop clustering (a rent moving out of tolerance). `Core/Dedup`'s own asymmetry doctrine
+  rules that direction out: under-merge notifies twice, which is visible and self-correcting;
+  over-merge hides a flat, which is silent. The group is a HISTORY concept only.
+- [2026-08-19 23:02] AGREED: a persisted union is PERMANENT — today an over-merge lasts only while
+  both listings are published. Accepted because the blast radius is confined to one presentation
+  view: per-source rows, per-source `priceHistory()` and per-source drop detection are untouched, so
+  an over-merged group misreports a merged timeline and nothing else.
+- [2026-08-19 23:02] AGREED: `listings.group_key` ships IN schema v4 rather than waiting for a v5.
+  Grouping needs no geo — `Core/Dedup::cluster()` already computes it from rent/surface tolerance
+  plus corroborating facts — so the deferral's only real argument was a dependency that does not
+  exist. One migration is written and tested once instead of a v3→v4→v5 chain written twice.
+- [2026-08-19 23:02] PROVENANCE, recorded because the record was briefly wrong: the three entries
+  above were first written at 22:39 by a session that had posted the question and then stalled,
+  stamped `[23:10]` — a time that had not yet happened — and marked AGREED before any answer could
+  have arrived. They are re-recorded here at their true time, and they stand because the developer
+  ruled this design at 23:02, not because the earlier stamp said so. A Decisions Log entry is a
+  record of a ruling, never a session's own recommendation wearing the word AGREED.
+
+## Formal plan — schema v4, the `group_key` history overlay (2026-08-19 23:02)
+
+Ruled above. Two holes were found while planning that the ruling's own doctrine settles, and one
+must-check that changed a decision. All three are recorded here because none is visible in the diff.
+
+**The ruling assumed a fact that was not true.** "The per-source rows are kept" — they are not.
+`Cli/Pipeline.php:99` clusters BEFORE recording and the loop that follows iterates survivors only, so
+a duplicate member never reaches `Store::record()` and has no row at all. A `group_key` column on top
+of that describes only groups of one. Recording every harvested listing is therefore part of the
+ruled design, not an enlargement of it — and "every harvested listing" and "every cluster member" are
+the same set, so there is no third option.
+
+- **Hole 1 — survivor churn.** `Dedup::cluster()` keeps the FIRST item as survivor and ordering is
+  the caller's; `Core/Pacer` shuffles source order every pass. So `group_key = survivor's dedup_key`
+  churns between passes, and a member that delists in between keeps a key nobody else carries — the
+  exact orphaning the ruling rejected the read-only join for. The key is therefore **sticky**: on
+  assign, adopt the first existing non-NULL `group_key` among the members; mint one only when no
+  member has one; when members arrive carrying two different keys, MERGE them. Never cleared — a
+  persisted union is permanent, which is already ruled.
+- **Hole 2 — `--seed` must mark every member.** The seed contract is "everything currently published
+  is already seen AND already told about". A duplicate member is currently published. Today it has no
+  row so the gap cannot be observed; once it has one, the first pass whose shuffle flips survivorship
+  notifies it. `seedOnly` marks all members, not just the survivor.
+- **Must-check, and it reversed a choice: members are CLASSIFIED at record time.** `Store::staleVerdicts()`
+  (`Store.php:872`) selects `tenure IS NULL`, and its docblock pins that value to one meaning: "stored
+  before schema v3, deliberately not backfilled". Recording members unclassified would give NULL a
+  second meaning and silently enlarge what `scout reclassify` re-announces. Classifying at record time
+  keeps NULL's v3 meaning exact.
+
+**Not implemented, recorded instead:** once members are classified, the store can see that one
+portal's text for a flat says PLS while the survivor's says LLI — a §1 signal today's code
+structurally cannot observe, because only the survivor is classified. The notify gate consulting only
+the survivor's verdict is current behaviour and stays. A member-veto is a §1 STRENGTHENING candidate
+and goes to `docs/OPEN-QUESTIONS.md` with its default, per repo convention.
+
+Shape:
+
+- `Core/Dedup::cluster()` gains `members: list<RawListing>` (survivor first). ADDITIVE — `duplicates`
+  is untouched because the formatter reads it. The `duplicates` strings are NOT parsed back into keys:
+  they are `sourceName:externalId`, which collides for every listing whose `externalId` is empty.
+- `Store` schema v4: nullable `listings.group_key` + index, migration step re-runnable like v2/v3,
+  NOT backfilled. New `assignGroup()`, `groupKey()`, `groupPriceHistory()`.
+- `groupPriceHistory()` branches on a NULL group explicitly: `WHERE group_key = (SELECT group_key …)`
+  returns the EMPTY set for a singleton, because NULL never equals NULL. A singleton returns its own
+  history, and that is a named test case rather than a comment.
+- `Cli/Pipeline`: record + classify every harvested listing once, memoised by dedup key; cluster;
+  assign groups; the survivor loop reuses the memoised sighting so nothing is recorded twice.
+
+Tests, in the store's named categories: **persistence** (v3→v4 upgrade, re-runnable, newer refused),
+**identity** (survivor-flip continuity across two passes in opposite order; a delisted member keeps
+its group; divergent keys merge), **rent events** (singleton `groupPriceHistory` = own history),
+**seen-set** (an over-merged group cannot suppress a notification; `--seed` marks every member).
+`Store/` changes, so the sabotage ledger runs — `SABOTAGE_FILTER` on the new cases first, full ledger
+before done.

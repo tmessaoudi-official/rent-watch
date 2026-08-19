@@ -125,13 +125,20 @@ final class Dedup
      * whatever order it wants preserved — and a "best" rule here would silently prefer one portal
      * over another on criteria this class has no business knowing.
      *
+     * Each cluster also carries its `members` as LISTINGS, survivor first. `duplicates` cannot
+     * serve that purpose and is kept beside it rather than replaced: it holds
+     * `sourceName:externalId` strings for the notification text, and every listing with an empty
+     * `externalId` produces the same string — so parsing them back into store keys collides exactly
+     * where the store's URL/title fallback key does not. Schema v4's group is assigned from
+     * `members`.
+     *
      * @param list<array{listing: RawListing, family: string}> $items
      *
-     * @return list<array{listing: RawListing, family: string, duplicates: list<string>}>
+     * @return list<array{listing: RawListing, family: string, duplicates: list<string>, members: list<RawListing>}>
      */
     public function cluster(array $items): array
     {
-        /** @var list<array{listing: RawListing, family: string, duplicates: list<string>}> $kept */
+        /** @var list<array{listing: RawListing, family: string, duplicates: list<string>, members: list<RawListing>}> $kept */
         $kept = [];
 
         foreach ($items as $item) {
@@ -151,13 +158,19 @@ final class Dedup
                     // indistinguishable from a listing that was never fetched.
                     $kept[$index]['duplicates'][] = $item['listing']->sourceName
                         . ':' . $item['listing']->externalId;
+                    $kept[$index]['members'][] = $item['listing'];
                     $mergedInto = $index;
                     break;
                 }
             }
 
             if ($mergedInto === null) {
-                $kept[] = ['listing' => $item['listing'], 'family' => $item['family'], 'duplicates' => []];
+                $kept[] = [
+                    'listing' => $item['listing'],
+                    'family' => $item['family'],
+                    'duplicates' => [],
+                    'members' => [$item['listing']],
+                ];
             }
         }
 

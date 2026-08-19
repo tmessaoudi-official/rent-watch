@@ -212,7 +212,7 @@ final class ScoutTest extends TestCase
     {
         $r = $this->scout(['doctor']);
 
-        self::assertStringContainsString('schéma v3', $r['out']);
+        self::assertStringContainsString('schéma v4', $r['out']);
         self::assertStringContainsString('digest à 8h', $r['out'], 'Q34: the digest hour must be visible with its timezone');
     }
 

@@ -16,7 +16,7 @@ for the product, and **every constraint in it is a ruling**, not a draft to be i
 before touching anything under `src/`.
 
 Status: **milestone 1 is functionally complete against a frozen payload.** The pure core, the store
-(schema v3), the config layer, the adapter contract, the criteria engine, dedup, the notification
+(schema v4), the config layer, the adapter contract, the criteria engine, dedup, the notification
 layer and the `scout` CLI all exist. What is missing is a NETWORK adapter, and that is blocked on an
 input rather than a decision. As of 2026-08-07 there is a PHP 8.5
 implementation of `models` + `tenure` under `src/php/Core/`, a 114-case language-neutral classifier
@@ -220,7 +220,7 @@ impossible by design rather than by omission (`docs/PHORJ-REQUIREMENTS.md`).
 | Layer | Path | Responsibility |
 |---|---|---|
 | Core | `src/php/Core/` · later `src/phorj/core/` | `models`, `tenure` (the classifier), `criteria` (score + hard disqualifiers), `dedup`, `health` (`SourceHealth` + `SourceStatus`), `Redact` (masks secrets in adapter error text) |
-| Store | `src/php/Store/` | SQLite seen-set, price history and run log. **PHP-only** — it touches a database, so phorj will not transpile it. |
+| Store | `src/php/Store/` | SQLite seen-set, price history, run log and the schema-v4 cross-portal `group_key`. **PHP-only** — it touches a database, so phorj will not transpile it. |
 | Notify | `src/php/Core/Notify/` | One module per channel. Every notification carries `score` + human-readable `reasons[]`. |
 | Adapters | `src/php/Adapters/` | `base` (the `Source` interface), `http_json`, `html`, `email_alert` (IMAP), `browser` (Playwright, opt-in), `sites/` for per-site overrides |
 | Enrich | `src/php/Enrich/` | `transit` (IDFM / PRIM door-to-door commute), `geo` (commune → INSEE code, coords) |
@@ -486,6 +486,9 @@ Required coverage, per spec §11 — non-negotiable once `src/` exists:
   field asserted — five were once replaceable with constants while the suite stayed green);
   **seen-set** (a listing is new exactly once, and *notified* is a different fact from *seen* — the
   store's two most basic guarantees, and the two that had no category for three rounds);
+  **group** (schema v4: the key SURVIVES a survivorship flip, a delisted member keeps it, two groups
+  that meet are merged, a listing that clusters alone has NO group, and a singleton reports its own
+  history rather than the empty set SQL gives you for `group_key = NULL`);
   **persistence** (the seen-set and price history survive reopening; an older schema is upgraded and
   a newer one refused; a snapshot carries every field it claims); **concurrency** (WAL, and a second
   writer that WAITS rather than failing — demonstrated, because a deferred transaction silently
@@ -515,7 +518,7 @@ src/php/Core/               PHP 8.5 pure core — models + tenure classifier + s
 src/php/Core/Pacer.php      the Q37 cadence; clock, sleeper and RNG all injected so it is testable
 src/php/Cli/WatchLoop.php   the `--watch` loop; survives a failing pass, stops after the one in flight
 src/php/Adapters/PacedSource.php   decorator applying Pacer, so Pipeline never learns time exists
-src/php/Store/              SQLite seen-set, price history and run log
+src/php/Store/              SQLite seen-set, price history, run log, cross-portal group (v4)
 src/phorj/                  phorj port of the same pure core                  [waits on phorj]
 tests/php/                  PHPUnit suites
 tests/fixtures/tenure/      corpus.json — the language-neutral classifier corpus

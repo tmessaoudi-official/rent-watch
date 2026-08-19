@@ -187,6 +187,53 @@ final class DedupTest extends TestCase
         self::assertSame([], $clusters[1]['duplicates']);
     }
 
+    /**
+     * A cluster also carries its MEMBERS as listings, survivor first — schema v4's group needs them.
+     *
+     * `duplicates` cannot serve: it holds `sourceName:externalId` strings, and every listing whose
+     * `externalId` is empty produces the same string, so parsing them back into store keys collides
+     * exactly where the store's own fallback key does not. The store must be handed the listings.
+     */
+    public function testAClusterCarriesItsMembersAsListingsSurvivorFirst(): void
+    {
+        $clusters = (new Dedup())->cluster([
+            ['listing' => $this->listing('seloger', 'a1'), 'family' => 'private'],
+            ['listing' => $this->listing('logic_immo', 'b9'), 'family' => 'private'],
+            ['listing' => $this->listing('leboncoin', 'c3', commune: 'Houilles'), 'family' => 'private'],
+        ]);
+
+        self::assertSame(['a1', 'b9'], array_map(
+            static fn ($l): string => $l->externalId,
+            $clusters[0]['members'],
+        ));
+        self::assertSame(['c3'], array_map(
+            static fn ($l): string => $l->externalId,
+            $clusters[1]['members'],
+        ));
+    }
+
+    /** Every harvested listing is a member of exactly one cluster — none is lost on the way. */
+    public function testEveryListingEndsUpInExactlyOneClustersMembers(): void
+    {
+        $items = [];
+        for ($i = 0; $i < 12; ++$i) {
+            $items[] = ['listing' => $this->listing('seloger', 'x' . $i, commune: 'Ville' . $i), 'family' => 'private'];
+        }
+
+        $clusters = (new Dedup())->cluster($items);
+        $seen = [];
+
+        foreach ($clusters as $cluster) {
+            foreach ($cluster['members'] as $member) {
+                $seen[] = $member->externalId;
+            }
+        }
+
+        sort($seen);
+        self::assertSame(12, count($seen));
+        self::assertSame(count($seen), count(array_unique($seen)), 'a listing appeared in two clusters');
+    }
+
     public function testClusteringDoesNotCollapseAWholeResultSet(): void
     {
         // The regression this whole file guards: every candidate passes a T4 filter, so a weak rule

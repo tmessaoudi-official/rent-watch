@@ -644,7 +644,7 @@ run_sabotage "redaction fails OPEN on a PCRE error (raw text returned)" \
 
 run_sabotage "schema version stops tracking the schema (an older database opens and then throws)" \
   src/php/Store/Store.php \
-  's%public const int SCHEMA_VERSION = 3;%public const int SCHEMA_VERSION = 1;%'
+  's%public const int SCHEMA_VERSION = [0-9]\+;%public const int SCHEMA_VERSION = 1;%'
 
 run_sabotage "the v1 upgrade never runs (seen_epoch column missing forever)" \
   src/php/Store/Store.php \
@@ -1545,6 +1545,47 @@ run_sabotage "--seed no longer gets past the empty-database guard" \
 run_sabotage "the seen-set emptiness answer comes from the process, not the rows" \
   src/php/Store/Store.php \
   's%return (int) \$this->pdo->query(.SELECT EXISTS (SELECT 1 FROM listings).)->fetchColumn() === 0;%return false;%'
+
+# ── schema v4, the cross-portal group ─────────────────────────────────────────────────────────────
+# Every guarantee below fails SILENTLY. A group that stops being assigned looks exactly like a market
+# with no cross-portal duplicates; a history that reports nothing looks like a flat whose rent never
+# moved. Neither shows up as an error, and both are invisible in a green suite.
+
+run_sabotage "a cluster's members are no longer tied into a group" \
+  src/php/Store/Store.php \
+  's%\$members = array_values(array_unique(\$memberKeys));%$members = [];%'
+
+# The one that survives a shuffle. Minting from whoever survived THIS pass renames the group every
+# time source order changes, and orphans any member that delisted in between.
+run_sabotage "the group key is minted fresh each pass instead of adopted" \
+  src/php/Store/Store.php \
+  's%\$adopted ??= \$members\[0\];%$adopted = $members[0];%'
+
+# NULL never equals NULL in SQL, so taking the group branch for an ungrouped listing reports "no
+# price history" for most of the database, silently.
+run_sabotage "the joined history compares a NULL group against itself" \
+  src/php/Store/Store.php \
+  's%if (\$group === null) {%if (false) {%'
+
+# The §1-adjacent one: a group-scoped notification gate hides a real flat the moment an over-merge
+# happens, and hides it permanently.
+run_sabotage "grouping also marks its members notified" \
+  src/php/Store/Store.php \
+  's%UPDATE listings SET group_key = :group WHERE dedup_key = :key%UPDATE listings SET group_key = :group, notified_at = first_seen_at WHERE dedup_key = :key%'
+
+run_sabotage "an older database is opened without ever adding group_key" \
+  src/php/Store/Store.php \
+  's%if (\$recorded < 4) {%if (false) {%'
+
+# Back to the pre-v4 shape: cluster first, record only survivors. The overlay then ships inert —
+# every group is a group of one and nothing anywhere says so.
+run_sabotage "only the cluster survivor is recorded" \
+  src/php/Cli/Pipeline.php \
+  "s%foreach (\\\$cluster\\['members'\\] as \\\$member) {%foreach ([\$cluster['listing']] as \$member) {%"
+
+run_sabotage "--seed marks only the survivor, leaving members to be announced later" \
+  src/php/Cli/Pipeline.php \
+  "s%foreach (\\\$clusterKeys\\[spl_object_id(\\\$listing)\\] as \\\$memberKey) {%foreach ([\$sighting->dedupKey] as \$memberKey) {%"
 
 printf '\n  %d sabotage(s) detected, %d undetected\n' "$pass" "$fail"
 

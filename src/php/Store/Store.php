@@ -45,7 +45,7 @@ final readonly class Store
      * without complaint and then threw a raw `no such column` at the first sighting. That is the
      * whole argument for this constant existing, demonstrated against itself.
      */
-    public const int SCHEMA_VERSION = 3;
+    public const int SCHEMA_VERSION = 4;
 
     /** Spec §8: the mean is rolling over seven days, not over a fixed number of runs. */
     public const int ROLLING_WINDOW_DAYS = 7;
@@ -236,9 +236,27 @@ final readonly class Store
                 -- will not be small. `scout reclassify` is what consumes these.
                 tenure          TEXT,
                 confidence_bp   INTEGER,
-                signals_json    TEXT
+                signals_json    TEXT,
+                -- Schema v4, ruled 2026-08-19. Ties the members of a dedup cluster together so a
+                -- flat listed on two portals has ONE readable price history. It is a HISTORY
+                -- concept and nothing else: `dedup_key` stays per-source, `price_history` rows stay
+                -- attached to the source that observed them, and `notified_at` is never consulted
+                -- through the group. A group-scoped notification gate would permanently suppress
+                -- the second listing once two members stop clustering — under-merge notifies twice,
+                -- which is visible and self-correcting; over-merge hides a flat, which is silent.
+                --
+                -- NULL means "never clustered under a version that recorded it" and is NOT
+                -- backfilled, for the same reason `tenure` is not: a backfilled self-group would be
+                -- indistinguishable from a real one, and that is the distinction the queries need.
+                group_key       TEXT
             );
 
+            -- `listings_group` is deliberately NOT here, and this is not an oversight. On an
+            -- existing v3 database `CREATE TABLE IF NOT EXISTS` skips the table, so `group_key` does
+            -- not exist yet and indexing it fails the whole DDL before `upgradeFrom()` can add the
+            -- column. It is created in the v4 step instead, after the ALTER — which a brand-new
+            -- database also runs, because a fresh store is stamped 1 and upgraded rather than
+            -- stamped current.
             CREATE INDEX IF NOT EXISTS listings_source ON listings (source);
 
             CREATE TABLE IF NOT EXISTS price_history (
@@ -386,6 +404,20 @@ final readonly class Store
                 );
             }
 
+            if ($recorded < 4) {
+                // Additive and re-runnable, like every step above it. NOT backfilled: see the DDL
+                // comment on the column — a self-group written here would be indistinguishable from
+                // a cluster that genuinely has one member, and `groupPriceHistory()` tells those
+                // apart by exactly this NULL.
+                $existing = array_column($this->pdo->query('PRAGMA table_info(listings)')->fetchAll(), 'name');
+
+                if (!\in_array('group_key', $existing, true)) {
+                    $this->pdo->exec('ALTER TABLE listings ADD COLUMN group_key TEXT');
+                }
+
+                $this->pdo->exec('CREATE INDEX IF NOT EXISTS listings_group ON listings (group_key)');
+            }
+
             $stamp = $this->pdo->prepare("UPDATE schema_meta SET value = :value WHERE key = 'schema_version'");
             $stamp->execute(['value' => (string) self::SCHEMA_VERSION]);
 
@@ -463,7 +495,7 @@ final readonly class Store
      * **Out-of-order sightings are expected, not exceptional.** Email-alert ingestion is the primary
      * path (hard rule 4) and delivers out of publication order routinely — an initial backfill, a
      * provider-delayed alert. A stale sighting therefore never overwrites the current state, and it
-     * is never a price drop.
+     * is not a price drop, whatever the arithmetic says.
      *
      * Two baselines, and they are not interchangeable — see the comment in the body. The DELTA is
      * measured against what we currently believe; the changes-only HISTORY is measured against the
@@ -609,7 +641,7 @@ final readonly class Store
             rentCc: $rentCc,
             previousRentCc: $previousRentCc,
             rentDeltaCc: $delta,
-            // A SUPERSEDED observation is never a price drop, whatever its arithmetic says. A
+            // A SUPERSEDED observation is not a price drop, whatever its arithmetic says. A
             // delayed alert carrying an older, intermediate price made the store answer "yes,
             // dropped to 900" for a flat whose current rent it correctly believed to be 1000 — the
             // row was hardened against this and the verdict object was left exposed.
@@ -630,6 +662,163 @@ final readonly class Store
         $statement->execute(['key' => $dedupKey]);
 
         return array_map(static fn (array $row): int => (int) $row['rent_cc'], $statement->fetchAll());
+    }
+
+    // ── The cross-portal group (schema v4, ruled 2026-08-19) ──────────────────────────────────────
+
+    /** The group a listing belongs to, or null if it has never clustered with anything. */
+    public function groupKey(string $dedupKey): ?string
+    {
+        $statement = $this->pdo->prepare('SELECT group_key FROM listings WHERE dedup_key = :key');
+        $statement->execute(['key' => $dedupKey]);
+        $row = $statement->fetch();
+
+        return $row === false || $row['group_key'] === null ? null : (string) $row['group_key'];
+    }
+
+    /**
+     * Tie the members of a dedup cluster together, and report the group they now share.
+     *
+     * **The key is STICKY, and that is the whole design.** `Dedup::cluster()` keeps the FIRST item
+     * as survivor, ordering is the caller's, and `Core/Pacer` shuffles source order on every pass —
+     * so survivorship flips routinely. Minting the key from whoever survived THIS pass would rename
+     * the group each time the shuffle changed its mind, and a member that delisted in between would
+     * keep a key nobody else carries. That orphaning is exactly the failure the ruling rejected a
+     * read-only join for: a flat whose surviving portal changes loses its history at the one seam
+     * worth notifying on. So an existing group is adopted, and a new one minted only when no member
+     * has one.
+     *
+     * Two groups that meet are MERGED rather than left to disagree — reachable whenever a third
+     * listing corroborates two that never clustered with each other, because `Dedup`'s tolerances
+     * are pairwise and transitivity is not guaranteed.
+     *
+     * A group is not unmade once formed. A persisted union is permanent, which is ruled and accepted: the
+     * blast radius is one presentation view, because per-source rows, per-source `priceHistory()`
+     * and per-source drop detection are all untouched by it.
+     *
+     * @param list<string> $memberKeys cluster members, survivor first
+     *
+     * @throws \InvalidArgumentException if a key was never recorded — grouping a listing the store
+     *                                   has never seen would silently create a group of one
+     */
+    public function assignGroup(array $memberKeys): ?string
+    {
+        $members = array_values(array_unique($memberKeys));
+
+        // Checked BEFORE the singleton short-circuit, so an unknown key is refused whether or not it
+        // happens to have company. A missing row here means the caller recorded nothing, and a group
+        // quietly assembled from listings that were never stored is unobservable.
+        $existing = [];
+
+        foreach ($members as $key) {
+            $statement = $this->pdo->prepare('SELECT group_key FROM listings WHERE dedup_key = :key');
+            $statement->execute(['key' => $key]);
+            $row = $statement->fetch();
+
+            if ($row === false) {
+                throw new \InvalidArgumentException(sprintf(
+                    'annonce inconnue, impossible de la regrouper : %s',
+                    $key,
+                ));
+            }
+
+            $existing[$key] = $row['group_key'] === null ? null : (string) $row['group_key'];
+        }
+
+        // A cluster of one is not a group. NULL keeps "never clustered" distinguishable from
+        // "clustered, and the others have gone" — `groupPriceHistory()` branches on precisely that.
+        if (count($members) < 2) {
+            return null;
+        }
+
+        $adopted = null;
+
+        foreach ($members as $key) {
+            if ($existing[$key] !== null) {
+                $adopted = $existing[$key];
+                break;
+            }
+        }
+
+        // Minted from the survivor only when nothing to adopt. Any member's key would do; the
+        // survivor's is the one the caller already treats as the cluster's representative.
+        $adopted ??= $members[0];
+
+        $this->pdo->exec('BEGIN IMMEDIATE');
+
+        try {
+            $absorb = $this->pdo->prepare('UPDATE listings SET group_key = :into WHERE group_key = :from');
+
+            foreach (array_unique(array_filter($existing)) as $other) {
+                if ($other !== $adopted) {
+                    // Every row of the losing group, not just the members in hand — a group that was
+                    // only half-merged would report two histories for one flat, and the half left
+                    // behind is the half whose portal has already delisted.
+                    $absorb->execute(['into' => $adopted, 'from' => $other]);
+                }
+            }
+
+            $join = $this->pdo->prepare('UPDATE listings SET group_key = :group WHERE dedup_key = :key');
+
+            foreach ($members as $key) {
+                $join->execute(['group' => $adopted, 'key' => $key]);
+            }
+
+            $this->pdo->exec('COMMIT');
+        } catch (\Throwable $failure) {
+            self::rollBackQuietly($this->pdo);
+
+            throw $failure;
+        }
+
+        return $adopted;
+    }
+
+    /**
+     * The price history of a listing's whole group, oldest first, each entry naming the source.
+     *
+     * **A listing with no group reports its OWN history, not an empty one.** Deriving the group with
+     * `WHERE group_key = (SELECT group_key FROM listings WHERE dedup_key = :key)` reads correctly
+     * and is wrong: SQL's NULL is never equal to NULL, so an ungrouped listing — which is most of
+     * them — would match no rows at all and report "no price history" silently.
+     *
+     * The group is derived by JOIN rather than copied onto `price_history`, so a later merge cannot
+     * leave a second copy of the column stale.
+     *
+     * @return list<array{source: string, rent_cc: int, at: string}>
+     */
+    public function groupPriceHistory(string $dedupKey): array
+    {
+        $group = $this->groupKey($dedupKey);
+
+        if ($group === null) {
+            $statement = $this->pdo->prepare(
+                'SELECT l.source AS source, h.rent_cc AS rent_cc, h.at AS at
+                   FROM price_history h
+                   JOIN listings l ON l.dedup_key = h.dedup_key
+                  WHERE h.dedup_key = :key
+                  ORDER BY h.at_epoch ASC, h.id ASC',
+            );
+            $statement->execute(['key' => $dedupKey]);
+        } else {
+            $statement = $this->pdo->prepare(
+                'SELECT l.source AS source, h.rent_cc AS rent_cc, h.at AS at
+                   FROM price_history h
+                   JOIN listings l ON l.dedup_key = h.dedup_key
+                  WHERE l.group_key = :group
+                  ORDER BY h.at_epoch ASC, h.id ASC',
+            );
+            $statement->execute(['group' => $group]);
+        }
+
+        return array_map(
+            static fn (array $row): array => [
+                'source' => (string) $row['source'],
+                'rent_cc' => (int) $row['rent_cc'],
+                'at' => (string) $row['at'],
+            ],
+            $statement->fetchAll(),
+        );
     }
 
     /** What the store currently believes about a listing, or null if it has never been seen. */

@@ -99,6 +99,47 @@ final readonly class Pipeline
         $clustered = $this->dedup->cluster($harvested);
         $duplicates = count($harvested) - count($clustered);
 
+        // EVERY member is recorded and classified here, not just the survivor the loop below
+        // iterates. Until schema v4 the pipeline clustered first and recorded only survivors, so an
+        // absorbed duplicate had no row at all — and `listings.group_key` on top of that would only
+        // ever describe groups of one, shipping inert while looking finished.
+        //
+        // Classified, not merely recorded: `Store::staleVerdicts()` selects `tenure IS NULL` and
+        // that value already means "stored before schema v3, deliberately not backfilled". Leaving
+        // members NULL would give it a second meaning and silently enlarge what `scout reclassify`
+        // re-announces.
+        //
+        // Recorded once and reused below, keyed on object identity, so the survivor is not stored
+        // twice in one pass.
+        /** @var array<int, array{sighting: \RentWatch\Store\Sighting, classification: \RentWatch\Core\Classification}> $observed */
+        $observed = [];
+        /** @var array<int, list<string>> $clusterKeys survivor object id -> every member's dedup key */
+        $clusterKeys = [];
+
+        foreach ($clustered as $cluster) {
+            $memberKeys = [];
+
+            foreach ($cluster['members'] as $member) {
+                $classification = $this->classifier->classify($member, $this->profileFor($sources, $member));
+                $sighting = $this->store->record($member, $member->effectiveRentCc(), $nowIso);
+                $this->store->recordVerdict(
+                    $sighting->dedupKey,
+                    $classification->tenure->value,
+                    $classification->confidenceBp,
+                    $classification->reasons(),
+                );
+
+                $observed[spl_object_id($member)] = ['sighting' => $sighting, 'classification' => $classification];
+                $memberKeys[] = $sighting->dedupKey;
+            }
+
+            // A cluster of one is not a group and `assignGroup()` returns null for it, leaving
+            // `group_key` NULL — which is what keeps "never clustered" distinguishable from
+            // "clustered, and the others have since delisted".
+            $this->store->assignGroup($memberKeys);
+            $clusterKeys[spl_object_id($cluster['listing'])] = $memberKeys;
+        }
+
         $matches = 0;
         $digested = 0;
         $rejectedCount = 0;
@@ -106,20 +147,14 @@ final readonly class Pipeline
         $undelivered = 0;
         $rejected = [];
 
-        /** @var list<array{listing: RawListing, verdict: Verdict, key: string}> $digestEntries */
+        /** @var list<array{listing: RawListing, verdict: Verdict, key: string, keys: list<string>}> $digestEntries */
         $digestEntries = [];
 
         foreach ($clustered as $cluster) {
             $listing = $cluster['listing'];
-            $classification = $this->classifier->classify($listing, $this->profileFor($sources, $listing));
-
-            $sighting = $this->store->record($listing, $listing->effectiveRentCc(), $nowIso);
-            $this->store->recordVerdict(
-                $sighting->dedupKey,
-                $classification->tenure->value,
-                $classification->confidenceBp,
-                $classification->reasons(),
-            );
+            $observation = $observed[spl_object_id($listing)];
+            $sighting = $observation['sighting'];
+            $classification = $observation['classification'];
 
             // Freshness (score component S7) is measured from FIRST seen, not from this sighting.
             // `null` means "new right now" and earns the bonus outright; an existing listing earns
@@ -152,6 +187,8 @@ final readonly class Pipeline
                         'listing' => $listing,
                         'verdict' => $verdict,
                         'key' => $sighting->dedupKey,
+                        // Every member, for `--seed` only — see the seeding branch below.
+                        'keys' => $clusterKeys[spl_object_id($listing)],
                     ];
                 }
 
@@ -167,7 +204,16 @@ final readonly class Pipeline
                 // which is precisely what Q36 exists to prevent. `--seed` means "treat everything
                 // currently published as already seen AND already told about"; only what appears
                 // after it is news.
-                $this->store->markNotified($sighting->dedupKey, $nowIso);
+                //
+                // EVERY MEMBER, not just the survivor. The contract is "everything currently
+                // published is already seen AND already told about", and an absorbed member is
+                // currently published — so the first later pass whose shuffle flipped survivorship
+                // would notify it, which is the flood moved one run later rather than prevented.
+                // This is not group-scoped suppression: it marks listings that were seen and seeded,
+                // and it would mark them identically if they had clustered with nothing.
+                foreach ($clusterKeys[spl_object_id($listing)] as $memberKey) {
+                    $this->store->markNotified($memberKey, $nowIso);
+                }
 
                 continue;
             }
@@ -217,8 +263,13 @@ final readonly class Pipeline
 
         if ($digestEntries !== []) {
             if ($seedOnly) {
+                // Every member, for the same reason the match path seeds every member: an absorbed
+                // duplicate is currently published, so seeding only the survivor leaves it to be
+                // announced by the first pass that reshuffles source order.
                 foreach ($digestEntries as $entry) {
-                    $this->store->markNotified($entry['key'], $nowIso);
+                    foreach ($entry['keys'] as $memberKey) {
+                        $this->store->markNotified($memberKey, $nowIso);
+                    }
                 }
             } else {
                 // Emitted at the end of any run that produced NEW entries (Q34), rather than once a
