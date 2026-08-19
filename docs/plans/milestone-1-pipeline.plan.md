@@ -1027,3 +1027,20 @@ its group; divergent keys merge), **rent events** (singleton `groupPriceHistory`
 **seen-set** (an over-merged group cannot suppress a notification; `--seed` marks every member).
 `Store/` changes, so the sabotage ledger runs — `SABOTAGE_FILTER` on the new cases first, full ledger
 before done.
+
+### Two behaviour changes v4 makes that are easy to mistake for bugs
+
+Both are deliberate, both are in the visible-and-self-correcting direction, and neither is obvious
+from the diff — so they are written here rather than left for a later session to "fix".
+
+- **A malformed listing now aborts the pass instead of being silently absorbed.** `Store::dedupKey()`
+  refuses a listing with no id, no URL and no title (an adapter bug — hard rule 3). That was already
+  fatal when such a listing was a cluster SURVIVOR; it was invisible when the listing happened to be
+  absorbed as a duplicate, because duplicates were never recorded. Now every member is recorded, so
+  both cases are loud. That is consistent, and it is the direction hard rule 3 wants — but it does
+  mean a pass can now fail on an input that previously passed.
+- **A delivered digest marks only the survivor**, so a later pass whose shuffle flips survivorship can
+  digest the same flat again. This is the SAME trade already documented for matches, and it must not
+  be "fixed" by marking members notified on delivery: that is group-scoped suppression, and an
+  over-merge would then hide a real flat permanently and silently. `--seed` marks every member and is
+  not an exception to this — seeding is about listings that are currently published, not about groups.
