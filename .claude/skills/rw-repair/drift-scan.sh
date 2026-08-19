@@ -26,39 +26,43 @@ QUIET=0; [[ "${1:-}" == "--quiet" ]] && QUIET=1
 FINDINGS="$(mktemp)"; trap 'rm -f "$FINDINGS"' EXIT
 say() { (( QUIET )) || printf '%s\n' "$1"; }
 
-# ── S1: the shipped framework's skill list vs the filesystem ─────────────────────────────────────
-# install.sh copies CLAUDE-global.md to ~/.claude/CLAUDE.md UNCONDITIONALLY, so a wrong claim there
-# becomes the next session's own system prompt. Highest-severity drift this repo can carry.
-# Only the PARENTHESISED not-installed list is parsed; prose after "NOT installed here" may name an
-# installed skill legitimately while explaining a past defect.
-say "── S1 shipped framework vs .claude/skills/"
+# ── S1: the container-era bootstrap must STAY gone ───────────────────────────────────────────────
+# Until 2026-08-18 this section compared a shipped CLAUDE-global.md's skill list against
+# .claude/skills/, because install.sh copied that file over ~/.claude/CLAUDE.md UNCONDITIONALLY —
+# a wrong claim there became the next session's own system prompt. The de-containerization deleted
+# scripts/claude-bootstrap/ entirely, which left this section guarded by a file-absent skip: dead
+# code that could never fire again in a live gate.
+# It now asserts the INVERSE, which is the property that actually needs defending: the bootstrap
+# stays gone. Reinstating it — by a restore, a revert, or a port from a sibling repo — would once
+# more clobber the developer's own ~/.claude/ install, and the one-shot .pre-bootstrap.bak safety
+# net was spent back in July. Same shape as S4b's assertion that `deny` stays empty.
+say "── S1 the container-era bootstrap stays gone"
 python3 - <<'PY' >>"$FINDINGS"
-import pathlib, re, sys
-have = {p.parent.name for p in pathlib.Path('.claude/skills').glob('*/SKILL.md')}
-g = pathlib.Path('scripts/claude-bootstrap/CLAUDE-global.md')
-if not g.is_file():
-    # De-containerized 2026-08-18: the repo no longer ships a framework copy, because
-    # ~/.claude/ is now the developer's own persistent install rather than an ephemeral
-    # container rebuilt each session. With no shipped framework there is nothing for S1
-    # to compare against, so this is a clean skip, not drift.
-    sys.exit(0)
-m = re.search(r'As built:(.*?)Anything else named in this framework\s*\((.*?)\)\s*is \*\*NOT installed here\*\*',
-              g.read_text(), re.S)
-if not m:
-    print("P1  CLAUDE-global.md § Global Skills Reference no longer has the expected 'As built: … / "
-          "Anything else named (…) is **NOT installed here**' shape — drift-scan cannot verify the "
-          "skill list. Fix the shape, or fix this scanner.")
-    sys.exit(0)
-built  = set(re.findall(r'`/([a-z-]+)`', m.group(1)))
-absent = set(re.findall(r'`/([a-z-]+)`', m.group(2)))
-for s in sorted(have & absent):
-    print(f"P0  /{s} exists at .claude/skills/{s}/ but CLAUDE-global.md lists it as NOT installed. "
-          f"install.sh ships that file to ~/.claude/CLAUDE.md unconditionally, so the next session is "
-          f"told it lacks a skill it has.")
-for s in sorted(have - built - absent):
-    print(f"P0  /{s} exists on disk but appears in NEITHER list — a session will not know it exists.")
-for s in sorted(built - have - {'loop'}):
-    print(f"P1  /{s} is listed as built but .claude/skills/{s}/ does not exist.")
+import json, pathlib
+d = pathlib.Path('scripts/claude-bootstrap')
+if d.exists():
+    print("P0  scripts/claude-bootstrap/ exists again — it was removed 2026-08-18. Its install.sh "
+          "ran at SessionStart and cp -f'd an in-repo, container-era framework copy over "
+          "~/.claude/CLAUDE.md (a copy that BANNED AskUserQuestion). ~/.claude/ is the developer's "
+          "own persistent install and this repo never writes it. Delete the directory; do not "
+          "re-register it.")
+s = pathlib.Path('.claude/settings.json')
+if s.is_file():
+    text = s.read_text()
+    if 'claude-bootstrap' in text:
+        print("P0  .claude/settings.json still references scripts/claude-bootstrap — a hook wired at "
+              "a path removed 2026-08-18. Remove the registration.")
+    try:
+        hooks = json.loads(text).get('hooks', {})
+    except json.JSONDecodeError as e:
+        print(f"P0  .claude/settings.json is not valid JSON ({e}) — every hook claim below is "
+              f"unverifiable and Claude Code will not load it.")
+        hooks = {}
+    for event in ('SessionStart', 'PreCompact'):
+        if event in hooks:
+            print(f"P1  .claude/settings.json registers a {event} hook. Both were removed 2026-08-18 "
+                  f"with the bootstrap; session handoffs are the GLOBAL "
+                  f"~/.claude/hooks/precompact-handoff.sh's job. Confirm this is deliberate.")
 PY
 # A python section that CRASHES must not read as a section that found nothing. Under
 # `set -uo pipefail` with no `-e`, an exception here printed a traceback to stderr, wrote

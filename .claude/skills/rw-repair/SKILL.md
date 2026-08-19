@@ -63,13 +63,21 @@ and before a milestone boundary.
 
 ---
 
-## Section 1 — THE SHIPPED FRAMEWORK (run this first; it is the one with teeth)
+## Section 1 — THE BOOTSTRAP STAYS GONE (run this first; it is the one with teeth)
 
 **De-containerized 2026-08-18**: the repo no longer ships a framework copy — `~/.claude/` is the
-developer's own persistent install and `scripts/claude-bootstrap/` is gone. `drift-scan.sh` § S1
-therefore **cleanly skips** when the shipped file is absent (a guarded `sys.exit(0)`, not drift).
-The section stays documented because the check re-arms automatically if a framework copy ever
-reappears.
+developer's own persistent install and `scripts/claude-bootstrap/` is gone.
+
+S1 used to compare that shipped copy's skill list against `.claude/skills/`. With the copy deleted
+that check could only ever skip, so it was **dead code inside a live gate** — the shape this repo
+records against everything else. **It now asserts the inverse**, which is the property that
+actually needs defending: the directory must not come back, `.claude/settings.json` must not name
+it, and no `SessionStart` or `PreCompact` registration may reappear. Reinstating any of them would
+once more `cp -f` a container-era framework over the developer's own `~/.claude/CLAUDE.md`, and the
+one-shot `.pre-bootstrap.bak` safety net was spent in July. Same shape as § S4b's assertion that
+`deny` stays empty — an invariant a later sibling-repo port could otherwise reintroduce.
+
+Pinned by a mutant: `mkdir -p scripts/claude-bootstrap` turns `P0=0` into `P0=1`.
 
 ```bash
 # Ground truth
