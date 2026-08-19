@@ -122,6 +122,18 @@ final class PayloadTest extends TestCase
         yield 'mixed English format' => ['1,450.50', 1451, 'comma thousands, dot decimal'];
         yield 'mixed French format' => ['1.450,50', 1451, 'dot thousands, comma decimal — the mirror image'];
         yield 'a suffix' => ['1450 €/mois', 1450, ''];
+
+        // ── A UNIT OR A LABEL CARRYING ITS OWN DIGITS ─────────────────────────────────────────
+        // Found against a real In'li capture, 2026-08-19. The old parser deleted every character
+        // that was not a digit or a separator and then read whatever remained as ONE number, so any
+        // second digit anywhere in the string silently fused into the first. Nothing rejected it and
+        // nothing looked wrong: a surface, a room count and a rent are all plausible at almost any
+        // magnitude, so the corruption reaches the criteria engine as ordinary data.
+        yield 'a unit whose name contains a digit' => ['55,32 m2', 55, 'THE FUSION BUG: `m2` contributes an ASCII 2, so the strip left `55,322`, whose last three digits then read as a thousands group — 55322 m². `m²` happened to be safe only because U+00B2 is not an ASCII digit, which is luck, not design'];
+        yield 'two quantities in one text node' => ['3 pièces · 55.32 m²', 3, 'the In\'li card packs rooms and surface into one node; the first token is the room count, and the surface is isolated by the html resolver\'s regex capture rather than by hoping this returns it'];
+        yield 'a type label before the count' => ['T3 · 2 pièces', 3, 'first token wins, and here that is the T-number — same value a human reads first'];
+        yield 'an id before the price' => ['Réf 12 — 1 450 €', 12, 'THE ACCEPTED COST of first-token: this yields the reference, not the rent. It is stated rather than hidden — but it beats the old behaviour, which fused them into 121450 and looked like a number'];
+
         yield 'no digits at all' => ['sur demande', null, 'null, never 0 — this is the disqualification trap'];
         yield 'an empty string' => ['', null, ''];
         yield 'a placeholder' => ['N/C', null, ''];
@@ -131,6 +143,22 @@ final class PayloadTest extends TestCase
     public function testAFloatKeepsItsFraction(): void
     {
         self::assertSame(91.5, Payload::float(['v' => '91,5'], ['v']));
+    }
+
+    /**
+     * The float half of the fusion bug, kept separate because `int` rounds and could hide it.
+     *
+     * A surface is the field where this did the most damage: `55,32 m2` became 55322 m², and a
+     * 55 m² flat with a surface two orders of magnitude too large passes every `surface_min` and
+     * scores as though it were a mansion. `CLAUDE.md` hard rule 9 says `null` is not zero; this is
+     * its neighbour — a fabricated number is not a missing one, and it is worse, because a `null`
+     * is visible as unknown and a wrong figure is not.
+     */
+    public function testAUnitCarryingItsOwnDigitDoesNotFuseIntoTheValue(): void
+    {
+        self::assertSame(55.32, Payload::float(['v' => '55,32 m2'], ['v']));
+        self::assertSame(55.32, Payload::float(['v' => '55.32 m²'], ['v']));
+        self::assertSame(3.0, Payload::float(['v' => '3 pièces · 55.32 m²'], ['v']));
     }
 
     // ---------------------------------------------------------------- booleans

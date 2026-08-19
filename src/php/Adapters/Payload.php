@@ -218,15 +218,39 @@ final class Payload
             return null;
         }
 
-        // Strip everything that is not a digit, a separator or a leading sign. `1 450,50 €/mois`
-        // and `1.450 €` both have to survive; the narrow-no-break space French formatting uses is
-        // not matched by `\s` in a non-unicode pattern, so it is removed as a literal first.
+        // Remove the spaces that are THOUSANDS SEPARATORS, so `1 450` is one token rather than two.
+        // The narrow-no-break space French typography uses is not matched by `\s` in a non-unicode
+        // pattern, so each variant is removed as a literal.
         $raw = str_replace(["\u{202F}", "\u{00A0}", "\u{2009}", ' '], '', trim($value));
-        $raw = preg_replace('~[^0-9,.\-]~u', '', $raw) ?? '';
 
-        if (!preg_match('~-?\d~', $raw)) {
+        // THEN take the FIRST NUMERIC TOKEN — not every digit left in the string.
+        //
+        // The previous version deleted every character that was not a digit or a separator and read
+        // what remained as one number. That is correct only while the string contains exactly one
+        // quantity, and real listing text routinely carries two:
+        //
+        //   '55,32 m2'            -> old: `55,322` -> 55322    (the unit's own `2` fused on, and the
+        //                                                       last three digits then read as a
+        //                                                       thousands group)
+        //   '3 pièces · 55.32 m²' -> old: `355.32`             (rooms and surface fused)
+        //   'Réf 12 — 1 450 €'    -> old: `121450`             (a reference and a rent fused)
+        //
+        // Every one of those is plausible as a rent, a surface or a room count, so nothing
+        // downstream could reject it — the criteria engine simply scored a fabricated number.
+        // `m²` escaped only because U+00B2 is not an ASCII digit, which is luck rather than design.
+        //
+        // The token may not END on a separator, so `1450.` yields `1450` rather than a trailing dot
+        // that `is_numeric` would accept and that means nothing.
+        //
+        // The cost, stated rather than hidden: when a string leads with a quantity that is not the
+        // one wanted, this returns the leading one. That is a visible, explainable wrong value
+        // instead of an invented one, and the html field map isolates the intended quantity with a
+        // regex capture rather than relying on token order.
+        if (!preg_match('~-?\d[\d.,]*\d|-?\d~u', $raw, $token)) {
             return null;
         }
+
+        $raw = $token[0];
 
         // Which separator is the decimal point?
         //

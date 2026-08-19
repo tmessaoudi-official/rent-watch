@@ -997,6 +997,29 @@ run_sabotage "the thousands-separator rule is dropped (1.450 becomes 1)" \
   src/php/Adapters/Payload.php \
   's%if (\$trailing === 3) {%if (false) {%'
 
+# Restores the pre-2026-08-19 parser: strip every non-digit, then read what is left as ONE number.
+# It reads as a tidy simplification and it silently FUSES two quantities into one — `55,32 m2`
+# became 55322 m², `3 pièces · 55.32 m²` became 355.32, `Réf 12 — 1 450 €` became 121450. Every
+# fused value is plausible as a rent, a surface or a room count, so nothing downstream can reject
+# it and the criteria engine simply scores an invented number. Found against a real In'li capture.
+#
+# NOTE the anchor: the token regex itself is unmatchable from a BRE without a pile of escapes (`\d`
+# has no BRE meaning and `[` opens a bracket expression), and an over-escaped pattern silently
+# matches nothing — which is a sabotage that reports `ok` while testing NOTHING. Both first attempts
+# here did exactly that and were caught by the harness's own `cmp -s` no-op guard. Anchor on the
+# plain assignment underneath instead; it says the same thing and cannot rot into a no-op.
+run_sabotage "a unit's own digit fuses into the number again (55,32 m2 -> 55322)" \
+  src/php/Adapters/Payload.php \
+  's%\$raw = \$token\[0\];%\$raw = preg_replace("~[^0-9,.-]~u", "", \$raw) ?? "";%'
+
+# The other half: the token is found, but the LAST one wins instead of the first. Reads as an
+# equally arbitrary choice and is worse — `3 pièces · 55.32 m²` yields 55 rooms, and a single-number
+# string (every rent this project has ever parsed) is unaffected, so the change looks harmless in
+# every test that does not deliberately put two quantities in one string.
+run_sabotage "the LAST numeric token wins instead of the first" \
+  src/php/Adapters/Payload.php \
+  's%\$raw = \$token\[0\];%preg_match_all("~-?[0-9][0-9.,]*[0-9]|-?[0-9]~u", \$raw, \$all); \$raw = end(\$all[0]);%'
+
 run_sabotage "an unrecognised boolean spelling becomes false instead of null" \
   src/php/Adapters/Payload.php \
   's%default => null,%default => false,%'
