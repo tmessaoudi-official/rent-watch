@@ -53,6 +53,55 @@ What the ruling cost, and how each cost is paid:
   a closing quote between the name and the colon, which pattern 5 did not allow for. Both fixed with
   matching test cases.
 
+## Remaining work — estimate (2026-08-19)
+
+Written down because "how much is left" is the question a compact destroys first, and because the
+answer here is not one number: the code is nearly finished and the product delivers nothing, and
+both of those are true at once.
+
+**Built so far:** 11 722 lines under `src/php/`, 9 548 under `tests/`, 66 classes, 19 PHPUnit
+suites, 1 327 tests / 4 732 assertions, 278 sabotage cases. Spec milestones 1 (core skeleton),
+2 (classifier) and 4 (health + `doctor`) are complete; the network adapters, the notification
+channels, Q37 pacing and CI were all built ahead of their milestone.
+
+### Three different percentages, because they disagree
+
+| Axis | Complete | Why it reads that way |
+|---|---|---|
+| **Code written** (excl. `src/phorj/`) | **~80%** | Everything but the `html` adapter, `Enrich/`, and cross-portal price history exists and is tested |
+| **Code written** (incl. `src/phorj/`) | **~65%** | The phorj port re-writes ~2 500 lines of pure core plus a differential harness |
+| **Product usable by the developer** | **~0%** | Zero live sources. Every `config/sources.json` entry is `enabled: false` with a `REMPLACER` URL (15 occurrences). It notifies about nothing real |
+
+That last row is the one that matters, and it is **one input away**, not one milestone away.
+
+### Remaining items
+
+| Item | Effort | Blocked on | Milestone |
+|---|---|---|---|
+| `html` adapter + CSS-selector parser | **L** — ~1 000 lines + tests, and no Composer means writing the selector engine | nothing — **the largest unblocked item** | 3/5 |
+| First real `json` source (In'li) | **M** — mostly config, but the first of a type shakes out the adapter | DevTools cURL capture (hard rule 1) | 3 |
+| First real `email_alert` portal | **M** — same shakedown, plus a parser shaped to a real message | IMAP credentials + one real alert email | 6 |
+| `PlafondBands` tier-4 figures | **S** — the class ships deliberately empty; ~150 lines of data + tests | the `plafonds de ressources` tables per zone/household | 2 |
+| Remaining 4 institutional sources | **S each** — config-only once the first of each type works | the captures above | 5/7 |
+| `Enrich/transit` + `Enrich/geo` | **M** — not started; door-to-door commute, commune → INSEE | IDFM/PRIM API key | 8 |
+| Cross-portal price history per *logical* listing | **M** — the store keys per source today; clustering is a separate failure profile | nothing | 8 |
+| Real corpus texts replacing 114/114 synthetic | **M** — append, never renumber | the captures above | 2 |
+| `src/phorj/` port of the pure core | **L** — the point of the two-language tree | three phorj builds (`docs/PHORJ-REQUIREMENTS.md`) | — |
+| Final MAXIMAL certification round | **M** — 3 lenses, two consecutive clean rounds, frozen commit | the above landing | — |
+
+### Wall-clock, in sessions of the size worked on 2026-08-19
+
+- **Unblocked right now: ~1.5 sessions.** The `html` adapter is ~1 session; cross-portal price
+  history ~half.
+- **Blocked on inputs: ~3–4 sessions**, and they unblock cheaply — the first real source is ~2 h
+  after its capture arrives, each subsequent one of the same type ~30–60 min.
+- **phorj port: ~2–3 sessions**, independent of everything else.
+- **Final certification: ~1 session.**
+
+**Total ≈ 8–9 sessions, ~25–35 working hours** — but the calendar is set by how long the four
+inputs take to arrive, not by the hours. Supplying the first cURL capture moves the "product
+usable" row from 0% to something real in a single afternoon; nothing else on this list does that.
+
 ## Decisions Log
 
 - [2026-08-07 14:20] AGREED: the store takes ISO-8601 timestamps as arguments rather than reading the
@@ -870,3 +919,10 @@ A changelog that overstates is worse than one that omits, because the next sessi
   TRAILING SPACE: without it the pattern also matches the `run_sabotage() {` definition and reports
   one case that does not exist, which is a phantom for anyone reconciling this figure against a
   ledger run's own total.
+
+- [2026-08-19 20:05] AGREED: the remaining-work estimate is persisted in this file (§ "Remaining
+  work — estimate") rather than answered in chat, because it is exactly the kind of answer a compact
+  destroys. Three percentages are recorded rather than one, because they disagree honestly: ~80% of
+  the code is written, ~65% counting the phorj port, and ~0% of the product is usable, since every
+  source in `config/sources.json` is disabled behind a `REMPLACER` URL. Re-derive the figures rather
+  than trusting them once a real source lands.
