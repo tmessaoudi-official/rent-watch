@@ -10,6 +10,13 @@
 # Grep-based structural checks, plus a YAML parse only when a parser is available (pyyaml locally;
 # GitHub itself rejects invalid workflow YAML, so the parse is a convenience, not the guarantee).
 #
+# NO LONGER PURELY STRUCTURAL, as of 2026-08-19. The last block EXECUTES every runner invocation
+# found in sabotage-check.sh, so this file now needs PHP, a fetched `tools/phpunit.phar` and a
+# `--dev` autoloader to reach its final checks — and an unrelated red suite reddens this file too.
+# Those checks SKIP (not fail) when the PHAR is absent, so a fresh clone still runs the rest. The
+# reason for the change: the ledger's baseline gate reddened ITSELF for six days and no structural
+# grep could have seen it, because every step was present and correctly spelled.
+#
 # Run: bash tests/test-ci-workflow.sh
 
 set -uo pipefail
@@ -41,7 +48,13 @@ check "the workflow file exists" test -f "$wf"
 # YAML parse — only if a parser is on hand. GitHub validates the syntax itself, so this is a local
 # convenience that catches a broken edit before it is pushed.
 if command -v python3 >/dev/null 2>&1 && python3 -c 'import yaml' >/dev/null 2>&1; then
-  check "the workflow is valid YAML" python3 -c "import yaml,sys; yaml.safe_load(open('$wf'))"
+  # The path goes through argv, NOT interpolated into the Python source. Interpolating put the repo
+  # path inside a Python string literal, so a checkout under a path containing a quote raised a
+  # SyntaxError that this check reported as "the workflow is not valid YAML" — accusing the workflow
+  # for a property of the directory it sits in. Found while proving the shell-side injection fix
+  # below; same defect class, same remedy.
+  check "the workflow is valid YAML" \
+    python3 -c 'import yaml,sys; yaml.safe_load(open(sys.argv[1]))' "$wf"
 else
   printf '  \033[33mskip\033[0m the YAML parse (no python3+pyyaml here — GitHub validates syntax anyway)\n'
 fi
@@ -60,7 +73,9 @@ check "runs the config/doc drift scan"       has "drift-scan.sh"
 check "runs the sabotage ledger"             has "tests/sabotage-check.sh"
 
 # The sabotage ledger must NOT be on the per-push fast path — it re-runs the whole suite once per
-# seeded break (~13 min). It belongs to schedule + dispatch only.
+# seeded break. It belongs to schedule + dispatch only. (Runtime is ~20-30 min on a runner and
+# ~2h10m on a debug PHP build — see the measured note at the top of ci.yml. The "~13 min" that used
+# to stand here was never measured against anything.)
 check "sabotage is gated to schedule/dispatch" \
   grep -q "github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'" "$wf"
 
@@ -75,15 +90,42 @@ check "sabotage is gated to schedule/dispatch" \
 # warning and exited 1 on a suite with zero failing tests. The nightly ledger failed 7/7 from the day
 # it was added (2026-08-13) through 2026-08-19 without anyone noticing, because it is nightly-only.
 #
-# So this EXECUTES the gate's own command rather than banning a known-bad flag by name: a denylist of
-# one would not have caught this flag before it was known, and will not catch the next one.
-baseline_cmd="$(sed -n 's/.*&& \(php tools\/phpunit\.phar .*\) >\/dev\/null.*/\1/p' "$sab" | head -1)"
+# So this EXECUTES the invocations rather than banning a known-bad flag by name: a denylist of one
+# would not have caught this flag before it was known, and will not catch the next one.
+#
+# EVERY invocation, not just the gate's. The first cut of this check extracted one command with
+# `head -1`, which bound it to whichever matching line came FIRST in the file rather than to the
+# gate — two reviewers independently defeated it by adding a redirect to the per-case run above,
+# which silently stole the match while the real gate rotted. It also left the per-case invocation
+# (sabotage-check.sh:81) unpinned, and a suite-reddening flag THERE would hit all 258 cases at once.
+# Enumerating every call site removes both problems and the ordering dependency with them.
+#
+# The `[0-9]` strip is not cosmetic: the pattern stops at the first `>` or `)`, so `… 2>&1` leaves a
+# dangling file-descriptor number on the extracted command. Verified against both current call sites.
+mapfile -t runner_cmds < <(
+  sed -n 's/.*\(php tools\/phpunit\.phar[^)>]*\).*/\1/p' "$sab" \
+    | sed 's/[[:space:]][0-9]\{1,\}[[:space:]]*$//; s/[[:space:]]*$//'
+)
 
-check "the ledger's baseline gate was found in sabotage-check.sh" test -n "$baseline_cmd"
+# At least two: the per-case run and the baseline gate. A lower count means the extraction broke,
+# which must FAIL rather than silently pin nothing — the failure mode this whole check exists for.
+check "every runner invocation in sabotage-check.sh was found (>=2)" \
+  test "${#runner_cmds[@]}" -ge 2
 
-if [[ -n "$baseline_cmd" ]]; then
-  check "the ledger's baseline gate is satisfiable (its flags do not redden a green suite)" \
-    bash -c "cd '$repo' && $baseline_cmd >/dev/null 2>&1"
+# Executing the suite needs the gitignored PHAR. SKIP rather than FAIL when it is absent: on a fresh
+# clone the run would otherwise report "the flags redden a green suite", accusing the one thing that
+# is not at fault. That is the mirror image of the error sabotage-check.sh:84-94 warns about at
+# length, and it cost a real debugging detour before it was caught here.
+if [[ ! -f "$repo/tools/phpunit.phar" ]]; then
+  printf '  \033[33mskip\033[0m the runner-invocation checks (no tools/phpunit.phar — run tools/fetch-phpunit.sh)\n'
+else
+  for cmd in "${runner_cmds[@]}"; do
+    # `eval` inside a subshell, NOT `bash -c "cd '$repo' && …"`. The interpolating form executed
+    # arbitrary commands from the REPO PATH: a reviewer ran it from a directory named
+    # `rw';touch INJECTED;'y` and the payload fired. Here the path never enters a parsed string.
+    check "runner invocation does not redden a green suite: ${cmd#php tools/phpunit.phar }" \
+      bash -c 'cd "$1" && eval "$2" >/dev/null 2>&1' _ "$repo" "$cmd"
+  done
 fi
 
 printf '\n  %d passed, %d failed\n\n' "$pass" "$fail"
