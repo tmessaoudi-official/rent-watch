@@ -82,7 +82,7 @@ say "── S2 plan pointers"
 python3 - <<'PY' >>"$FINDINGS"
 import pathlib, re
 CITE = re.compile(r'pointed at|used to|formerly|previously|only ever existed|was deleted|no longer|'
-                  r'had REJECTED|correct when written|renamed|retargeted|dangling', re.I)
+                  r'had REJECTED|correct when written|renamed|retargeted|dangling|SUPERSEDED', re.I)
 for p in pathlib.Path('.').rglob('*'):
     if p.suffix not in ('.md', '.sh') or not p.is_file(): continue
     if any(x in p.parts for x in ('.git', 'var', 'node_modules')): continue
@@ -99,9 +99,12 @@ for p in pathlib.Path('.').rglob('*'):
         # A foreign path is FINE when qualified by its repo on the same line ("phorj's docs/…",
         # "phorj:docs/…"). Bare is the defect, because bare reads as local.
         qualified = re.search(r"(phorj|twes-in|pdfturbo|stack)(\'s)?[ :/]", line, re.I)
-        for ref in re.findall(r'docs/[A-Za-z0-9_/-]+\.md', line):
+        # .claude/ paths joined 2026-08-19: a certification round found OPEN-QUESTIONS.md
+        # dangling on the renamed ask-human skill while this check — whose message describes
+        # exactly that defect — only policed docs/ paths. Same rule, second path family.
+        for ref in re.findall(r'(?:docs/[A-Za-z0-9_/-]+\.md|(?<!~/)(?<!HOME/)\.claude/[A-Za-z0-9_./-]+)', line):
             if qualified: continue
-            if not pathlib.Path(ref).is_file():
+            if not pathlib.Path(ref.rstrip('.')).exists():
                 print(f"P1  {p}:{n} cites {ref}, which does not exist in this repo. If it belongs to "
                       f"another repo, say so explicitly — a bare path reads as local and a future "
                       f"session will follow it into nothing.")

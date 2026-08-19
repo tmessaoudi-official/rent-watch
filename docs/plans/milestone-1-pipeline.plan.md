@@ -181,8 +181,9 @@ consecutive clean rounds are required rather than one.
   a URL was destroying the failing endpoint, which is how a masker gets deleted.
 - [2026-08-07 20:40] AGREED: the database default moves out of `var/` to `state/`. `var/` is
   documented as container-lifetime scratch, so `rm -rf var/` is a reasonable thing to do — and the
-  seen-set is the opposite of scratch. `BLAST-RADIUS.md` now names the path, and names `rm -rf var/`
-  as safe so nobody widens it by analogy.
+  seen-set is the opposite of scratch. The stateful-data list (then `BLAST-RADIUS.md`, since
+  2026-08-18 CLAUDE.md § "Credentials & stateful data" — the bootstrap-era file left with it) names
+  the path, and names `rm -rf var/` as safe so nobody widens it by analogy.
 - [2026-08-07 20:40] AGREED: WAL and a 5-second busy timeout. `--watch` alongside a manual
   `scout doctor` is the spec's own target usage, and the default journal mode failed instantly with
   "database is locked" instead of waiting.

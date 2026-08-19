@@ -948,7 +948,8 @@ start another.
 
 - [2026-08-06] AGREED: work on `master` only; no `claude/*` branch (developer instruction).
 - [2026-08-06] AGREED: `AskUserQuestion` is forbidden; questions are plain text per
-  `.claude/skills/ask-human/SKILL.md` (developer instruction — it times out in this container).
+  `.claude/skills/ask-human/SKILL.md` — SUPERSEDED by the 2026-08-18 re-inversion below (the
+  timeout died with the cloud container), and the skill was renamed `rw-ask-human`.
 - [2026-08-06] ASSUMED: stack is **Python** (Q7), from `prototype/scout.py` and available `ruff`.
 - [2026-08-06] ASSUMED: AGPL headers **stripped**, not propagated (Q12) — flagged for ruling.
 - [2026-08-06] AGREED (Q4): **PLS is EXCLUDED** — it is social housing, and the ruling is no social
@@ -1108,4 +1109,4 @@ start another.
   the tool works (`askUserQuestionTimeout: "never"` globally, answered calls verified 2026-08-18)
   and the global Stop hook mechanically requires it. The `❓`/`⏹` end-of-reply markers retire with
   the plain-text protocol. Question QUALITY rules (five parts, recommendation first, after-states,
-  visible escape) are unchanged — see `.claude/skills/ask-human/SKILL.md`.
+  visible escape) are unchanged — see `.claude/skills/rw-ask-human/SKILL.md`.

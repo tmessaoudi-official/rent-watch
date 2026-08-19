@@ -1,7 +1,7 @@
 {
   "$comment": [
     "THE CLASSIFIER CORPUS. Read by BOTH implementations — src/php/Core and, later, src/phorj/core.",
-    "This file is the ground truth for the tenure classifier and is listed in BLAST-RADIUS.md as",
+    "This file is the ground truth for the tenure classifier and is listed in CLAUDE.md \u00a7 Credentials & stateful data as",
     "stateful data that must not be casually removed or relabelled. CLAUDE.md: 'Never weaken a",
     "classifier test to make a change pass. If a fixture goes red, the classifier regressed.'",
     "",

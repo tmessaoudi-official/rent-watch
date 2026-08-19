@@ -323,7 +323,7 @@ constructor argument that can change it — per `CLAUDE.md` §1, *"not user-over
 - `CLAUDE.md` glossary: PLS `OPEN — Q4` → `NEVER`; architecture table `src/core/` → `src/php/core/`.
 - `spec/PROJECT_BRIEF.md` §2: PLS/LIBRE `ASK USER (Q4)` → the Q4 answer.
 - `.claude/hooks/tenure-guard.sh`: add `pls` to the excluded-term patterns.
-- `.claude/skills/repair/drift-scan.sh` S6: add `PLS` to `TERMS`, so the guard can never lose it again.
+- `.claude/skills/rw-repair/drift-scan.sh` S6: add `PLS` to `TERMS`, so the guard can never lose it again.
 - `docs/OPEN-QUESTIONS.md`: two new questions surfaced by building this (PLI, plafond bands).
 - `.gitignore`: `/vendor`.
 - `README.md` + `CLAUDE.md` § "Common workflows": the repo now has something to run.
@@ -467,7 +467,7 @@ absent thing present.
 - `CLAUDE.md`: PLS glossary, the excluded set, architecture table, status, workflows, gotchas, counts.
 - `spec/PROJECT_BRIEF.md` §2: the Q4 answer.
 - `.claude/hooks/tenure-guard.sh` + `tests/test-tenure-guard.sh`.
-- `.claude/skills/repair/drift-scan.sh` S6.
+- `.claude/skills/rw-repair/drift-scan.sh` S6.
 - **`.claude/skills/*/SKILL.md` — 11 files carrying a shared "Absent: `src/`" banner.**
 - **`.claude/agents/*.md` — all 3 reviewer charters.**
 - **`scripts/claude-bootstrap/CLAUDE-global.md` — shipped as the next session's system prompt.**

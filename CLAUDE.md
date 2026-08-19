@@ -33,7 +33,7 @@ with `.env` swapping the real thing in. **What is missing is not code but two IN
 cURL capture to replace a `REMPLACER` URL in `config/sources.json` (hard rule 1 forbids writing one
 from memory), and the `plafonds` figures for classifier tier 4. CI now exists
 (`.github/workflows/ci.yml`): the fast job runs the PHPUnit suite, the tenure tripwire and
-runner-fetch self-tests, the drift scan, shell syntax and the bootstrap self-tests on every push and
+runner-fetch self-tests, the drift scan and shell syntax on every push and
 PR; the sabotage ledger runs nightly and on demand. Still missing: the `--watch` loop (it refuses
 rather than running unpaced — Q37) and the `html`-type adapter (needs a CSS-selector parser).
 `src/phorj/` is not written yet — it waits on the three phorj builds in `docs/PHORJ-REQUIREMENTS.md`.
