@@ -365,6 +365,8 @@ bash tools/fetch-phpunit.sh             # the runner — pinned SHA-256, refuses
 composer dump-autoload --dev            # if the corpus suite errors with "Class ... not found"
 php tools/phpunit.phar                  # the core suite — must stay green
 bash tests/sabotage-check.sh            # proves the suite would CATCH a broken classifier
+SABOTAGE_FILTER='<regex on labels>' bash tests/sabotage-check.sh   # one new case, not the 2 h ledger
+                                        #   prints a loud PARTIAL RUN line; never a ledger result
 bash tests/test-tenure-guard.sh         # proves the §1 tripwire still fires, and stays quiet on PHP
 bash tests/test-fetch-phpunit.sh        # proves the runner fetch refuses a bad signature
 bash tests/test-ci-workflow.sh          # proves ci.yml still wires every step CLAUDE.md claims,
@@ -379,9 +381,12 @@ python3 prototype/scout.py --help       # the superseded prototype, reference on
 silent — a classifier that over-rejects looks exactly like a quiet rental market, and one that
 under-rejects looks productive until an application is wasted. The store is the same shape: a
 seen-set that stops persisting, a price history that stops recording, a run log that reports a dead
-source as calm. A green suite proves the code passes the tests; only the sabotage run proves the
-tests would notice if it stopped working. **Run it after any change to `src/php/Core/Tenure*`,
-`Text.php`, the corpus, or anything under `src/php/Store/`.** It already found three undetected
+source as calm. Q37 pacing is the same shape again: a banned IP presents as every source going quiet
+at once, which is exactly what a slow rental market looks like. A green suite proves the code passes
+the tests; only the sabotage run proves the tests would notice if it stopped working. **Run it after
+any change to `src/php/Core/Tenure*`, `Text.php`, the corpus, `src/php/Core/Pacer.php`,
+`src/php/Cli/WatchLoop.php`, `src/php/Adapters/PacedSource.php`, or anything under
+`src/php/Store/`.** It already found three undetected
 regressions and one piece of dead safety code on the day it was written, and two more holes in the
 store's own suite the day that was added.
 
@@ -465,6 +470,9 @@ docs/OPEN-QUESTIONS.md      All 25 questions, each closed 2026-08-07 with the de
 docs/plans/                 <topic>.plan.md, each with its own ## Decisions Log
 config/                     criteria.json + sources.json (committed) — JSON, ruled 2026-08-07 (Q22)
 src/php/Core/               PHP 8.5 pure core — models + tenure classifier + source health
+src/php/Core/Pacer.php      the Q37 cadence; clock, sleeper and RNG all injected so it is testable
+src/php/Cli/WatchLoop.php   the `--watch` loop; survives a failing pass, stops after the one in flight
+src/php/Adapters/PacedSource.php   decorator applying Pacer, so Pipeline never learns time exists
 src/php/Store/              SQLite seen-set, price history and run log
 src/phorj/                  phorj port of the same pure core                  [waits on phorj]
 tests/php/                  PHPUnit suites

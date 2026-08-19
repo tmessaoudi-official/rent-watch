@@ -180,8 +180,59 @@ final class PacedSourceTest extends TestCase
         self::assertSame('2026-08-19T12:00:00Z', $inner->healthCalledWith);
     }
 
+    public function testWrapAllGivesEverySourceTheSamePacerRatherThanAPrivateWindow(): void
+    {
+        // `wrapAll` is documented as the ONLY intended way to build these, and it was the one thing
+        // here with no test at all — found by a sabotage run, not by reading the code. Handing each
+        // source its own pacer is the plausible mistake (a `clone`, a pacer built inside the map),
+        // and it is invisible: every source still paces itself perfectly, while the machine as a
+        // whole fires one request per source with no gap between them. That is the polling burst
+        // Q37 exists to prevent, and no single-source test can see it.
+        $log = new CallLog();
+        $wrapped = PacedSource::wrapAll(
+            [new SpySource('one', 'shared.test', $log), new SpySource('two', 'shared.test', $log)],
+            self::pacer($log),
+        );
+
+        foreach ($wrapped as $source) {
+            $source->fetch();
+        }
+
+        // One shared window ⇒ the second request waits 60 s. Two private ones ⇒ no sleep at all.
+        self::assertContains('sleep:60', $log->entries);
+        self::assertCount(3, $log->entries);
+    }
+
+    public function testWrapAllShufflesTheOrderAndLosesNoSource(): void
+    {
+        // Q37 shuffles the order each pass so a site cannot learn its slot in a fixed rotation. The
+        // failure mode of a shuffle is not "badly shuffled" — it is "quietly dropped a source",
+        // which reads as a market that went quiet on exactly one landlord.
+        $log = new CallLog();
+        $names = ['a', 'b', 'c', 'd'];
+        $sources = array_map(static fn (string $n): Source => new SpySource($n, $n . '.test', $log), $names);
+
+        // The helper's rand returns its LOWER bound, which drives Fisher-Yates to a deterministic
+        // rotation rather than the identity — so "did not shuffle" and "shuffled" are
+        // distinguishable. Returning the upper bound would swap every element with itself and this
+        // test would then assert nothing; it did exactly that on its first run.
+        $wrapped = PacedSource::wrapAll($sources, self::pacer($log));
+
+        $got = array_map(static fn (Source $s): string => $s->name(), $wrapped);
+        self::assertSame($names, self::sorted($got), 'a source was dropped or duplicated');
+        self::assertNotSame($names, $got, 'the order was not shuffled at all');
+    }
+
+    /** @param list<string> $names @return list<string> */
+    private static function sorted(array $names): array
+    {
+        sort($names);
+
+        return $names;
+    }
+
     /** A pacer whose sleeps are recorded into the same log the fetches write to, so order is visible. */
-    private static function pacer(CallLog $log): Pacer
+    private static function pacer(CallLog $log, ?\Closure $rand = null): Pacer
     {
         $now = 0.0;
 
@@ -193,7 +244,7 @@ final class PacedSourceTest extends TestCase
                 $log->entries[] = 'sleep:' . (int) round($seconds);
                 $now += $seconds;
             },
-            rand: static fn (int $min, int $max): int => $min,
+            rand: $rand ?? static fn (int $min, int $max): int => $min,
         );
     }
 }

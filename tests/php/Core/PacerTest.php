@@ -39,6 +39,41 @@ final class PacerTest extends TestCase
      * @param-out list<float> $slept
      * @param-out float $now
      */
+    /**
+     * The window is measured from when the request WAS issued, not from when the pacer meant to
+     * issue it. Those two coincide whenever a sleeper delivers exactly what it was asked for, which
+     * is why every other test here is blind to the difference — and why a sabotage replacing the
+     * re-read clock with the intended wake time went undetected until this test existed.
+     *
+     * They come apart for a real reason, not a contrived one: `WatchLoop::interruptibleSleeper`
+     * returns EARLY when a signal has asked the loop to stop. Trusting the intended wake time then
+     * records a request as having happened in the future, and the next request to that host is
+     * released early — the pacer under-waits at exactly the moment it believes it over-waited.
+     */
+    public function testTheHostWindowIsMeasuredFromTheClockNotFromTheIntendedWakeTime(): void
+    {
+        $now = 1_000.0;
+        $slept = [];
+        // A sleeper that delivers only half of what it is asked for, as an interrupted one does.
+        $p = new Pacer(
+            clock: static function () use (&$now): float {
+                return $now;
+            },
+            sleeper: static function (float $seconds) use (&$slept, &$now): void {
+                $slept[] = $seconds;
+                $now += $seconds / 2.0;
+            },
+            rand: static fn (int $min, int $max): int => $min,
+        );
+
+        $p->beforeFetch('a.test');   // issued at 1000; no wait
+        $p->beforeFetch('a.test');   // wants +60, is asked to sleep 60, only reaches 1030
+        $p->beforeFetch('a.test');   // must therefore still owe 60 s from 1030, not from 1060
+
+        self::assertSame([60.0, 60.0], $slept, 'the second wait is computed from the real clock');
+        self::assertSame(1_060.0, $now);
+    }
+
     private function pacer(&$slept, &$now, array $randReturns = [900]): Pacer
     {
         $slept = [];
@@ -137,6 +172,28 @@ final class PacerTest extends TestCase
         $p->beforeFetch('b.test');
 
         self::assertSame([5.0], $slept, 'only the two real requests are spaced');
+    }
+
+    /**
+     * The half of "neither waits nor counts" that the test above cannot see. Both tests issue every
+     * request at the same instant, so a hostless source that DID claim the distinct-host slot would
+     * only ever overwrite it with the value already there — a sabotage doing exactly that stayed
+     * undetected until this test existed.
+     *
+     * Time has to pass for the bug to surface, and in a real pass it does: reading a mailbox takes
+     * seconds. A pacer that let the mailbox restart the 5 s window would delay every web request
+     * queued behind it, growing the pass by 5 s per hostless source for no protective benefit.
+     */
+    public function testAHostlessSourceDoesNotRestartTheWindowAsTimePasses(): void
+    {
+        $p = $this->pacer($slept, $now);
+
+        $p->beforeFetch('a.test');
+        $now += 30.0;              // the mailbox is read — wall-clock time, not a pacing sleep
+        $p->beforeFetch(null);
+        $p->beforeFetch('b.test'); // 30 s have already elapsed, so nothing is owed
+
+        self::assertSame([], $slept, 'the mailbox must not restart the distinct-host window');
     }
 
     public function testTheHostWindowIsCaseInsensitive(): void

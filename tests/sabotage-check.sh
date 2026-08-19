@@ -31,9 +31,21 @@ fail=0
 # ten lines is a gate nobody can act on.
 failed_labels=()
 
+# An optional regex over LABELS, so a newly-added case can be proven red on its own instead of
+# behind a two-hour full run. It skips silently rather than reporting, because a filtered run is a
+# development aid and must never be mistakable for the ledger: the summary counts only what ran, and
+# `skipped` is printed at the end whenever the filter was in play. CI never sets it.
+_filter="${SABOTAGE_FILTER:-}"
+skipped=0
+
 # Each entry: label :: file :: sed expression that breaks the guarantee
 run_sabotage() {
   local label="$1" target="$2" expr="$3"
+
+  if [[ -n "$_filter" ]] && ! grep -qE -- "$_filter" <<<"$label"; then
+    skipped=$((skipped + 1))
+    return
+  fi
 
   rm -rf "$work/repo"
   mkdir -p "$work/repo"
@@ -1317,7 +1329,111 @@ run_sabotage "a body line starting with a dot stops being stuffed (RFC 5321)" \
   src/php/Core/Notify/SmtpTransport.php \
   "s%'\\.\\.'%'.'%"
 
+# ── Q37 pacing (hard rule 5) ─────────────────────────────────────────────────────────────────────
+# Hard rule 5 forbids CAPTCHA solving, proxy rotation and fingerprint spoofing, which leaves polite
+# rate limiting as the ENTIRE strategy for not being blocked. Every failure below is silent in the
+# worst way this project has: a banned IP presents as every source going quiet at once, which is
+# indistinguishable from a slow rental market — the exact shape hard rule 2 exists to prevent.
+
+run_sabotage "the gap between two requests to the same host is dropped" \
+  src/php/Core/Pacer.php \
+  's%public const float SAME_HOST_GAP_SECONDS = 60.0;%public const float SAME_HOST_GAP_SECONDS = 0.0;%'
+
+run_sabotage "the gap between requests to distinct hosts is dropped" \
+  src/php/Core/Pacer.php \
+  's%public const float DISTINCT_HOST_GAP_SECONDS = 5.0;%public const float DISTINCT_HOST_GAP_SECONDS = 0.0;%'
+
+run_sabotage "the same-host window is only enforced against the LAST request" \
+  src/php/Core/Pacer.php \
+  's%if (isset(\$this->lastByHost\[\$key\])) {%if (false) {%'
+
+run_sabotage "the poll cadence collapses to a tight loop" \
+  src/php/Core/Pacer.php \
+  's%public const int PASS_INTERVAL_SECONDS = 900;%public const int PASS_INTERVAL_SECONDS = 0;%'
+
+run_sabotage "the jitter band is widened past the ruling" \
+  src/php/Core/Pacer.php \
+  's%public const int JITTER_SECONDS = 300;%public const int JITTER_SECONDS = 600;%'
+
+run_sabotage "a fast pass is allowed to immediately start another" \
+  src/php/Core/Pacer.php \
+  's%public const float MIN_SECONDS_BETWEEN_PASSES = 60.0;%public const float MIN_SECONDS_BETWEEN_PASSES = 0.0;%'
+
+run_sabotage "the host is compared case-sensitively (one site becomes two)" \
+  src/php/Core/Pacer.php \
+  's%\$key = strtolower(\$host);%\$key = \$host;%'
+
+run_sabotage "the source order stops being shuffled each pass" \
+  src/php/Core/Pacer.php \
+  's%\$j = (\$this->rand)(0, \$i);%\$j = \$i;%'
+
+# Records the slot on the way out instead of skipping it, rather than deleting the guard: dropping
+# the guard would reach `strtolower(null)` and the suite would go red on a PHP deprecation rather
+# than on the assertion, which proves the runtime noticed and nothing about the test.
+run_sabotage "a hostless source consumes the distinct-host slot" \
+  src/php/Core/Pacer.php \
+  's%if (\$host === null || \$host === '"''"') {%if ($host === null || $host === '"''"') { $this->lastRequestAt = ($this->clock)(); return; } if (false) {%'
+
+run_sabotage "the pacer records the time it INTENDED to wait, not the clock" \
+  src/php/Core/Pacer.php \
+  's%\$issuedAt = (\$this->clock)();%\$issuedAt = \$readyAt;%'
+
+run_sabotage "the decorator does not pace at all (every request goes out unthrottled)" \
+  src/php/Adapters/PacedSource.php \
+  's%\$this->pacer->beforeFetch(\$this->inner->host());%%'
+
+# A DIFFERENT regression from the one above, and the more plausible of the two: the pacing is all
+# still there, it just lands on the wrong side of the request. Such a decorator fires its first two
+# requests back to back and only then starts behaving, so a short pass is never throttled at all.
+# The `finally` leaves the original `return` below unreachable, which PHP accepts.
+run_sabotage "the decorator waits AFTER the request instead of before it" \
+  src/php/Adapters/PacedSource.php \
+  's%\$this->pacer->beforeFetch(\$this->inner->host());%try { return $this->inner->fetch(); } finally { $this->pacer->beforeFetch($this->inner->host()); }%'
+
+run_sabotage "the decorator swallows a source failure into an empty list (rule 3)" \
+  src/php/Adapters/PacedSource.php \
+  's%return \$this->inner->fetch();%try { return \$this->inner->fetch(); } catch (\\Throwable) { return []; }%'
+
+run_sabotage "wrapAll stops sharing one pacer (each source gets a private window)" \
+  src/php/Adapters/PacedSource.php \
+  's%static fn (Source \$s): Source => new self(\$s, \$pacer),%static fn (Source $s): Source => new self($s, clone $pacer),%'
+
+run_sabotage "PacedSource::health drops the clock, so STALE can never fire" \
+  src/php/Adapters/PacedSource.php \
+  's%return \$this->inner->health(\$nowIso);%return \$this->inner->health();%'
+
+# Narrows the caught type instead of rethrowing: `\LogicException` is a real class, so the file still
+# parses, and every exception the loop is meant to survive (`SourceError`, `\RuntimeException`) now
+# escapes `run()`. NOTE the single backslashes — `\\` in a BRE is one literal backslash, and an
+# earlier `\\\\` here matched two, making this whole case a silent no-op.
+run_sabotage "a throwing pass kills the watch loop" \
+  src/php/Cli/WatchLoop.php \
+  's%} catch (\\Exception \$e) {%} catch (\\LogicException $e) {%'
+
+run_sabotage "a failing pass is survived in SILENCE (nothing is reported)" \
+  src/php/Cli/WatchLoop.php \
+  's%(\$this->onError)(\$e);%%'
+
+run_sabotage "the loop stops mid-pass instead of finishing the pass in flight" \
+  src/php/Cli/WatchLoop.php \
+  's%if (\$this->stopping || (\$maxPasses !== null \&\& \$completed >= \$maxPasses)) {%if (false) {%'
+
+run_sabotage "the inter-pass wait stops being interruptible by a signal" \
+  src/php/Cli/WatchLoop.php \
+  's%if (\$shouldStop()) {%if (false) {%'
+
+run_sabotage "the wait is served as one long sleep, ignoring signals for 20 min" \
+  src/php/Cli/WatchLoop.php \
+  's%\$slice = min(self::TICK_SECONDS, \$remaining);%$slice = $remaining;%'
+
 printf '\n  %d sabotage(s) detected, %d undetected\n' "$pass" "$fail"
+
+if [[ -n "$_filter" ]]; then
+  # Loud, because a filtered run that looked like a full one would be the ledger lying about its own
+  # coverage — the same class of defect as the baseline gate that reddened itself for six days.
+  printf '  \033[33mPARTIAL RUN\033[0m — SABOTAGE_FILTER=%s skipped %d case(s). NOT a ledger result.\n' \
+    "$_filter" "$skipped"
+fi
 
 if (( fail > 0 )); then
   printf '\n  undetected or unapplied:\n'

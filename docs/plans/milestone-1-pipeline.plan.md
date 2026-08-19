@@ -813,3 +813,60 @@ A changelog that overstates is worse than one that omits, because the next sessi
   and lets the CURRENT PASS FINISH, then exits 0. A signal landing between a notification send and
   the seen-set write would re-notify everything on the next start, which is the same user-visible
   damage as deleting the database. Bounded `--max-passes` was rejected as not actually a watcher.
+- [2026-08-19 17:45] `scout run --watch` IMPLEMENTED (commit 7bf77b1), closing the last unwritten
+  piece of milestone 1 that was not blocked on an external input. Three design rulings, each argued
+  in the file it applies to rather than here, so they cannot drift from the code:
+    - **`Core/Pacer` owns the cadence, with clock, sleeper and RNG all injected.** A pacer that
+      called `time()` and `sleep()` could not be tested at all — asserting a 15-minute interval
+      would take 15 minutes, so in practice nobody would, and Q37 would ship unverified. `PacerTest`
+      asserts the whole ruling in microseconds. `hrtime()` not `microtime()`, so an NTP step cannot
+      make an elapsed interval look negative and collapse a gap to zero.
+    - **`Adapters/PacedSource` is a decorator, not pacing inside `Pipeline`.** `Pipeline` also
+      serves `--once`, which has no cadence; a timing-aware pipeline would need a "do not actually
+      pace" mode, and a safety control with an off switch is the kind that ends up off.
+    - **`Source::host(): ?string` added to the contract.** Q37 is worded in hosts. Pacing per source
+      would give two adapters on one landlord's domain a private 60 s window each — the burst the
+      ruling exists to prevent. There is deliberately no default implementation: a new adapter must
+      answer honestly, because `null` silently opts a source out of the entire ruling.
+  The property `Cli/WatchLoop` exists for is NOT the cadence but surviving a bad pass. A watcher
+  that exits on the first `SourceError` is hard rule 2's silent failure with every source inside it,
+  and *more* invisible, because no process is left to report anything. `Exception` is reported and
+  survived; `Error` propagates, because a `TypeError` is a bug here, not a flaky landlord.
+- [2026-08-19 17:45] AGREED: stopping is deliberate, never immediate. SIGINT/SIGTERM set a flag and
+  the pass in flight finishes. A signal landing between a notification send and the seen-set write
+  would re-notify every listing already sent on the next start — the same user-visible damage as
+  deleting the database, arriving as a burst of duplicates for flats already seen. The inter-pass
+  wait is up to 20 minutes and is therefore served in 1 s slices: `docker stop` and systemd send
+  SIGTERM, wait, then SIGKILL, so a loop checking its flag only after sleeping would be killed
+  uncleanly every time. Without `ext-pcntl` the loop still runs and SAYS SO on startup, rather than
+  letting the operator discover it from a duplicate-notification storm after the first `docker stop`.
+- [2026-08-19 17:45] AGREED: `tests/sabotage-check.sh` gains a `SABOTAGE_FILTER` regex over labels,
+  so a newly-added case can be proven red on its own instead of behind a two-hour full run — which
+  is the practice already used on 2026-08-12, just without a mechanism. It prints a loud
+  `PARTIAL RUN … NOT a ledger result` line whenever it is set, because a filtered run mistaken for a
+  full one would be the ledger lying about its own coverage: the same defect class as the baseline
+  gate that reddened itself for six days. CI never sets it.
+- [2026-08-19 19:40] AGREED: the 20 Q37 pacing sabotage cases are verified red (`SABOTAGE_FILTER`
+  mini-run, 20/20 detected, 0 undetected). The first run of them was 15/19 — the case count grew by
+  one afterwards, see below — and every one of the four failures was worth the run:
+    - **Two were no-op `sed` expressions** — a BRE does not honour `{2}`, and `\\\\` matches TWO
+      literal backslashes where the PHP source has one. Both are the failure the harness's own
+      `cmp -s` no-op guard exists to catch; without that guard they would have printed `ok` while
+      testing nothing at all.
+    - **Two were REAL holes in the tests, not in the harness.** `PacedSource::wrapAll()` — the
+      documented, only-intended way to build these — had no test whatsoever, so handing each source
+      a private pacer went undetected: every source paces itself perfectly while the machine as a
+      whole fires one unthrottled request per source. And the pacer recording its INTENDED wake time
+      instead of re-reading the clock was invisible because every fake sleeper delivered exactly
+      what it was asked for; `WatchLoop::interruptibleSleeper` genuinely returns early on a signal,
+      so the two come apart in production and not only under sabotage.
+    - A fifth was found on the re-run: a hostless source claiming the distinct-host slot is
+      unobservable when every request is issued at the same instant, because it overwrites the slot
+      with the value already in it. Both existing tests did exactly that. The bug needs wall-clock
+      time to pass — which, in a pass that reads a mailbox, it does.
+  Net: 4 new tests, and one sabotage label corrected — "the decorator waits AFTER the request" was
+  in fact deleting the pacing call outright, so it now has its own case and the reordering one
+  actually reorders. 278 cases total — count them with `grep -c '^run_sabotage '` and note the
+  TRAILING SPACE: without it the pattern also matches the `run_sabotage() {` definition and reports
+  one case that does not exist, which is a phantom for anyone reconciling this figure against a
+  ledger run's own total.

@@ -107,7 +107,7 @@ is blocked on a mailbox, an endpoint capture or a phorj module that does not exi
 scout doctor                  # health-check every source: status, timing, item counts
 scout dump <source>           # raw payload of the first item — for building field maps
 scout run --once [-v]         # single pass
-scout run --watch             # loop with jitter
+scout run --watch [-v]        # loop: every 15 min ± 5 of jitter, paced per host (Q37)
 scout test-notify             # verify the notification channel
 scout replay <fixture>        # re-run parsing against a saved fixture
 ```
