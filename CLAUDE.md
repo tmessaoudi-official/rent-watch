@@ -32,9 +32,11 @@ today. The network adapters exist too — `HttpJsonSource` + `Robots`, `EmailAle
 with `.env` swapping the real thing in. **What is missing is not code but two INPUTS**: a DevTools
 cURL capture to replace a `REMPLACER` URL in `config/sources.json` (hard rule 1 forbids writing one
 from memory), and the `plafonds` figures for classifier tier 4. CI now exists
-(`.github/workflows/ci.yml`): the fast job runs the PHPUnit suite, the tenure tripwire and
-runner-fetch self-tests, the drift scan and shell syntax on every push and
-PR; the sabotage ledger runs nightly and on demand. Still missing: the `--watch` loop (it refuses
+(`.github/workflows/ci.yml`): the fast job runs the PHPUnit suite, the tenure tripwire,
+runner-fetch and ci-workflow self-tests, the drift scan and shell syntax on every push and
+PR; the sabotage ledger runs nightly and on demand. **A red nightly now opens a GitHub issue** —
+it previously notified nobody, and failed 7/7 unnoticed from 2026-08-13 to 2026-08-19 (hard rule 2:
+an alert computed and never sent is worse than none). Still missing: the `--watch` loop (it refuses
 rather than running unpaced — Q37) and the `html`-type adapter (needs a CSS-selector parser).
 `src/phorj/` is not written yet — it waits on the three phorj builds in `docs/PHORJ-REQUIREMENTS.md`.
 
@@ -359,7 +361,9 @@ php tools/phpunit.phar                  # the core suite — must stay green
 bash tests/sabotage-check.sh            # proves the suite would CATCH a broken classifier
 bash tests/test-tenure-guard.sh         # proves the §1 tripwire still fires, and stays quiet on PHP
 bash tests/test-fetch-phpunit.sh        # proves the runner fetch refuses a bad signature
-bash tests/test-ci-workflow.sh          # proves ci.yml still wires every step CLAUDE.md claims
+bash tests/test-ci-workflow.sh          # proves ci.yml still wires every step CLAUDE.md claims,
+                                        #   AND that the ledger's baseline gate cannot redden itself
+                                        #   (needs tools/phpunit.phar — it executes that gate)
 bash .claude/skills/rw-repair/drift-scan.sh                         # config/doc drift; exit 1 on P0/P1
 bash -n .claude/hooks/*.sh tests/*.sh tools/*.sh
 python3 prototype/scout.py --help       # the superseded prototype, reference only
@@ -576,7 +580,8 @@ tests/test-tenure-guard.sh         Sabotage test FOR that hook — must-fire and
 .claude/skills/rw-repair/drift-scan.sh  The mechanical half of /rw-repair — run it in a gate
 tests/sabotage-check.sh            Breaks the classifier many ways; the suite must catch every one
 tests/test-fetch-phpunit.sh        Proves the runner fetch refuses a bad signature
-tests/test-ci-workflow.sh          Proves ci.yml still wires every step this file claims CI runs
+tests/test-ci-workflow.sh          Proves ci.yml still wires every step this file claims CI runs,
+                                   and that the ledger's baseline gate is satisfiable (executes it)
 .github/workflows/ci.yml           CI: suite+guards on every push/PR; sabotage ledger nightly+dispatch
 (PreCompact handoffs: the GLOBAL ~/.claude/hooks/precompact-handoff.sh handles them — writes to
                                      ~/.claude/projects/<slug>/memory/sessions/. The repo briefly

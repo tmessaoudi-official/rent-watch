@@ -735,9 +735,11 @@ A changelog that overstates is worse than one that omits, because the next sessi
 - [2026-08-12] CI added (`.github/workflows/ci.yml`), on the developer's request. Two jobs:
   `test` (fast, every push/PR/dispatch) runs `composer dump-autoload --dev`, fetches the pinned
   PHPUnit PHAR, then the suite + `test-ci-workflow.sh` + `test-tenure-guard.sh` +
-  `test-fetch-phpunit.sh` + drift-scan + shell `bash -n` + the two bootstrap self-tests; `sabotage`
+  `test-fetch-phpunit.sh` + drift-scan + shell `bash -n` + the two bootstrap self-tests (the latter
+  SUPERSEDED — removed with the bootstrap in a8cfae7; ci.yml no longer runs them); `sabotage`
   (schedule nightly 03:00 UTC + workflow_dispatch, NOT per-push — it re-runs the whole suite once
-  per seeded break, ~13 min) runs the 258-case ledger. Toolchain honoured: PHP 8.5 via
+  per seeded break, ~13 min — SUPERSEDED, that figure was never measured; see the 2026-08-19 entry)
+  runs the 258-case ledger. Toolchain honoured: PHP 8.5 via
   shivammathur/setup-php, `--dev` autoloader (without it the corpus suite errors), vendor/ and the
   PHAR both regenerated/fetched (gitignored). fetch-phpunit is CI-safe — SHA-256 is the always-run
   gate and `unverifiable` is non-fatal on a match, and on a runner with keyserver access CI gets
@@ -745,3 +747,43 @@ A changelog that overstates is worse than one that omits, because the next sessi
   the repo's every-executable-has-a-self-test culture) so a step silently dropped from the workflow
   fails a test rather than passing unnoticed. Every workflow command dry-run green locally before
   commit; CLAUDE.md's "still no CI" line and the two file-layout listings updated.
+- [2026-08-19 14:30] NIGHTLY LEDGER BLACKOUT — root cause found, and it was NOT the flag alone.
+  The `sabotage` job had failed **7/7** since it was added (2026-08-13 → 2026-08-19) and had never
+  once reached case 1. Nothing surfaced it: it is nightly-only and notifies nobody. Because the
+  ledger is what proves the suite HAS TEETH, "1285 tests green" was an unbacked claim for six days.
+  The full causal chain, each link verified rather than reasoned:
+    1. `sabotage-check.sh` passed `--do-not-cache-result`, which disables the result cache;
+       `phpunit.xml` sets `executionOrder="defects"` (needs it) + `failOnWarning="true"`. PHPUnit
+       raises a runner warning and exits 1 on a suite with ZERO failing tests.
+    2. That contradiction landed in 6e9778d — but was INERT on the runner the repo pinned.
+       MEASURED: PHPUnit 13.2.6 (old pin 292ccbd5…, confirmed by download+hash) exits **0** with the
+       flag; 13.3.1 (current pin) exits **1**. So it was not "latent then fatal" by itself.
+    3. `phpunit-13.phar` is a MOVING tag, and `fetch-phpunit.sh` INSTALLED OFF-PIN whenever the PGP
+       signature verified ("pin is stale but the signature is valid", then `mv` and exit 0). CI
+       therefore silently ran 13.3.x while the repo pinned 13.2.6.
+    => THE FIRST CAUSE is an unreviewed toolchain upgrade reaching CI with no commit, no review, and
+       its only signal a log line in the job nobody watches. A signature answers "is this really from
+       Sebastian Bergmann?", never "is this the runner this repo was tested against?".
+  AGREED, and each is a ruling rather than a tidy-up:
+  - REMOVE the flag from both call sites rather than dropping `executionOrder="defects"` from
+    phpunit.xml — smaller blast radius, and cache isolation never needed a flag: `$work/repo` is
+    rm -rf'd and rebuilt per case. Verified PHPUnit creates `var/phpunit` itself in a bare sandbox.
+  - PIN THE EXACT VERSION (`VERSION=13.3.1`, immutable URL) so a moving tag cannot rotate under CI.
+    The versioned URL hashes identically to the pin it replaced, so the switch moved no bytes.
+  - A SHA MISMATCH NOW FAILS IN CI (`${CI:-}` guard). The install-and-warn path stays for a
+    developer's machine, where it is a convenience; in CI a stale pin must be a red build.
+  - SPLIT THE CONCURRENCY GROUP BY `github.event_name`. VERIFIED against the Actions API that every
+    scheduled run reports `head_branch=master`, identical to every push — so with workflow-level
+    `cancel-in-progress: true` the next push cancelled the running nightly. A SECOND, INDEPENDENT
+    reason the ledger never completed; fixing the flag alone would not have been enough.
+  - A RED NIGHTLY MUST REACH A HUMAN — `if: failure()` opens/updates a dated GitHub issue via the
+    built-in token (no new secret, safe in a public repo). Hard rule 2: an alert computed and never
+    sent is worse than none, and this one was computed into the void 7 nights running.
+  - `timeout-minutes` on both jobs (15 / 90) instead of GitHub's silent 360-minute default.
+  - PIN THE CLASS BY EXECUTING the gate's own command in `test-ci-workflow.sh`, not by name-denylist:
+    a denylist of one would not have caught this flag before it was known.
+  TIMING, corrected with measurement — the "~13 min" in ci.yml and here was never measured against
+  anything. A GitHub runner does the full 1285-test suite in **4 s** (run 32219789532, step
+  05:32:27→05:32:31), so the 258-case ledger is ~20-30 min there. A ZTS DEBUG build (the dev machine)
+  is ~31 s/case ≈ 2 h 10 m. The two differ by ~7x; do NOT read a local timing as the CI cost. No
+  completed CI run has ever been timed, because there has never been one.

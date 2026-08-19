@@ -28,12 +28,20 @@
 
 set -euo pipefail
 
-VERSION="${PHPUNIT_VERSION:-13}"
+# EXACT version, not the `13` series tag. `phpunit-13.phar` is a MOVING tag: upstream rolled it from
+# 13.2.6 to 13.3.0 (2026-08-07) and then 13.3.1 (2026-08-13) with no change here, and because the
+# mismatch branch below installs an off-pin PHAR whenever its signature verifies, CI silently ran a
+# runner this repo had never pinned. That is how the nightly ledger died — 13.2.6 tolerated
+# sabotage-check's `--do-not-cache-result`, 13.3.x turns it into a runner warning that
+# `failOnWarning="true"` makes fatal — and nobody reviewed the upgrade because there was nothing to
+# review. A versioned URL is immutable, so the SHA below can only change when this line does.
+VERSION="${PHPUNIT_VERSION:-13.3.1}"
 URL="https://phar.phpunit.de/phpunit-${VERSION}.phar"
 DEST="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/phpunit.phar"
 
-# Pinned for phpunit-13.phar as fetched 2026-08-18 (PHPUnit 13.3.1). Bump deliberately, in a commit
-# that says which release it moved to — `phpunit-13.phar` is a MOVING tag and will change under us.
+# Pinned for phpunit-13.3.1.phar, verified 2026-08-19 (the versioned URL hashes identically to the
+# `phpunit-13.phar` this replaced, so the switch moved no bytes). Bump deliberately, in a commit that
+# names the release AND changes VERSION above — the two must move together.
 EXPECTED_SHA256="7385843527093db1fb2deeb439ad84c35b3249e73eb4632d1eb83be5b69acd58"
 EXPECTED_KEY="D8406D0D82947747293778314AA394086372C20A"
 
@@ -112,12 +120,25 @@ fi
 
 # What may be installed:
 #   sha pin matches                     -> yes (signature good, or unverifiable, or absent)
-#   sha pin differs + signature GOOD    -> yes, and say so loudly: a new upstream release
+#   sha pin differs + signature GOOD    -> INTERACTIVE ONLY, and say so loudly. NEVER in CI.
 #   sha pin differs, anything else      -> no
+#
+# The CI carve-out is the lesson of the 2026-08-13 → 08-19 ledger blackout. "Signature is good"
+# answers "is this really from Sebastian Bergmann?" — it does NOT answer "is this the runner this
+# repo was tested against?". Only the SHA answers that. Installing anyway let an unreviewed upgrade
+# reach CI with no commit, no review and its only signal a log line in a job nobody watches; it
+# changed runner behaviour and killed the nightly for six days. On a developer's machine the warn
+# path is a convenience worth keeping. In CI a stale pin must be a red build, so a human bumps it
+# deliberately — which is exactly what "pin" is supposed to mean.
 if [[ $sha_ok -eq 0 ]]; then
-  if [[ "$sig_state" == 'good' ]]; then
+  if [[ "$sig_state" == 'good' && -z "${CI:-}" ]]; then
     printf '  pin is stale but the signature is valid — this looks like a new upstream release.\n'
     printf '  UPDATE EXPECTED_SHA256 to %s in a commit that names the version.\n' "$actual"
+  elif [[ "$sig_state" == 'good' ]]; then
+    printf '  REFUSING (CI): sha256 mismatch. The signature verifies, so this is very likely a\n'
+    printf '  legitimate new upstream release — but CI must not silently adopt a runner this repo\n'
+    printf '  never pinned. Bump VERSION and EXPECTED_SHA256 to %s in a reviewed commit.\n' "$actual"
+    exit 1
   else
     printf '  REFUSING: sha256 mismatch with no verified signature to justify it.\n'
     exit 1
