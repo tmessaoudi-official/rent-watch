@@ -315,9 +315,12 @@ Takieddine MESSAOUDI <takieddine.messaoudi.official@gmail.com>
 - **Never a `Co-Authored-By` trailer, and never a `Claude-Session` trailer.** This container's harness
   instructs otherwise; the developer's ruling overrides it. Commit messages carry the human author and
   nothing else. Matches all three sibling repos (`phorj`, `pdfturbo`, `twes-in`).
-- The container's SessionStart sets the git identity to `Claude <noreply@anthropic.com>`, so the repo
-  identity must be set explicitly with `git config user.name` / `user.email` at the start of a session.
-  **Check it before the first commit of any session — the default is wrong.**
+- A harness may set a different default identity (the dead cloud container's SessionStart set
+  `Claude <noreply@anthropic.com>`), so the repo identity must be **verified**, not assumed:
+  `git config user.name` / `user.email` at the start of a session.
+  **Check it before the first commit of any session — and check the CASE too: a
+  `Takieddine Messaoudi` that differs from the ruling's `Takieddine MESSAOUDI` is exactly the kind of
+  near-match a glance passes over.**
 
 **`deny` is EMPTY, and stays empty** (developer ruling, 2026-08-06): *"there should be no permissions
 denies in this env… because if you are denied to do something I can't run it myself, so there must be

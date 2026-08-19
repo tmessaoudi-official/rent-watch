@@ -98,7 +98,7 @@ which is why it needs an adversarial reviewer rather than a test.
    mailbox is read-only or moves-to-processed rather than destructively consuming.
 9. **Politeness and blast radius of a run.** Verify request pacing/jitter exists between sources, that
    a `--watch` loop cannot hammer a site if a run finishes instantly, and that a retry storm is
-   bounded. Remember that a request from this container leaves it and is logged by someone else: a
+   bounded. Remember that a request from this machine leaves it and is logged by someone else: a
    careless loop is a rate-limit ban on the developer's own IP.
 10. **Notification blast radius.** A `--no-state` run, a deleted seen-set, or a schema migration that
     re-marks stored listings as unseen will re-notify **everything** — a self-inflicted flood on the
