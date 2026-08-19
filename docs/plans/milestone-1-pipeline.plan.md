@@ -787,3 +787,20 @@ A changelog that overstates is worse than one that omits, because the next sessi
   05:32:27→05:32:31), so the 258-case ledger is ~20-30 min there. A ZTS DEBUG build (the dev machine)
   is ~31 s/case ≈ 2 h 10 m. The two differ by ~7x; do NOT read a local timing as the CI cost. No
   completed CI run has ever been timed, because there has never been one.
+
+- [2026-08-19 16:50] FULL LEDGER, POST-FIX: **258/258 detected, 0 undetected** (exit 0). Run against
+  the frozen tree of `210f853` on this machine; log snapshot at `var/claude/ledger-210f853.log`.
+  This is the first COMPLETE ledger since 2026-08-13 — the seven nightly runs in between never
+  reached case 1. It is also the evidence the fix actually restored the check rather than merely
+  silencing its symptom: the baseline gate now passes AND every one of the 258 seeded breaks is
+  still caught, so no sabotage case was quietly disarmed while the gate was being repaired. Measured
+  wall-clock on the dev machine's ZTS DEBUG build, consistent with the ~31 s/case figure above.
+- [2026-08-19 16:55] AGREED: **certification collapses to ONE MAXIMAL round at the milestone
+  boundary** instead of a panel per commit. Round 1 (17 findings) is closed; round 2 was launched
+  against frozen `21ba5b1` and all three lenses died on a session limit. Rather than re-spend the
+  budget certifying a CI fix, the developer ruled that TDD is the gate for the rest of this session
+  — failing test first, executed output as evidence — and the panel runs once, MAXIMAL, against a
+  frozen commit when milestone 1 closes. This is CLAUDE.md's own rule ("milestone boundaries always
+  get MAXIMAL, against a frozen commit"), not an exemption from it. What it costs, stated plainly:
+  the three CI commits (`210f853`, `e700051`, `21ba5b1`) carry ONE clean panel round, not two, so
+  they are NOT MAXIMAL-certified until that boundary round covers them.
