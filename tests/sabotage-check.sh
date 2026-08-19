@@ -74,7 +74,11 @@ run_sabotage() {
   fi
 
   local out
-  out="$(cd "$work/repo" && php tools/phpunit.phar --colors=never --do-not-cache-result 2>&1)"
+  # NO `--do-not-cache-result`: it disables the result cache, which `executionOrder="defects"` in
+  # phpunit.xml requires, so PHPUnit raises a runner warning and `failOnWarning="true"` turns a
+  # perfectly green suite red. Cache isolation between cases needs no flag — `$work/repo` is
+  # rm -rf'd and rebuilt above for every sabotage, so the cache PHPUnit writes under it dies with it.
+  out="$(cd "$work/repo" && php tools/phpunit.phar --colors=never 2>&1)"
   local rc=$?
 
   # A non-zero exit is NOT evidence of detection — a PHP parse error, a missing autoloader or a
@@ -120,7 +124,12 @@ printf '\n== sabotage-check: can the suite detect a broken classifier or store? 
 # the suite is ALREADY red — a missing autoloader, a syntax error, a half-applied edit — then every
 # single sabotage reports success and the whole run is a green light that means nothing. That
 # happened on 2026-08-06, and it is why this check exists before the loop rather than after it.
-if ! (cd "$repo" && php tools/phpunit.phar --no-output --do-not-cache-result >/dev/null 2>&1); then
+#
+# The flags here are load-bearing in the other direction too: this gate must not be reddened by its
+# OWN invocation. `--do-not-cache-result` was removed on 2026-08-19 for exactly that — see the note
+# at the per-sabotage run above, and the satisfiability check in tests/test-ci-workflow.sh that now
+# pins it. `--no-output` is kept: it is current in PHPUnit 13 and suppresses the progress dots.
+if ! (cd "$repo" && php tools/phpunit.phar --no-output >/dev/null 2>&1); then
   printf '  \033[31mABORT\033[0m the suite is red BEFORE any sabotage — every result below would be a\n'
   printf '        false positive. Fix the suite first, then re-run.\n\n'
   exit 1
