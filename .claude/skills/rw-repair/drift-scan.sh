@@ -58,11 +58,19 @@ if s.is_file():
         print(f"P0  .claude/settings.json is not valid JSON ({e}) — every hook claim below is "
               f"unverifiable and Claude Code will not load it.")
         hooks = {}
+    # Scoped to BOOTSTRAP-DERIVED registrations, deliberately. An unscoped "any SessionStart or
+    # PreCompact hook is drift" would cry wolf at the first legitimate one somebody adds — and a
+    # gate that cries wolf gets deleted wholesale, which is the failure this repo records from the
+    # other direction. The invariant is about the bootstrap, not about those two events.
     for event in ('SessionStart', 'PreCompact'):
-        if event in hooks:
-            print(f"P1  .claude/settings.json registers a {event} hook. Both were removed 2026-08-18 "
-                  f"with the bootstrap; session handoffs are the GLOBAL "
-                  f"~/.claude/hooks/precompact-handoff.sh's job. Confirm this is deliberate.")
+        for group in hooks.get(event, []):
+            for h in group.get('hooks', []):
+                cmd = h.get('command', '')
+                if 'claude-bootstrap' in cmd or 'precompact-handoff' in cmd:
+                    print(f"P0  .claude/settings.json registers a {event} hook running `{cmd}` — a "
+                          f"bootstrap-era registration removed 2026-08-18. Session handoffs are the "
+                          f"GLOBAL ~/.claude/hooks/precompact-handoff.sh's job and the framework "
+                          f"installer must never run again. Remove it.")
 PY
 # A python section that CRASHES must not read as a section that found nothing. Under
 # `set -uo pipefail` with no `-e`, an exception here printed a traceback to stderr, wrote

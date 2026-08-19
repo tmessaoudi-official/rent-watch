@@ -80,8 +80,9 @@ Start with `enabled: false`, an `items_path`, and no `map:`. Run `scout dump <na
 item, then fill `map:` from the real payload shape. `scout dump` is what makes this take five minutes
 instead of an hour — if it does not exist yet, building it comes first.
 
-Config is **JSON**, not YAML — ruled 2026-08-07 (Q22): this container has no `ext-yaml` and cannot
-install a parser. `sources.json` is an **object keyed by source name**, so a duplicate name is
+Config is **JSON**, not YAML — ruled 2026-08-07 (Q22). The rationale of the day was that the cloud
+container had no `ext-yaml` and could not install a parser; that container is dead, but the ruling
+stands on its own merits, which are the two that follow. `sources.json` is an **object keyed by source name**, so a duplicate name is
 impossible to write rather than merely discouraged. JSON has no comments, so any key beginning with `_`
 is ignored by the loader (`_comment` by convention); **every other unknown key is a hard error**, which
 is what keeps that convention from doubling as a typo swallower.
