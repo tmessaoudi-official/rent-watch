@@ -36,6 +36,9 @@ failed_labels=()
 # development aid and must never be mistakable for the ledger: the summary counts only what ran, and
 # `skipped` is printed at the end whenever the filter was in play. CI never sets it.
 _filter="${SABOTAGE_FILTER:-}"
+
+# Per case, not for the whole ledger — see the call site for what it is defending against.
+readonly SUITE_TIMEOUT_SECONDS="${SABOTAGE_SUITE_TIMEOUT:-300}"
 skipped=0
 
 # Each entry: label :: file :: sed expression that breaks the guarantee
@@ -90,8 +93,25 @@ run_sabotage() {
   # phpunit.xml requires, so PHPUnit raises a runner warning and `failOnWarning="true"` turns a
   # perfectly green suite red. Cache isolation between cases needs no flag — `$work/repo` is
   # rm -rf'd and rebuilt above for every sabotage, so the cache PHPUnit writes under it dies with it.
-  out="$(cd "$work/repo" && php tools/phpunit.phar --colors=never 2>&1)"
+  # `timeout`, because a sabotage can make the suite BLOCK rather than fail, and a gate that stalls
+  # silently is worse than one that reports a failure. Observed on 2026-08-19: disabling the Q36
+  # empty-database guard let `scout run --watch` enter its real fifteen-minute loop inside a test
+  # that expected the run to be refused, and this script sat on its FIRST case for eleven minutes
+  # printing nothing. The test-side fix is a bounded loop; this is the harness refusing to be held
+  # hostage by the next one. The full suite runs in ~25 s, so five minutes is not a tight budget.
+  out="$(cd "$work/repo" && timeout "$SUITE_TIMEOUT_SECONDS" php tools/phpunit.phar --colors=never 2>&1)"
   local rc=$?
+
+  # 124 is `timeout`'s own verdict. It is NOT detection: the suite never finished, so it never said
+  # anything about the guarantee. Loud, and counted as a failure, because an inconclusive case in a
+  # gate that certifies §1 must not read as a pass.
+  if [[ $rc -eq 124 ]]; then
+    printf '  \033[31mFAIL\033[0m %-58s (the suite did not terminate within %ss — inconclusive,\n' "$label" "$SUITE_TIMEOUT_SECONDS"
+    printf '        and a hang is not a detection)\n'
+    fail=$((fail + 1))
+    failed_labels+=("$label")
+    return
+  fi
 
   # A non-zero exit is NOT evidence of detection — a PHP parse error, a missing autoloader or a
   # failed `cd` produces one too, and asserting on `rc` alone would report those as successes.
@@ -1496,6 +1516,35 @@ run_sabotage "a regex that does not match returns the raw text instead of null" 
 run_sabotage "an enabled html source may ship with no item_selector" \
   src/php/Config/ConfigLoader.php \
   "s%if (\\\$type === 'html' \&\& (\\\$itemSelector === null || trim(\\\$itemSelector) === '')) {%if (false) {%"
+
+# ── the Q36 flood guard ───────────────────────────────────────────────────────────────────────
+#
+# Every failure here is silent in the same direction: the guard still exists, still reads a
+# plausible fact, and lets the run through. Nobody sees a stack trace — they see one push per
+# listing in the back catalogue, which on a source like In'li is ninety-two of them at once.
+
+# There is deliberately NO case for `RENT_WATCH_MAX_PASSES` itself. Removing the bound does not make
+# a test fail, it makes one BLOCK — which the timeout above reports as inconclusive, correctly, since
+# a suite that never finished never said anything. The hang is the signal; it just is not detection.
+
+# The guard is disarmed outright.
+run_sabotage "the empty-database guard stops firing" \
+  src/php/Cli/Scout.php \
+  's%if (\$store->isSeenSetEmpty() \&\& !\$seed) {%if (false) {%'
+
+# It fires, but `--seed` is no longer the way past it, so the ONLY documented route through is shut
+# and the guard becomes a wall: the tool can never make its first real run.
+run_sabotage "--seed no longer gets past the empty-database guard" \
+  src/php/Cli/Scout.php \
+  's%if (\$store->isSeenSetEmpty() \&\& !\$seed) {%if (true) {%'
+
+# The regression this whole change fixes, reintroduced: the store answers "has anything been
+# recorded?" from a flag about THIS process instead of from the rows. Any earlier command that
+# opened the file — `scout doctor` is the first one a new machine invites you to type — then
+# answers it for good.
+run_sabotage "the seen-set emptiness answer comes from the process, not the rows" \
+  src/php/Store/Store.php \
+  's%return (int) \$this->pdo->query(.SELECT EXISTS (SELECT 1 FROM listings).)->fetchColumn() === 0;%return false;%'
 
 printf '\n  %d sabotage(s) detected, %d undetected\n' "$pass" "$fail"
 

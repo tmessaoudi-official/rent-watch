@@ -931,6 +931,23 @@ refuses to notify and exits saying so, offering `--seed` to populate the seen-se
 The mount is additionally asserted by a marker file written in `RENT_WATCH_DB`'s directory at first
 successful start.
 
+**AMENDED [2026-08-19], on both halves — the ruling's INTENT stands, its two mechanisms did not.**
+
+*The fact the guard reads.* "Did `open()` **create** the file?" is destroyed by any earlier command
+that merely opens the database, and `scout doctor` — the first command a new machine invites you to
+type — opens it. Typing `doctor` once therefore let the following `scout run --once` push the whole
+back catalogue, which on In'li is 92 listings at once. The guard now reads whether anything has ever
+been **recorded** (`Store::isSeenSetEmpty()`): a fact that lives in the rows, so no other command can
+answer it away. `--seed` is unchanged as the route through.
+
+*The marker file is WITHDRAWN, because it cannot detect what it was ruled for.* Its stated location
+is `RENT_WATCH_DB`'s own directory — that is to say, inside the volume. A typo in `-v` gives the
+container a fresh empty directory, so the marker vanishes together with the database and the two
+states it was meant to separate stay identical. Put it outside the volume instead and it lives in
+the image layer, which resets on exactly the container recreation where the typo happens. Neither
+placement fires. Nothing is lost by dropping it: the empty seen-set fires in precisely that case,
+and it is the same refusal.
+
 ### Ⓐ Q37 — `--watch` pacing, which was ruled as the word "jitter" and no number
 
 15 Tier-A sources polled from one VPS IP, with the obvious implementation being a tight loop, is 15

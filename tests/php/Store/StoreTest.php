@@ -83,6 +83,49 @@ final class StoreTest extends TestCase
         self::assertFalse($this->store->record($listing, 950, '2026-08-07T10:00:00+00:00')->isNew);
     }
 
+    /**
+     * ── seen-set ──
+     *
+     * "Has anything ever been recorded?" — the fact the Q36 flood guard reads before `scout run`
+     * is allowed to notify. It replaced "did `open()` create the file?", which any earlier command
+     * that merely opened the database destroyed; `scout doctor` did, so typing it once disarmed the
+     * guard for the following run.
+     *
+     * A missing volume mount produces a valid, empty, migrated database indistinguishable from a
+     * healthy one, and with nothing batched every historic listing pushes at once (Q8 rules out
+     * GitHub Actions for exactly this, then adopts Docker-on-a-VPS, which fails the same way).
+     */
+    public function testAStoreThatHasRecordedNothingSaysSo(): void
+    {
+        self::assertTrue($this->store->isSeenSetEmpty(), 'a migrated database with no rows is empty');
+
+        $this->store->record($this->listing(externalId: 'ANN-1'), 950, '2026-08-07T09:00:00+00:00');
+
+        self::assertFalse($this->store->isSeenSetEmpty());
+    }
+
+    /**
+     * And the answer comes from the ROWS, not from a flag set during this process's `open()` —
+     * otherwise a second process reading the same file would report a full seen-set as empty and
+     * refuse to run, or the reverse.
+     */
+    public function testTheEmptySeenSetAnswerSurvivesReopening(): void
+    {
+        $path = sys_get_temp_dir() . '/rentwatch-seenset-' . bin2hex(random_bytes(8)) . '.sqlite3';
+
+        try {
+            $first = Store::open($path);
+            self::assertTrue($first->isSeenSetEmpty());
+            $first->record($this->listing(externalId: 'ANN-1'), 950, '2026-08-07T09:00:00+00:00');
+
+            self::assertFalse(Store::open($path)->isSeenSetEmpty(), 'reopened on a populated file');
+        } finally {
+            foreach (['', '-wal', '-shm'] as $suffix) {
+                @unlink($path . $suffix);
+            }
+        }
+    }
+
     /** A rent DROP on a listing already seen is its own notification-worthy event (spec §7). */
     public function testARentDropIsReported(): void
     {

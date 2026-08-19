@@ -31,11 +31,17 @@ final class ScoutTest extends TestCase
     {
         $this->dbPath = sys_get_temp_dir() . '/rentwatch-cli-' . bin2hex(random_bytes(8)) . '.sqlite3';
         putenv('RENT_WATCH_DB=' . $this->dbPath);
+        // `--watch` never returns on its own. Every test here that reaches it expects to be stopped
+        // BEFORE the loop starts, so if that expectation is ever wrong the test would block rather
+        // than fail — and block the suite, and the sabotage ledger behind it. One pass is enough to
+        // prove any of them.
+        putenv('RENT_WATCH_MAX_PASSES=1');
     }
 
     protected function tearDown(): void
     {
         putenv('RENT_WATCH_DB');
+        putenv('RENT_WATCH_MAX_PASSES');
         putenv('NTFY_TOPIC');
         putenv('SMTP_TO');
 
@@ -210,6 +216,25 @@ final class ScoutTest extends TestCase
         self::assertStringContainsString('digest à 8h', $r['out'], 'Q34: the digest hour must be visible with its timezone');
     }
 
+    /**
+     * Make the fixture's listings look newly published — WITHOUT emptying the seen-set.
+     *
+     * Emptying it is what these tests used to do, and an empty seen-set is now precisely the state
+     * `scout run` refuses to notify on (Q36), because it is what a missing volume mount looks like.
+     * So the stored rows are RENAMED instead: the seen-set still holds listings, just no longer
+     * these ones — which is what "the source published something" actually means.
+     *
+     * The raw connection leaves `foreign_keys` off, so the price-history rows are orphaned rather
+     * than cascaded. That is deliberate and harmless here: the point of these tests is the run
+     * loop's output, and a listing seen for the first time has no price history to carry.
+     */
+    private function republishEverything(): void
+    {
+        (new \PDO('sqlite:' . (string) $this->dbPath))->exec(
+            "UPDATE listings SET dedup_key = 'ancienne:' || dedup_key, external_id = 'ancienne-' || external_id",
+        );
+    }
+
     // ---------------------------------------------------------------- seed (Q36)
 
     public function testRunRefusesOnAFreshlyCreatedDatabase(): void
@@ -223,6 +248,28 @@ final class ScoutTest extends TestCase
         self::assertStringContainsString('base vide', $r['err']);
         self::assertStringContainsString('--seed', $r['err'], 'the refusal must name the way through');
         self::assertSame('', $r['out'], 'nothing may be notified on a fresh database');
+    }
+
+    /**
+     * ANY earlier command that merely OPENS the database creates the file, and the guard used to
+     * read exactly that fact — "did `open()` create this?" — so a single `scout doctor` disarmed it
+     * and the next run notified the entire back catalogue at once. `doctor` is the natural first
+     * command to type on a new machine, which made this the likeliest path through the guard rather
+     * than an exotic one.
+     *
+     * The fact the guard reads is now the one Q36 is about: whether anything has ever been recorded.
+     */
+    public function testAnEarlierDoctorDoesNotDisarmTheEmptyDatabaseGuard(): void
+    {
+        $doctor = $this->scout(['doctor']);
+        self::assertSame(0, $doctor['code'], $doctor['err']);
+        self::assertFileExists((string) $this->dbPath, 'doctor is expected to create the database — that is the trap');
+
+        $r = $this->scout(['run', '--once']);
+
+        self::assertSame(2, $r['code'], 'an existing but empty database is still an empty database');
+        self::assertStringContainsString('base vide', $r['err']);
+        self::assertSame('', $r['out'], 'nothing may be notified on an empty seen-set');
     }
 
     public function testSeedPopulatesTheSeenSetWithoutNotifying(): void
@@ -264,11 +311,10 @@ final class ScoutTest extends TestCase
 
     public function testAFirstRealRunEmitsTheNotificationPayload(): void
     {
-        // Seeded, then the seen-set is emptied so the listings are new again — which is the closest
-        // an offline test gets to "a source published something".
+        // Seeded, then the stored rows are renamed so the fixture's listings are new again — which
+        // is the closest an offline test gets to "a source published something".
         $this->scout(['run', '--seed']);
-        $pdo = new \PDO('sqlite:' . (string) $this->dbPath);
-        $pdo->exec('DELETE FROM listings');
+        $this->republishEverything();
 
         $r = $this->scout(['run', '--once']);
 
@@ -284,7 +330,7 @@ final class ScoutTest extends TestCase
     public function testTheDigestEntryExplainsItselfRatherThanBeingABareLink(): void
     {
         $this->scout(['run', '--seed']);
-        (new \PDO('sqlite:' . (string) $this->dbPath))->exec('DELETE FROM listings');
+        $this->republishEverything();
 
         $r = $this->scout(['run', '--once']);
 
@@ -296,10 +342,16 @@ final class ScoutTest extends TestCase
     {
         // §1, at the only surface the developer actually sees. The fixture carries a PLAI listing.
         $this->scout(['run', '--seed']);
-        (new \PDO('sqlite:' . (string) $this->dbPath))->exec('DELETE FROM listings');
+        $this->republishEverything();
 
         $r = $this->scout(['run', '--once']);
 
+        // COUNTERWEIGHT FIRST. Two assertions of absence pass perfectly on a run that was refused
+        // and printed nothing at all — which is exactly what happened when the Q36 guard started
+        // reading the seen-set: this test stayed green while its siblings went red, and a §1 test
+        // that cannot fail is worse than no test. The match proves the pass actually ran.
+        self::assertSame(0, $r['code'], $r['err']);
+        self::assertStringContainsString('[MATCH]', $r['out'], 'the pass must have produced output for the absences below to mean anything');
         self::assertStringNotContainsString('demo-0002', $r['out'], 'the PLAI listing must not be surfaced');
         self::assertStringNotContainsString('PLAI', $r['out']);
     }
@@ -309,7 +361,7 @@ final class ScoutTest extends TestCase
         // A hard disqualifier rejects silently and is logged only (hard rule 8), so `-v` is the ONLY
         // way a mis-scoped filter is ever noticed — nothing arrives either way.
         $this->scout(['run', '--seed']);
-        (new \PDO('sqlite:' . (string) $this->dbPath))->exec('DELETE FROM listings');
+        $this->republishEverything();
 
         $r = $this->scout(['run', '--once', '-v']);
 
@@ -380,6 +432,29 @@ final class ScoutTest extends TestCase
 
         self::assertSame(2, $r['code']);
         self::assertStringContainsString('base vide', $r['err']);
+    }
+
+    /**
+     * THE SUITE MUST NOT BE ABLE TO HANG HERE, and until 2026-08-19 it could.
+     *
+     * `--watch` is the one CLI verb whose success case never returns: the guard above is what stops
+     * these tests from entering a real fifteen-minute loop. So the moment the guard is what breaks —
+     * the exact regression the case above exists for — the test does not fail, it BLOCKS, and the
+     * sabotage ledger stalls for hours reporting nothing instead of printing one red line. That was
+     * observed, not imagined: a sabotage run sat on this file for eleven minutes on its first case.
+     *
+     * `RENT_WATCH_MAX_PASSES` bounds the loop, and `setUp()` sets it for every test in this class,
+     * so a broken guard now produces a fast wrong answer — which a test can catch.
+     */
+    public function testTheWatchLoopIsBoundedSoABrokenGuardFailsRatherThanHanging(): void
+    {
+        $this->scout(['run', '--seed']);
+
+        $r = $this->scout(['run', '--watch']);
+
+        self::assertSame(0, $r['code'], $r['err']);
+        self::assertStringContainsString('surveillance active', $r['out']);
+        self::assertStringContainsString('RENT_WATCH_MAX_PASSES', $r['out'], 'a bounded watcher must say so — it is not the documented behaviour');
     }
 
     public function testWatchRefusesToBeCombinedWithSeed(): void

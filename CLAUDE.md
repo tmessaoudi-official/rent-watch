@@ -68,6 +68,26 @@ suite into a four-page-per-test crawler of a live landlord's site within a singl
 `scout doctor|run --source=<name>` (repeatable) limits a run to one source, which is what onboarding
 the next source needs and what keeps the CLI tests off the shipped source list.
 
+**Two more environment seams, both of them there so a test cannot become a hang or a crawl**
+(2026-08-19). `RENT_WATCH_MAX_PASSES=<n>` bounds `scout run --watch` to n passes; absent — the
+normal case — the loop runs until stopped, and when it is set the watcher SAYS so on its banner
+every time. `tests/php/Cli/ScoutTest.php` sets it for every test in the class, because `--watch` is
+the one verb whose success case never returns: a test that expects the run to be refused and is
+wrong does not fail, it blocks, and it blocks the suite and the sabotage ledger behind it. That was
+observed — disabling the Q36 guard made the ledger sit on its FIRST case for eleven minutes printing
+nothing. `tests/sabotage-check.sh` now also runs each case under `timeout` (`SABOTAGE_SUITE_TIMEOUT`,
+default 300 s) and counts a suite that never finished as a loud FAILURE, since a hang is not a
+detection.
+
+**The Q36 flood guard reads the ROWS, not the file** (fixed 2026-08-19). `scout run` refuses to
+notify while `Store::isSeenSetEmpty()` — a missing volume mount produces a valid, empty, migrated
+database indistinguishable from a healthy one, and every historic listing would push at once. The
+guard used to ask whether `Store::open()` had CREATED the file, which any earlier command that
+merely opened the database answered away: `scout doctor` opens it, so typing the first command a new
+machine invites you to type disarmed the guard for the following run. Q36's other half — a mount
+marker file — is WITHDRAWN rather than unimplemented; `docs/OPEN-QUESTIONS.md` records why it cannot
+fire in either placement.
+
 **The five sabotage gaps are closed as of 2026-08-12**, each verified individually by a targeted
 mini-run going 7/7 red (the two fixed sed expressions included): honest User-Agent pinned;
 SMTP-without-STARTTLS proven refused via a scripted loopback server and its wire transcript;

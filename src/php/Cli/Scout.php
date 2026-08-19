@@ -288,7 +288,12 @@ final readonly class Scout
 
         // Q36. A missing volume mount produces a valid, empty, migrated database indistinguishable
         // from a healthy one — and with nothing batched, every historic listing would push at once.
-        if ($store->wasCreated() && !$seed) {
+        //
+        // The question asked is whether anything has ever been RECORDED, not whether this process
+        // created the file: `scout doctor` opens the database, and while the guard read the latter,
+        // running doctor once — the first thing a new machine invites you to do — let the next run
+        // notify the entire back catalogue.
+        if ($store->isSeenSetEmpty() && !$seed) {
             return $this->fail(
                 'base vide : première exécution, ou volume non monté. Rien n\'a été notifié. '
                 . 'Relancez avec `--seed` pour amorcer le seen-set sans notifier, puis sans le flag.',
@@ -371,8 +376,10 @@ final readonly class Scout
 
         $handlers = $loop->installSignalHandlers();
 
+        $maxPasses = $this->maxPasses();
+
         $this->line(sprintf(
-            'surveillance active · %d source(s) · toutes les %d min ± %d (Q37) · %s',
+            'surveillance active · %d source(s) · toutes les %d min ± %d (Q37) · %s%s',
             count($sources),
             (int) (Pacer::PASS_INTERVAL_SECONDS / 60),
             (int) (Pacer::JITTER_SECONDS / 60),
@@ -382,9 +389,12 @@ final readonly class Scout
             $handlers
                 ? 'arrêt propre sur SIGINT/SIGTERM (la passe en cours se termine)'
                 : 'ext-pcntl absent : pas d\'arrêt propre, la passe en cours sera interrompue',
+            // Said out loud, every pass, because a watcher that stops after N passes looks exactly
+            // like one that is still watching — right up until the listing it missed.
+            $maxPasses === null ? '' : sprintf(' · RENT_WATCH_MAX_PASSES=%d : arrêt après %d passe(s)', $maxPasses, $maxPasses),
         ));
 
-        return $loop->run();
+        return $loop->run($maxPasses);
     }
 
     /**
@@ -509,6 +519,30 @@ final readonly class Scout
             $this->rootDir . '/config/criteria.json',
             $this->rootDir . '/config/criteria.local.json',
         );
+    }
+
+    /**
+     * A bound on the number of `--watch` passes, from `RENT_WATCH_MAX_PASSES`. Absent — the normal
+     * case, and the documented behaviour — means the loop runs until it is stopped.
+     *
+     * A TEST SEAM, in the same shape as `RENT_WATCH_OFFLINE`, and it exists because `--watch` is the
+     * one verb whose success case never returns. Without a bound, a test that expects the run to be
+     * REFUSED and is wrong does not fail: it blocks, and takes the whole suite with it. The sabotage
+     * ledger sat on exactly that for eleven minutes before it was noticed, and a gate that stalls
+     * silently is worse than one that reports a failure.
+     *
+     * Anything that is not a positive integer is ignored rather than refused: this must never be the
+     * reason a watcher will not start on a machine where somebody exported a stray value.
+     */
+    private function maxPasses(): ?int
+    {
+        $configured = getenv('RENT_WATCH_MAX_PASSES');
+
+        if (!is_string($configured) || preg_match('/^[1-9]\d*$/', trim($configured)) !== 1) {
+            return null;
+        }
+
+        return (int) trim($configured);
     }
 
     private function dbPath(): string

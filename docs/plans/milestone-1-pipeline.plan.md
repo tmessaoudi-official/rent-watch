@@ -926,3 +926,21 @@ A changelog that overstates is worse than one that omits, because the next sessi
   the code is written, ~65% counting the phorj port, and ~0% of the product is usable, since every
   source in `config/sources.json` is disabled behind a `REMPLACER` URL. Re-derive the figures rather
   than trusting them once a real source lands.
+- [2026-08-19 22:40] AGREED: the Q36 flood guard reads whether anything has ever been RECORDED
+  (`Store::isSeenSetEmpty()`), not whether `Store::open()` created the file. The old fact was
+  destroyed by any command that merely opened the database, and `scout doctor` opens it — so typing
+  the one command a new machine invites you to type let the next `scout run --once` notify the whole
+  back catalogue (92 listings on In'li). `Store::wasCreated()` is deleted rather than kept alongside:
+  emptiness is a strict superset, and two guards reading two facts is how one of them rots unnoticed.
+- [2026-08-19 22:40] AGREED: Q36's second half — a mount marker file in `RENT_WATCH_DB`'s directory —
+  is WITHDRAWN rather than implemented, because it cannot fire. Inside the volume it disappears with
+  the database it was meant to outlive; outside it, it lives in the image layer and resets on the
+  container recreation where the failure happens. The empty seen-set covers the same case.
+- [2026-08-19 22:55] AGREED: `scout run --watch` honours `RENT_WATCH_MAX_PASSES`, and
+  `tests/sabotage-check.sh` runs every case under `timeout` (default 300 s, `SABOTAGE_SUITE_TIMEOUT`)
+  and counts a suite that never finished as a FAILURE. Found by this change rather than reasoned
+  about: sabotaging the Q36 guard let a CLI test that expects a REFUSAL enter the real 15-minute
+  watch loop, and the ledger sat on its first case for eleven minutes printing nothing. A gate that
+  stalls silently is worse than one that reports a failure. No sabotage case covers the bound itself
+  — removing it produces a hang, which the timeout reports as inconclusive, which is the honest
+  verdict rather than a detection.

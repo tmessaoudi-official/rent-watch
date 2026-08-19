@@ -106,7 +106,6 @@ final readonly class Store
     private function __construct(
         private \PDO $pdo,
         private string $journalModeInUse,
-        private bool $wasCreated = false,
     ) {}
 
     /**
@@ -126,14 +125,6 @@ final readonly class Store
      */
     public static function open(string $path): self
     {
-        // Captured BEFORE the connection, because PDO creates the file on connect. Q8 rules out
-        // GitHub Actions *because* no persistent disk means re-notifying everything, then adopts
-        // Docker-on-a-VPS, which has the identical failure mode: a typo in `-v`, or a volume that
-        // fails to reattach on reboot, produces a valid, empty, migrated database indistinguishable
-        // from a healthy one — and with nothing batched, every historic listing pushes at once.
-        // `scout run` refuses to notify on a fresh database (Q36); `--seed` is the way through.
-        $existedBefore = $path === ':memory:' || is_file($path);
-
         if ($path !== ':memory:') {
             $directory = \dirname($path);
 
@@ -173,22 +164,35 @@ final readonly class Store
         // the migration below fail with "cannot commit transaction - SQL statements in progress".
         $mode?->closeCursor();
 
-        $store = new self($pdo, $journalMode, !$existedBefore);
+        $store = new self($pdo, $journalMode);
         $store->migrate();
 
         return $store;
     }
 
     /**
-     * Did {@see open()} CREATE this database, rather than find one?
+     * Has this store ever recorded a listing? The fact the Q36 flood guard reads before `scout run`
+     * is allowed to notify anything.
      *
-     * The one signal that tells a missing volume mount apart from a first run — and they need
-     * telling apart, because the first is a misconfiguration whose symptom is notifying the entire
-     * market at once, and the second is expected.
+     * Q8 rules out GitHub Actions *because* no persistent disk means re-notifying everything, then
+     * adopts Docker-on-a-VPS, which has the identical failure mode: a typo in `-v`, or a volume
+     * that fails to reattach on reboot, produces a valid, empty, migrated database indistinguishable
+     * from a healthy one — and with nothing batched, every historic listing pushes at once.
+     *
+     * The question used to be "did {@see open()} CREATE this file?", which is a DIFFERENT fact and
+     * a fragile one: any earlier command that merely opened the database answered it for good.
+     * `scout doctor` opens it, so typing the one command a new machine invites you to type disarmed
+     * the guard for the following run. Rows survive that; a per-process flag does not.
+     *
+     * `:memory:` is deliberately NOT exempt, though it was under the old fact. An in-memory store
+     * starts empty on every invocation, so it would re-notify the whole market every pass — that is
+     * the flood itself, not an edge case around it.
      */
-    public function wasCreated(): bool
+    public function isSeenSetEmpty(): bool
     {
-        return $this->wasCreated;
+        // EXISTS rather than COUNT: SQLite stops at the first row instead of walking the table, and
+        // the answer is a yes/no anyway.
+        return (int) $this->pdo->query('SELECT EXISTS (SELECT 1 FROM listings)')->fetchColumn() === 0;
     }
 
     /**

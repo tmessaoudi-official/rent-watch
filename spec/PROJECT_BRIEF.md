@@ -279,7 +279,7 @@ scout doctor                  # health-check every source; prints status, timing
 scout dump <source>           # raw payload of first item — for building field maps
 scout run --once [-v]         # single pass
 scout run --watch             # loop with jitter (15 min ± 5, paced per host — Q37)
-scout run --seed              # populate the seen-set without notifying (fresh database — Q36)
+scout run --seed              # populate the seen-set without notifying (empty seen-set — Q36)
 scout digest                  # emit the "à vérifier" digest on demand — added 2026-08-07 (1c)
 scout reclassify [--since]    # re-run the classifier over stored listings — added 2026-08-07 (Q35)
 scout test-notify             # verify the notification channel
