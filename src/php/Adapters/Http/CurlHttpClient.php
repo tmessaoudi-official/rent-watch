@@ -90,6 +90,37 @@ final readonly class CurlHttpClient implements HttpClient
             $headers[] = $name . ': ' . $value;
         }
 
+        // ── the offline tripwire ─────────────────────────────────────────────────────────────
+        //
+        // `RENT_WATCH_OFFLINE=1` turns every outbound request into a loud refusal, and
+        // `tests/bootstrap.php` sets it for the whole suite. Spec §11 says parser tests run
+        // offline; until 2026-08-19 that held only BY ACCIDENT, because every source in
+        // `config/sources.json` was disabled and the tests that run the real CLI against the real
+        // config therefore had nothing to poll. Enabling In'li turned the suite into a four-page
+        // crawler of a live landlord's site, once per test, inside a single run.
+        //
+        // An accidental guarantee is not one. This makes it structural: an accidental real client
+        // now fails in microseconds naming the cause, rather than hanging — and, the part that
+        // matters under hard rule 5, rather than hammering somebody else's server from CI.
+        //
+        // **Placed AFTER the header guards on purpose.** Above them it short-circuited the
+        // User-Agent, token and CRLF refusals, so four tests that prove hard rule 5 is enforced at
+        // this funnel started passing for the wrong reason — they saw the offline message instead
+        // of the refusal they were written to pin. A safety check that its own test can no longer
+        // reach is indistinguishable from one that was deleted. Validation first, transport second.
+        // Loopback is exempt, and that is not a loophole. What the switch forbids is contacting
+        // SOMEBODY ELSE'S server — third-party load, third-party rate limits, a test suite whose
+        // result depends on a landlord's deploy schedule. A scripted server on 127.0.0.1 is how
+        // this project proves the things only a real socket can prove: that the honest User-Agent
+        // is what actually crosses the wire, and that SMTP refuses a credential without STARTTLS.
+        // Banning those would delete real evidence to enforce a rule they do not break.
+        if (getenv('RENT_WATCH_OFFLINE') === '1' && !self::isLoopback($request->url)) {
+            throw new HttpError(
+                'RENT_WATCH_OFFLINE=1 — refusing to request ' . $request->url
+                    . '. Tests and dry runs must not reach the network; use a fake client or a frozen fixture',
+            );
+        }
+
         $responseHeaders = [];
         $options = [
             CURLOPT_RETURNTRANSFER => true,
@@ -154,6 +185,23 @@ final readonly class CurlHttpClient implements HttpClient
      * is either compromised or not the source we verified — either way, following it silently means
      * polling something nobody approved, with our honest User-Agent attached.
      */
+    /**
+     * Is this URL served by this machine?
+     *
+     * Deliberately a NAME check and not a resolution: resolving would let a hostname that happens
+     * to point at 127.0.0.1 today decide whether the offline rule applies, which makes the rule
+     * depend on DNS. The three spellings below are the ones a test server is ever reachable by.
+     */
+    private static function isLoopback(string $url): bool
+    {
+        $host = parse_url($url, PHP_URL_HOST);
+        if (!is_string($host)) {
+            return false;
+        }
+
+        return in_array(strtolower(trim($host, '[]')), ['127.0.0.1', 'localhost', '::1'], true);
+    }
+
     public function sendFollowing(HttpRequest $request): HttpResponse
     {
         $current = $request;

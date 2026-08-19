@@ -42,9 +42,31 @@ shuffled each pass), `Adapters/PacedSource` is the decorator that applies it —
 learns that time exists and `--once` stays unpaced — and `Cli/WatchLoop` is the loop, which SURVIVES
 a pass that throws (reporting it) and stops on SIGINT/SIGTERM only after the pass in flight
 finishes. `Source::host(): ?string` was added to the contract to make host-level pacing possible;
-`null` means the source issues no outbound web request and is never delayed. Still missing: the
-`html`-type adapter (needs a CSS-selector parser).
-`src/phorj/` is not written yet — it waits on the three phorj builds in `docs/PHORJ-REQUIREMENTS.md`.
+`null` means the source issues no outbound web request and is never delayed.
+
+**THE FIRST REAL SOURCE IS LIVE (2026-08-19).** In'li is `enabled: true` in `config/sources.json`
+with a verified endpoint — `robots.txt` read first (`Disallow: /espace-membre/` only), the search
+page fetched, the payload frozen and scrubbed into `tests/fixtures/inli/search.html`.
+`scout doctor --source=inli` returns **92 annonces, 4 pages, ~12 s, `ok`**. Its search page is
+server-rendered, so there is no JSON API to prefer and it uses the new `html` adapter:
+`Adapters/HtmlSource` + `Adapters/Html/Selector`, built on PHP 8.5's own `Dom\HTMLDocument` and
+`querySelectorAll` — **no hand-written selector engine was needed**, which is why this cost ~300
+lines rather than the ~1 000 estimated. Field maps for `type: html` are CSS selectors with an
+optional `@attr` and an optional `=> regex` capture; extraction still funnels through
+`ListingMapper`, so hard rule 9 has exactly one implementation. Pagination is real, not deferred:
+`page_param` walks pages and `total_selector` CHECKS the walk against the count the page states
+about itself, because walking until a page comes back empty is a termination rule and not a proof.
+
+`src/phorj/` is **ON INDEFINITE HOLD** (developer ruling, 2026-08-19) — not blocked, deprioritised.
+Do not start it; `docs/PHORJ-REQUIREMENTS.md` remains the record of what it would need.
+
+**No test reaches the network, and that is now structural rather than accidental.**
+`tests/bootstrap.php` sets `RENT_WATCH_OFFLINE=1` and `CurlHttpClient::send()` refuses any
+third-party host (loopback stays allowed — the wire tests need a real socket). Before In'li was
+enabled the offline guarantee held only because every source was disabled; enabling one turned the
+suite into a four-page-per-test crawler of a live landlord's site within a single run.
+`scout doctor|run --source=<name>` (repeatable) limits a run to one source, which is what onboarding
+the next source needs and what keeps the CLI tests off the shipped source list.
 
 **The five sabotage gaps are closed as of 2026-08-12**, each verified individually by a targeted
 mini-run going 7/7 red (the two fixed sed expressions included): honest User-Agent pinned;

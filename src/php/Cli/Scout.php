@@ -7,6 +7,7 @@ namespace RentWatch\Cli;
 use RentWatch\Adapters\EmailAlertSource;
 use RentWatch\Adapters\FixtureSource;
 use RentWatch\Adapters\Http\CurlHttpClient;
+use RentWatch\Adapters\HtmlSource;
 use RentWatch\Adapters\HttpJsonSource;
 use RentWatch\Adapters\Mail\FileMailbox;
 use RentWatch\Adapters\Mail\ImapMailbox;
@@ -84,7 +85,7 @@ final readonly class Scout
 
         try {
             return match ($command) {
-                'doctor' => $this->doctor(),
+                'doctor' => $this->doctor($flags),
                 'dump' => $this->dump($flags),
                 'run' => $this->runCommand($flags),
                 'digest' => $this->digest(),
@@ -117,11 +118,11 @@ final readonly class Scout
      * instead of share. And it passes `$nowIso` to `Store::health()`, without which `STALE` — the
      * verdict that catches the schedule itself having stopped — can never fire at all.
      */
-    private function doctor(): int
+    private function doctor(array $flags = []): int
     {
         $criteria = $this->criteria();
         $store = $this->store();
-        $sources = $this->sources($store);
+        $sources = $this->sources($store, $this->onlySources($flags));
         $now = $this->now();
 
         $this->line('rent-watch doctor · ' . $now);
@@ -306,7 +307,7 @@ final readonly class Scout
             $this->warn('canal ' . $name . ' désactivé : ' . $problem);
         }
 
-        $sources = $this->sources($store);
+        $sources = $this->sources($store, $this->onlySources($flags));
         if ($sources === []) {
             $this->line('aucune source activée — rien à faire.');
 
@@ -533,11 +534,17 @@ final readonly class Scout
      *
      * @return list<Source>
      */
-    private function sources(Store $store): array
+    private function sources(Store $store, ?array $only = null): array
     {
         $out = [];
+        $known = [];
 
         foreach (ConfigLoader::loadSources($this->rootDir . '/config/sources.json') as $definition) {
+            if ($only !== null && !in_array($definition->name, $only, true)) {
+                continue;
+            }
+            $known[] = $definition->name;
+
             if (!$definition->enabled) {
                 continue;
             }
@@ -563,7 +570,43 @@ final readonly class Scout
             $out[] = $source;
         }
 
+        // A `--source` naming nothing is a typo, and a typo that silently runs zero sources is the
+        // worst possible outcome of a debugging flag: it reports a clean, fast, empty pass. Name
+        // what was asked for and what exists, and let the caller decide.
+        if ($only !== null) {
+            $absent = array_values(array_diff($only, $known));
+            if ($absent !== []) {
+                $this->warn('source(s) inconnue(s) : ' . implode(', ', $absent));
+            }
+        }
+
         return $out;
+    }
+
+    /**
+     * `--source=<name>`, repeatable. `null` means every enabled source.
+     *
+     * The flag exists for the moment a new source is onboarded: `/add-source` asks for a run
+     * against exactly one block, and without this the only way to get one was to disable the
+     * others — an edit to committed config, made under time pressure, easy to forget to undo.
+     *
+     * @param list<string> $flags
+     *
+     * @return list<string>|null
+     */
+    private function onlySources(array $flags): ?array
+    {
+        $names = [];
+        foreach ($flags as $flag) {
+            if (str_starts_with($flag, '--source=')) {
+                $name = trim(substr($flag, strlen('--source=')));
+                if ($name !== '') {
+                    $names[] = $name;
+                }
+            }
+        }
+
+        return $names === [] ? null : $names;
     }
 
     private function buildSource(SourceDefinition $definition, Store $store): ?Source
@@ -575,9 +618,12 @@ final readonly class Scout
             // loader refuses `enabled: true` next to a REMPLACER placeholder — so this can never
             // poll something nobody verified, while still being ready the moment a capture lands.
             'json' => new HttpJsonSource($definition, $store, new CurlHttpClient()),
+            // Same shape as `json`, one step different in the middle: the payload is parsed as
+            // HTML5 by the language's own `Dom\HTMLDocument` and the field map is read as CSS
+            // selectors. In'li is the first real source to use it — its search page is
+            // server-rendered, so there is no JSON endpoint to prefer.
+            'html' => new HtmlSource($definition, $store, new CurlHttpClient()),
             'email_alert' => $this->buildEmailSource($definition, $store),
-            // `html` still has no adapter: it needs a parser with CSS selectors, which is a
-            // different job from this one and is not blocked on anything but time.
             default => null,
         };
     }
@@ -741,6 +787,7 @@ final readonly class Scout
             '  scout run --once [-v]         une passe complète',
             '  scout run --seed              amorce le seen-set sans notifier',
             '  scout run --watch [-v]        boucle : 15 min ± 5 de jitter (Q37)',
+            '  … --source=<nom>              limite `doctor` / `run` à une source (répétable)',
             '  scout digest                  récapitulatif « à vérifier »',
             '  scout reclassify              annonces au verdict indéterminé',
             '  scout test-notify             vérifie les canaux de notification',

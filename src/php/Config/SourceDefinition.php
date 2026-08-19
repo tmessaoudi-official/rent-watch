@@ -59,6 +59,36 @@ final readonly class SourceDefinition
         public ?string $itemsPath = null,
         /** CSS selector picking one listing element, for `type: html`. `items_path` is its JSON twin. */
         public ?string $itemSelector = null,
+        /**
+         * Query parameter that selects a results page, for `type: html`. `null` means the source is
+         * read as a single page.
+         *
+         * Not cosmetic, and not optional once a search is loosened: In'li returns 24 cards per page
+         * and answered `92 logements` to an ordinary set of filters [verified 2026-08-19], so a
+         * page-one-only read would have discarded 68 listings on every pass — silently, since a
+         * short result set and a quiet market are the same observation.
+         */
+        public ?string $pageParam = null,
+        /**
+         * CSS selector for the page's own declared result count (In'li: `92 logements`).
+         *
+         * This is what makes pagination CHECKABLE rather than hopeful. Walking pages until one
+         * comes back empty is a termination rule, not a correctness proof — a pagination link that
+         * silently 404s ends the walk exactly like a genuine last page. Comparing the total the
+         * site itself states against the number actually collected is the only assertion that can
+         * tell those apart.
+         */
+        public ?string $totalSelector = null,
+        /**
+         * Upper bound on pages walked in one fetch. Reaching it is an error, never a quiet stop.
+         *
+         * A bound rather than a target: at 24 per page this is 480 listings, so hitting it means
+         * pagination is looping or the filters are far wider than intended — both worth a loud
+         * failure. Without it a malformed `page` param that always returns page one is an infinite
+         * loop against somebody else's server, which is the one bug in this file that could get an
+         * IP banned (hard rule 5).
+         */
+        public int $maxPages = 20,
         public FieldMap $map = new FieldMap(ref: ['id']),
         public bool $legalRisk = false,
         public ?string $fixture = null,

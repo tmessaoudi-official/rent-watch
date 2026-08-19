@@ -66,6 +66,24 @@ final class ScoutTest extends TestCase
         self::assertIsResource($out);
         self::assertIsResource($err);
 
+        // ── scoped to the fixture source ──────────────────────────────────────────────────────
+        //
+        // These tests exercise the RUN LOOP — seeding, notification, exit codes, doctor's columns —
+        // against the real repo root, and until 2026-08-19 that was harmless because every source
+        // in the shipped config was disabled. Enabling In'li made every one of them depend on a
+        // live landlord's website: the run's exit code became 1 because a network source could not
+        // be reached, which says nothing about the loop under test.
+        //
+        // `--source=fixture_demo` pins them to the frozen payload they were always really about.
+        // Which sources ship ENABLED is a different question with its own test — see
+        // `ConfigTest::testEveryEnabledSourceCarriesTheEvidenceThatItWasVerified` — and it belongs
+        // there, not smeared across twenty CLI assertions that would each fail for the same reason.
+        $command = $argv[0] ?? '';
+        $names = array_filter($argv, static fn (string $a): bool => str_starts_with($a, '--source='));
+        if (in_array($command, ['run', 'doctor'], true) && $names === []) {
+            $argv[] = '--source=fixture_demo';
+        }
+
         // A FIXED clock. Without one, `STALE` and the counting window depend on wall time, and a
         // test that passes at 23:59 and fails at 00:01 teaches people to re-run rather than to read.
         $code = (new Scout(self::ROOT, $out, $err, '2026-08-07T12:00:00+02:00'))->run($argv);
@@ -92,6 +110,26 @@ final class ScoutTest extends TestCase
      * @param array<string,mixed> $criteria
      * @param array<string,mixed> $sources
      */
+    public function testSourceFlagLimitsTheRunToTheNamedSource(): void
+    {
+        // In'li is enabled in the shipped config and would be polled without this flag — which is
+        // exactly why the flag exists: onboarding a source needs a run against one block, and the
+        // alternative was editing committed config to disable the others.
+        $r = $this->scout(['doctor', '--source=fixture_demo']);
+
+        self::assertStringContainsString('fixture_demo', $r['out']);
+        self::assertStringNotContainsString('inli', $r['out']);
+    }
+
+    public function testAnUnknownSourceNameIsAWarningRatherThanASilentEmptyRun(): void
+    {
+        // The worst outcome for a debugging flag is a typo that reports a clean, fast, empty pass.
+        // The developer reads "0 problems" and concludes the source is fine, when it was never run.
+        $r = $this->scout(['doctor', '--source=inlii']);
+
+        self::assertStringContainsString('inconnue', $r['out'] . $r['err']);
+    }
+
     private function tempRoot(array $criteria = [], array $sources = []): string
     {
         $root = sys_get_temp_dir() . '/rentwatch-root-' . bin2hex(random_bytes(8));

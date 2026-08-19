@@ -305,6 +305,9 @@ final class ConfigLoader
         $body = $r->optString('body', null);
         $itemsPath = $r->optString('items_path', null);
         $itemSelector = $r->optString('item_selector', null);
+        $pageParam = $r->optString('page_param', null);
+        $totalSelector = $r->optString('total_selector', null);
+        $maxPages = $r->optInt('max_pages', 20, 1, 500) ?? 20;
         $legalRisk = $r->optBool('legal_risk', false);
         $fixture = $r->optString('fixture', null);
         $rateLimitMs = $r->optInt('rate_limit_ms', 2000, 0, 600000) ?? 2000;
@@ -371,6 +374,19 @@ final class ConfigLoader
                             . 'an endpoint from memory — verify it against the live site, or leave the source disabled',
                     );
                 }
+
+                // An html source with no `item_selector` cannot know which element is a listing, so
+                // it extracts nothing — and extracting nothing is this project's signature silent
+                // failure, indistinguishable from a market that went quiet. `HtmlSource::fetch()`
+                // refuses it too; this one refuses it at LOAD, before a poll has been scheduled and
+                // before a run log has recorded a source that was never going to work.
+                if ($type === 'html' && ($itemSelector === null || trim($itemSelector) === '')) {
+                    throw ConfigError::at(
+                        $where . '.item_selector',
+                        'required for an enabled html source — it is the CSS selector picking one '
+                            . 'listing element, and without it the adapter finds nothing and reports calm',
+                    );
+                }
             }
         }
 
@@ -389,6 +405,9 @@ final class ConfigLoader
             params: $params,
             itemsPath: $itemsPath,
             itemSelector: $itemSelector,
+            pageParam: $pageParam,
+            totalSelector: $totalSelector,
+            maxPages: $maxPages,
             map: $map,
             legalRisk: $legalRisk,
             fixture: $fixture,

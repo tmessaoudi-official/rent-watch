@@ -53,6 +53,41 @@ final class ConfigTest extends TestCase
         ]]];
     }
 
+    // ---------------------------------------------------------------- the html adapter's config
+
+    /**
+     * An enabled `type: html` source without an `item_selector` is refused AT LOAD.
+     *
+     * `HtmlSource::fetch()` refuses it too, so this is the second of two guards — and it is the one
+     * that matters, because the adapter's refusal arrives after a poll has been scheduled and a run
+     * logged against a source that was never going to extract anything. Without a selector the
+     * adapter matches zero elements, and zero listings is this project's signature silent failure:
+     * identical, from the outside, to a rental market that went quiet.
+     *
+     * Written because a sabotage run found the guard had no test at all — the validation was added
+     * and the suite stayed green with it deleted.
+     */
+    public function testAnEnabledHtmlSourceWithoutAnItemSelectorIsRefusedAtLoad(): void
+    {
+        $this->expectException(ConfigError::class);
+        $this->expectExceptionMessageMatches('~item_selector~');
+
+        ConfigLoader::sourcesFromArray(self::minimalSource([
+            'enabled' => true,
+            'type' => 'html',
+            'url' => 'https://example.test/search',
+        ]));
+    }
+
+    public function testADisabledHtmlSourceMayStillBeIncomplete(): void
+    {
+        // The refusal is scoped to ENABLED sources on purpose: a block being drafted towards a
+        // future capture must remain writable, and hard rule 1 keeps it disabled meanwhile.
+        $sources = ConfigLoader::sourcesFromArray(self::minimalSource(['type' => 'html']));
+
+        self::assertNull($sources['demo']->itemSelector);
+    }
+
     // ---------------------------------------------------------------- strictness
 
     public function testUnknownKeyIsRefusedRatherThanIgnored(): void
@@ -794,17 +829,59 @@ final class ConfigTest extends TestCase
         self::assertTrue($sources['icf_novedis']->mixedTenure, 'Q20: stays true until a Novedis payload can be inspected');
     }
 
-    public function testEveryShippedSourceIsEitherDisabledOrHasNoPlaceholderUrl(): void
+    /**
+     * An enabled source must carry its own EVIDENCE of verification.
+     *
+     * This replaces a blanket "no source may be enabled at all", which was the right assertion
+     * while no endpoint in the repo had ever been checked and became false on 2026-08-19, when
+     * In'li was fetched live with `robots.txt` read first and its payload frozen into
+     * `tests/fixtures/inli/`. Deleting the test would have removed the guard along with the
+     * premise, so the guard is restated against what actually makes enabling legitimate.
+     *
+     * What it now demands of every enabled non-fixture source, and why each one:
+     *
+     * - **`_verified_at`** — hard rule 1 is a claim about a MOMENT ("verified against the live
+     *   site"). Undated, it decays into folklore, and nobody can tell a checked endpoint from an
+     *   inherited one.
+     * - **`_source`** — how it was verified, so the next person can repeat it rather than trust it.
+     * - **no `REMPLACER` anywhere in the block** — the loader guards the `url`; a placeholder can
+     *   also sit in `items_path`, `item_selector` or any map entry, and there it fails at fetch
+     *   rather than at load.
+     * - **an `item_selector` for `type: html`** — without it the adapter matches nothing, and
+     *   matching nothing is this project's signature silent failure.
+     */
+    public function testEveryEnabledSourceCarriesTheEvidenceThatItWasVerified(): void
     {
-        // The loader already refuses this combination, so what this really pins is that the shipped
-        // file has not been "helpfully" enabled with an invented endpoint (hard rule 1).
+        $raw = json_decode((string) file_get_contents(self::ROOT . '/config/sources.json'), true);
+        self::assertIsArray($raw);
+
+        $enabled = [];
+
         foreach (ConfigLoader::loadSources(self::ROOT . '/config/sources.json') as $name => $s) {
-            if ($s->enabled && $s->type !== 'fixture') {
-                self::fail("source '{$name}' is enabled but no endpoint in this repo has been verified");
+            if (!$s->enabled || $s->type === 'fixture') {
+                continue;
+            }
+
+            $enabled[] = $name;
+            $block = $raw['sources'][$name] ?? null;
+            self::assertIsArray($block, "source '{$name}' is enabled but has no block in the file");
+
+            self::assertArrayHasKey('_verified_at', $block, "source '{$name}' is enabled without recording WHEN its endpoint was verified (hard rule 1)");
+            self::assertArrayHasKey('_source', $block, "source '{$name}' is enabled without recording HOW its endpoint was verified");
+            self::assertStringNotContainsString(
+                'REMPLACER',
+                (string) json_encode($block),
+                "source '{$name}' is enabled with a placeholder still somewhere in its block",
+            );
+
+            if ($s->type === 'html') {
+                self::assertNotNull($s->itemSelector, "html source '{$name}' is enabled with no item_selector — it would match nothing and report calm");
             }
         }
 
-        self::assertTrue(true);
+        // Named rather than counted: the day a second source is enabled, this line is the one that
+        // makes someone confirm it was a decision.
+        self::assertSame(['inli'], $enabled, 'the set of enabled network sources changed');
     }
 
     public function testCdcHabitatStaysDisabledPendingTheRobotsTxtQuestion(): void

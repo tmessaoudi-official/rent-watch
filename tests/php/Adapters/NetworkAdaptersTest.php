@@ -310,6 +310,44 @@ final class NetworkAdaptersTest extends TestCase
         self::assertStringNotContainsStringIgnoringCase('mozilla', $head);
     }
 
+    /**
+     * `RENT_WATCH_OFFLINE=1` refuses any request to a third-party host.
+     *
+     * Set by `tests/bootstrap.php` for the whole suite. Spec §11 says parser tests run offline, and
+     * until 2026-08-19 that held only BY ACCIDENT: every source in the shipped config was disabled,
+     * so the tests that run the real CLI against the real config had nothing to poll. Enabling the
+     * first real source turned the suite into a four-page-per-test crawler of a live landlord's
+     * site inside one run — which is both a broken test contract and, under hard rule 5, load on
+     * somebody else's server every time CI fires.
+     */
+    public function testTheOfflineSwitchRefusesAThirdPartyRequest(): void
+    {
+        self::assertSame('1', getenv('RENT_WATCH_OFFLINE'), 'the bootstrap must set this for every test');
+
+        $this->expectException(HttpError::class);
+        $this->expectExceptionMessageMatches('~RENT_WATCH_OFFLINE=1~');
+
+        (new CurlHttpClient())->send(new HttpRequest('https://www.inli.fr/locations/offres/x'));
+    }
+
+    public function testTheOfflineSwitchStillAllowsALoopbackServer(): void
+    {
+        // Not a loophole: what the switch forbids is contacting somebody else's server. A scripted
+        // server on 127.0.0.1 is how this project proves the things only a real socket can — that
+        // the honest User-Agent is what actually crosses the wire, and that SMTP refuses a
+        // credential without STARTTLS. Banning those deletes real evidence to enforce a rule they
+        // do not break.
+        //
+        // Port 1 has nothing listening, so the request fails either way. What is asserted is WHICH
+        // failure: a connection error means the offline gate let it through to the socket.
+        try {
+            (new CurlHttpClient())->send(new HttpRequest('http://127.0.0.1:1/never-reached'));
+            self::fail('expected the connection to be refused');
+        } catch (HttpError $e) {
+            self::assertStringNotContainsString('RENT_WATCH_OFFLINE', $e->getMessage());
+        }
+    }
+
     public function testAUserAgentHeaderCannotOverrideTheHonestOne(): void
     {
         // In cURL, a User-Agent entry in CURLOPT_HTTPHEADER silently overrides CURLOPT_USERAGENT —

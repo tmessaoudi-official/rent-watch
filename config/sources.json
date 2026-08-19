@@ -3,17 +3,36 @@
   "_why": "The single flag that disarms the fail-closed rule of CLAUDE.md §1. It is REQUIRED on every block — the loader refuses a source that omits it, and SourceProfile independently defaults it to true. `false` is a claim that this landlord publishes NO social stock whatsoever, and it is only defensible for In'li (Action Logement's intermediate arm) and the private-market portals. Every value here is bound to tests/fixtures/tenure/corpus.json by ConfigTest, so the two cannot drift apart silently.",
   "sources": {
     "inli": {
-      "_comment": "A1, docs/SOURCES.md. The flagship: ~60 000 LLI units across IDF, covers both 78 and 95, rents 20-30% below market. robots.txt disallows only /espace-membre/. Pure LLI, which is why mixed_tenure is false here and almost nowhere else. Build this one first.",
-      "enabled": false,
+      "_comment": "A1, docs/SOURCES.md. The flagship: ~60 000 LLI units across IDF, covers both 78 and 95, rents 20-30% below market. Pure LLI, which is why mixed_tenure is false here and almost nowhere else. THE FIRST VERIFIED SOURCE IN THIS FILE (2026-08-19).",
+      "_verified_at": "2026-08-19",
+      "_source": "Fetched from the live site, robots.txt read FIRST: `User-agent: *` / `Disallow: /espace-membre/` only, so /locations/ is allowed and this poll is within hard rule 5. The search page is SERVER-RENDERED — there is no JSON API behind it (the route map at /locations/js/routes and the app bundle expose only member-area endpoints), which is why type is `html` and not `json`. Frozen payload: tests/fixtures/inli/search.html, scrubbed of the page's embedded third-party Google API key.",
+      "_why": "WHY THE FILTERS ARE LOOSER THAN criteria.json (ruled 2026-08-19): In'li applies price_max/area_min/room_min server-side, so anything it rejects never reaches CriteriaEngine — no score, no log, no `à vérifier` entry. That is the silent over-rejection hard rule 8 warns about, and it is invisible precisely because nothing arrives. So the URL casts a WIDE net and criteria.json does the real filtering, where every rejection is scored and logged; tightening your criteria later then needs no re-capture. WHY PAGINATION: measured, not assumed — these filters returned `92 logements` across 4 pages of 24 [2026-08-19]. A page-one-only read would have dropped 68 listings on every pass and reported a healthy run. total_selector is what makes the walk checkable: collecting fewer than the page declares is a hard failure, because a page=N that quietly 404s ends the walk exactly like a real last page.",
+      "enabled": true,
       "family": "institutional",
-      "type": "json",
+      "type": "html",
       "default_tenure": "LLI",
       "mixed_tenure": false,
-      "url": "REMPLACER",
+      "url": "https://www.inli.fr/locations/offres/ile-de-france-region_r:11",
+      "base_url": "https://www.inli.fr",
       "method": "GET",
-      "items_path": "REMPLACER",
+      "params": {
+        "price_max": "1600",
+        "area_min": "35",
+        "room_min": "2"
+      },
+      "item_selector": ".featured-items > .featured-item",
+      "page_param": "page",
+      "total_selector": ".sf-results-head h5",
       "map": {
-        "ref": "REMPLACER",
+        "_comment": "Selectors, not dotted paths — see src/php/Adapters/Html/Selector.php. `=>` introduces a capture, because the card packs rooms and surface into ONE text node (`3 pièces · 55.32 m²`) and a general number parser would return whichever comes first.",
+        "ref": "a@href => /([^/]+)$",
+        "url": "a@href",
+        "commune": "img@alt",
+        "cp": "a@href => -(\\d{5})/",
+        "rent": ".featured-price .demi-condensed",
+        "surface": ".featured-details span => ([\\d.,]+)\\s*m²",
+        "rooms": ".featured-details span => (\\d+)\\s*pièce",
+        "_charges_included": "The card prints `cc` in a sibling span beside the figure — charges comprises, confirmed on all 19 cards of the frozen capture.",
         "charges_included": true
       }
     },

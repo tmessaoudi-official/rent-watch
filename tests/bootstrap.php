@@ -23,6 +23,18 @@ if (!is_file($autoload)) {
 
 require $autoload;
 
+// NO TEST REACHES THE NETWORK. Spec §11: parser tests run against frozen fixtures, offline.
+//
+// Set here rather than trusted to discipline, because until 2026-08-19 this held only by accident —
+// every source in `config/sources.json` was disabled, and the tests that run the real CLI against
+// the real config therefore had nothing to poll. Enabling the first real source (In'li) turned the
+// suite into a four-page-per-test crawler of a live landlord's site within one run.
+//
+// `CurlHttpClient::send()` reads this and refuses, so an accidental real client fails instantly and
+// says why, instead of hanging or quietly succeeding on a developer's machine and hammering the
+// site from CI. Adapters under test are given fakes; this is the backstop for the ones that are not.
+putenv('RENT_WATCH_OFFLINE=1');
+
 if (!class_exists(\RentWatch\Tests\Core\Corpus::class)) {
     fwrite(
         STDERR,

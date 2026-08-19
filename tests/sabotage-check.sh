@@ -1449,6 +1449,54 @@ run_sabotage "the wait is served as one long sleep, ignoring signals for 20 min"
   src/php/Cli/WatchLoop.php \
   's%\$slice = min(self::TICK_SECONDS, \$remaining);%$slice = $remaining;%'
 
+# ── The html adapter (In'li, the first real source), added 2026-08-19 ─────────────────────────────
+#
+# Every case here is a SILENT failure by construction. An html adapter that stops extracting does
+# not error, does not slow down and does not look different — it reports a healthy run with no
+# listings, which is indistinguishable from a rental market that went quiet. That is the whole
+# reason this source's adapter throws where the obvious code would `return []`.
+
+# The one that matters most. A redesign renaming `featured-item` leaves a 200, valid HTML and zero
+# cards; returning them as an empty list reports calm forever.
+run_sabotage "a selector matching nothing returns an empty list instead of throwing" \
+  src/php/Adapters/HtmlSource.php \
+  's%if (\$items->count() === 0) {%if (false) {%'
+
+# Drops the capture and hands the whole text node to the number parser. `3 pièces · 55.32 m²` then
+# yields the FIRST token for the surface — 3 m² instead of 55.32 — and 3 m² is a number, so nothing
+# downstream can tell it apart from a very small studio.
+run_sabotage "the field map's regex capture is ignored (surface reads the room count)" \
+  src/php/Adapters/Html/Selector.php \
+  's%return \$this->capture === null ? \$raw : self::captureFrom(\$raw, \$this->capture);%return $raw;%'
+
+# Walking pages until one comes back empty is a TERMINATION rule, not a correctness proof: a page=N
+# that quietly 404s or redirects to page one ends the walk exactly like a genuine last page. Without
+# the declared-total check, 24 of 92 listings is reported as a complete pass.
+run_sabotage "pagination stops checking the total the page declares" \
+  src/php/Adapters/HtmlSource.php \
+  's%if (\$total !== null \&\& count(\$out) < \$total) {%if (false) {%'
+
+# Unbounded pagination against a site that ignores the page parameter is an infinite request loop
+# on somebody else's server — the one bug in this adapter that could actually get an IP banned,
+# which under hard rule 5 is the thing polite pacing exists to prevent.
+run_sabotage "the pagination page bound stops being enforced" \
+  src/php/Adapters/HtmlSource.php \
+  's%if (\$page >= \$this->definition->maxPages) {%if (false) {%'
+
+# A pattern that does not match yields the UNPARSED text instead of null. Hard rule 9's neighbour:
+# the field is then a string that happens to contain a number somewhere, and the parser will find
+# one — so an unknown becomes a confident wrong value rather than an honest absence.
+run_sabotage "a regex that does not match returns the raw text instead of null" \
+  src/php/Adapters/Html/Selector.php \
+  's%return \$value === .. ? null : \$value;%return $value;%'
+
+# The loader stops refusing an enabled html source with no item_selector, so the refusal moves from
+# load time to fetch time — after a poll has been scheduled and a run logged against a source that
+# was never going to work.
+run_sabotage "an enabled html source may ship with no item_selector" \
+  src/php/Config/ConfigLoader.php \
+  "s%if (\\\$type === 'html' \&\& (\\\$itemSelector === null || trim(\\\$itemSelector) === '')) {%if (false) {%"
+
 printf '\n  %d sabotage(s) detected, %d undetected\n' "$pass" "$fail"
 
 if [[ -n "$_filter" ]]; then
