@@ -323,16 +323,37 @@ final class ScoutTest extends TestCase
         self::assertStringContainsString('scout doctor', $r['out']);
     }
 
-    public function testWatchRefusesRatherThanRunningAnUnpacedLoop(): void
+    /**
+     * `--watch` used to refuse outright, because an unpaced loop over many sources from one IP is
+     * what a scraper looks like (hard rule 5). It now runs, paced by {@see \RentWatch\Core\Pacer} to
+     * the Q37 ruling — so what remains to assert here is that it is still subject to every guard
+     * `--once` is subject to, rather than having quietly become a second, laxer entry point.
+     *
+     * The cadence itself is asserted in `PacerTest`, and the loop's survival of a failing pass in
+     * `WatchLoopTest`. Neither belongs here: reaching them through the CLI would mean a real
+     * database, a real config and a fifteen-minute wait.
+     */
+    public function testWatchIsStillSubjectToTheUnseededDatabaseGuard(): void
     {
-        // Q37 ruled the pacing — 15 min ± 5, 5 s between hosts, 60 s per host, shuffled order —
-        // and an unpaced loop over 15 sources from one IP is what a scraper looks like. Refusing
-        // with the ruling quoted is honest; a loop that ignored it would get the developer's own
-        // IP banned (hard rule 5).
+        // Q36's guard. A missing volume mount yields a valid, empty, migrated database that is
+        // indistinguishable from a healthy one — and with nothing batched, every historic listing
+        // would push at once. A watcher would do that on its very first pass and then keep running.
         $r = $this->scout(['run', '--watch']);
 
         self::assertSame(2, $r['code']);
-        self::assertStringContainsString('Q37', $r['err']);
+        self::assertStringContainsString('base vide', $r['err']);
+    }
+
+    public function testWatchRefusesToBeCombinedWithSeed(): void
+    {
+        // `--seed` marks everything as already seen WITHOUT notifying, to bootstrap the seen-set
+        // once. Repeated every fifteen minutes it would suppress every notification forever while
+        // the process reported itself perfectly healthy — a watcher that watches and never speaks,
+        // which is the silent failure hard rule 2 exists to make impossible.
+        $r = $this->scout(['run', '--watch', '--seed']);
+
+        self::assertSame(2, $r['code']);
+        self::assertStringContainsString('--seed', $r['err']);
         self::assertStringContainsString('--once', $r['err'], 'the refusal must name what to use instead');
     }
 
@@ -341,7 +362,7 @@ final class ScoutTest extends TestCase
         $r = $this->scout(['help']);
 
         self::assertSame(0, $r['code']);
-        foreach (['doctor', 'dump', 'run --once', '--seed', 'digest', 'reclassify', 'test-notify'] as $verb) {
+        foreach (['doctor', 'dump', 'run --once', '--seed', 'run --watch', 'digest', 'reclassify', 'test-notify'] as $verb) {
             self::assertStringContainsString($verb, $r['out'], "spec §10 lists `{$verb}`");
         }
         self::assertStringContainsString('--i-accept-legal-risk', $r['out'], 'hard rule 4 / Q26');

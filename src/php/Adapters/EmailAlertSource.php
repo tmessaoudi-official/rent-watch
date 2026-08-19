@@ -74,6 +74,20 @@ final readonly class EmailAlertSource implements Source
         return $this->definition->name;
     }
 
+    /**
+     * `null` on purpose, and it is a ruling rather than an omission. An alert mailbox is one IMAP
+     * connection to the user's OWN mail provider — not a landlord's website, and not a party that
+     * can rate-limit or ban this tool. Q37's host pacing exists to protect the sources; applying it
+     * here would add dead time to every pass while protecting nobody, and would let the mailbox
+     * consume the distinct-host slot ahead of the requests that actually need it.
+     *
+     * This is also why hard rule 4 makes email ingestion the PRIMARY path: there is no bot to block.
+     */
+    public function host(): ?string
+    {
+        return null;
+    }
+
     public function family(): string
     {
         return $this->definition->family === 'private' ? 'private' : 'institutional';

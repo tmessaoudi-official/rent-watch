@@ -804,3 +804,12 @@ A changelog that overstates is worse than one that omits, because the next sessi
   get MAXIMAL, against a frozen commit"), not an exemption from it. What it costs, stated plainly:
   the three CI commits (`210f853`, `e700051`, `21ba5b1`) carry ONE clean panel round, not two, so
   they are NOT MAXIMAL-certified until that boundary round covers them.
+- [2026-08-19 17:10] AGREED: `--watch` paces by HOST via a new `Source::host(): ?string`, not by
+  source. Q37's wording is "requests to distinct hosts" / "the same host", and two sources on one
+  landlord's domain paced independently would each open their own 60 s window — precisely the ban
+  risk the ruling exists to prevent. `null` means the source makes no outbound web request and is
+  therefore unpaced (`FixtureSource`, `EmailAlertSource` — IMAP is one mailbox, not a scrape target).
+- [2026-08-19 17:10] AGREED: `--watch` stops on SIGINT/SIGTERM via a pcntl handler that sets a flag
+  and lets the CURRENT PASS FINISH, then exits 0. A signal landing between a notification send and
+  the seen-set write would re-notify everything on the next start, which is the same user-visible
+  damage as deleting the database. Bounded `--max-passes` was rejected as not actually a watcher.

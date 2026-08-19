@@ -36,8 +36,14 @@ from memory), and the `plafonds` figures for classifier tier 4. CI now exists
 runner-fetch and ci-workflow self-tests, the drift scan and shell syntax on every push and
 PR; the sabotage ledger runs nightly and on demand. **A red nightly now opens a GitHub issue** —
 it previously notified nobody, and failed 7/7 unnoticed from 2026-08-13 to 2026-08-19 (hard rule 2:
-an alert computed and never sent is worse than none). Still missing: the `--watch` loop (it refuses
-rather than running unpaced — Q37) and the `html`-type adapter (needs a CSS-selector parser).
+an alert computed and never sent is worse than none). **`scout run --watch` now runs** (2026-08-19):
+`Core/Pacer` holds the Q37 cadence (15 min ± 5, 5 s between distinct hosts, 60 s per host, order
+shuffled each pass), `Adapters/PacedSource` is the decorator that applies it — so `Pipeline` never
+learns that time exists and `--once` stays unpaced — and `Cli/WatchLoop` is the loop, which SURVIVES
+a pass that throws (reporting it) and stops on SIGINT/SIGTERM only after the pass in flight
+finishes. `Source::host(): ?string` was added to the contract to make host-level pacing possible;
+`null` means the source issues no outbound web request and is never delayed. Still missing: the
+`html`-type adapter (needs a CSS-selector parser).
 `src/phorj/` is not written yet — it waits on the three phorj builds in `docs/PHORJ-REQUIREMENTS.md`.
 
 **The five sabotage gaps are closed as of 2026-08-12**, each verified individually by a targeted

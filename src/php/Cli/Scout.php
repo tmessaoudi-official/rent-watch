@@ -11,6 +11,7 @@ use RentWatch\Adapters\HttpJsonSource;
 use RentWatch\Adapters\Mail\FileMailbox;
 use RentWatch\Adapters\Mail\ImapMailbox;
 use RentWatch\Adapters\Mail\Mailbox;
+use RentWatch\Adapters\PacedSource;
 use RentWatch\Adapters\Source;
 use RentWatch\Adapters\SourceError;
 use RentWatch\Config\ConfigError;
@@ -28,6 +29,8 @@ use RentWatch\Core\Notify\SmtpTransport;
 use RentWatch\Core\Notify\Notifier;
 use RentWatch\Core\Notify\NtfyChannel;
 use RentWatch\Core\Notify\Priority;
+use RentWatch\Core\Pacer;
+use RentWatch\Core\Redact;
 use RentWatch\Core\TenureClassifier;
 use RentWatch\Store\Store;
 
@@ -267,12 +270,15 @@ final readonly class Scout
         $verbose = in_array('-v', $flags, true) || in_array('--verbose', $flags, true);
         $seed = in_array('--seed', $flags, true);
 
-        if (in_array('--watch', $flags, true)) {
+        $watch = in_array('--watch', $flags, true);
+
+        if ($watch && $seed) {
+            // `--seed` marks everything already seen WITHOUT notifying, to bootstrap the seen-set.
+            // Repeating that every fifteen minutes would suppress every notification forever while
+            // the process looked perfectly healthy — a watcher that watches and never speaks.
             return $this->fail(
-                '`--watch` n\'est pas encore implémenté. Il doit respecter la cadence réglée le '
-                . '2026-08-07 (Q37) : 15 min ± 5, 5 s entre deux hôtes, 60 s entre deux requêtes '
-                . 'au même hôte, ordre des sources mélangé à chaque passe. Utilisez `--once` sous cron '
-                . 'en attendant.',
+                '`--seed` amorce le seen-set en une passe ; combiné à `--watch` il n\'émettrait '
+                . 'jamais aucune notification. Lancez `scout run --once --seed`, puis `--watch`.',
             );
         }
 
@@ -307,6 +313,92 @@ final readonly class Scout
             return 0;
         }
 
+        if ($watch) {
+            return $this->watch($criteria, $store, $notifier, $sources, $verbose);
+        }
+
+        return $this->onePass($criteria, $store, $notifier, $sources, $seed, $verbose);
+    }
+
+    /**
+     * The Q37 watch loop.
+     *
+     * Three things are re-done on EVERY pass, and each was a way to get this wrong:
+     *
+     * - `PacedSource::wrapAll()` is called per pass, not once, because Q37 requires the order to be
+     *   shuffled *each* pass. Wrapping once would fix one random order for the lifetime of the
+     *   process — which for a service running for weeks is simply a fixed order, and being polled
+     *   first every fifteen minutes is itself a fingerprint.
+     * - `$this->now()` is re-read per pass. Hoisting it would stamp every run in the log with the
+     *   moment the process started, and `Store::health()` derives `STALE` from those timestamps —
+     *   so the one verdict that catches "the schedule has stopped" would be computed against a clock
+     *   that never moves. That is the failure mode of a monitor monitoring itself with a dead clock.
+     * - The pacer is built ONCE and shared, because its whole job is remembering across passes.
+     *
+     * @param list<Source> $sources
+     */
+    private function watch(
+        Criteria $criteria,
+        Store $store,
+        Notifier $notifier,
+        array $sources,
+        bool $verbose,
+    ): int {
+        $loop = null;
+        $pacer = new Pacer(
+            clock: static fn (): float => hrtime(true) / 1_000_000_000.0,
+            sleeper: WatchLoop::interruptibleSleeper(
+                static function () use (&$loop): bool {
+                    return $loop !== null && $loop->isStopping();
+                },
+            ),
+            rand: static fn (int $min, int $max): int => random_int($min, $max),
+        );
+
+        $loop = new WatchLoop(
+            pass: function () use ($criteria, $store, $notifier, $sources, $verbose, $pacer): void {
+                $this->onePass($criteria, $store, $notifier, PacedSource::wrapAll($sources, $pacer), false, $verbose);
+            },
+            pacer: $pacer,
+            onError: function (\Throwable $e): void {
+                // Reported, never hidden — hard rule 3 at the loop level. The loop survives so the
+                // next pass can succeed; saying nothing would make a watcher that has stopped
+                // fetching indistinguishable from one watching a quiet market.
+                $this->warn('passe en échec : ' . Redact::text($e->getMessage()));
+            },
+        );
+
+        $handlers = $loop->installSignalHandlers();
+
+        $this->line(sprintf(
+            'surveillance active · %d source(s) · toutes les %d min ± %d (Q37) · %s',
+            count($sources),
+            (int) (Pacer::PASS_INTERVAL_SECONDS / 60),
+            (int) (Pacer::JITTER_SECONDS / 60),
+            // Said out loud rather than assumed: without ext-pcntl a SIGTERM kills the process
+            // wherever it happens to be, and the operator should not learn that from a duplicate
+            // notification storm after the first `docker stop`.
+            $handlers
+                ? 'arrêt propre sur SIGINT/SIGTERM (la passe en cours se termine)'
+                : 'ext-pcntl absent : pas d\'arrêt propre, la passe en cours sera interrompue',
+        ));
+
+        return $loop->run();
+    }
+
+    /**
+     * One complete pass. Shared by `--once` and by every iteration of `--watch`.
+     *
+     * @param list<Source> $sources
+     */
+    private function onePass(
+        Criteria $criteria,
+        Store $store,
+        Notifier $notifier,
+        array $sources,
+        bool $seed,
+        bool $verbose,
+    ): int {
         $result = (new Pipeline($criteria, $store, $notifier))->runOnce($sources, $this->now(), $seed);
 
         $this->line(sprintf(
@@ -648,6 +740,7 @@ final readonly class Scout
             '  scout dump <source>           première annonce brute + field map appliqué',
             '  scout run --once [-v]         une passe complète',
             '  scout run --seed              amorce le seen-set sans notifier',
+            '  scout run --watch [-v]        boucle : 15 min ± 5 de jitter (Q37)',
             '  scout digest                  récapitulatif « à vérifier »',
             '  scout reclassify              annonces au verdict indéterminé',
             '  scout test-notify             vérifie les canaux de notification',

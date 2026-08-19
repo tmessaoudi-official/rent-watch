@@ -54,6 +54,28 @@ final readonly class HttpJsonSource implements Source
         return $this->definition->name;
     }
 
+    /**
+     * The host `fetch()` will contact, for Q37 pacing.
+     *
+     * Deliberately tolerant: a URL that is absent, empty or still the `REMPLACER` placeholder yields
+     * `null` here rather than throwing. `host()` is called by the pacer BEFORE the fetch, and a
+     * throw from the pacing layer would report a misconfigured source as a pacing failure. `fetch()`
+     * is where those cases are diagnosed properly, with the hard-rule-1 message they deserve — this
+     * method's only job is to answer "which site", and for a source that cannot name one the honest
+     * answer is "none yet".
+     */
+    public function host(): ?string
+    {
+        $url = $this->definition->url;
+        if ($url === null || $url === '' || str_contains($url, 'REMPLACER')) {
+            return null;
+        }
+
+        $host = parse_url($url, PHP_URL_HOST);
+
+        return is_string($host) && $host !== '' ? strtolower($host) : null;
+    }
+
     public function family(): string
     {
         return $this->definition->family === 'private' ? 'private' : 'institutional';

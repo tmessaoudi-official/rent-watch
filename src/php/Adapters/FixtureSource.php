@@ -36,6 +36,12 @@ final readonly class FixtureSource implements Source
         return $this->definition->name;
     }
 
+    /** A frozen payload read off the local disk. No host, so Q37 pacing does not apply. */
+    public function host(): ?string
+    {
+        return null;
+    }
+
     public function family(): string
     {
         return $this->definition->family === 'private' ? 'private' : 'institutional';

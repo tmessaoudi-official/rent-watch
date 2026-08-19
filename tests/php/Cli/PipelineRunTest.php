@@ -498,6 +498,12 @@ final readonly class FakeSource implements Source
         return 'institutional';
     }
 
+    /** No network in this fake, so no host — and therefore no Q37 pacing. */
+    public function host(): ?string
+    {
+        return null;
+    }
+
     public function defaultTenure(): ?Tenure
     {
         return $this->mixedTenure ? null : Tenure::LLI;

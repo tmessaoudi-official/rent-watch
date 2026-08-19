@@ -66,4 +66,24 @@ interface Source
      * and the run loop.
      */
     public function health(?string $nowIso = null): SourceHealth;
+
+    /**
+     * The internet host {@see fetch()} will contact, or `null` if it contacts none.
+     *
+     * This exists for one reason: the Q37 pacing ruling (2026-08-07) is written in terms of HOSTS —
+     * *"at least 5 s between requests to distinct hosts, at least 60 s between two requests to the
+     * same host"* — and `--watch` cannot honour it without asking each source where it is about to
+     * go. Pacing by SOURCE instead would give two sources on one landlord's domain a private 60 s
+     * window each, which is precisely the polling burst that gets an IP banned, and `CLAUDE.md` hard
+     * rule 5 leaves polite rate limiting as the entire strategy for not being banned.
+     *
+     * `null` is a claim, not a fallback: *this source issues no outbound web request*. A fixture
+     * read from disk and an IMAP mailbox both qualify — a mailbox is one connection to one's own
+     * mail provider, not a site that can ban anyone. A `null` source is neither delayed nor allowed
+     * to consume the distinct-host slot, so it never pushes a real request further down the pass.
+     *
+     * Returning `null` from a source that DOES make requests silently opts it out of the ruling, so
+     * a new adapter must answer this honestly. There is no default implementation for that reason.
+     */
+    public function host(): ?string;
 }
