@@ -112,6 +112,22 @@ final readonly class RawListing
      */
     public function text(): string
     {
-        return trim($this->title . "\n" . $this->description);
+        // `_text` is the adapter's whole-card text surface (see `HtmlSource`, which writes it and
+        // calls it exactly that). It belongs HERE and not in the field scan: the field path matches
+        // financing acronyms case-insensitively, on the stated grounds that a field value is an
+        // identifier or a short declaration rather than prose. Fed a card's prose, that rule read
+        // the French adverb in `implanté au plus près` as the excluded acronym `PLUS` and vetoed the
+        // listing's own tier-1 badge [measured 2026-08-20 on CDC Habitat: identical text in
+        // `description` gave LLI 0.97, in `_text` UNKNOWN 0.00]. `plus` is one of the commonest
+        // words in the language, so that is close to every card carrying prose.
+        //
+        // Joined rather than scanned separately for the same reason title and description are: a
+        // label sits in whichever surface the landlord chose.
+        $cardText = $this->fields['_text'] ?? null;
+
+        return trim(
+            $this->title . "\n" . $this->description
+            . (is_string($cardText) && $cardText !== '' ? "\n" . $cardText : ''),
+        );
     }
 }

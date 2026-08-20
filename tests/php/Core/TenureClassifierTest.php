@@ -548,4 +548,96 @@ final class TenureClassifierTest extends TestCase
         self::assertSame(Outcome::REJECT, $verdict->outcome, 'an explicit social declaration is not a maybe');
     }
 
+    // ------------------------------------------------- `_text` is PROSE, not an identifier field
+
+    /**
+     * The card's own text must not veto its own badge because French uses the word *plus*.
+     *
+     * `HtmlSource` writes the whole card into `fields['_text']` and its docblock calls that "the
+     * classifier's text surface". It arrived through the FIELD door, though, and the field path
+     * matches `AMBIGUOUS_LABELS` case-INSENSITIVELY — deliberately, on the stated grounds that
+     * "neither of these haystacks is prose". `_text` is prose, so *"implanté au plus près des
+     * bassins d'emploi"* — CDC Habitat's own tooltip defining logement intermédiaire — matched the
+     * excluded financing acronym `PLUS` and contradicted the tier-1 badge down to UNKNOWN.
+     *
+     * Measured 2026-08-20: identical text in `description` classified LLI 0.97 MATCH, in `_text`
+     * UNKNOWN 0.00 DIGEST. `plus` is one of the commonest words in French, so this vetoes almost any
+     * card that carries prose; In'li escaped it by luck, not design. Fail-closed, and useless —
+     * the over-rejection hard rule 8 names.
+     */
+    public function testTheCardsOwnProseDoesNotVetoItsBadgeOverTheAdverbPlus(): void
+    {
+        $listing = new RawListing(
+            sourceName: 'cdc_habitat',
+            externalId: '1',
+            title: '2 pièces - RDC - 48m²',
+            description: 'Ascenseur, Eau froide comprise, Parking',
+            fields: [
+                'tenureField' => 'Logement intermédiaire',
+                '_text' => 'Logement intermédiaire Le logement intermédiaire est 10 à 15 % inférieur '
+                    . "au prix du marché et implanté au plus près des bassins d'emploi. L'attribution "
+                    . 'est soumise à plafonds de ressources.',
+            ],
+        );
+
+        $verdict = (new TenureClassifier())->classify(
+            $listing,
+            new SourceProfile(name: 'cdc_habitat', defaultTenure: null, mixedTenure: true),
+        );
+
+        self::assertSame(Tenure::LLI, $verdict->tenure);
+        self::assertGreaterThanOrEqual(0.6, $verdict->confidence(), 'the adverb "plus" is not the acronym PLUS');
+    }
+
+    /**
+     * The counterweight, and the reason the fix above is a re-route rather than a skip.
+     *
+     * If `_text` simply stopped being scanned, excluded vocabulary living in card regions that no
+     * field map names would stop being seen at all — the "correct rule applied to a subset of the
+     * surfaces it belongs on" P0 that eight review rounds each found one of. `_text` must still be
+     * read; it must be read as PROSE.
+     *
+     * @param string $text
+     */
+    #[\PHPUnit\Framework\Attributes\DataProvider('excludedProseInText')]
+    public function testExcludedVocabularyInTheCardTextIsStillCaught(string $text, string $why): void
+    {
+        $listing = new RawListing(
+            sourceName: 'cdc_habitat',
+            externalId: '2',
+            title: '4 pièces - 2ème étage - 78m²',
+            description: 'Ascenseur',
+            fields: ['_text' => $text],
+        );
+
+        $verdict = (new TenureClassifier())->classify(
+            $listing,
+            new SourceProfile(name: 'cdc_habitat', defaultTenure: null, mixedTenure: true),
+        );
+
+        self::assertNotSame(Outcome::MATCH, $verdict->outcome, $why);
+        self::assertNotSame(Tenure::LLI, $verdict->tenure, $why);
+    }
+
+    /** @return iterable<string, array{string, string}> */
+    public static function excludedProseInText(): iterable
+    {
+        yield 'logement social' => [
+            '4 pièces - 78m² Logement social CERGY (95000) 612,40 €',
+            'an explicit social badge in the card text must never reach a match',
+        ];
+        yield 'PLAI' => [
+            '4 pièces - 78m² financement PLAI CERGY (95000)',
+            'an excluded acronym in the card text must never reach a match',
+        ];
+        yield 'PLUS in financing context' => [
+            '4 pièces - 78m² financement PLUS CERGY (95000)',
+            'the real acronym, uppercase and in context, is still the real acronym',
+        ];
+        yield 'numero unique' => [
+            "4 pièces - 78m² numéro unique d'enregistrement requis CERGY",
+            'a procedural social tell in the card text must never reach a match',
+        ];
+    }
+
 }

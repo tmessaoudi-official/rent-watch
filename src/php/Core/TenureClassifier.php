@@ -493,6 +493,18 @@ final readonly class TenureClassifier
         }
 
         foreach ($listing->fields as $name => $value) {
+            // `_text` IS NOT A FIELD. It is the adapter's prose surface, and `RawListing::text()`
+            // now returns it, so every prose rule in this class already reads it — case-respecting
+            // acronym handling, collocation context, the `sans` negation, the lot. Scanning it here
+            // as well would re-apply the identifier discipline this loop uses, which is what turned
+            // the adverb `plus` into the acronym `PLUS`. Skipping it is a RE-ROUTE, not a
+            // narrowing: `testExcludedVocabularyInTheCardTextIsStillCaught` pins that a social
+            // badge, `PLAI`, an in-context `PLUS` and a `numéro unique` in card text still never
+            // reach a match.
+            if ($name === '_text') {
+                continue;
+            }
+
             // ── Checks that apply to EVERY field, before the recognised/unrecognised split ──────
             //
             // Both of these used to sit inside the recognised branch, and both were empty cells in
