@@ -128,5 +128,31 @@ else
   done
 fi
 
+# ── The ledger must COUNT every case it runs, and its exit status must reflect them ──────────────
+# sabotage-check.sh prints a tally and then ends on the expression that becomes its exit status.
+# Both are POSITIONAL, and both were defeated by appending cases to the end of the file: eight cases
+# added on 2026-08-20 landed below the tally, so the ledger ran 303 cases and reported 295 — and
+# because there is no `set -e`, those trailing calls ran on past the exit expression and left their
+# own 0 as the script's status. A FAIL anywhere then exited 0, so the nightly job could not go red
+# and the issue it opens could not be opened. Measured 2026-08-20: an unmatched pattern appended to
+# the end printed `FAIL` and the script still exited 0.
+#
+# Structural on purpose. The defect is a matter of WHERE a line sits; executing the script from a
+# green tree reports success either way, which is exactly how it survived a two-hour ledger run.
+tally_line="$(grep -n 'sabotage(s) detected, %d undetected' "$sab" | head -1 | cut -d: -f1)"
+last_case_line="$(grep -n '^run_sabotage ' "$sab" | tail -1 | cut -d: -f1)"
+
+check "the ledger's tally line was found (the check below is bound to it)" \
+  test -n "$tally_line"
+
+check "every sabotage case is defined ABOVE the tally, so every one of them is counted" \
+  test "${last_case_line:-0}" -lt "${tally_line:-0}"
+
+# The exit status must be the last thing the script does. `[[ $fail -eq 0 ]]` as a trailing
+# expression is correct only while nothing follows it; an explicit `exit` makes anything appended
+# below it dead code — which the check above then reports, instead of the ledger absorbing it.
+check "the ledger ends on an explicit exit, not a positional test expression" \
+  test "$(grep -vE '^[[:space:]]*(#|$)' "$sab" | tail -1)" = 'exit 0'
+
 printf '\n  %d passed, %d failed\n\n' "$pass" "$fail"
 [[ $fail -eq 0 ]]

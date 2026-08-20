@@ -1607,24 +1607,6 @@ run_sabotage "--seed marks only the survivor, leaving members to be announced la
   src/php/Cli/Pipeline.php \
   "s%foreach (\\\$clusterKeys\\[spl_object_id(\\\$listing)\\] as \\\$memberKey) {%foreach ([\$sighting->dedupKey] as \$memberKey) {%"
 
-printf '\n  %d sabotage(s) detected, %d undetected\n' "$pass" "$fail"
-
-if [[ -n "$_filter" ]]; then
-  # Loud, because a filtered run that looked like a full one would be the ledger lying about its own
-  # coverage — the same class of defect as the baseline gate that reddened itself for six days.
-  printf '  \033[33mPARTIAL RUN\033[0m — SABOTAGE_FILTER=%s skipped %d case(s). NOT a ledger result.\n' \
-    "$_filter" "$skipped"
-fi
-
-if (( fail > 0 )); then
-  printf '\n  undetected or unapplied:\n'
-  printf '    - %s\n' "${failed_labels[@]}"
-fi
-
-printf '\n'
-
-[[ $fail -eq 0 ]]
-
 # ── the second source: CDC Habitat, path pagination, and prose that is not an acronym ─────────────
 #
 # Every one of these is silent. A source that classifies everything UNKNOWN looks like a quiet
@@ -1662,3 +1644,31 @@ run_sabotage "page_path silently falls back to appending a query parameter" \
 run_sabotage "a page_path with no {page} placeholder is accepted, so the walk never advances" \
   src/php/Config/ConfigLoader.php \
   's%if (\$pagePath !== null \&\& !str_contains(\$pagePath, .{page}.)) {%if (false) {%'
+
+
+printf '\n  %d sabotage(s) detected, %d undetected\n' "$pass" "$fail"
+
+if [[ -n "$_filter" ]]; then
+  # Loud, because a filtered run that looked like a full one would be the ledger lying about its own
+  # coverage — the same class of defect as the baseline gate that reddened itself for six days.
+  printf '  \033[33mPARTIAL RUN\033[0m — SABOTAGE_FILTER=%s skipped %d case(s). NOT a ledger result.\n' \
+    "$_filter" "$skipped"
+fi
+
+if (( fail > 0 )); then
+  printf '\n  undetected or unapplied:\n'
+  printf '    - %s\n' "${failed_labels[@]}"
+fi
+
+printf '\n'
+
+# An explicit exit, not a trailing test expression. The positional form was correct only while
+# nothing followed it, and on 2026-08-20 eight appended cases followed it: with no `set -e` they
+# ran on past it and left their own 0 as the script's status, so a FAIL exited 0 and the nightly
+# job could not go red. Anything appended below is now dead code, which
+# tests/test-ci-workflow.sh reports rather than the ledger absorbing it.
+if (( fail > 0 )); then
+  exit 1
+fi
+
+exit 0
