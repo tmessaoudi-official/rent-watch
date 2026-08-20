@@ -306,6 +306,7 @@ final class ConfigLoader
         $itemsPath = $r->optString('items_path', null);
         $itemSelector = $r->optString('item_selector', null);
         $pageParam = $r->optString('page_param', null);
+        $pagePath = $r->optString('page_path', null);
         $totalSelector = $r->optString('total_selector', null);
         $maxPages = $r->optInt('max_pages', 20, 1, 500) ?? 20;
         $legalRisk = $r->optBool('legal_risk', false);
@@ -387,6 +388,28 @@ final class ConfigLoader
                             . 'listing element, and without it the adapter finds nothing and reports calm',
                     );
                 }
+
+                // Two pagination mechanisms configured at once. Whichever the adapter picks, the
+                // other is silently ignored, and a walk that appends the ignored one refetches page
+                // one until the bound trips — or worse, terminates "naturally" on a duplicate page.
+                if ($pageParam !== null && $pagePath !== null) {
+                    throw ConfigError::at(
+                        $where . '.page_path',
+                        'a source paginates by query parameter or by path, never both — remove one, '
+                            . 'because the ignored mechanism fails silently rather than loudly',
+                    );
+                }
+
+                // Without the placeholder every page after the first requests the same url: a walk
+                // that cannot advance, and whose collected count then trips the declared-total check
+                // with a message about lost pages rather than about this typo.
+                if ($pagePath !== null && !str_contains($pagePath, '{page}')) {
+                    throw ConfigError::at(
+                        $where . '.page_path',
+                        'must contain the {page} placeholder — `' . $pagePath . '` would request the '
+                            . 'same url for every page',
+                    );
+                }
             }
         }
 
@@ -406,6 +429,7 @@ final class ConfigLoader
             itemsPath: $itemsPath,
             itemSelector: $itemSelector,
             pageParam: $pageParam,
+            pagePath: $pagePath,
             totalSelector: $totalSelector,
             maxPages: $maxPages,
             map: $map,

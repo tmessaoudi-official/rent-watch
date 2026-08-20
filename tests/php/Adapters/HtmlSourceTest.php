@@ -428,7 +428,99 @@ final class HtmlSourceTest extends TestCase
 
         return Store::open($this->dbPath);
     }
+    // ---------------------------------------------------------------- pagination in the PATH
+
+    /**
+     * Some sites paginate in the path, not the query string — and for CDC Habitat that is the whole
+     * reason the source is pollable at all.
+     *
+     * Its `robots.txt` disallows every search QUERY PARAMETER by name (`?nbPiece`, `?nbLoyerMin`,
+     * `?cdTypeBien`, …). Its own sitemap advertises `/recherche/location/<region>/page-2/`, which
+     * carries no query string. A `page_param` walk would append `?page=2` to a URL the site asked
+     * not to be queried; `page_path` walks the shape the site publishes.
+     */
+    public function testAPathPaginatedSourceWalksPagesInThePathNotTheQueryString(): void
+    {
+        $client = new PathPagedHttpClient([
+            1 => self::page(['a', 'b'], 5),
+            2 => self::page(['c', 'd'], 5),
+            3 => self::page(['e'], 5),
+        ]);
+
+        $rows = $this->pathPaged($client)->fetch();
+
+        self::assertSame(['a', 'b', 'c', 'd', 'e'], array_map(static fn ($r) => $r->externalId, $rows));
+        self::assertSame([
+            'https://www.cdc-habitat.fr/recherche/location/ile-de-france',
+            'https://www.cdc-habitat.fr/recherche/location/ile-de-france/page-2/',
+            'https://www.cdc-habitat.fr/recherche/location/ile-de-france/page-3/',
+            'https://www.cdc-habitat.fr/recherche/location/ile-de-france/page-4/',
+        ], $client->urls, 'page one is the bare url; the rest carry the path segment');
+        self::assertSame([], $client->queries, 'no query string is ever added — the site disallows those');
+    }
+
+    /**
+     * robots.txt is consulted for EVERY page, not only the first.
+     *
+     * With query-string pagination the path never changes, so one check covered the whole walk. A
+     * path-paginated walk visits a different path on every request, and a site may allow the index
+     * while disallowing the paginated form. Checking only page one would then walk straight into
+     * the disallowed paths with a clean conscience — the exact shape of hard rule 5 violation that
+     * is invisible from the outside because every request returns 200.
+     */
+    public function testPathPaginationChecksRobotsForEveryPageNotJustTheFirst(): void
+    {
+        $client = new PathPagedHttpClient([1 => self::page(['a', 'b'], 5), 2 => self::page(['c'], 5)]);
+        $robots = Robots::parse("User-agent: *\nDisallow: /recherche/location/ile-de-france/page-\n");
+
+        $this->expectException(SourceError::class);
+        $this->expectExceptionMessageMatches('~robots.txt disallows /recherche/location/ile-de-france/page-2/~');
+
+        $this->pathPaged($client, [], $robots)->fetch();
+    }
+
+    /** The `{page}` placeholder is the whole contract — a template without it would refetch page one forever. */
+    public function testAPagePathWithNoPlaceholderIsRefused(): void
+    {
+        $client = new PathPagedHttpClient([1 => self::page(['a'], 5)]);
+
+        $this->expectException(SourceError::class);
+        $this->expectExceptionMessageMatches('~\{page\}~');
+
+        $this->pathPaged($client, ['pagePath' => '/page-2/'])->fetch();
+    }
+
+    /** @param array<string, mixed> $overrides */
+    private function pathPaged(PathPagedHttpClient $client, array $overrides = [], ?Robots $robots = null): HtmlSource
+    {
+        $definition = new SourceDefinition(
+            name: 'cdc_habitat',
+            enabled: true,
+            family: 'institutional',
+            type: 'html',
+            mixedTenure: true,
+            defaultTenure: null,
+            url: 'https://www.cdc-habitat.fr/recherche/location/ile-de-france',
+            baseUrl: 'https://www.cdc-habitat.fr',
+            itemSelector: '.featured-items > .featured-item',
+            map: new FieldMap(
+                ref: ['a@href => /([^/]+)$'],
+                url: ['a@href'],
+                commune: ['img@alt'],
+                rent: ['.featured-price .demi-condensed'],
+                chargesIncluded: true,
+            ),
+            pagePath: array_key_exists('pagePath', $overrides) ? $overrides['pagePath'] : '/page-{page}/',
+            totalSelector: '.sf-results-head h5',
+            maxPages: $overrides['maxPages'] ?? 20,
+            rateLimitMs: 0,
+        );
+
+        return new HtmlSource($definition, $this->store(), $client, $robots);
+    }
+
 }
+
 
 /**
  * Answers per requested page, and records which pages were asked for.
@@ -461,3 +553,32 @@ final class PagedHttpClient implements \RentWatch\Adapters\Http\HttpClient
         return new HttpResponse(200, $body);
     }
 }
+
+/** Serves pages addressed by a `/page-N/` PATH segment, and records the URLs it was asked for. */
+final class PathPagedHttpClient implements \RentWatch\Adapters\Http\HttpClient
+{
+    /** @var list<string> */
+    public array $urls = [];
+
+    /** @var list<string> */
+    public array $queries = [];
+
+    /** @param array<int, string> $bodies */
+    public function __construct(private readonly array $bodies) {}
+
+    public function send(\RentWatch\Adapters\Http\HttpRequest $request): HttpResponse
+    {
+        $this->urls[] = $request->url;
+
+        $query = parse_url($request->url, PHP_URL_QUERY);
+        if (is_string($query) && $query !== '') {
+            $this->queries[] = $query;
+        }
+
+        $page = preg_match('~/page-(\d+)/~', $request->url, $m) === 1 ? (int) $m[1] : 1;
+        $body = $this->bodies[$page] ?? '<html><body><div class="featured-items"></div></body></html>';
+
+        return new HttpResponse(200, $body);
+    }
+}
+

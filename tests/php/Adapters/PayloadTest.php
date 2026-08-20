@@ -241,4 +241,48 @@ final class PayloadTest extends TestCase
         self::assertSame('LLI', $flat['financement'], 'a shallow field survives a deep sibling');
         self::assertLessThan(40, count($flat), 'the deep branch is bounded');
     }
+    // ---------------------------------------------------------------- floor, which is French prose
+
+    /**
+     * `RDC` is the ground floor, and the ground floor is `0` — not `null`, and not "no answer".
+     *
+     * This is hard rule 9's own example (`floor == 0` is falsy but real) meeting the first French
+     * source that actually prints it: five of the thirteen distinct floor strings on CDC Habitat's
+     * Yvelines page are `RDC`. Parsed with the generic number reader they all come back `null`, so a
+     * ground-floor flat would be indistinguishable from one whose floor the ad never stated — and
+     * the two feed DIFFERENT score components (a stated ground floor is fine; an unknown floor is
+     * simply unknown).
+     *
+     * @param mixed $raw
+     */
+    #[\PHPUnit\Framework\Attributes\DataProvider('floorVocabulary')]
+    public function testFloorReadsTheWayFrenchListingsWriteIt(mixed $raw, ?int $expected, string $why): void
+    {
+        self::assertSame($expected, Payload::floor(['v' => $raw], ['v']), $why);
+    }
+
+    /** @return iterable<string, array{mixed, int|null, string}> */
+    public static function floorVocabulary(): iterable
+    {
+        yield 'RDC' => ['RDC', 0, 'the ground floor is zero, not unknown'];
+        yield 'rdc lowercase' => ['rdc', 0, 'case is not a fact'];
+        yield 'rez-de-chaussee accented' => ['Rez-de-chaussée', 0, 'the spelled-out form is the same floor'];
+        yield 'rez de chaussee unaccented' => ['rez de chaussee', 0, 'accents are stripped before matching'];
+        yield 'first' => ['1er étage', 1, 'the ordinal is the floor'];
+        yield 'second' => ['2ème étage', 2, 'ordinal suffixes vary; the digit does not'];
+        yield 'fourth' => ['4ème étage', 4, 'ordinal suffixes vary; the digit does not'];
+        yield 'bare int' => [3, 3, 'a source with a clean numeric field still works'];
+        yield 'bare numeric string' => ['3', 3, 'a clean numeric string still works'];
+        yield 'zero' => [0, 0, 'an explicit zero survives, because it is a real floor'];
+
+        // The trap this parser exists to avoid. `Payload::int` on the card's whole heading returns
+        // the FIRST number it finds, which is the room count or the surface — a plausible-looking
+        // floor that is entirely fabricated. Silence is the only correct answer here.
+        yield 'surface is not a floor' => ['82m²', null, 'a surface must never be read as a floor'];
+        yield 'rooms are not a floor' => ['3 pièces', null, 'a room count must never be read as a floor'];
+        yield 'unstated' => [null, null, 'unknown stays unknown'];
+        yield 'empty' => ['', null, 'unknown stays unknown'];
+        yield 'prose' => ['dernier étage', null, 'a floor that is not stated as a number is not guessed'];
+    }
+
 }

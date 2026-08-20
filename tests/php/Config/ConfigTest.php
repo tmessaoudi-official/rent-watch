@@ -67,6 +67,43 @@ final class ConfigTest extends TestCase
      * Written because a sabotage run found the guard had no test at all — the validation was added
      * and the suite stayed green with it deleted.
      */
+    /**
+     * Both pagination mechanisms at once is refused AT LOAD, because the loser fails silently.
+     *
+     * The adapter picks one; the other is then ignored, and "ignored" here means either a walk that
+     * refetches page one until the bound trips, or one that ends on a duplicate page and reports a
+     * short result set. Neither reads as a configuration mistake at the point it hurts.
+     */
+    public function testASourceCannotPaginateByBothQueryParameterAndPath(): void
+    {
+        $this->expectException(ConfigError::class);
+        $this->expectExceptionMessageMatches('~page_path~');
+
+        ConfigLoader::sourcesFromArray(self::minimalSource([
+            'enabled' => true,
+            'type' => 'html',
+            'url' => 'https://example.test/search',
+            'item_selector' => '.card',
+            'page_param' => 'page',
+            'page_path' => '/page-{page}/',
+        ]));
+    }
+
+    /** A `page_path` with no `{page}` requests the same url forever — refused where it is written. */
+    public function testAPagePathWithoutThePlaceholderIsRefusedAtLoad(): void
+    {
+        $this->expectException(ConfigError::class);
+        $this->expectExceptionMessageMatches('~\{page\}~');
+
+        ConfigLoader::sourcesFromArray(self::minimalSource([
+            'enabled' => true,
+            'type' => 'html',
+            'url' => 'https://example.test/search',
+            'item_selector' => '.card',
+            'page_path' => '/page-2/',
+        ]));
+    }
+
     public function testAnEnabledHtmlSourceWithoutAnItemSelectorIsRefusedAtLoad(): void
     {
         $this->expectException(ConfigError::class);

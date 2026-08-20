@@ -70,6 +70,22 @@ final readonly class SourceDefinition
          */
         public ?string $pageParam = null,
         /**
+         * Pagination in the PATH rather than the query string: a template holding `{page}`,
+         * appended to `url` for every page after the first (`/page-{page}/`).
+         *
+         * Mutually exclusive with {@see $pageParam}, and not a stylistic alternative to it. CDC
+         * Habitat's `robots.txt` disallows every search QUERY PARAMETER by name — `?nbPiece`,
+         * `?nbLoyerMin`, `?cdTypeBien` and four more — while its own sitemap advertises
+         * `/recherche/location/<region>/page-2/`. Appending `?page=2` there would query a URL space
+         * the site asked robots to stay out of; walking the published path does not. So for that
+         * source this field is not a convenience, it is the difference between a pollable source
+         * and one that must be refused (hard rule 5).
+         *
+         * Because the PATH changes per page, robots is re-checked for every page rather than once
+         * for the index — a site may publish an index it welcomes and paginated forms it does not.
+         */
+        public ?string $pagePath = null,
+        /**
          * CSS selector for the page's own declared result count (In'li: `92 logements`).
          *
          * This is what makes pagination CHECKABLE rather than hopeful. Walking pages until one

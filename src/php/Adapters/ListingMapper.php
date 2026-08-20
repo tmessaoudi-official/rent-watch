@@ -58,7 +58,7 @@ final readonly class ListingMapper
             surfaceM2: Payload::float($item, $map->surface),
             rooms: Payload::int($item, $map->rooms),
             bedrooms: Payload::int($item, $map->bedrooms),
-            floor: Payload::int($item, $map->floor),
+            floor: Payload::floor($item, $map->floor),
             hasElevator: Payload::bool($item, $map->elevator),
         );
     }

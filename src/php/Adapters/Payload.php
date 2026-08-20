@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace RentWatch\Adapters;
 
+use RentWatch\Core\Text;
+
 /**
  * Reads values out of one decoded raw item, following a field map's dotted paths.
  *
@@ -126,6 +128,63 @@ final class Payload
         $number = self::number($item, $paths);
 
         return $number === null ? null : (int) round($number);
+    }
+
+    /**
+     * A FLOOR, read the way French listings actually write one.
+     *
+     * Floors are the one numeric field that arrives as prose rather than as a number, and the two
+     * ways of getting it wrong are both silent:
+     *
+     * - **`RDC` parsed as nothing.** The ground floor is `0`, a real and extremely common floor —
+     *   five of the thirteen distinct floor strings on CDC Habitat's Yvelines page are `RDC`. Read
+     *   as `null` it becomes "the ad did not say", and hard rule 9 exists because those are
+     *   different facts that drive different score components.
+     * - **The card heading parsed as a number.** `3 pièces - 4ème étage - 82m²` fed to
+     *   {@see number()} yields `3`, because that is the first number in the string. A fabricated
+     *   floor is worse than an absent one, so anything this function does not positively recognise
+     *   as a floor returns `null` rather than falling back to a generic number read.
+     *
+     * @param list<string> $paths
+     */
+    public static function floor(mixed $item, array $paths): ?int
+    {
+        $value = self::first($item, $paths);
+
+        if (is_int($value)) {
+            return $value;
+        }
+        if (is_float($value)) {
+            return (int) round($value);
+        }
+        if (!is_string($value)) {
+            return null;
+        }
+
+        $text = trim($value);
+        if ($text === '') {
+            return null;
+        }
+
+        // A clean numeric field, which is what a source with a real `etage` key gives us.
+        if (preg_match('/^-?\d+$/', $text) === 1) {
+            return (int) $text;
+        }
+
+        $folded = Text::fold($text);
+
+        // `rdc`, `rez-de-chaussee`, `rez de chaussee` — all one floor, and that floor is zero.
+        if (preg_match('/\brdc\b/', $folded) === 1 || preg_match('/\brez.?de.?chaussee\b/', $folded) === 1) {
+            return 0;
+        }
+
+        // `1er etage`, `2eme etage`, `4e etage`. The ordinal suffix varies by source and by writer;
+        // the digit in front of `etage` does not.
+        if (preg_match('/(\d+)\s*(?:er|ere|eme|e)?\s*etage/', $folded, $m) === 1) {
+            return (int) $m[1];
+        }
+
+        return null;
     }
 
     /** @param list<string> $paths */

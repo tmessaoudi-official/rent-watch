@@ -131,11 +131,29 @@ final readonly class HtmlSource implements Source
         }
 
         $pageParam = $this->definition->pageParam;
+        $pagePath = $this->definition->pagePath;
+
+        if ($pageParam !== null && $pagePath !== null) {
+            throw new SourceError(
+                $this->name(),
+                'both page_param and page_path are configured — a source paginates one way or the '
+                    . 'other, and guessing which one the site honours is how a walk silently refetches '
+                    . 'page one',
+            );
+        }
+
+        if ($pagePath !== null && !str_contains($pagePath, '{page}')) {
+            throw new SourceError(
+                $this->name(),
+                'page_path `' . $pagePath . '` contains no {page} placeholder, so every page after '
+                    . 'the first would request the same url — a walk that never advances and never ends',
+            );
+        }
 
         $body = $this->get($url, []);
         $out = $this->extract($body, $selector);
 
-        if ($pageParam === null) {
+        if ($pageParam === null && $pagePath === null) {
             return $out;
         }
 
@@ -159,7 +177,25 @@ final readonly class HtmlSource implements Source
                 usleep($this->definition->rateLimitMs * 1000);
             }
 
-            $pageBody = $this->get($url, [$pageParam => (string) $page]);
+            if ($pagePath !== null) {
+                $pageUrl = $url . str_replace('{page}', (string) $page, $pagePath);
+
+                // Re-checked per page, because with path pagination the PATH is what changes. A
+                // site may publish an index it welcomes and paginated forms it does not, and a
+                // one-shot check on the index would walk into those with every request returning
+                // 200 — a hard rule 5 breach that is invisible from the outside.
+                if ($this->robots !== null && !$this->robots->allows(Robots::pathOf($pageUrl))) {
+                    throw new SourceError(
+                        $this->name(),
+                        'robots.txt disallows ' . Robots::pathOf($pageUrl) . ' — the index is '
+                            . 'pollable but its paginated form is not, so this walk must stop here',
+                    );
+                }
+
+                $pageBody = $this->get($pageUrl, []);
+            } else {
+                $pageBody = $this->get($url, [$pageParam => (string) $page]);
+            }
 
             try {
                 $rows = $this->extract($pageBody, $selector);
@@ -176,8 +212,9 @@ final readonly class HtmlSource implements Source
             throw new SourceError(
                 $this->name(),
                 'pagination reached the ' . $this->definition->maxPages . '-page bound without ending — '
-                    . 'the `' . $pageParam . '` parameter is probably ignored by the site, so every page '
-                    . 'returns the first one. Refusing to keep requesting',
+                    . 'the `' . ($pageParam ?? $pagePath) . '` ' . ($pageParam !== null ? 'parameter' : 'path template')
+                    . ' is probably ignored by the site, so every page returns the first one. '
+                    . 'Refusing to keep requesting',
             );
         }
 
