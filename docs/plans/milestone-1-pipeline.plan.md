@@ -138,6 +138,16 @@ usable" row from 0% to something real in a single afternoon; nothing else on thi
   a CDC quirk. The change is a RE-ROUTE, never a skip — the counterweight that excluded vocabulary
   in card text is still SEEN is pinned by test, on the reason string rather than on the outcome,
   because "did not match" is also what silence looks like.
+- [2026-08-20 23:05] AGREED: **a sabotage case is defined ABOVE the tally, and the ledger ends on an
+  explicit `exit`** — both pinned by structural checks in `tests/test-ci-workflow.sh`. Appending to
+  the end of `sabotage-check.sh` is the obvious way to add a case and it silently broke the gate
+  twice over: the tally counted 295 of 303, and because there is no `set -e`, the trailing calls ran
+  past the exit expression and left their own `0` as the script's status, so a FAIL anywhere exited
+  0 and the nightly job could not go red. Position is not a convention here; it is the mechanism.
+- [2026-08-20 23:05] AGREED: **a gate's exit status is part of its contract and gets its own test.**
+  The ledger had a correct baseline gate, a correct per-case verdict, a correct summary and a loud
+  failure list — and still could not fail. Every existing check was about what the gate *says*;
+  nothing asserted what it *returns*, which is the only part CI reads.
 
 - [2026-08-07 14:20] AGREED: the store takes ISO-8601 timestamps as arguments rather than reading the
   clock. Health is a function of run history over time, and a store that calls `now()` internally can
@@ -1147,10 +1157,42 @@ and two of them came back UNDETECTED on the first attempt, which is how the two 
 `e9079b0` were found: a counterweight asserting "not MATCH" that silence also satisfies, and a field
 map with no fixture test behind it.
 
-**Full ledger vs `7461e01`: LAUNCHED, NOT YET COUNTED.** Started 2026-08-20 ~18:5x against that
-frozen commit, logging to `var/claude/ledger-7461e01.log`; ~2 h, so it outlives the session that
-started it. A filtered run is explicitly NOT a ledger result — the script prints that on every
-partial run — and the classifier, the corpus, the adapters and the config all changed today, so the
-295/0 above certifies a tree that no longer exists. Until a count is written here, the ledger-level
-claim for this tree is OWED, not held. Nightly CI re-runs the ledger once these commits are pushed,
-which is a second, independent path to the same number.
+**Full ledger vs `7461e01`: COUNTED — 303 detected, 0 undetected. Its own closing line said 295, and
+its exit status was a lie.** Started 2026-08-20 ~18:5x against that frozen commit, finished 21:08,
+logged to `var/claude/ledger-7461e01.log`. Every one of the 303 cases ran and every one was detected
+[Verified: `grep -c 'suite went red, as it must'` → 303; ANSI-aware `FAIL` count → 0; `ABORT` → 0.
+Six lines matching an `undetected|failure` grep were checked individually and are all case LABELS
+containing the word "failure"]. So the substance of the run is sound and it is recorded as the
+ledger result for that tree.
+
+**What was not sound is the harness, and it had been broken since the eight CDC cases were added.**
+Those cases were appended to the END of `tests/sabotage-check.sh` — below the tally `printf` *and*
+below the trailing `[[ $fail -eq 0 ]]` that supplies the script's exit status. Both are POSITIONAL,
+and `sabotage-check.sh` runs under `set -uo pipefail` with no `-e`, so:
+
+- the tally counted only the 295 cases above it, while 303 ran — the log shows eight `ok` lines
+  printed *after* the closing summary;
+- and every `run_sabotage` returns 0, so the last one became the script's exit status. **A FAIL
+  anywhere in the ledger — including the 295 counted ones — exited 0.** The nightly job could not go
+  red, and the GitHub issue it opens on failure could not be opened. That is the same defect class as
+  the baseline gate that reddened itself for six days, inverted: this one could only ever be green.
+
+[Verified 2026-08-20 by probe: a deliberately unmatched pattern appended to the end printed
+`FAIL … (sabotage was a no-op)` and the script exited **0**; the same case placed above the tally
+after the fix printed `0 sabotage(s) detected, 1 undetected`, named itself under "undetected or
+unapplied", and exited **1**.]
+
+**Fixed:** the eight cases moved above the tally, and the trailing expression replaced with an
+explicit `if (( fail > 0 )); then exit 1; fi` / `exit 0`, so anything appended below is dead code
+rather than live-and-uncounted. Two structural checks in `tests/test-ci-workflow.sh` now pin both —
+no `run_sabotage` may appear after the tally line, and the script must end on an explicit `exit`.
+They were written first and went red on the unfixed file [Verified: `15 passed, 2 failed`], then
+green. A filtered run on a moved case now reports `1 sabotage(s) detected … skipped 302`, where it
+previously reported `0 … skipped 295` — that number moving is the proof the case is inside the
+count.
+
+**Full ledger vs `e4e3ef0`: LAUNCHED, NOT YET COUNTED.** A filtered run is explicitly NOT a ledger
+result, and the 303/0 above was produced by a harness whose exit status could not fail — the
+per-case lines are trustworthy, the aggregate machinery was not. Re-run against that frozen commit,
+logging to `var/claude/ledger-e4e3ef0.log`; ~2 h, so it outlives the session that started it. Nightly CI is now a second, independent path to the same number — and, for the first time since
+2026-08-20, one that can actually report failure.
