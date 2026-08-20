@@ -79,6 +79,8 @@
         "_floor": "Captured as PROSE, not as a number, and read by Payload::floor(): `RDC` is the ground floor and the ground floor is 0, not unknown (hard rule 9). Five of the thirteen distinct floor strings on the Yvelines page are RDC.",
         "floor": ".description h3 => -\\s*([^-]+?)\\s*-\\s*[\\d.,]+\\s*m²",
         "description": ".notes",
+        "_elevator": "Captured from the amenity list as the NOUN, which is how the card asserts it. Absence of the word is NOT a denial: the capture simply fails and the field stays null, so this can never manufacture the explicit false the high-floor penalty needs (hard rule 9).",
+        "elevator": ".notes => (?i)(ascenseur)",
         "_tenure_field": "The card's own tenure badge: `Logement a loyer libre`, `Logement intermediaire`, and -- on other departments -- the social variants. This is signal priority 2 (an explicit label), the highest this source offers on a search card. A badge the classifier does not recognise lowers confidence rather than defaulting, and with mixed_tenure true that routes to `a verifier` instead of a match.",
         "tenure_field": ".label.tooltiped",
         "_charges_included": "VERIFIED, not assumed: the detail page for the card printing `1 668,67 EUR` states `Loyer charges comprises | 1 668,67 EUR / mois`, and itemises what the charges cover [measured 2026-08-20].",

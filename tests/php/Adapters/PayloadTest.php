@@ -285,4 +285,21 @@ final class PayloadTest extends TestCase
         yield 'prose' => ['dernier étage', null, 'a floor that is not stated as a number is not guessed'];
     }
 
+    /**
+     * A French amenity list asserts a lift with the noun, not with a yes.
+     *
+     * And the asymmetry is the point: the word present means `true`, the word ABSENT means the
+     * capture failed, which is `null` — never `false`. The high-floor penalty fires only on an
+     * explicit `false`, so nothing here can invent one (hard rule 9).
+     */
+    public function testTheAmenityNounAsserstsALiftButItsAbsenceAssertsNothing(): void
+    {
+        self::assertTrue(Payload::bool(['v' => 'Ascenseur'], ['v']), 'the noun is the assertion');
+        self::assertTrue(Payload::bool(['v' => 'ascenseur'], ['v']), 'case is not a fact');
+        self::assertNull(
+            Payload::bool(['v' => null], ['v']),
+            'a card that does not mention a lift says nothing — it does not say no',
+        );
+    }
+
 }

@@ -130,6 +130,17 @@ final class TenureCorpusTest extends TestCase
             'trap-002-au-plus-tard' => ['plus' => 'the adverb in "au plus tard" and "plus lumineux"'],
             'trap-003-plus-tier-uppercase-boundary' => ['plus' => 'a SHOUTED title, "PLUS DE 70 M2"'],
             'trap-003b-shouted-logement-plus-grand' => ['plus' => 'a SHOUTED "LOGEMENT PLUS GRAND"'],
+            // THE FIRST CAPTURED FIXTURE TO NEED ONE, and the reason the re-route landed: this is
+            // CDC Habitat's own tooltip DEFINING logement intermediaire, and the definition happens
+            // to contain `au plus pres des bassins d'emploi`. Not a contrived trap — real card text
+            // from a real results page [captured 2026-08-20], which is what makes it the strongest
+            // member of this table. Exempted for `plus` ONLY: everything else the §1 invariant
+            // checks still applies to this fixture, including the `plafonds de ressources` it also
+            // carries, which is true of LLI and of social housing alike.
+            'cdc-001-captured-intermediate-badge-with-plus-adverb' => [
+                'plus' => 'the adverb in CDC Habitat\'s own definition, "implante au plus pres des '
+                    . 'bassins d\'emploi"',
+            ],
             'trap-010-lowercase-plus-with-no-comparative' => [
                 'plus' => 'the LOWERCASE adverb in "plus un bureau" — the prose doubt floor is '
                     . 'case-sensitive, and this fixture is what stops it being widened',

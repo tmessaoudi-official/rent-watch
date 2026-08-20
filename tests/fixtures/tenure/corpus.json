@@ -1,7 +1,7 @@
 {
   "$comment": [
     "THE CLASSIFIER CORPUS. Read by BOTH implementations — src/php/Core and, later, src/phorj/core.",
-    "This file is the ground truth for the tenure classifier and is listed in CLAUDE.md \u00a7 Credentials & stateful data as",
+    "This file is the ground truth for the tenure classifier and is listed in CLAUDE.md § Credentials & stateful data as",
     "stateful data that must not be casually removed or relabelled. CLAUDE.md: 'Never weaken a",
     "classifier test to make a change pass. If a fixture goes red, the classifier regressed.'",
     "",
@@ -23,7 +23,7 @@
   "version": 1,
   "declared_counts": {
     "synthetic": 114,
-    "captured": 0
+    "captured": 2
   },
   "sources": {
     "inli": {
@@ -1676,6 +1676,40 @@
         "min_confidence": 85
       },
       "why": "A COUNTERWEIGHT, added the day the doubts above were. `loyer plafonne` was briefly added as a doubt with them and immediately digested lli-004, lli-011 and regress-030 — because LLI is BY DEFINITION a capped rent under an income ceiling, so that phrase is the primary target describing itself. This fixture pins the reason it was removed, so a future session cannot re-add it and see a green suite."
+    },
+    {
+      "id": "cdc-001-captured-intermediate-badge-with-plus-adverb",
+      "provenance": "captured",
+      "captured_at": "2026-08-20",
+      "source": "cdc_habitat",
+      "title": "2 pièces - RDC - 48m²",
+      "fields": {
+        "tenureField": "Logement intermédiaire"
+      },
+      "description": "Logement intermédiaire Le logement intermédiaire est 10 à 15 % inférieur au prix du marché et implanté au plus près des bassins d'emploi. L'attribution est soumise à plafonds de ressources. Appartement 2 pièces - RDC - 48m² Ascenseur, Eau froide comprise, Parking NANGIS (77370) 698,89 €",
+      "expect": {
+        "tenure": "LLI",
+        "outcome": "MATCH",
+        "min_confidence": 85
+      },
+      "why": "THE HARD ONE, and the first captured case in this corpus. Real card text from CDC Habitat's Ile-de-France results page [2026-08-20]. Its tooltip DEFINES logement intermediaire, and in doing so contains the words `au plus pres` -- which the field-scan path read as the excluded financing acronym PLUS and used to contradict the card's own tier-1 badge down to UNKNOWN. `plus` is one of the commonest words in French, so this is not a CDC quirk; it vetoed almost any card carrying prose. This case is what stops the fix from being undone: it also carries `plafonds de ressources`, which is true of LLI and of social housing alike, so a rule that treats that phrase as a social tell reddens here."
+    },
+    {
+      "id": "cdc-002-captured-loyer-libre-badge",
+      "provenance": "captured",
+      "captured_at": "2026-08-20",
+      "source": "cdc_habitat",
+      "title": "5 pièces - RDC - 112m²",
+      "fields": {
+        "tenureField": "Logement à loyer libre"
+      },
+      "description": "Logement à loyer libre Logements locatifs à loyer libre, inférieur au prix du marché privé. Maison 5 pièces - RDC - 112m² Cuisine aménagée, Parking, Jardin / Terrasse Résidence Le Sentier des Landes CHATOU (78400) 2 421,27 €",
+      "expect": {
+        "tenure": "LIBRE",
+        "outcome": "MATCH",
+        "min_confidence": 85
+      },
+      "why": "THE CLEAR ONE. Real card text, same page, same day. `loyer libre` is the tenure term and Q4 ruled LIBRE in scope on its own track, so this must MATCH rather than digest -- from a source whose mixed_tenure is true, which is the combination where a timid rule would fail closed on something that is simply eligible. Paired with cdc-001 so the two badges CDC actually ships are both pinned; a third badge is an unseen vocabulary item and belongs in the digest until someone labels it."
     }
   ]
 }

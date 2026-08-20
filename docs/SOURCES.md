@@ -1,4 +1,10 @@
-# Source catalogue — verified 2026-08-06
+# Source catalogue — verified 2026-08-06, A2/A3 re-measured 2026-08-20
+
+> **Two rows changed on 2026-08-20 and both changed for the same reason: a `200` was read as
+> a feed.** A2 answers 200 and publishes no vacancies at all; A3 answers 200 and disallows far
+> more than this table said, while advertising a different route in its own sitemap. Neither
+> was knowable without fetching, which is what the preamble below already says — it just had
+> not been done for those two.
 
 > **Every status in this file was measured, not recalled.** `CLAUDE.md` hard rule 1 forbids writing an
 > endpoint from memory, so each domain below was fetched once with an honest User-Agent
@@ -76,8 +82,8 @@ Nothing on the market aggregates these. Status column = HTTP response to a singl
 | # | Source | Domain | HTTP | Tenure mix | Notes |
 |---|---|---|---|---|---|
 | **A1** | **In'li** | `www.inli.fr` | **200** | **Pure LLI** | ⭐ The flagship. ~60 000 units across IDF, **covers both 78 and 95**, rents ~20–30 % below market. `robots.txt` disallows only `/espace-membre/`. `mixed_tenure: false`. **Build first.** |
-| **A2** | **ICF Habitat Novedis** | `www.icfhabitat.fr/patrimoine/icf-novedis` | **200** | **Intermediate + loyer libre only** | ⭐ **Found this round; nearly missed it.** ICF Habitat's *non-social* arm — 10 000 units aimed explicitly at *"personnes dont les revenus dépassent les plafonds sociaux"*. SNCF group, so stock clusters on rail corridors, which fits the boucle de Seine. Second-highest value after In'li. |
-| **A3** | **CDC Habitat** | `www.cdc-habitat.fr` | **200** | Mixed | ⚠️ **`robots.txt` disallows `/Recherche/show/`** — very likely the search-results path. Must be respected: if the listing endpoint lives under it, this source becomes email-alert or manual, not polled. Resolve before enabling. |
+| **A2** | **ICF Habitat Novedis** | `www.icfhabitat.fr/patrimoine/icf-novedis` | **200, but NO VACANCY FEED** | **Intermediate + loyer libre only** | ⛔ **NOT POLLABLE — measured 2026-08-20, three levels deep.** ICF Habitat's *non-social* arm (10 000 units aimed at *"personnes dont les revenus dépassent les plafonds sociaux"*, SNCF group, rail-corridor stock) was ranked second on PORTFOLIO value. Its site publishes a **patrimoine directory, not availability**: `/patrimoine/icf-novedis` → `/patrimoine/filiale/icf-novedis/78-yvelines` → `/patrimoine/localites/icf-novedis/78500-sartrouville` all list *résidences* ("Il y a 8 résidence(s)"), with **zero rents, zero surfaces and zero occurrences of `disponib`** on any of the three. `robots.txt` is stock Drupal and irrelevant here — there is nothing to poll. Remaining routes, in order: an email alert if ICF offers one, or the portals. `novedispm.fr` is the third-party property-management arm, a separate site — *[Unverified: not fetched; capped deliberately rather than crawled]*. |
+| **A3** | **CDC Habitat** | `www.cdc-habitat.fr` | **200** | Mixed — **and genuinely so** | ✅ **LIVE since 2026-08-20 — the second verified source, and the first mixed-tenure one.** robots is **stricter than this table recorded**: it disallows `/Recherche/show/`, `/Recherche/search` **and seven search QUERY PARAMETERS by name** (`?cdTypeBien`, `?nbSurfaceMin`, `?nbSurfaceMax`, `?cdCategorieLogement`, `?nbPiece`, `?nbLoyerMin`, `?nbLoyerMax`), so the parameterised search is off limits entirely. What is pollable is the route the site **advertises in its own `sitemap.xml`**: the lowercase, query-free `/recherche/location/<region>` tree — robots path matching is case-sensitive, so `/Recherche/…` does not cover `/recherche/…`. Server-rendered, `134 logements disponibles` for Île-de-France at 16/page, paginated by **path** (`/page-2/`, never a query string). Frozen at `tests/fixtures/cdc_habitat/search.html`, with `robots.txt` frozen beside it and asserted per page by test. |
 | **A4** | **AL'in** (Action Logement) | `www.al-in.fr` | **200** | Mixed | Employer-reserved stock. Likely needs an authenticated session. High value (less competition), hardest to build. |
 | **A5** | **Seqens** | `www.seqens.fr` | **200** | Mixed | Action Logement group. Strong 78/95 footprint. `robots.txt` clean (`/wp-admin/` only). |
 | **A6** | **Immobilière 3F** | `www.groupe3f.fr` | **200** | Mixed | Action Logement group. Large IDF portfolio. |

@@ -218,7 +218,13 @@ final class Payload
         }
 
         return match (mb_strtolower(trim($value))) {
-            'true', 'oui', 'yes', '1', 'y', 'o', 'avec', 'present', 'présent' => true,
+            // `ascenseur` is here because French amenity lists assert with the NOUN rather than
+            // with a yes: CDC Habitat's cards carry `Ascenseur, Eau chaude comprise, Parking`, and a
+            // field map captures the token itself. It can only ever produce `true` — a card without
+            // a lift simply omits the word, the capture then fails, and the result is `null`. So
+            // this cannot manufacture the explicit `false` the high-floor penalty requires, which is
+            // the only direction that would hurt (hard rule 9).
+            'true', 'oui', 'yes', '1', 'y', 'o', 'avec', 'present', 'présent', 'ascenseur' => true,
             'false', 'non', 'no', '0', 'n', 'sans', 'absent', 'aucun' => false,
             default => null,
         };
