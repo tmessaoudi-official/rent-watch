@@ -1138,3 +1138,19 @@ the session that launched it, and it was discharged by the session that came aft
 left in a committed plan is indistinguishable from a measured one to every future reader, which is
 the same failure shape as the stale sabotage case above — a record that was true when written and
 silently stopped being checked.
+
+**Case count is now 303, not 295** — eight cases were added on 2026-08-20 with CDC Habitat: the
+`_text` re-route (twice, from both ends), the config's own `tenure_field`, `RDC` as floor zero, the
+mapper's floor wiring, per-page robots, the `page_path`/query-param fallback, and the missing
+`{page}` placeholder. All eight were verified individually by a `SABOTAGE_FILTER` run going 8/8 —
+and two of them came back UNDETECTED on the first attempt, which is how the two real holes fixed in
+`e9079b0` were found: a counterweight asserting "not MATCH" that silence also satisfies, and a field
+map with no fixture test behind it.
+
+**Full ledger vs `7461e01`: LAUNCHED, NOT YET COUNTED.** Started 2026-08-20 ~18:5x against that
+frozen commit, logging to `var/claude/ledger-7461e01.log`; ~2 h, so it outlives the session that
+started it. A filtered run is explicitly NOT a ledger result — the script prints that on every
+partial run — and the classifier, the corpus, the adapters and the config all changed today, so the
+295/0 above certifies a tree that no longer exists. Until a count is written here, the ledger-level
+claim for this tree is OWED, not held. Nightly CI re-runs the ledger once these commits are pushed,
+which is a second, independent path to the same number.
