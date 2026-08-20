@@ -1088,6 +1088,11 @@ all. Both are defects in the LEDGER, and both are now fixed:
    can reach `betweenPasses()` in a test must leave `RENT_WATCH_MAX_PASSES` able to do its job.
 
 Case count is now **295** (296 minus the stale Q36 duplicate). The expected next full result is
-**295 detected, 0 undetected**; a confirming run against the frozen commit is the open obligation
-that replaces this one — the two fixes above are each verified by a filtered run (1/1 and 3/3 red),
-which is evidence for those cases and explicitly not a ledger result.
+**295 detected, 0 undetected**; the two fixes above are each verified by a filtered run (1/1 and 3/3
+red), which is evidence for those cases and explicitly not a ledger result.
+
+**Confirming ledger: LAUNCHED, NOT YET COUNTED.** Started against the frozen `945b485` on
+2026-08-20 ~04:0x, logging to `var/claude/ledger-945b485.log`; 2–3 h, so it outlives the session that
+started it. Its count is recorded here on completion, and until that line exists the schema-v4 ledger
+is confirmed only up to the 294/2 run above plus two filtered runs — which is exactly the state the
+previous entry was in, and is why the obligation is written down rather than remembered.
