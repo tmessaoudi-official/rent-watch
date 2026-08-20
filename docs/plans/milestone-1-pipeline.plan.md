@@ -1091,8 +1091,15 @@ Case count is now **295** (296 minus the stale Q36 duplicate). The expected next
 **295 detected, 0 undetected**; the two fixes above are each verified by a filtered run (1/1 and 3/3
 red), which is evidence for those cases and explicitly not a ledger result.
 
-**Confirming ledger: LAUNCHED, NOT YET COUNTED.** Started against the frozen `945b485` on
-2026-08-20 ~04:0x, logging to `var/claude/ledger-945b485.log`; 2–3 h, so it outlives the session that
-started it. Its count is recorded here on completion, and until that line exists the schema-v4 ledger
-is confirmed only up to the 294/2 run above plus two filtered runs — which is exactly the state the
-previous entry was in, and is why the obligation is written down rather than remembered.
+**Confirming ledger: COUNTED — 295 detected, 0 undetected.** Run against the frozen `945b485`,
+started 2026-08-20 ~04:0x and finished 05:44 (~1 h 40 m), log at `var/claude/ledger-945b485.log`
+[Verified: `grep -c` on the log gives 295 `ok` lines and 0 `undetected)` lines; the run's own closing
+line reads `295 sabotage(s) detected, 0 undetected`]. The prediction the previous entry recorded is
+therefore confirmed by measurement rather than by inference, and the schema-v4 ledger is now clean
+end to end on the current tree — 295/295, no stale case and no timeout.
+
+Worth keeping in view: the obligation was written into this file precisely because the run outlived
+the session that launched it, and it was discharged by the session that came after. A predicted count
+left in a committed plan is indistinguishable from a measured one to every future reader, which is
+the same failure shape as the stale sabotage case above — a record that was true when written and
+silently stopped being checked.
