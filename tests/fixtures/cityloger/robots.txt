@@ -1,0 +1,6 @@
+User-agent: *
+Disallow: /composants/
+Disallow: /classes/
+Disallow: /include/
+Disallow: /dpe/
+Disallow: /newdpe/

@@ -144,6 +144,31 @@ usable" row from 0% to something real in a single afternoon; nothing else on thi
   twice over: the tally counted 295 of 303, and because there is no `set -e`, the trailing calls ran
   past the exit expression and left their own `0` as the script's status, so a FAIL anywhere exited
   0 and the nightly job could not go red. Position is not a convention here; it is the mechanism.
+- [2026-08-21 01:39] AGREED: **a source may fetch a listing's own detail page, behind a gate, via
+  `detail_map`** — and a `detail_map` with no gate REFUSES rather than defaulting. Cityloger's search
+  card carries no tenure at all, so on a mixed source every listing resolved UNKNOWN and went to the
+  digest forever. Both defaults are wrong and one is silent: hydrating everything is a per-listing
+  crawl of somebody else's site, hydrating nothing is a source that looks healthy and can never
+  match. The gate is the run's own `Criteria::matchesCommune()`, injected by the CLI, because it is
+  the only filter whose inputs the CARD already carries in full — gating on rent or surface would
+  reject on a field the detail page might have been the one to supply (hard rule 8).
+- [2026-08-21 01:39] AGREED: **a detail map's selectors address the LISTING, never the page**, and
+  the adapter enforces it structurally by not adding `_text` on the detail path. Measured on the
+  frozen Antony payload: its own `.description` classifies LLI 0.90, the whole page classifies
+  UNKNOWN 0.00, because "Commission d'attribution" and "demande de logement social" are furniture
+  present on social and intermediate listings alike. Third instance of one failure class — after
+  `au plus près` and the `_text` field scan — and the reason the corpus now carries
+  "Logement intermédiaire géré par un **bailleur social**" as a captured case.
+- [2026-08-21 01:39] AGREED: **`{page}` may appear in `url` itself**, mutually exclusive with
+  `page_param` and `page_path`, validated at load. For a site whose page number sits mid-path. The
+  rejected alternative — `url` = the site root, so page one is the homepage widget whose ten cards
+  are identical today — fails silently the day that widget becomes "featured" rather than ranks 1-10.
+- [2026-08-21 01:39] AGREED: **rank a source by a verified FEED, never by portfolio size.** A2, A5
+  and A6 were each ranked on how much stock the landlord owns and each publishes no vacancies at
+  all; Seqens and 3F both dead-end at `al-in.fr`, which makes A4 AL'in the only route to the Action
+  Logement ESH stock rather than one source among many. The cheap pre-check now recorded in
+  `docs/SOURCES.md`: on WordPress read `sitemap_index.xml` for a listings post type; on any site
+  scan the index page for `€`, `m²` and `disponib`.
 - [2026-08-20 23:05] AGREED: **a gate's exit status is part of its contract and gets its own test.**
   The ledger had a correct baseline gate, a correct per-case verdict, a correct summary and a loud
   failure list — and still could not fail. Every existing check was about what the gate *says*;
@@ -1191,8 +1216,28 @@ green. A filtered run on a moved case now reports `1 sabotage(s) detected … sk
 previously reported `0 … skipped 295` — that number moving is the proof the case is inside the
 count.
 
-**Full ledger vs `e4e3ef0`: LAUNCHED, NOT YET COUNTED.** A filtered run is explicitly NOT a ledger
+**Full ledger vs `e4e3ef0`: COUNTED — 303 detected, 0 undetected, and this time the tally says so.**
+Run in a pinned `git worktree` at that commit (not the live tree, so source #3 could be built beside
+it without changing what each case tests), finished 2026-08-21 01:3x. Its closing line reads
+`303 sabotage(s) detected, 0 undetected` where the same tree previously reported 295 — that number
+is the fix, visible in the artefact. Zero FAIL lines, zero ABORT.
+
+**Superseded launch note, kept for the record:** A filtered run is explicitly NOT a ledger
 result, and the 303/0 above was produced by a harness whose exit status could not fail — the
 per-case lines are trustworthy, the aggregate machinery was not. Re-run against that frozen commit,
 logging to `var/claude/ledger-e4e3ef0.log`; ~2 h, so it outlives the session that started it. Nightly CI is now a second, independent path to the same number — and, for the first time since
 2026-08-20, one that can actually report failure.
+
+**Case count is now 315, not 303** — twelve added on 2026-08-21 with Cityloger: the detail gate, the
+no-gate refusal, a failed detail fetch becoming an unhydrated listing, the detail map taking the card
+path (so `_text` becomes the whole page), two merge rules from hard rule 9, detail re-identification,
+per-detail-page robots, detail pacing, the `{page}` url template in two directions, and a detail map
+redefining `ref`. Three were written first as MULTI-LINE seds and came back `sabotage was a no-op` —
+GNU sed matches within a line — so they were rewritten line-scoped, two of them with a
+`/private function withDetail/,$` range because the search-page robots check and the page walk's
+`usleep` are textually identical to the detail ones. The filtered verification confirmed the first
+five before it was stopped (four `ok`, and the no-op that exposed the sed problem).
+
+**Full ledger vs the Cityloger commit: OWED, NOT YET RUN.** A filtered run is a PARTIAL RUN and the
+script says so on every line of one. Run it in a pinned worktree, the way `e4e3ef0` was, so the next
+session's work cannot change what the cases test halfway through.

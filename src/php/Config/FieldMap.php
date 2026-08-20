@@ -69,8 +69,34 @@ final readonly class FieldMap
         );
     }
 
+    /**
+     * A DETAIL map: the same shape, minus the one field it must never carry.
+     *
+     * `ref` is required of a card map and refused here, and both rules have the same reason.
+     * Identity belongs to the card, because that is what the seen-set is keyed on — a detail map
+     * that redefined `ref` could re-identify a listing halfway through a pass and re-notify it on
+     * every run. {@see \RentWatch\Core\RawListing::mergedWith()} ignores detail identity outright,
+     * so a `ref` here would be config that reads as behaviour and does nothing.
+     *
+     * @throws ConfigError
+     */
+    public static function detailFromReader(Reader $r): self
+    {
+        $map = self::fromReader($r, requireRef: false);
+
+        if ($map->ref !== []) {
+            throw ConfigError::at(
+                $r->pointer() . '.ref',
+                'a detail map must not redefine `ref` — identity comes from the card, and a listing '
+                    . 're-identified mid-pass is re-notified on every run',
+            );
+        }
+
+        return $map;
+    }
+
     /** @throws ConfigError */
-    public static function fromReader(Reader $r): self
+    public static function fromReader(Reader $r, bool $requireRef = true): self
     {
         $paths = static function (string $key) use ($r): array {
             if (!$r->has($key)) {
@@ -131,7 +157,7 @@ final readonly class FieldMap
         );
         $r->done();
 
-        if ($ref === []) {
+        if ($requireRef && $ref === []) {
             throw ConfigError::at(
                 $r->pointer() . '.ref',
                 'required — without a stable id every run re-notifies every listing',

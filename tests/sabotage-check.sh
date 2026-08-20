@@ -1646,6 +1646,61 @@ run_sabotage "a page_path with no {page} placeholder is accepted, so the walk ne
   's%if (\$pagePath !== null \&\& !str_contains(\$pagePath, .{page}.)) {%if (false) {%'
 
 
+# ── source #3: Cityloger, detail-page hydration, and prose that is not a tenure ───────────────────
+#
+# Every one of these is silent. A gate that stops narrowing turns one pass into 51 requests against
+# somebody else's site; a detail map that reads the whole page classifies a real logement
+# intermédiaire as UNKNOWN and digests it forever; and a merge that lets an absent field win erases
+# what the card already knew.
+
+run_sabotage "the detail gate stops narrowing (every listing costs a request)" \
+  src/php/Adapters/HtmlSource.php \
+  's%if (!($this->detailGate)($listing)) {%if (false) {%'
+
+run_sabotage "a detail_map with no gate silently hydrates nothing instead of refusing" \
+  src/php/Adapters/HtmlSource.php \
+  's%if ($this->detailGate === null) {%if (false) {%'
+
+run_sabotage "a failed detail fetch becomes an unhydrated listing (rule 3)" \
+  src/php/Adapters/HtmlSource.php \
+  's%} catch (SourceError $e) {%} catch (SourceError $e) { return $listing;%'
+
+run_sabotage "the detail map gets the card path, so _text becomes the whole PAGE" \
+  src/php/Adapters/HtmlSource.php \
+  's%$this->flatMapped($detailMap, detailMode: true)%$this->flatMapped($detailMap, detailMode: false)%'
+
+run_sabotage "an absent detail value overwrites what the card knew (rule 9)" \
+  src/php/Core/RawListing.php \
+  's%static fn (mixed $mine, mixed $theirs): mixed => $theirs ?? $mine%static fn (mixed $mine, mixed $theirs): mixed => $theirs%'
+
+run_sabotage "an empty detail string overwrites the card's own text (rule 9)" \
+  src/php/Core/RawListing.php \
+  's%static fn (string $mine, string $theirs): string => $theirs !== .. ? $theirs : $mine%static fn (string $mine, string $theirs): string => $theirs%'
+
+run_sabotage "the detail page re-identifies the listing, so it re-notifies forever" \
+  src/php/Core/RawListing.php \
+  's%externalId: $this->externalId,%externalId: $detail->externalId !== '"'"''"'"' ? $detail->externalId : $this->externalId,%'
+
+run_sabotage "robots is checked for the search page only, never for the detail pages" \
+  src/php/Adapters/HtmlSource.php \
+  '/private function withDetail/,$ s%if ($this->robots !== null \&\& !$this->robots->allows(Robots::pathOf($url))) {%if (false) {%'
+
+run_sabotage "detail fetches stop being paced (a per-listing burst, hard rule 5)" \
+  src/php/Adapters/HtmlSource.php \
+  '/private function withDetail/,$ s%usleep($this->definition->rateLimitMs \* 1000);%%'
+
+run_sabotage "a {page} url template is fetched literally, so page one is never real" \
+  src/php/Adapters/HtmlSource.php \
+  's%$firstUrl = $urlTemplate ? str_replace(.{page}., .1., $url) : $url;%$firstUrl = $url;%'
+
+run_sabotage "the walk stops substituting {page}, so every page is page one" \
+  src/php/Adapters/HtmlSource.php \
+  "s%? str_replace('{page}', (string) \$page, \$url)%? \$url%"
+
+run_sabotage "a detail map may redefine ref, so identity comes from the wrong page" \
+  src/php/Config/FieldMap.php \
+  's%if ($map->ref !== \[\]) {%if (false) {%'
+
 printf '\n  %d sabotage(s) detected, %d undetected\n' "$pass" "$fail"
 
 if [[ -n "$_filter" ]]; then

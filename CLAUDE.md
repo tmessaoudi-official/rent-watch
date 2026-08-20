@@ -19,7 +19,7 @@ Status: **milestone 1 is functionally complete against a frozen payload.** The p
 (schema v4), the config layer, the adapter contract, the criteria engine, dedup, the notification
 layer and the `scout` CLI all exist. What is missing is a NETWORK adapter, and that is blocked on an
 input rather than a decision. As of 2026-08-07 there is a PHP 8.5
-implementation of `models` + `tenure` under `src/php/Core/`, a 116-case language-neutral classifier
+implementation of `models` + `tenure` under `src/php/Core/`, a 118-case language-neutral classifier
 corpus at `tests/fixtures/tenure/corpus.json`, the seen-set / price-history / run-log store under
 `src/php/Store/` with `SourceHealth` + `SourceStatus` in `Core/`, a strict JSON config layer under
 `src/php/Config/` with both files committed, the `Source` contract plus `Payload` / `ListingMapper` /
@@ -57,6 +57,55 @@ optional `@attr` and an optional `=> regex` capture; extraction still funnels th
 `page_param` walks pages and `total_selector` CHECKS the walk against the count the page states
 about itself, because walking until a page comes back empty is a termination rule and not a proof.
 
+**SOURCE #3 IS LIVE, AND IT IS THE FIRST THAT NEEDS A SECOND REQUEST (2026-08-21).** Cityloger —
+`www.cityloger.fr`, the Immobilière 3F group's own lettings platform — is `enabled: true`;
+`scout doctor --source=cityloger` returns **51 annonces, ~16 s, `ok`**, and the ref is stable across
+two runs. Four things about it change how a source is added here:
+
+- **Its search card carries NO tenure at all.** Not a badge, not a code, nothing — asserted by test,
+  so the day one appears the assertion fails rather than the second request continuing forever. On a
+  mixed source that meant every listing resolved `UNKNOWN` and went to the *à vérifier* digest:
+  correct under §1, and useless. So `type: html` gained **`detail_map`** — a second field map,
+  resolved against a listing's own detail page.
+- **A detail fetch is one request PER LISTING, so it runs behind a gate**, and the gate is the run's
+  own `Criteria::matchesCommune()`, injected by the CLI. It is the only filter whose inputs the CARD
+  already carries in full, so gating on it cannot reject on a field the detail page would have
+  filled (hard rule 8). 51 national listings cost at most 3 detail fetches. **A `detail_map` with no
+  gate REFUSES** rather than defaulting: hydrating everything is a crawl, hydrating nothing is a
+  mixed source resolving `UNKNOWN` forever while its health stays green.
+- **A detail map's selectors must address the LISTING, never the page.** Measured on the frozen
+  Antony payload: its own `.description` classifies **LLI 0.90**, and the same listing fed its whole
+  detail page classifies **UNKNOWN 0.00** — because *"Commission d'attribution"* and *"demande de
+  logement social"* are page furniture present on social and intermediate listings alike, and three
+  such signals conflict a correct verdict away. This is the CDC `au plus près` failure class on a
+  new surface, and `HtmlSource` enforces it structurally: the detail path deliberately does NOT add
+  `_text`, so a detail map contributes only what it selects.
+- **`{page}` may now appear in `url` itself**, for a site whose page number sits mid-path
+  (`resultats-location-{page}-defaut-`). Page one substitutes like every other page. The rejected
+  alternative — point `url` at the site root and let page one be the homepage widget, whose ten
+  cards are identical today — fails silently the day that widget becomes *featured* rather than
+  ranks 1–10.
+
+The corpus gained its **first captured SOCIAL case** here, and its third instance of one failure
+class: *"Logement intermédiaire géré par un **bailleur social**"* — an explicit intermediate label
+sharing a sentence with words that describe who manages the flat, not its tenure. `plus`,
+`au plus près`, `bailleur social`: the pattern is excluded vocabulary appearing as ordinary French on
+an eligible listing, and it has now cost three fixes.
+
+**Live yield today is 0 matches, and that is not a defect.** All 51 listings are outside the 78/95
+commune filter (the 3 IDF ones are 92 and 77), so nothing is hydrated on a real pass right now. The
+machinery is proven by fixtures, not by yield. `docs/SOURCES.md` A6b records why the source is worth
+having anyway: 3F's *social* stock is allocated through AL'in and the SNE, so what surfaces on
+Cityloger skews to the intermediate and libre stock this project is looking for.
+
+> **Two ranked sources were dropped the same day, and the catalogue was wrong in nine rows.** Seqens
+> (A5) and Immobilière 3F's own site (A6) publish no vacancies at all — both dead-end at `al-in.fr`,
+> because Action Logement's ESH allocate by commission. That makes **A4 AL'in the only route to that
+> group's stock**, not one source among many. `docs/SOURCES.md` carries the measurements and the
+> cheap pre-check that would have caught A2, A5 and A6 before any deep crawl: on WordPress read
+> `sitemap_index.xml` for a listings post type; on any site scan the index page for `€`, `m²` and
+> `disponib`.
+
 **SOURCE #2 IS LIVE, AND IT IS THE FIRST MIXED-TENURE ONE (2026-08-20).** CDC Habitat is
 `enabled: true`; `scout doctor --source=cdc_habitat` returns **139 annonces, ~21 s**. In'li is pure
 LLI, so until now *nothing exercised §1 against a real payload* — CDC ships `Logement intermédiaire`
@@ -84,8 +133,8 @@ Two smaller things landed with it, both hard rule 9: `Payload::floor()` reads fl
 they are (`RDC` is **0**, not unknown; and the generic number reader would return the ROOM COUNT from
 `3 pièces - 4ème étage - 82m²`), and `Payload::bool()` accepts the amenity noun `ascenseur`, which
 can only ever yield `true` or `null` and so cannot manufacture the explicit `false` the high-floor
-penalty needs. **`tests/fixtures/tenure/corpus.json` now has its first two CAPTURED cases** (116
-total, 114 synthetic + 2 real), both real CDC card text — including the `au plus près` one, which is
+penalty needs. **`tests/fixtures/tenure/corpus.json` now has CAPTURED cases** (118
+total, 114 synthetic + 4 real), both real CDC card text — including the `au plus près` one, which is
 what stops the classifier fix from being quietly undone.
 
 **ICF Habitat Novedis (A2) is NOT pollable** and was dropped: measured three levels deep, its site
@@ -487,7 +536,7 @@ Required coverage, per spec §11 — non-negotiable once `src/` exists:
   Offline. No network in CI. A parser test that reaches the network is a monitoring check, not a test.
 - **Classifier tests.** ≥30 hand-labelled listing texts covering pure-LLI In'li, mixed CDC Habitat,
   an explicit PLAI, an explicit PLS, and an ambiguous case. The suite must go red if the classifier
-  regresses. **Done** — `tests/fixtures/tenure/corpus.json`, 116 cases, and the suite asserts all five
+  regresses. **Done** — `tests/fixtures/tenure/corpus.json`, 118 cases, and the suite asserts all five
   shapes are present so "30 easy ones" cannot satisfy it. The corpus is **114 synthetic + 2 CAPTURED**
   (2026-08-20, real CDC Habitat card text — the first non-synthetic entries; the spec asks for real
   texts and until a source was live there were none. Append as sources come online, never renumber

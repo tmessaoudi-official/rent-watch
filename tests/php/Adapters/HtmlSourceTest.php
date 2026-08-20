@@ -562,6 +562,95 @@ final class HtmlSourceTest extends TestCase
         return new HtmlSource($definition, $this->store(), $client, $robots);
     }
 
+
+    /**
+     * A `{page}` in the URL itself, for a site whose page number is not a suffix.
+     *
+     * Cityloger paginates through `resultats-location-{page}-defaut-`, where the number sits in the
+     * MIDDLE of the path. `page_path` cannot express that — it appends — and the tempting
+     * alternative was to point `url` at the site root and let page one be the homepage, whose
+     * listing widget happens to hold the same ten cards today. That equality is not a guarantee:
+     * the day the widget becomes "featured" rather than ranks 1-10, page one's listings are never
+     * fetched at all and nothing anywhere says so. So page one substitutes like every other page.
+     */
+    public function testAPageTemplateInTheUrlSubstitutesEveryPageIncludingTheFirst(): void
+    {
+        $client = new TemplatedUrlHttpClient([
+            1 => $this->templatedPage(['a1', 'a2']),
+            2 => $this->templatedPage(['b1']),
+        ]);
+
+        $rows = $this->templatedSource($client)->fetch();
+
+        self::assertCount(3, $rows);
+        self::assertSame(
+            [
+                'https://example.test/resultats-location-1-defaut-',
+                'https://example.test/resultats-location-2-defaut-',
+                'https://example.test/resultats-location-3-defaut-',
+            ],
+            $client->urls,
+            'page one is fetched through the template too, not from a different url',
+        );
+    }
+
+    /** Two pagination mechanisms is a guess about which one the site honours. */
+    public function testAUrlTemplateCombinedWithPageParamIsRefused(): void
+    {
+        $client = new TemplatedUrlHttpClient([1 => $this->templatedPage(['a1'])]);
+
+        $this->expectException(SourceError::class);
+        $this->expectExceptionMessageMatches('/one way or the other|both/i');
+
+        $this->templatedSource($client, pageParam: 'page')->fetch();
+    }
+
+    /** Hard rule 5: with the path changing per page, every page gets its own robots verdict. */
+    public function testRobotsIsCheckedForEveryTemplatedPageUrl(): void
+    {
+        $client = new TemplatedUrlHttpClient([1 => $this->templatedPage(['a1']), 2 => $this->templatedPage(['b1'])]);
+        $robots = \RentWatch\Adapters\Http\Robots::parse("User-agent: *\nDisallow: /resultats-location-2\n");
+
+        $this->expectException(SourceError::class);
+        $this->expectExceptionMessageMatches('/robots\.txt disallows/');
+
+        $this->templatedSource($client, robots: $robots)->fetch();
+    }
+
+    /** @param list<string> $refs */
+    private function templatedPage(array $refs): string
+    {
+        $cards = '';
+        foreach ($refs as $ref) {
+            $cards .= '<a class="card" href="https://example.test/logement-' . $ref . '"><span class="commune">HOUILLES</span></a>';
+        }
+
+        return '<html><body>' . $cards . '</body></html>';
+    }
+
+    private function templatedSource(
+        TemplatedUrlHttpClient $client,
+        ?string $pageParam = null,
+        ?\RentWatch\Adapters\Http\Robots $robots = null,
+    ): HtmlSource {
+        $definition = new SourceDefinition(
+            name: 'cityloger',
+            enabled: true,
+            family: 'institutional',
+            type: 'html',
+            mixedTenure: true,
+            url: 'https://example.test/resultats-location-{page}-defaut-',
+            baseUrl: 'https://example.test',
+            itemSelector: 'a.card',
+            pageParam: $pageParam,
+            maxPages: 10,
+            map: new FieldMap(ref: ['@href => -([^-]+)$'], url: ['@href'], commune: ['.commune']),
+            rateLimitMs: 0,
+        );
+
+        return new HtmlSource($definition, $this->store(), $client, $robots);
+    }
+
 }
 
 
@@ -635,3 +724,28 @@ final class PathPagedHttpClient implements \RentWatch\Adapters\Http\HttpClient
     }
 }
 
+
+/**
+ * Answers per page, where the page number sits INSIDE the path rather than at its end.
+ *
+ * Reads the page back out of the URL for the same reason {@see PagedHttpClient} does: a fake that
+ * counted calls would pass just as happily if every request went to page one, which is precisely
+ * the failure the template exists to make impossible.
+ */
+final class TemplatedUrlHttpClient implements \RentWatch\Adapters\Http\HttpClient
+{
+    /** @var list<string> */
+    public array $urls = [];
+
+    /** @param array<int, string> $bodies */
+    public function __construct(private readonly array $bodies) {}
+
+    public function send(\RentWatch\Adapters\Http\HttpRequest $request): HttpResponse
+    {
+        $this->urls[] = $request->url;
+
+        $page = preg_match('~resultats-location-(\d+)-~', $request->url, $m) === 1 ? (int) $m[1] : 0;
+
+        return new HttpResponse(200, $this->bodies[$page] ?? '<html><body></body></html>');
+    }
+}

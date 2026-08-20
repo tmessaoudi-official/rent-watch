@@ -59,6 +59,46 @@ final readonly class RawListing
     ) {}
 
     /**
+     * This listing, plus whatever a second fetch of its own detail page turned up.
+     *
+     * The merge rule is hard rule 9 read strictly: **`$detail` wins where it HAS a value, and never
+     * where it does not.** A detail page that omits the rent is not a detail page reporting a rent
+     * of nothing — it is a page that said nothing about rent, and the card's figure stands. Empty
+     * strings count as absent for the same reason: a selector that matched an empty element found
+     * no value, and letting `''` overwrite a real title is how a good card becomes a blank one.
+     *
+     * Identity is never merged. `sourceName` and `externalId` come from the card, because the card
+     * is what the seen-set is keyed on — a detail map that happened to define `ref` could otherwise
+     * re-identify a listing mid-pass and re-notify it forever.
+     */
+    public function mergedWith(self $detail): self
+    {
+        $str = static fn (string $mine, string $theirs): string => $theirs !== '' ? $theirs : $mine;
+        $any = static fn (mixed $mine, mixed $theirs): mixed => $theirs ?? $mine;
+
+        return new self(
+            sourceName: $this->sourceName,
+            externalId: $this->externalId,
+            title: $str($this->title, $detail->title),
+            description: $str($this->description, $detail->description),
+            // The card's own keys stay unless the detail page names the same one — `_text` included,
+            // which is the card's text and remains correctly scoped to the card.
+            fields: [...$this->fields, ...$detail->fields],
+            url: $any($this->url, $detail->url),
+            commune: $any($this->commune, $detail->commune),
+            postcode: $any($this->postcode, $detail->postcode),
+            rentCc: $any($this->rentCc, $detail->rentCc),
+            rentHc: $any($this->rentHc, $detail->rentHc),
+            charges: $any($this->charges, $detail->charges),
+            surfaceM2: $any($this->surfaceM2, $detail->surfaceM2),
+            rooms: $any($this->rooms, $detail->rooms),
+            bedrooms: $any($this->bedrooms, $detail->bedrooms),
+            floor: $any($this->floor, $detail->floor),
+            hasElevator: $any($this->hasElevator, $detail->hasElevator),
+        );
+    }
+
+    /**
      * Rent charges comprises, derived when it was not reported directly.
      *
      * RULED 2026-08-07 (Q32, amending Q2). Q2 said only *"normalise every source to CC"*, which left

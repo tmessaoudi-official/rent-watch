@@ -106,6 +106,28 @@ final readonly class SourceDefinition
          */
         public int $maxPages = 20,
         public FieldMap $map = new FieldMap(ref: ['id']),
+        /**
+         * A SECOND map, resolved against a listing's own detail page — for the sources that do not
+         * put everything on the card.
+         *
+         * Cityloger is the case it was built for: its search cards carry rent, rooms, surface,
+         * commune and floor, and no tenure whatsoever. On a mixed-tenure source that means every
+         * listing resolves UNKNOWN and goes to the à-vérifier digest — correct under §1, and
+         * useless — while the detail page has both an explicit `Financement` code and prose saying
+         * "Logement intermédiaire" in words.
+         *
+         * Two constraints, and neither is stylistic:
+         *
+         * - **It costs a request per listing**, so it runs only for listings that pass a gate
+         *   supplied by the caller. `HtmlSource` REFUSES a detail map with no gate rather than
+         *   defaulting either way — see the constructor.
+         * - **Its selectors must address the listing's own content, never the whole page.** Measured
+         *   2026-08-20 on the real Antony payload: the scoped `.description` classifies LLI at 0.90;
+         *   the same listing fed its entire detail page classifies UNKNOWN at 0.00, because generic
+         *   furniture ("Commission d'attribution", "demande de logement social") sits on social and
+         *   intermediate pages alike and conflicts the verdict away.
+         */
+        public ?FieldMap $detailMap = null,
         public bool $legalRisk = false,
         public ?string $fixture = null,
         public int $rateLimitMs = 2000,

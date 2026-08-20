@@ -25,12 +25,13 @@ use RentWatch\Core\Notify\EmailChannel;
 use RentWatch\Core\Notify\FileTransport;
 use RentWatch\Core\Notify\Formatter;
 use RentWatch\Core\Notify\MailTransport;
-use RentWatch\Core\Notify\SendmailTransport;
-use RentWatch\Core\Notify\SmtpTransport;
 use RentWatch\Core\Notify\Notifier;
 use RentWatch\Core\Notify\NtfyChannel;
 use RentWatch\Core\Notify\Priority;
+use RentWatch\Core\Notify\SendmailTransport;
+use RentWatch\Core\Notify\SmtpTransport;
 use RentWatch\Core\Pacer;
+use RentWatch\Core\RawListing;
 use RentWatch\Core\Redact;
 use RentWatch\Core\TenureClassifier;
 use RentWatch\Store\Store;
@@ -122,7 +123,7 @@ final readonly class Scout
     {
         $criteria = $this->criteria();
         $store = $this->store();
-        $sources = $this->sources($store, $this->onlySources($flags));
+        $sources = $this->sources($store, $this->onlySources($flags), $criteria);
         $now = $this->now();
 
         $this->line('rent-watch doctor · ' . $now);
@@ -215,7 +216,10 @@ final readonly class Scout
             return $this->fail('source inconnue : ' . $name . ' (connues : ' . implode(', ', array_keys($definitions)) . ')');
         }
 
-        $source = $this->buildSource($definitions[$name], $store);
+        // `dump` builds the gate too: a dump that hydrated nothing would show a different listing
+        // than a run does, which makes it useless for the one job it has — seeing what the pipeline
+        // will see.
+        $source = $this->buildSource($definitions[$name], $store, $this->criteria());
         if ($source === null) {
             return $this->fail('la source ' . $name . ' est de type `' . $definitions[$name]->type
                 . '`, pour lequel aucun adaptateur n\'existe encore');
@@ -312,7 +316,7 @@ final readonly class Scout
             $this->warn('canal ' . $name . ' désactivé : ' . $problem);
         }
 
-        $sources = $this->sources($store, $this->onlySources($flags));
+        $sources = $this->sources($store, $this->onlySources($flags), $criteria);
         if ($sources === []) {
             $this->line('aucune source activée — rien à faire.');
 
@@ -568,7 +572,7 @@ final readonly class Scout
      *
      * @return list<Source>
      */
-    private function sources(Store $store, ?array $only = null): array
+    private function sources(Store $store, ?array $only = null, ?Criteria $criteria = null): array
     {
         $out = [];
         $known = [];
@@ -593,7 +597,7 @@ final readonly class Scout
                 continue;
             }
 
-            $source = $this->buildSource($definition, $store);
+            $source = $this->buildSource($definition, $store, $criteria);
             if ($source === null) {
                 $this->warn('source ' . $definition->name . ' ignorée : aucun adaptateur pour le type `'
                     . $definition->type . '`');
@@ -643,8 +647,22 @@ final readonly class Scout
         return $names === [] ? null : $names;
     }
 
-    private function buildSource(SourceDefinition $definition, Store $store): ?Source
+    /**
+     * @param ?Criteria $criteria the run's own filters, from which the detail gate is built. A
+     *        source with a `detail_map` REFUSES without one rather than guessing — see
+     *        {@see HtmlSource::hydrate()}.
+     */
+    private function buildSource(SourceDefinition $definition, Store $store, ?Criteria $criteria = null): ?Source
     {
+        // WHY the geographic filter and not the whole criteria set: a detail fetch is one request
+        // per listing, so something must narrow it — and `matchesCommune()` is the only filter whose
+        // inputs a CARD already carries in full. Gating on rent or surface would reject on a field
+        // the detail page might have been the one to supply, which is hard rule 8's silent
+        // over-rejection: invisible, because nothing arrives.
+        $gate = $criteria === null
+            ? null
+            : static fn (RawListing $listing): bool => $criteria->matchesCommune($listing->commune, $listing->postcode);
+
         return match ($definition->type) {
             'fixture' => new FixtureSource($definition, $store, $this->rootDir),
             // The ADAPTER exists and is tested; what waits on the developer is the URL in
@@ -656,7 +674,7 @@ final readonly class Scout
             // HTML5 by the language's own `Dom\HTMLDocument` and the field map is read as CSS
             // selectors. In'li is the first real source to use it — its search page is
             // server-rendered, so there is no JSON endpoint to prefer.
-            'html' => new HtmlSource($definition, $store, new CurlHttpClient()),
+            'html' => new HtmlSource($definition, $store, new CurlHttpClient(), null, $gate),
             'email_alert' => $this->buildEmailSource($definition, $store),
             default => null,
         };

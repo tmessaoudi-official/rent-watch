@@ -894,6 +894,7 @@ final class ConfigTest extends TestCase
         self::assertIsArray($raw);
 
         $enabled = [];
+        $withDetail = [];
 
         foreach (ConfigLoader::loadSources(self::ROOT . '/config/sources.json') as $name => $s) {
             if (!$s->enabled || $s->type === 'fixture') {
@@ -915,11 +916,20 @@ final class ConfigTest extends TestCase
             if ($s->type === 'html') {
                 self::assertNotNull($s->itemSelector, "html source '{$name}' is enabled with no item_selector — it would match nothing and report calm");
             }
+
+            if ($s->detailMap !== null) {
+                $withDetail[] = $name;
+            }
         }
+
+        // A detail map costs one request PER GATED LISTING on top of the page walk, so a source
+        // acquiring one is a request-volume decision and not a mapping tweak. Named for the same
+        // reason the enabled set is.
+        self::assertSame(['cityloger'], $withDetail, 'the set of sources that fetch detail pages changed');
 
         // Named rather than counted: the day a second source is enabled, this line is the one that
         // makes someone confirm it was a decision.
-        self::assertSame(['inli', 'cdc_habitat'], $enabled, 'the set of enabled network sources changed');
+        self::assertSame(['inli', 'cdc_habitat', 'cityloger'], $enabled, 'the set of enabled network sources changed');
     }
 
     /**

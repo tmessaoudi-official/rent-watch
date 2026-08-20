@@ -23,7 +23,7 @@
   "version": 1,
   "declared_counts": {
     "synthetic": 114,
-    "captured": 2
+    "captured": 4
   },
   "sources": {
     "inli": {
@@ -34,6 +34,12 @@
     },
     "cdc_habitat": {
       "name": "cdc_habitat",
+      "family": "institutional",
+      "default_tenure": null,
+      "mixed_tenure": true
+    },
+    "cityloger": {
+      "name": "cityloger",
       "family": "institutional",
       "default_tenure": null,
       "mixed_tenure": true
@@ -1710,6 +1716,39 @@
         "min_confidence": 85
       },
       "why": "THE CLEAR ONE. Real card text, same page, same day. `loyer libre` is the tenure term and Q4 ruled LIBRE in scope on its own track, so this must MATCH rather than digest -- from a source whose mixed_tenure is true, which is the combination where a timid rule would fail closed on something that is simply eligible. Paired with cdc-001 so the two badges CDC actually ships are both pinned; a third badge is an unseen vocabulary item and belongs in the digest until someone labels it."
+    },
+    {
+      "id": "cityloger-001-captured-intermediate-managed-by-a-social-landlord",
+      "provenance": "captured",
+      "captured_at": "2026-08-20",
+      "source": "cityloger",
+      "title": "Appartement 4 pièce(s)",
+      "fields": {
+        "tenureField": "LI15P"
+      },
+      "description": "Dans résidence avec ascenseur au 3ème étage, bel appartement de type F4 de 80 m2, comprenant entrée, cuisine ouverte sur séjour, 3 chambres dont 2 avec placard, salle de bains, WC séparés et 2 balcons. Charges mensuelles comprises : 191,19 € - Chauffage collectif au gaz - Consommation eau individuelle : forfait mensuel à prévoir 42 € - Stationnement possible : 46 €/ MensuelLogement intermédiaire géré par un bailleur social -attribution sous conditions de ressources. Les logements intermédiaires sont définis par la Loi de Finances du 1er janvier 2014. En contrepartie de plafonds de ressources à respecter, les loyers sont plafonnés et fixés par la loi, et en dessous du prix du marché",
+      "expect": {
+        "tenure": "LLI",
+        "outcome": "MATCH",
+        "min_confidence": 85
+      },
+      "why": "THE THIRD INSTANCE OF ONE FAILURE CLASS, and the cleanest yet: excluded vocabulary appearing on an ELIGIBLE listing as ordinary French. Real detail-page prose from Cityloger (Immobiliere 3F group), Antony 92160 [2026-08-20]. The listing says `Logement intermediaire gere par un bailleur social` -- an explicit tier-2 intermediate label sharing its sentence with the words `bailleur social`, which describe WHO MANAGES the flat, not its tenure. The predecessors: CDC's tooltip saying `au plus pres` (read as the acronym PLUS), and CDC's card prose scanned with identifier discipline. This one is captured so that a future tightening of the social vocabulary cannot quietly start rejecting managed-by-an-ESH intermediate stock -- which is most of the intermediate stock there is. Note what is NOT in this text: the same page carries `Commission d'attribution` and `demande de logement social` as FURNITURE, on social and intermediate listings alike. Fed the whole page this listing classifies UNKNOWN at 0.00 [measured]; fed its own description, LLI at 0.90. The corpus case is the scoped text, because that is what the adapter sends."
+    },
+    {
+      "id": "cityloger-002-captured-social-asking-for-a-numero-unique",
+      "provenance": "captured",
+      "captured_at": "2026-08-20",
+      "source": "cityloger",
+      "title": "Appartement 4 pièce(s)",
+      "fields": {
+        "tenureField": "PEXNC"
+      },
+      "description": "Location T4 de 63m² au 1er étage avec ascenseur. Commune : LES SALLES DU GARDON. Adresse : HLM BAS VILLAGE. Loyer : 510€ par mois, les charges incluent : charges générales, entretien des équipements communs et ascenseur. Cuisine pas équipée seulement évier + meuble sous évier. Chauffage au GAZ DE VILLE. Merci de bien vouloir nous contacter par mail en indiquant votre numéro unique d'enregistrement de demande de logement social afin de permettre l'étude de votre dossier..",
+      "expect": {
+        "tenure": "SOCIAL",
+        "outcome": "REJECT"
+      },
+      "why": "The counterweight to cityloger-001, from the same source and the same selector on the same day -- and the corpus's first captured SOCIAL case. Real detail-page prose, Les Salles du Gardon 30110. It names its residence `HLM BAS VILLAGE` and asks the applicant to quote their `numero unique d'enregistrement de demande de logement social`, which is the procedural tell (signal tier 3) that the domain glossary calls the cheapest reliable discriminator. Without this case, cityloger-001 could be satisfied by a classifier that simply stopped reading Cityloger descriptions at all."
     }
   ]
 }

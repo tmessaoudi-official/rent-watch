@@ -14,6 +14,7 @@ use RentWatch\Adapters\Http\HttpRequest;
 use RentWatch\Adapters\Http\Robots;
 use RentWatch\Config\FieldMap;
 use RentWatch\Config\SourceDefinition;
+use RentWatch\Core\RawListing;
 use RentWatch\Core\SourceHealth;
 use RentWatch\Core\SourceProfile;
 use RentWatch\Core\Tenure;
@@ -48,11 +49,18 @@ use RentWatch\Store\Store;
  */
 final readonly class HtmlSource implements Source
 {
+    /**
+     * @param ?\Closure(RawListing): bool $detailGate which listings earn a second
+     *        request. Supplied by the caller rather than configured, because it IS the run's own
+     *        geographic criteria — the one filter whose inputs a card already carries in full, so
+     *        gating on it cannot reject on a field the detail page would have filled (hard rule 8).
+     */
     public function __construct(
         private SourceDefinition $definition,
         private Store $store,
         private HttpClient $client = new CurlHttpClient(),
         private ?Robots $robots = null,
+        private ?\Closure $detailGate = null,
     ) {}
 
     public function name(): string
@@ -133,6 +141,26 @@ final readonly class HtmlSource implements Source
         $pageParam = $this->definition->pageParam;
         $pagePath = $this->definition->pagePath;
 
+        // A `{page}` in the URL ITSELF, for a site whose page number is not a suffix. Cityloger
+        // paginates through `resultats-location-{page}-defaut-`, where the number sits in the middle
+        // of the path — which `page_path` cannot express, because it appends.
+        //
+        // The rejected alternative is worth recording: point `url` at the site root and let page one
+        // be the homepage, whose listing widget holds the same ten cards today [verified 2026-08-20,
+        // ids identical]. That equality is not a guarantee. The day the widget becomes "featured"
+        // rather than ranks 1-10, page one's listings are simply never fetched, and a source that
+        // silently drops its first page looks exactly like a smaller market (hard rule 2).
+        $urlTemplate = str_contains($url, '{page}');
+
+        if ($urlTemplate && ($pageParam !== null || $pagePath !== null)) {
+            throw new SourceError(
+                $this->name(),
+                'the url carries a {page} template AND ' . ($pageParam !== null ? 'page_param' : 'page_path')
+                    . ' is configured — a source paginates one way or the other, and guessing which '
+                    . 'one the site honours is how a walk silently refetches page one',
+            );
+        }
+
         if ($pageParam !== null && $pagePath !== null) {
             throw new SourceError(
                 $this->name(),
@@ -150,11 +178,21 @@ final readonly class HtmlSource implements Source
             );
         }
 
-        $body = $this->get($url, []);
+        $firstUrl = $urlTemplate ? str_replace('{page}', '1', $url) : $url;
+
+        if ($urlTemplate && $this->robots !== null && !$this->robots->allows(Robots::pathOf($firstUrl))) {
+            throw new SourceError(
+                $this->name(),
+                'robots.txt disallows ' . Robots::pathOf($firstUrl) . ' — this source must not be '
+                    . 'polled. Use the email-alert route instead',
+            );
+        }
+
+        $body = $this->get($firstUrl, []);
         $out = $this->extract($body, $selector);
 
-        if ($pageParam === null && $pagePath === null) {
-            return $out;
+        if (!$urlTemplate && $pageParam === null && $pagePath === null) {
+            return $this->hydrate($out);
         }
 
         // ── walk the remaining pages ──────────────────────────────────────────────────────────
@@ -177,8 +215,10 @@ final readonly class HtmlSource implements Source
                 usleep($this->definition->rateLimitMs * 1000);
             }
 
-            if ($pagePath !== null) {
-                $pageUrl = $url . str_replace('{page}', (string) $page, $pagePath);
+            if ($urlTemplate || $pagePath !== null) {
+                $pageUrl = $urlTemplate
+                    ? str_replace('{page}', (string) $page, $url)
+                    : $url . str_replace('{page}', (string) $page, $pagePath);
 
                 // Re-checked per page, because with path pagination the PATH is what changes. A
                 // site may publish an index it welcomes and paginated forms it does not, and a
@@ -228,7 +268,7 @@ final readonly class HtmlSource implements Source
             throw new SourceError(
                 $this->name(),
                 'pagination reached the ' . $this->definition->maxPages . '-page bound without ending — '
-                    . 'the `' . ($pageParam ?? $pagePath) . '` ' . ($pageParam !== null ? 'parameter' : 'path template')
+                    . 'the `' . ($pageParam ?? $pagePath ?? $url) . '` ' . ($pageParam !== null ? 'parameter' : 'path template')
                     . ' is probably ignored by the site, so every page returns the first one. '
                     . 'Refusing to keep requesting',
             );
@@ -248,6 +288,150 @@ final readonly class HtmlSource implements Source
                 'collected ' . count($out) . ' listings but the page declares ' . $total
                     . ' — pagination lost results rather than reaching the end',
             );
+        }
+
+        return $this->hydrate($out);
+    }
+
+    /**
+     * Fetch each gated listing's own page and merge what only that page knows.
+     *
+     * No detail map means no second request, and that is the whole cost model: a source without one
+     * behaves exactly as before, and a source with one spends requests only on listings the run
+     * would actually act on.
+     *
+     * @param list<RawListing> $listings
+     *
+     * @return list<RawListing>
+     *
+     * @throws SourceError
+     */
+    private function hydrate(array $listings): array
+    {
+        $detailMap = $this->definition->detailMap;
+
+        if ($detailMap === null) {
+            return $listings;
+        }
+
+        if ($this->detailGate === null) {
+            // REFUSING, rather than defaulting either way, because both defaults are wrong and one
+            // of them is silent. Hydrating everything turns a config-only source into a per-listing
+            // crawl of somebody else's site; hydrating nothing leaves a mixed-tenure source
+            // resolving UNKNOWN forever while its health stays green and its digest stays plausible.
+            throw new SourceError(
+                $this->name(),
+                'a detail_map is configured but no gate was supplied — refusing to guess between '
+                    . 'fetching every listing\'s page and fetching none of them',
+            );
+        }
+
+        $out = [];
+        foreach ($listings as $listing) {
+            if (!($this->detailGate)($listing)) {
+                $out[] = $listing;
+
+                continue;
+            }
+
+            $out[] = $this->withDetail($listing, $detailMap);
+        }
+
+        return $out;
+    }
+
+    /**
+     * One listing, one extra request, merged under hard rule 9.
+     *
+     * @throws SourceError
+     */
+    private function withDetail(RawListing $listing, FieldMap $detailMap): RawListing
+    {
+        $url = $listing->url;
+
+        if ($url === null || $url === '') {
+            throw new SourceError(
+                $this->name(),
+                'listing ' . $listing->externalId . ' passed the detail gate but carries no url, so '
+                    . 'its detail page cannot be fetched — the card\'s `url` mapping is wrong',
+            );
+        }
+
+        // Its own robots verdict, because a detail page is a different path from the search index.
+        // A site may publish a search it welcomes and listing pages it does not, and a check made
+        // once on the index would walk into every one of them returning 200 (hard rule 5).
+        if ($this->robots !== null && !$this->robots->allows(Robots::pathOf($url))) {
+            throw new SourceError(
+                $this->name(),
+                'robots.txt disallows ' . Robots::pathOf($url) . ' — the search index is pollable '
+                    . 'but the listing pages are not, so this source cannot be hydrated',
+            );
+        }
+
+        if ($this->definition->rateLimitMs > 0) {
+            usleep($this->definition->rateLimitMs * 1000);
+        }
+
+        try {
+            $body = $this->get($url, []);
+        } catch (SourceError $e) {
+            // Hard rule 3. The tempting alternative — return the listing unhydrated — converts a
+            // broken detail fetch into a listing that merely looks tenure-less, which on a mixed
+            // source is indistinguishable from a listing whose page genuinely says nothing.
+            throw new SourceError(
+                $this->name(),
+                'the detail page for listing ' . $listing->externalId . ' could not be fetched: '
+                    . $e->getMessage(),
+                $e,
+            );
+        }
+
+        // Through the MAPPER, not assigned raw: a detail page's rent, floor and surface are the same
+        // prose the card's are, and hard rule 9 lives in `ListingMapper`/`Payload`. A second,
+        // hand-rolled conversion here would be a second place for `RDC` to stop meaning zero.
+        $mapper = new ListingMapper($this->flatMapped($detailMap, detailMode: true));
+        $flat = $this->detailFields($body, $detailMap);
+        $flat['ref'] = $listing->externalId;
+
+        return $listing->mergedWith($mapper->map($flat));
+    }
+
+    /**
+     * The detail map, resolved against the detail document.
+     *
+     * Deliberately NOT `extract()`: that one adds `_text` — every word of the element it is given —
+     * which on a whole page is the furniture that conflicts a correct verdict into UNKNOWN. Here
+     * only the configured selectors are read, so a detail map that addresses the listing's own
+     * block contributes the listing's own words and nothing else.
+     *
+     * @return array<string, string>
+     *
+     * @throws SourceError
+     */
+    private function detailFields(string $html, FieldMap $detailMap): array
+    {
+        try {
+            $document = HTMLDocument::createFromString($html, LIBXML_NOERROR);
+        } catch (\Throwable $e) {
+            throw new SourceError($this->name(), 'detail page could not be parsed as HTML: ' . $e->getMessage(), $e);
+        }
+
+        $root = $document->documentElement;
+        if ($root === null) {
+            throw new SourceError($this->name(), 'detail page parsed to an empty document');
+        }
+
+        $out = [];
+        foreach (self::FIELDS as $field) {
+            /** @var list<string> $entries */
+            $entries = $detailMap->{$field};
+            foreach ($entries as $entry) {
+                $value = Selector::parse($entry)->resolve($root);
+                if ($value !== null) {
+                    $out[$field] = $value;
+                    break;
+                }
+            }
         }
 
         return $out;
@@ -446,12 +630,20 @@ final readonly class HtmlSource implements Source
      * the classifier its words, and an absent description is the shape that quietly starves signal
      * tier 2.
      */
-    private function flatMapped(): SourceDefinition
+    private function flatMapped(?FieldMap $source = null, bool $detailMode = false): SourceDefinition
     {
-        $map = $this->definition->map;
+        $map = $source ?? $this->definition->map;
         $literal = [];
         foreach (self::FIELDS as $field) {
             $literal[$field] = $map->{$field} === [] ? [] : [$field];
+        }
+
+        if ($detailMode) {
+            // The mapper refuses a listing with no `ref`, and it is right to: without a stable id
+            // every run re-notifies everything. A detail map has no ref of its own and must not have
+            // one — identity belongs to the card — so the caller supplies the card's id under this
+            // key and the guarantee stays intact rather than being switched off for detail pages.
+            $literal['ref'] = ['ref'];
         }
 
         return new SourceDefinition(
@@ -477,7 +669,13 @@ final readonly class HtmlSource implements Source
                 bedrooms: $literal['bedrooms'],
                 floor: $literal['floor'],
                 elevator: $literal['elevator'],
-                description: [...$literal['description'], '_text'],
+                description: !$detailMode
+                    ? [...$literal['description'], '_text']
+                    // A DETAIL map gets no `_text` fallback, and that is the point of the flag: on a
+                    // detail page `_text` would be the whole page, which is the furniture that
+                    // conflicts a correct verdict into UNKNOWN. A detail page with no description
+                    // selector match contributes no description, and the card's own stands.
+                    : $literal['description'],
                 tenureField: $literal['tenureField'],
                 chargesIncluded: $map->chargesIncluded,
             ),

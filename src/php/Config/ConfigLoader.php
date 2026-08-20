@@ -357,6 +357,9 @@ final class ConfigLoader
         $mapReader = $r->optObject('map');
         $map = $mapReader === null ? new FieldMap(ref: ['id']) : FieldMap::fromReader($mapReader);
 
+        $detailMapReader = $r->optObject('detail_map');
+        $detailMap = $detailMapReader === null ? null : FieldMap::detailFromReader($detailMapReader);
+
         $r->done();
 
         if ($enabled) {
@@ -410,6 +413,39 @@ final class ConfigLoader
                             . 'same url for every page',
                     );
                 }
+
+                // A THIRD mechanism, and the same rule: exactly one. `{page}` in the url itself is
+                // for a site whose page number sits mid-path (Cityloger), and combining it with
+                // either of the others leaves one silently ignored.
+                if (str_contains($url, '{page}') && ($pageParam !== null || $pagePath !== null)) {
+                    throw ConfigError::at(
+                        $where . '.url',
+                        'carries a {page} template AND ' . ($pageParam !== null ? 'page_param' : 'page_path')
+                            . ' is configured — a source paginates one way, and the ignored mechanism '
+                            . 'fails silently rather than loudly',
+                    );
+                }
+
+                // A detail map is a request PER LISTING. Only the html adapter implements it, and a
+                // detail_map sitting on a json source would be read by nobody while looking like
+                // configured behaviour — the shape of a mapping that fails silently at runtime
+                // instead of loudly at load.
+                if ($detailMap !== null && $type !== 'html') {
+                    throw ConfigError::at(
+                        $where . '.detail_map',
+                        'only an html source fetches detail pages — this map would be silently ignored',
+                    );
+                }
+
+                // The card's `url` is what a detail fetch requests. Without it every gated listing
+                // fails at fetch time, one exception per listing, on a source that loaded cleanly.
+                if ($detailMap !== null && $map->url === []) {
+                    throw ConfigError::at(
+                        $where . '.detail_map',
+                        'needs `map.url` — the detail page is fetched from each card\'s own url, and '
+                            . 'without that mapping there is nothing to request',
+                    );
+                }
             }
         }
 
@@ -430,6 +466,7 @@ final class ConfigLoader
             itemSelector: $itemSelector,
             pageParam: $pageParam,
             pagePath: $pagePath,
+            detailMap: $detailMap,
             totalSelector: $totalSelector,
             maxPages: $maxPages,
             map: $map,

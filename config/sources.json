@@ -88,6 +88,42 @@
         "charges_included": true
       }
     },
+    "cityloger": {
+      "_comment": "A6b, docs/SOURCES.md. Cityloger IS the Immobiliere 3F group's lettings platform, and it is how 3F stock is reachable at all: groupe3f.fr publishes no vacancies (its own 'je cherche un logement' route links out to al-in.fr), and this site is where the group actually lists. Low volume, high precision: 51 rentals nationally on 2026-08-20, of which 3 in IDF -- because the SOCIAL stock is allocated through AL'in and the SNE, so what surfaces here skews to the intermediate and libre stock this project is looking for. mixed_tenure is true regardless: the national feed does carry social listings (an Occitanie one is frozen as a fixture).",
+      "_verified_at": "2026-08-20",
+      "_source": "robots.txt read FIRST and frozen at tests/fixtures/cityloger/robots.txt: it disallows only /composants/ /classes/ /include/ /dpe/ /newdpe/, nothing near the search. Results are server-rendered by an infinite-scroll partial (jquery.jscroll) that answers a plain GET with no cookie and no token -- pages 2 and 3 return disjoint sets, and page 7 of a 51-listing feed returns 29 bytes and zero cards, so the walk terminates on its own. Frozen payloads: results.html (page 1 as served), detail-intermediate.html (Antony, Financement LI15P) and detail-social.html (Occitanie, Financement PEXNC), all scrubbed of contact addresses.",
+      "_why": "URL TEMPLATE: the page number sits MID-PATH, so page_path cannot express it -- page_path appends. The rejected alternative was url = the site root, letting page 1 be the homepage widget, whose ten cards are identical to page 1's today [verified 2026-08-20]; that equality is not a guarantee, and if the widget ever becomes 'featured' rather than ranks 1-10, page one is never fetched and nothing says so.\nDETAIL MAP: the search card carries NO tenure -- not a badge, not a code, nothing -- so on a mixed source every listing would resolve UNKNOWN and land in the a-verifier digest forever, which is correct under CLAUDE.md section 1 and useless. The tenure lives on the detail page, so gated listings get a second request; the gate is the run's own commune filter, supplied by the CLI, so 51 national listings cost at most 3 detail fetches rather than 51. SELECTORS MUST ADDRESS THE LISTING'S OWN CONTENT: measured 2026-08-20, the scoped .description classifies the Antony flat LLI at 0.90 while the SAME listing fed its whole detail page classifies UNKNOWN at 0.00 -- the page's furniture ('Commission d'attribution', 'demande de logement social') sits on social and intermediate pages alike and conflicts the verdict away.\nTENURE FIELD REGEX: the financement value sits in the third of three <table class=\"table\"> with nothing to tell them apart, and the first span.label.label-success happens to be it on both frozen pages -- by POSITION, so a new label above it would silently feed a DATE into the tenure field. Anchoring on the word Financement cannot return a date.\nFLOOR: two entries, first non-null wins. Cards say `3e etg`, which Payload::floor's own `etage` pattern does not match, so the capture hands it a bare number instead; the `rdc` fallback is the ground floor, which is 0 and not unknown (hard rule 9), and Payload::floor already reads that word.",
+      "enabled": true,
+      "family": "institutional",
+      "type": "html",
+      "mixed_tenure": true,
+      "default_tenure": null,
+      "url": "https://www.cityloger.fr/resultats-location-{page}-defaut-",
+      "base_url": "https://www.cityloger.fr",
+      "item_selector": "a.card",
+      "max_pages": 20,
+      "rate_limit_ms": 2000,
+      "map": {
+        "ref": "@href => -(\\d+)$",
+        "url": "@href",
+        "title": "h2",
+        "commune": ".cp-perso => ^\\s*\\d{5}\\s+(.+?)\\s*$",
+        "cp": ".cp-perso => (\\d{5})",
+        "rent": ".custom-figPrice",
+        "charges_included": true,
+        "rooms": "h2 => (\\d+)\\s*pi[eè]ce",
+        "floor": [
+          ".cardFeat => (\\d+)e\\s*etg",
+          ".cardFeat => (?i)\\b(rdc)\\b"
+        ]
+      },
+      "detail_map": {
+        "description": ".description",
+        "tenure_field": "div.tab-content => Financement\\s*([A-Z0-9]{3,10})",
+        "surface": "div.tab-content => ([\\d.,]+)\\s*m2",
+        "elevator": "div.tab-content => Ascenseurs\\s*(Oui|Non)"
+      }
+    },
     "seqens": {
       "_comment": "A5. Action Logement group, strong 78/95 footprint. robots.txt clean (/wp-admin/ only). Publishes social AND intermediate stock on the same pages — see CLAUDE.md, 'The Action Logement wrinkle'.",
       "enabled": false,
