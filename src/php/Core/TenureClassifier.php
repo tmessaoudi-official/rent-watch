@@ -66,6 +66,16 @@ final readonly class TenureClassifier
 
     /** Structured fields worth treating as tier 1. Compared as {@see Text::fieldKey()} output. */
     private const array TENURE_FIELDS = [
+        // `tenureField` is not a name any landlord uses — it is the key `FieldMap::tenure_field`
+        // writes into, i.e. THIS PROJECT'S OWN declaration that a given element of a payload is the
+        // financing field. Omitting it made that config key inert: `/add-source` Step 4 calls it
+        // "the highest-value mapping, look hard for it", and it produced no tier-1 signal at all,
+        // falling through to the unrecognised-field path which only doubts on EXCLUDED vocabulary.
+        // Measured on CDC Habitat's frozen payload [2026-08-20]: 16 of 16 cards came back
+        // UNKNOWN/0.00/DIGEST, including the 14 badged `Logement intermédiaire`. §1 held, but by
+        // accident rather than by understanding — and the visible half was over-rejection, which
+        // looks exactly like a quiet market.
+        'tenurefield',
         'financement', 'typefinancement', 'financementlogement',
         'typeproduit', 'produit',
         'categorie', 'category', 'categorielogement',

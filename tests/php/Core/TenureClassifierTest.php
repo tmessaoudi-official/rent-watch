@@ -488,4 +488,64 @@ final class TenureClassifierTest extends TestCase
     {
         return new SourceProfile(name: self::MIXED, defaultTenure: null, mixedTenure: true);
     }
+    // ------------------------------------------------- the config's own tenure_field must be tier 1
+
+    /**
+     * `tenure_field` is the field map's declaration of "THIS is the financing field" — so the
+     * classifier has to recognise the name the mapper stores it under.
+     *
+     * It did not. `FieldMap::tenure_field` writes its value into `RawListing::$fields` under the key
+     * `tenureField`, and `TENURE_FIELDS` lists the names sources use in their own payloads
+     * (`financement`, `typeProduit`, `categorie`) — not that one. So the mapping documented in
+     * `/add-source` Step 4 as "the highest-value mapping, look hard for it" produced NO tier-1
+     * signal at all, and fell through to the unrecognised-field path, which only raises a doubt when
+     * the value contains EXCLUDED vocabulary.
+     *
+     * Found against CDC Habitat's real payload [2026-08-20]: all 16 cards on the frozen page
+     * classified `UNKNOWN / 0.00 / DIGEST`, including the 14 whose own badge reads
+     * `Logement intermédiaire`. §1 held — nothing reached a match — but it held by accident, and
+     * the visible half of the bug is over-rejection: a correctly-labelled intermediate source
+     * emitting zero matches looks exactly like a quiet market.
+     */
+    public function testTheConfiguredTenureFieldIsReadAsAFinancingField(): void
+    {
+        $listing = new RawListing(
+            sourceName: 'cdc_habitat',
+            externalId: '1',
+            title: '2 pièces - RDC - 48m²',
+            description: 'Ascenseur, Eau froide comprise, Parking',
+            fields: ['tenureField' => 'Logement intermédiaire'],
+        );
+
+        $verdict = (new TenureClassifier())->classify($listing, new SourceProfile(name: 'cdc_habitat', defaultTenure: null, mixedTenure: true));
+
+        self::assertSame(Tenure::LLI, $verdict->tenure);
+        self::assertGreaterThanOrEqual(0.6, $verdict->confidence(), 'a tier-1 field is not a doubt');
+    }
+
+    /**
+     * The same path, pointed the other way — and this is the half that matters for §1.
+     *
+     * A source that declares its financing field and says `Logement social` must REJECT, not merely
+     * raise a doubt. Before the fix this produced an `UNKNOWN` digest entry, which is safe but wrong
+     * for the wrong reason: safe because the value happened to contain excluded vocabulary, not
+     * because the field was understood.
+     */
+    public function testAConfiguredTenureFieldSayingSocialIsExcludedOutright(): void
+    {
+        $listing = new RawListing(
+            sourceName: 'cdc_habitat',
+            externalId: '2',
+            title: '4 pièces - 2ème étage - 78m²',
+            description: 'Ascenseur',
+            fields: ['tenureField' => 'Logement social'],
+        );
+
+        $verdict = (new TenureClassifier())->classify($listing, new SourceProfile(name: 'cdc_habitat', defaultTenure: null, mixedTenure: true));
+
+        self::assertNotSame(Tenure::LLI, $verdict->tenure);
+        self::assertNotSame(Tenure::LIBRE, $verdict->tenure);
+        self::assertSame(Outcome::REJECT, $verdict->outcome, 'an explicit social declaration is not a maybe');
+    }
+
 }

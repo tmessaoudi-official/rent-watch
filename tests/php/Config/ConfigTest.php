@@ -7,6 +7,7 @@ namespace RentWatch\Tests\Config;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use RentWatch\Config\ConfigError;
+use RentWatch\Adapters\Http\Robots;
 use RentWatch\Config\ConfigLoader;
 use RentWatch\Config\Criteria;
 use RentWatch\Config\NotifyPolicy;
@@ -918,16 +919,53 @@ final class ConfigTest extends TestCase
 
         // Named rather than counted: the day a second source is enabled, this line is the one that
         // makes someone confirm it was a decision.
-        self::assertSame(['inli'], $enabled, 'the set of enabled network sources changed');
+        self::assertSame(['inli', 'cdc_habitat'], $enabled, 'the set of enabled network sources changed');
     }
 
-    public function testCdcHabitatStaysDisabledPendingTheRobotsTxtQuestion(): void
+    /**
+     * Q15, answered by measurement on 2026-08-20 — and this test is now the answer's guard.
+     *
+     * The question was whether CDC Habitat's listing endpoint sits inside the `Disallow` space. It
+     * turned out to be larger than the question assumed: robots forbids `/Recherche/show/`,
+     * `/Recherche/search` AND seven search QUERY PARAMETERS by name, so the parameterised search is
+     * off limits entirely. What the site's own sitemap.xml advertises is the lowercase, query-free
+     * `/recherche/location/<region>` tree.
+     *
+     * So the invariant worth pinning is no longer "cdc_habitat is disabled" — it is that the URL
+     * this source polls, AND every page its walk visits, is allowed by CDC's REAL robots.txt. That
+     * file is frozen beside the payload; if CDC tightens it, this test is what notices, rather than
+     * a crawl that keeps returning 200 while breaking hard rule 5.
+     */
+    public function testEveryUrlTheCdcWalkVisitsIsAllowedByCdcsRealRobotsTxt(): void
     {
-        $sources = ConfigLoader::loadSources(self::ROOT . '/config/sources.json');
-        self::assertFalse(
-            $sources['cdc_habitat']->enabled,
-            'Q15: robots.txt disallows /Recherche/show/ and the real endpoint path is unknown',
-        );
+        $source = ConfigLoader::loadSources(self::ROOT . '/config/sources.json')['cdc_habitat'];
+        $robots = Robots::parse((string) file_get_contents(self::ROOT . '/tests/fixtures/cdc_habitat/robots.txt'));
+
+        $url = (string) $source->url;
+        self::assertNull(parse_url($url, PHP_URL_QUERY), 'the query space is what robots disallows here');
+        self::assertTrue($robots->allows(Robots::pathOf($url)), 'the index page itself must be allowed');
+
+        // Not just page one. The path changes per page, so each is a separate robots decision.
+        for ($page = 2; $page <= $source->maxPages; ++$page) {
+            $paged = $url . str_replace('{page}', (string) $page, (string) $source->pagePath);
+
+            self::assertNull(parse_url($paged, PHP_URL_QUERY), "page {$page} must not add a query string");
+            self::assertTrue($robots->allows(Robots::pathOf($paged)), "page {$page} is disallowed by robots.txt");
+        }
+    }
+
+    /**
+     * The disallowed shapes are still disallowed — the frozen robots.txt is read, not assumed.
+     *
+     * Without this, the test above would pass just as happily against an empty or mis-parsed
+     * robots file, which is the failure mode where a compliance check certifies nothing.
+     */
+    public function testCdcsRobotsTxtStillForbidsTheParameterisedSearch(): void
+    {
+        $robots = Robots::parse((string) file_get_contents(self::ROOT . '/tests/fixtures/cdc_habitat/robots.txt'));
+
+        self::assertFalse($robots->allows('/Recherche/show/12345'), 'the capitalised search path is disallowed');
+        self::assertFalse($robots->allows('/Recherche/search'), 'the search endpoint is disallowed');
     }
 
     // ---------------------------------------------------------------- local override
