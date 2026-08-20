@@ -600,7 +600,7 @@ final class TenureClassifierTest extends TestCase
      * @param string $text
      */
     #[\PHPUnit\Framework\Attributes\DataProvider('excludedProseInText')]
-    public function testExcludedVocabularyInTheCardTextIsStillCaught(string $text, string $why): void
+    public function testExcludedVocabularyInTheCardTextIsStillCaught(string $text, string $seen, string $why): void
     {
         $listing = new RawListing(
             sourceName: 'cdc_habitat',
@@ -617,25 +617,40 @@ final class TenureClassifierTest extends TestCase
 
         self::assertNotSame(Outcome::MATCH, $verdict->outcome, $why);
         self::assertNotSame(Tenure::LLI, $verdict->tenure, $why);
+
+        // "Not a match" is NOT the guarantee — a listing whose card text was never scanned at all
+        // also fails to match, by falling through to the sub-floor tier-5 default. A sabotage run
+        // proved exactly that: deleting `_text` from `RawListing::text()` left this test green
+        // [measured 2026-08-20]. What must be pinned is that the vocabulary was SEEN, so the
+        // assertion is on the reason the classifier gives.
+        self::assertStringContainsStringIgnoringCase(
+            $seen,
+            implode(' | ', $verdict->reasons()),
+            'the card text was not scanned at all — silence here is indistinguishable from safety',
+        );
     }
 
-    /** @return iterable<string, array{string, string}> */
+    /** @return iterable<string, array{string, string, string}> */
     public static function excludedProseInText(): iterable
     {
         yield 'logement social' => [
             '4 pièces - 78m² Logement social CERGY (95000) 612,40 €',
+            'logement social',
             'an explicit social badge in the card text must never reach a match',
         ];
         yield 'PLAI' => [
             '4 pièces - 78m² financement PLAI CERGY (95000)',
+            'plai',
             'an excluded acronym in the card text must never reach a match',
         ];
         yield 'PLUS in financing context' => [
             '4 pièces - 78m² financement PLUS CERGY (95000)',
+            'PLUS',
             'the real acronym, uppercase and in context, is still the real acronym',
         ];
         yield 'numero unique' => [
             "4 pièces - 78m² numéro unique d'enregistrement requis CERGY",
+            'numero unique',
             'a procedural social tell in the card text must never reach a match',
         ];
     }

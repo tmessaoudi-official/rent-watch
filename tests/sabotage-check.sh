@@ -1624,3 +1624,41 @@ fi
 printf '\n'
 
 [[ $fail -eq 0 ]]
+
+# ── the second source: CDC Habitat, path pagination, and prose that is not an acronym ─────────────
+#
+# Every one of these is silent. A source that classifies everything UNKNOWN looks like a quiet
+# market; a floor parser that loses RDC looks like ads that omit the floor; a robots check that
+# only covers page one keeps returning 200 while breaking hard rule 5.
+
+run_sabotage "the card's own prose is scanned as an identifier field again (the adverb PLUS returns)" \
+  src/php/Core/TenureClassifier.php \
+  "s%if (\\\$name === '_text') {%if (false) {%"
+
+run_sabotage "RawListing::text stops returning the adapter's card-text surface" \
+  src/php/Core/RawListing.php \
+  's%\$cardText = \$this->fields\[._text.\] ?? null;%$cardText = null;%'
+
+run_sabotage "the config's own tenure_field stops being read as a financing field" \
+  src/php/Core/TenureClassifier.php \
+  "s%'tenurefield',%%"
+
+run_sabotage "RDC stops meaning the ground floor (null is not zero, hard rule 9)" \
+  src/php/Adapters/Payload.php \
+  's%return 0;%return null;%'
+
+run_sabotage "a floor is read with the generic number parser (the room count becomes the floor)" \
+  src/php/Adapters/ListingMapper.php \
+  's%floor: Payload::floor(\$item, \$map->floor),%floor: Payload::int($item, $map->floor),%'
+
+run_sabotage "robots is checked for the index only, never for the pages the walk visits" \
+  src/php/Adapters/HtmlSource.php \
+  's%if (\$this->robots !== null \&\& !\$this->robots->allows(Robots::pathOf(\$pageUrl))) {%if (false) {%'
+
+run_sabotage "page_path silently falls back to appending a query parameter" \
+  src/php/Adapters/HtmlSource.php \
+  's%\$pageBody = \$this->get(\$pageUrl, \[\]);%$pageBody = $this->get($url, ["page" => (string) $page]);%'
+
+run_sabotage "a page_path with no {page} placeholder is accepted, so the walk never advances" \
+  src/php/Config/ConfigLoader.php \
+  's%if (\$pagePath !== null \&\& !str_contains(\$pagePath, .{page}.)) {%if (false) {%'
