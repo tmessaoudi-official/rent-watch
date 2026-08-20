@@ -1,6 +1,12 @@
-# Source catalogue — verified 2026-08-06, A2/A3 re-measured 2026-08-20
+# Source catalogue — verified 2026-08-06; A2/A3 re-measured 2026-08-20; A5–A13 re-measured 2026-08-20
 
-> **Two rows changed on 2026-08-20 and both changed for the same reason: a `200` was read as
+> **NINE rows changed on 2026-08-20, and they all changed for one reason: a `200` was read as
+> a feed.** The second pass (A5–A13) is why the Tier A count is now much smaller than it looks:
+> Seqens and 3F publish no vacancies at all on their own domains, and the reason turned out to be
+> structural rather than per-site — see § "The Action Logement ESH do not publish their own
+> vacancies". One genuinely new feed came out of it, **A6b Cityloger**, found from 3F's own page.
+>
+> **Two rows changed earlier that day and both changed for the same reason: a `200` was read as
 > a feed.** A2 answers 200 and publishes no vacancies at all; A3 answers 200 and disallows far
 > more than this table said, while advertising a different route in its own sitemap. Neither
 > was knowable without fetching, which is what the preamble below already says — it just had
@@ -75,6 +81,27 @@ So "all Action Logement" resolves to a much cleaner answer than a 42-entity list
   consequence is the useful part — region must be **config, not code**, so a new region is a
   `config/sources.json` block plus a commune list, never a code change.
 
+### The Action Logement ESH do not publish their own vacancies — they delegate to AL'in (measured 2026-08-20)
+
+Seqens (A5) and Immobilière 3F (A6) were probed independently and both ended at the same place: their
+own sites carry no vacancy feed, and their "I'm looking for a home" route links out to
+**`https://al-in.fr/`**. Antin (A8) is the same group and the same shape as far as one fetch shows.
+
+Three consequences, and the first is the one that changes plans:
+
+- **A4 AL'in is not "one more source" — it is the ONLY route to the Action Logement ESH stock.** It was
+  ranked fourth on the strength of being employer-reserved and hard; it should be read as the gateway to
+  A5, A6 and A8 combined. Its authenticated session stops being an obstacle to one source and becomes
+  the price of an entire group.
+- **In'li is the exception that explains the rule.** It publishes its own feed because it is the group's
+  *intermediate* arm and allocates directly — no commission, no SNE number. The ESH delegate because
+  their stock is allocated by commission, through the social channel.
+- **A `200` still is not a feed.** Three rows in this table (A2, A5, A6) were ranked on portfolio size
+  and each turned out to publish no availability at all. The cheap pre-check that would have caught all
+  three, before any deep crawl: on WordPress, read `sitemap_index.xml` and look for a **listings post
+  type** (Seqens, 1001 Vies and Batigère have none); on any site, scan the candidate index page for
+  `€`, `m²` and `disponib` — a directory of buildings has none of the three.
+
 ## Tier A — Track 1: institutional, intermediate / LLI. **Where this project earns its keep**
 
 Nothing on the market aggregates these. Status column = HTTP response to a single polite GET.
@@ -85,15 +112,16 @@ Nothing on the market aggregates these. Status column = HTTP response to a singl
 | **A2** | **ICF Habitat Novedis** | `www.icfhabitat.fr/patrimoine/icf-novedis` | **200, but NO VACANCY FEED** | **Intermediate + loyer libre only** | ⛔ **NOT POLLABLE — measured 2026-08-20, three levels deep.** ICF Habitat's *non-social* arm (10 000 units aimed at *"personnes dont les revenus dépassent les plafonds sociaux"*, SNCF group, rail-corridor stock) was ranked second on PORTFOLIO value. Its site publishes a **patrimoine directory, not availability**: `/patrimoine/icf-novedis` → `/patrimoine/filiale/icf-novedis/78-yvelines` → `/patrimoine/localites/icf-novedis/78500-sartrouville` all list *résidences* ("Il y a 8 résidence(s)"), with **zero rents, zero surfaces and zero occurrences of `disponib`** on any of the three. `robots.txt` is stock Drupal and irrelevant here — there is nothing to poll. Remaining routes, in order: an email alert if ICF offers one, or the portals. `novedispm.fr` is the third-party property-management arm, a separate site — *[Unverified: not fetched; capped deliberately rather than crawled]*. |
 | **A3** | **CDC Habitat** | `www.cdc-habitat.fr` | **200** | Mixed — **and genuinely so** | ✅ **LIVE since 2026-08-20 — the second verified source, and the first mixed-tenure one.** robots is **stricter than this table recorded**: it disallows `/Recherche/show/`, `/Recherche/search` **and seven search QUERY PARAMETERS by name** (`?cdTypeBien`, `?nbSurfaceMin`, `?nbSurfaceMax`, `?cdCategorieLogement`, `?nbPiece`, `?nbLoyerMin`, `?nbLoyerMax`), so the parameterised search is off limits entirely. What is pollable is the route the site **advertises in its own `sitemap.xml`**: the lowercase, query-free `/recherche/location/<region>` tree — robots path matching is case-sensitive, so `/Recherche/…` does not cover `/recherche/…`. Server-rendered, `134 logements disponibles` for Île-de-France at 16/page, paginated by **path** (`/page-2/`, never a query string). Frozen at `tests/fixtures/cdc_habitat/search.html`, with `robots.txt` frozen beside it and asserted per page by test. |
 | **A4** | **AL'in** (Action Logement) | `www.al-in.fr` | **200** | Mixed | Employer-reserved stock. Likely needs an authenticated session. High value (less competition), hardest to build. |
-| **A5** | **Seqens** | `www.seqens.fr` | **200** | Mixed | Action Logement group. Strong 78/95 footprint. `robots.txt` clean (`/wp-admin/` only). |
-| **A6** | **Immobilière 3F** | `www.groupe3f.fr` | **200** | Mixed | Action Logement group. Large IDF portfolio. |
-| **A7** | **1001 Vies Habitat** | `www.1001vieshabitat.fr` | **200** | Mixed | **Domain corrected** — not `1001vies-habitat.fr`. `robots.txt` sets `Content-Signal: use=reference`, blocks named AI crawlers, `Allow: /` for a generic client. |
-| **A8** | **Antin Résidences** | `www.antin-residences.fr` | **200** | Mixed | Action Logement group. |
+| **A5** | **Seqens** | `www.seqens.fr` | **200, but NO VACANCY FEED** | n/a | ⛔ **NOT POLLABLE — measured 2026-08-20.** `robots.txt` is clean (`/wp-admin/` only), and there is nothing behind it to poll. Its Yoast `sitemap_index.xml` enumerates every public post type — `post`, `page`, `beetween`, `evenement`, `job`, `metiers`, `publication`, `question_faq`, `realisation`, `theme_faq`, `profil_ideal` — and **none of them is a listings type**. The whole `/louer/` section offers exactly three routes: a *local commercial*, a *parking*, and *un logement social* — and that last page's own outbound link is **`https://al-in.fr/`**. `patrimoine/nos-residences-hlm/` is a résidence directory with **zero** `disponib`, `€` or `m²`, i.e. A2's shape exactly. Seqens does not publish its vacancies; it delegates them to AL'in (A4). |
+| **A6** | **Immobilière 3F** | `www.groupe3f.fr` | **200, but NO VACANCY FEED ON THIS DOMAIN** | Mixed | ⛔ **The corporate site is not pollable — measured 2026-08-20.** Drupal, stock robots (`/search/` and `/search?` disallowed, `/location` allowed). `/location` is editorial: zero `€`, `m²` or `pièce`. `/je-cherche-un-logement` carries no listings either and its outbound routes are **`al-in.fr`**, `logement-actionlogement.fr` and **`cityloger.fr`**. The stock is real; it is published elsewhere — see A6b. |
+| **A6b** | **Cityloger** (the 3F group's own lettings platform) | `www.cityloger.fr` | **200 — REAL FEED, verified 2026-08-20** | Mixed, national | ✅ Pollable today, and the shape is good: `robots.txt` disallows only `/composants/ /classes/ /include/ /dpe/ /newdpe/` — nothing near the search. Results are **server-rendered** and paginated by PATH through an infinite-scroll partial, `resultats-location-{page}-defaut-`, which is **stateless GET** (pages 2 and 3 return disjoint sets with no cookie or token) and terminates cleanly on an empty page. Cards carry filiale, type, rooms, postcode, commune, address, rent **cc**, and floor. **The catch is volume and tenure placement:** the whole national inventory is **51 rentals**, of which **3 are IDF** (2×92, 1×77) — and the tenure lives on the DETAIL page, never on the card. Detail pages do carry the tier-1 field (`Financement`: `LI15P` on the Antony T4, `PEXNC` on an Occitanie social one). ⚠️ Those detail pages also carry generic boilerplate — *"Numéro de demande de logement social"*, *"Commission d'attribution"*, *"catégories de logements sociaux"* — sitting on a listing whose own financement code is **intermediate**. That is the CDC `au plus près` failure class again, on a new surface. |
+| **A7** | **1001 Vies Habitat** | `www.1001vieshabitat.fr` | **200** | Mixed | ⚠️ *[Unverified as a feed — measured 2026-08-20: its `sitemap_index.xml` carries only `post`, `page` and `category` sitemaps, i.e. no listings post type, and the homepage shows zero `€`, `m²` or `disponib`. Not dropped, because a JS-rendered search would not show in either signal — but do not rank it as pollable until something is fetched.]* **Domain corrected** — not `1001vies-habitat.fr`. `robots.txt` sets `Content-Signal: use=reference`, blocks named AI crawlers, `Allow: /` for a generic client. |
+| **A8** | **Antin Résidences** | `www.antin-residences.fr` | **200** | Mixed | Action Logement group — so the A5/A6 finding predicts it delegates to AL'in too. Drupal. Homepage shows zero `€`, `m²` or `disponib`; the only lettings route is `/louer-acheter`. *[Unverified beyond that one fetch, 2026-08-20 — capped deliberately rather than crawled.]* |
 | **A9** | **Vilogia** | `www.vilogia.fr` | **403** | Mixed, has an intermediate line | Blocks a plain client. Treat as Tier B in practice: email alert, or skip. |
-| **A10** | **Batigère IDF** | `www.batigere.fr` | **200** | Mixed | Second tier. |
-| **A11** | **Toit et Joie** | `www.toitetjoie.com` | **200** | Mixed | Second tier. |
-| **A12** | **Logirep / Polylogis** | `www.logirep.fr` | **200** | Mixed | Second tier. |
-| **A13** | **Erilia** | `www.erilia.fr` | **200** | Mixed | Second tier. |
+| **A10** | **Batigère IDF** | `www.batigere.fr` | **200** | Mixed | ⭐ **The best remaining unbuilt candidate — it has a real offers subdomain, `offres.batigere.fr`.** Measured 2026-08-20: the main site advertises it, and the subdomain answers 200 with ~197 KB carrying 75/78 postcodes. Two caveats before building: the page shows **zero** `€`/`m²`/`pièce`, so results are almost certainly rendered client-side (an XHR/JSON endpoint to find — which would be the config-only `json` adapter); and **`offres.batigere.fr/robots.txt` answers 403** (Microsoft-Azure-Application-Gateway), so the robots posture must be settled before any walk — an unreadable robots is not a permission. |
+| **A11** | **Toit et Joie** | `www.toitetjoie.com` | **200** | Mixed | Second tier. Homepage marker scan 2026-08-20: zero `€`, zero `m²`; the four `disponib` hits are on `/Nos-offres-d-emploi` (jobs). No lettings route found from the homepage. |
+| **A12** | **Logirep / Polylogis** | `www.logirep.fr` | **200** | Mixed | Second tier. Homepage marker scan 2026-08-20: two `€` and two `m²` hits, no lettings route in the markup. Weakest of the "some markers" group; check only after A10. |
+| **A13** | **Erilia** | `www.erilia.fr` | **200** | Mixed | Second tier. Homepage marker scan 2026-08-20: zero `€`, `m²`, `disponib`; `/decouvrir-erilia/nos-offres` is corporate, not lettings. |
 | **A14** | **RIVP** | `www.rivp.fr` | **200** | Mixed | ⚠️ Paris-focused — **outside the commune filter**. Listed for completeness; do not enable unless the commune set expands into Paris. |
 | **A15** | **Val d'Oise Habitat** | `www.valdoisehabitat.fr` | **200** | Predominantly **social** | ⚠️ A departmental office. Mostly out of scope by Q4. Low expected yield; enable last, if ever. |
 
