@@ -1129,9 +1129,15 @@ run_sabotage "a known duplicate is silently dropped instead of shown" \
 # The CLI is the only surface the developer sees, so a defect here is a defect in the product's
 # entire output. Every case below was written against a specific ruling.
 
-run_sabotage "run stops refusing on a freshly created database (Q36: a missing volume re-notifies everything)" \
-  src/php/Cli/Scout.php \
-  's%if (\$store->wasCreated() \&\& !\$seed) {%if (false) {%'
+# The Q36 empty-database guard USED to be tested here, against `Store::wasCreated()`. That guard was
+# replaced on 2026-08-19 by `Store::isSeenSetEmpty()` — the old one asked whether `open()` had created
+# the file, which any earlier command that merely opened the database answered away. The case is not
+# re-pointed here because its replacement already exists, written against the current code and against
+# both halves of the ruling: see "the empty-database guard stops firing", "--seed no longer gets past
+# the empty-database guard" and "the seen-set emptiness answer comes from the process, not the rows"
+# in the Q36 block below. Two cases for one guarantee is not twice the coverage; it is one case that
+# nobody notices has gone stale. This one HAD gone stale and reported `sabotage was a no-op` in the
+# 2026-08-19 full ledger — which is the harness working, and the reason it is removed rather than left.
 
 run_sabotage "--seed stops marking listings notified (the flood moves one run later)" \
   src/php/Cli/Pipeline.php \
@@ -1457,9 +1463,23 @@ run_sabotage "a failing pass is survived in SILENCE (nothing is reported)" \
   src/php/Cli/WatchLoop.php \
   's%(\$this->onError)(\$e);%%'
 
+# Only the `stopping` half is degraded, and the `$maxPasses` half is deliberately left standing.
+#
+# Blanking the whole condition to `if (false)` also disables the bound `RENT_WATCH_MAX_PASSES` relies
+# on, and that bound is the ONLY thing stopping `ScoutTest`'s bounded `--watch` tests from entering a
+# real `betweenPasses()` wait — 600 to 1200 seconds of genuine sleep. The suite then does not go red,
+# it BLOCKS: measured on 2026-08-19, the full ledger reported this case as
+# `the suite did not terminate within 300s — inconclusive`. A sabotage that takes out the test
+# harness's own anti-hang seam along with the guarantee is measuring the seam, not the guarantee.
+#
+# Degrading only `$this->stopping` reproduces exactly the regression the case is named for — a stop
+# request no longer interrupting the loop, so the process naps for a quarter of an hour before
+# exiting — while leaving every bounded test bounded. Verified: the suite goes red in 16 s on
+# `WatchLoopTest::testStopDoesNotSleepBeforeExiting`, "exiting must be prompt, not after a
+# fifteen-minute nap", with the trailing 600.0 s sleep printed in the diff.
 run_sabotage "the loop stops mid-pass instead of finishing the pass in flight" \
   src/php/Cli/WatchLoop.php \
-  's%if (\$this->stopping || (\$maxPasses !== null \&\& \$completed >= \$maxPasses)) {%if (false) {%'
+  's%if (\$this->stopping || (\$maxPasses !== null \&\& \$completed >= \$maxPasses)) {%if (\$maxPasses !== null \&\& \$completed >= \$maxPasses) {%'
 
 run_sabotage "the inter-pass wait stops being interruptible by a signal" \
   src/php/Cli/WatchLoop.php \

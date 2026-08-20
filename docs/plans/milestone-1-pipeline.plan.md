@@ -972,6 +972,16 @@ A changelog that overstates is worse than one that omits, because the next sessi
   have arrived. They are re-recorded here at their true time, and they stand because the developer
   ruled this design at 23:02, not because the earlier stamp said so. A Decisions Log entry is a
   record of a ruling, never a session's own recommendation wearing the word AGREED.
+- [2026-08-20 04:01] AGREED: a sabotage case whose sed also disables the seam a test relies on is
+  REWRITTEN to be surgical, never left to hang and never counted. Applied to
+  `the loop stops mid-pass instead of finishing the pass in flight`, which blanked the whole
+  post-pass condition and took `RENT_WATCH_MAX_PASSES` out with it. A `timeout` verdict is
+  inconclusive, and an inconclusive case in the gate that certifies §1 must not be allowed to
+  persist as a permanent FAIL line.
+- [2026-08-20 04:01] AGREED: when a ledger case goes stale because the symbol it pins has been
+  renamed, it is REMOVED if a case written against the current code already covers the guarantee,
+  and re-pointed only if none does. Applied to the old `wasCreated()` Q36 case, whose three
+  `isSeenSetEmpty()` successors cover both halves of the ruling.
 
 ## Formal plan — schema v4, the `group_key` history overlay (2026-08-19 23:02)
 
@@ -1045,8 +1055,39 @@ from the diff — so they are written here rather than left for a later session 
   over-merge would then hide a real flat permanently and silently. `--seed` marks every member and is
   not an exception to this — seeding is about listings that are currently published, not about groups.
 
-**Full ledger: LAUNCHED, NOT YET COUNTED.** Started against `15c3303` (clean tree) on 2026-08-19,
-logging to `var/claude/ledger-15c3303.log`; the run takes 2–3 h and outlives the session that started
-it. The count is recorded here on completion, per repo convention — until that line exists, the
-ledger for schema v4 is unfinished, whatever the filtered 8/8 run said. The filtered run covered the
-seven new cases plus the `SCHEMA_VERSION` case the bump had disarmed; it is not a ledger result.
+**Full ledger: COUNTED — 294 detected, 2 undetected.** Run against `15c3303` (clean tree), started
+2026-08-19 ~23:0x and finished 2026-08-20 01:23; log at `var/claude/ledger-15c3303.log`. Neither of
+the two is a hole in schema v4 — all seven v4 cases are `ok` — and neither is a hole in the code at
+all. Both are defects in the LEDGER, and both are now fixed:
+
+1. **`run stops refusing on a freshly created database (Q36 …)` — reported `sabotage was a no-op —
+   the pattern no longer matches`.** Its sed targeted `$store->wasCreated()`, which commit `08541e2`
+   replaced with `$store->isSeenSetEmpty()` the same day. The guarantee is not uncovered: three cases
+   written against the current code already cover both halves of the ruling (`the empty-database
+   guard stops firing`, `--seed no longer gets past the empty-database guard`, `the seen-set
+   emptiness answer comes from the process, not the rows`), and a filtered re-run has them 3/3 red.
+   The stale case is therefore **removed**, not re-pointed — two cases for one guarantee is not twice
+   the coverage, it is one case nobody notices has gone stale. This is the SECOND case in two days to
+   go stale by pinning a symbol that then changed (the first was `SCHEMA_VERSION = 3`), and the
+   harness caught both by refusing to count a sabotage that changes nothing.
+
+2. **`the loop stops mid-pass instead of finishing the pass in flight` — reported
+   `the suite did not terminate within 300s — inconclusive`.** Root-caused rather than retried. The
+   sed blanked the whole post-pass condition to `if (false)`, which removes the `$maxPasses` bound
+   along with the `$this->stopping` check — and that bound is the ONLY thing keeping `ScoutTest`'s
+   bounded `--watch` tests out of a real `Pacer::betweenPasses()` wait of 600–1200 s. Measured on a
+   sabotaged scratch copy: `ScoutTest` alone went from **3.7 s to 88 s** and still passed, and the
+   single test `testTheWatchLoopIsBoundedSoABrokenGuardFailsRatherThanHanging` did not finish inside
+   120 s. So the case was measuring the harness's own anti-hang seam, not the guarantee. The sed is
+   now **surgical** — it degrades only `$this->stopping`, leaving the bound standing — and the suite
+   goes red in **16 s** on `WatchLoopTest::testStopDoesNotSleepBeforeExiting` ("exiting must be
+   prompt, not after a fifteen-minute nap"), with the 600.0 s sleep printed in the failure diff.
+
+   The general lesson, which applies to every future case: **a sabotage that also disables the seam a
+   test relies on is measuring the seam.** `Q37`'s pacing constants are real seconds, so any case that
+   can reach `betweenPasses()` in a test must leave `RENT_WATCH_MAX_PASSES` able to do its job.
+
+Case count is now **295** (296 minus the stale Q36 duplicate). The expected next full result is
+**295 detected, 0 undetected**; a confirming run against the frozen commit is the open obligation
+that replaces this one — the two fixes above are each verified by a filtered run (1/1 and 3/3 red),
+which is evidence for those cases and explicitly not a ledger result.
