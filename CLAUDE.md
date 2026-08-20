@@ -19,7 +19,7 @@ Status: **milestone 1 is functionally complete against a frozen payload.** The p
 (schema v4), the config layer, the adapter contract, the criteria engine, dedup, the notification
 layer and the `scout` CLI all exist. What is missing is a NETWORK adapter, and that is blocked on an
 input rather than a decision. As of 2026-08-07 there is a PHP 8.5
-implementation of `models` + `tenure` under `src/php/Core/`, a 114-case language-neutral classifier
+implementation of `models` + `tenure` under `src/php/Core/`, a 116-case language-neutral classifier
 corpus at `tests/fixtures/tenure/corpus.json`, the seen-set / price-history / run-log store under
 `src/php/Store/` with `SourceHealth` + `SourceStatus` in `Core/`, a strict JSON config layer under
 `src/php/Config/` with both files committed, the `Source` contract plus `Payload` / `ListingMapper` /
@@ -56,6 +56,42 @@ optional `@attr` and an optional `=> regex` capture; extraction still funnels th
 `ListingMapper`, so hard rule 9 has exactly one implementation. Pagination is real, not deferred:
 `page_param` walks pages and `total_selector` CHECKS the walk against the count the page states
 about itself, because walking until a page comes back empty is a termination rule and not a proof.
+
+**SOURCE #2 IS LIVE, AND IT IS THE FIRST MIXED-TENURE ONE (2026-08-20).** CDC Habitat is
+`enabled: true`; `scout doctor --source=cdc_habitat` returns **139 annonces, ~21 s**. In'li is pure
+LLI, so until now *nothing exercised §1 against a real payload* — CDC ships `Logement intermédiaire`
+and `Logement à loyer libre` badges in one result set and social stock in others. Three things about
+it are worth knowing before touching a source again:
+
+- **`robots.txt` decided the whole shape of the config.** CDC disallows `/Recherche/show/`,
+  `/Recherche/search` *and seven search QUERY PARAMETERS by name*, so the parameterised search is
+  refused outright. What its own `sitemap.xml` advertises is the lowercase, query-free
+  `/recherche/location/<region>` tree — and robots path matching is case-sensitive, so `/Recherche/…`
+  does not cover `/recherche/…`. That is why pagination here is `page_path` (a PATH segment,
+  `/page-2`) and not `page_param`: appending `?page=2` would query a space the site asked robots to
+  stay out of. Because the path changes per page, **robots is re-checked for every page**, and CDC's
+  `robots.txt` is frozen at `tests/fixtures/cdc_habitat/robots.txt` and asserted per page by test.
+- **The walk now stops at the count the site declares**, rather than probing one page past the end.
+  CDC's out-of-range page answers `301`, not empty, and the adapter refuses a non-2xx on purpose —
+  a redirect landing back on page one ends a walk exactly like a genuine last page.
+- **`fields['_text']` is prose and goes through `RawListing::text()`.** It used to be scanned as a
+  structured field, where financing acronyms match case-insensitively; CDC's own tooltip defining
+  *logement intermédiaire* contains *"au plus près"*, which was read as the excluded acronym `PLUS`
+  and vetoed the card's own tier-1 badge. 14 of 16 correctly-badged listings were going to the
+  digest. `plus` is one of the commonest words in French — In'li escaped this by luck.
+
+Two smaller things landed with it, both hard rule 9: `Payload::floor()` reads floors as the prose
+they are (`RDC` is **0**, not unknown; and the generic number reader would return the ROOM COUNT from
+`3 pièces - 4ème étage - 82m²`), and `Payload::bool()` accepts the amenity noun `ascenseur`, which
+can only ever yield `true` or `null` and so cannot manufacture the explicit `false` the high-floor
+penalty needs. **`tests/fixtures/tenure/corpus.json` now has its first two CAPTURED cases** (116
+total, 114 synthetic + 2 real), both real CDC card text — including the `au plus près` one, which is
+what stops the classifier fix from being quietly undone.
+
+**ICF Habitat Novedis (A2) is NOT pollable** and was dropped: measured three levels deep, its site
+publishes a directory of *résidences* with zero rents, zero surfaces and zero occurrences of
+`disponib`. It was ranked second on portfolio value, not on a verified feed — a `200` had been read
+as a feed. See `docs/SOURCES.md`, whose A2 and A3 rows were both corrected.
 
 `src/phorj/` is **ON INDEFINITE HOLD** (developer ruling, 2026-08-19) — not blocked, deprioritised.
 Do not start it; `docs/PHORJ-REQUIREMENTS.md` remains the record of what it would need.
@@ -451,9 +487,10 @@ Required coverage, per spec §11 — non-negotiable once `src/` exists:
   Offline. No network in CI. A parser test that reaches the network is a monitoring check, not a test.
 - **Classifier tests.** ≥30 hand-labelled listing texts covering pure-LLI In'li, mixed CDC Habitat,
   an explicit PLAI, an explicit PLS, and an ambiguous case. The suite must go red if the classifier
-  regresses. **Done** — `tests/fixtures/tenure/corpus.json`, 114 cases, and the suite asserts all five
-  shapes are present so "30 easy ones" cannot satisfy it. The corpus is **still 114/114 synthetic**:
-  the spec asks for *real* texts and those need a captured payload (blocked on the DevTools cURL
+  regresses. **Done** — `tests/fixtures/tenure/corpus.json`, 116 cases, and the suite asserts all five
+  shapes are present so "30 easy ones" cannot satisfy it. The corpus is **114 synthetic + 2 CAPTURED**
+  (2026-08-20, real CDC Habitat card text — the first non-synthetic entries; the spec asks for real
+  texts and until a source was live there were none. Append as sources come online, never renumber
   captures). Every case declares its `provenance` and a test asserts the declared counts, so the gap
   is visible as data. Replace them with captured texts as sources come online — append, never
   renumber.

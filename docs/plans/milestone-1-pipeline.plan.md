@@ -104,6 +104,41 @@ usable" row from 0% to something real in a single afternoon; nothing else on thi
 
 ## Decisions Log
 
+- [2026-08-20 18:41] AGREED: **ICF Habitat Novedis (A2) is not a pollable source and is dropped from
+  the build queue.** It was ranked second in `docs/SOURCES.md` on PORTFOLIO value — 10 000 non-social
+  units aimed at incomes above the social ceilings — and that ranking survived because a `200` was
+  read as a feed. Measured three levels deep on 2026-08-20 (`/patrimoine/icf-novedis` →
+  `/patrimoine/filiale/icf-novedis/78-yvelines` → `/patrimoine/localites/icf-novedis/78500-sartrouville`):
+  every page lists *résidences*, not vacancies — zero rents, zero surfaces, zero occurrences of
+  `disponib`. Remaining routes are an email alert or the portals. Reversed by finding a Novedis
+  vacancy feed anywhere; `novedispm.fr` is the third-party management arm and was deliberately not
+  crawled.
+- [2026-08-20 18:41] AGREED: **CDC Habitat (A3) is source #2 and is `enabled: true`.** Its
+  `robots.txt` is stricter than the catalogue recorded — `/Recherche/show/`, `/Recherche/search` and
+  seven search query parameters by name — so the parameterised search is refused outright. What the
+  site advertises in its OWN `sitemap.xml` is the lowercase, query-free `/recherche/location/<region>`
+  tree, and robots path matching is case-sensitive. Polling that, and only that, is within hard rule
+  5. Reversed the moment CDC's `robots.txt` covers it, which is why that file is frozen beside the
+  payload and asserted per page by test rather than trusted from memory.
+- [2026-08-20 18:41] AGREED: **a source paginates by query parameter or by path, never both**, and a
+  `page_path` must contain `{page}`. Refused at load AND at fetch, because whichever mechanism the
+  adapter ignores fails silently — a walk that refetches page one until the bound trips, or one that
+  ends on a duplicate page and reports a short result set.
+- [2026-08-20 18:41] AGREED: **the walk stops at the count the site declares about itself**, rather
+  than probing one page past the end. The probe assumed an out-of-range page comes back empty; CDC's
+  answers `301`, and this adapter refuses a non-2xx deliberately — a redirect landing back on page
+  one ends a walk exactly like a genuine last page. This is not new trust in the declared total: it
+  was already the assertion the walk exists to make. Where a source declares no total, the empty-page
+  probe still applies.
+- [2026-08-20 18:41] AGREED: **`fields['_text']` is PROSE and belongs in `RawListing::text()`**, not
+  in the structured-field scan. The field path matches financing acronyms case-insensitively, on the
+  stated grounds that a field value is an identifier rather than prose; fed a card's prose it read
+  the French adverb in *"implanté au plus près"* as the excluded acronym `PLUS` and vetoed the
+  listing's own tier-1 badge. `plus` is one of the commonest words in the language, so this was not
+  a CDC quirk. The change is a RE-ROUTE, never a skip — the counterweight that excluded vocabulary
+  in card text is still SEEN is pinned by test, on the reason string rather than on the outcome,
+  because "did not match" is also what silence looks like.
+
 - [2026-08-07 14:20] AGREED: the store takes ISO-8601 timestamps as arguments rather than reading the
   clock. Health is a function of run history over time, and a store that calls `now()` internally can
   only be tested by waiting.
