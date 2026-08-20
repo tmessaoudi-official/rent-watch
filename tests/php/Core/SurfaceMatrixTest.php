@@ -181,6 +181,19 @@ final class SurfaceMatrixTest extends TestCase
                 title: 'T3 Le Vesinet ' . $t,
                 description: 'Grand sejour, proche RER A.',
             ),
+            // `_text` — the html adapter's whole-card surface, and as of 2026-08-20 it has its OWN
+            // routing rather than being one more field: the field loop skips it and
+            // `RawListing::text()` returns it, because the field path matches financing acronyms
+            // case-insensitively and read the French adverb in `au plus pres` as `PLUS`. A surface
+            // with bespoke routing and no cell here is precisely the "correct rule applied to a
+            // subset of the surfaces it belongs on" P0 this file exists to catch — the re-route was
+            // pinned by four hand-picked literals, and this cell is the whole vocabulary.
+            //
+            // The input is the shape CDC Habitat actually emits: a badge, its tooltip, then the
+            // card's own line of facts.
+            '_text, the whole card' => static fn (string $t): RawListing => self::listing(
+                fields: ['_text' => $t . ' Appartement 4 pieces - 2eme etage - 78m2 CERGY (95000) 612,40 EUR'],
+            ),
             'recognised tenure field' => static fn (string $t): RawListing => self::listing(fields: ['financement' => $t]),
             // `TENURE_FIELDS` is an exact-match list, so a feed spelling a key any other way lands
             // here. This is the cell round 7 found open for `PLUS`.

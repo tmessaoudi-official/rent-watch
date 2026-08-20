@@ -292,7 +292,7 @@ final class PayloadTest extends TestCase
      * capture failed, which is `null` — never `false`. The high-floor penalty fires only on an
      * explicit `false`, so nothing here can invent one (hard rule 9).
      */
-    public function testTheAmenityNounAsserstsALiftButItsAbsenceAssertsNothing(): void
+    public function testTheAmenityNounAssertsALiftButItsAbsenceAssertsNothing(): void
     {
         self::assertTrue(Payload::bool(['v' => 'Ascenseur'], ['v']), 'the noun is the assertion');
         self::assertTrue(Payload::bool(['v' => 'ascenseur'], ['v']), 'case is not a fact');
