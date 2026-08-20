@@ -206,6 +206,22 @@ final readonly class HtmlSource implements Source
             }
 
             $out = [...$out, ...$rows];
+
+            // THE SITE'S OWN COUNT IS THE TERMINATOR, when it gives one.
+            //
+            // The alternative — walk until a page comes back empty — assumes a page past the end
+            // comes back empty. CDC Habitat's does not: page 11 of a 9-page result set answers 301
+            // [measured 2026-08-20], and this adapter refuses a non-2xx deliberately, because a
+            // redirect that lands back on page one ends a walk exactly like a genuine last page.
+            // The probe therefore turned a complete, correct walk into `broken / 0 items`.
+            //
+            // This is not new trust in the total: it is already the assertion the check below
+            // makes. Using it to STOP as well as to VERIFY also costs one fewer request per pass
+            // against somebody else's server, which is hard rule 5's direction anyway. With no
+            // declared total there is nothing to stop on, and the empty-page probe still applies.
+            if ($total !== null && count($out) >= $total) {
+                break;
+            }
         }
 
         if ($page >= $this->definition->maxPages) {

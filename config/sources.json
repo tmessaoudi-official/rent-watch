@@ -64,7 +64,8 @@
       "base_url": "https://www.cdc-habitat.fr",
       "method": "GET",
       "item_selector": "#listeResultats article.residenceCard",
-      "page_path": "/page-{page}/",
+      "_page_path": "NO TRAILING SLASH, and that is measured. The site's OWN pagination links are written `/page-2/` and the site 301s them to `/page-2` [2026-08-20]. The adapter refuses a non-2xx rather than following it, deliberately: a redirect that lands back on page one terminates a walk exactly like a real last page. So the canonical form is requested directly and no redirect is involved.",
+      "page_path": "/page-{page}",
       "total_selector": ".headerResults p",
       "map": {
         "_comment": "CSS selectors with an optional @attr and an optional `=> regex` capture -- see src/php/Adapters/Html/Selector.php. The card packs rooms, floor and surface into ONE heading (`3 pieces - 4eme etage - 82m2`), so each needs its own capture: a general number read would return the room count for all three.",

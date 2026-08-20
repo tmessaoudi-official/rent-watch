@@ -298,7 +298,13 @@ final class HtmlSourceTest extends TestCase
         $rows = $this->paged($client)->fetch();
 
         self::assertSame(['a', 'b', 'c', 'd', 'e'], array_map(static fn ($r) => $r->externalId, $rows));
-        self::assertSame([null, '2', '3', '4'], $client->pages, 'page one carries no page param');
+
+        // No `4`: the walk stops once the site's own declared count is satisfied. It used to probe
+        // one page past the end, which assumed a page past the end comes back EMPTY — CDC Habitat's
+        // answers 301 instead [measured 2026-08-20], and a refused non-2xx then failed the whole
+        // run. The declared total was already the assertion this mechanism makes; using it to stop
+        // as well costs one fewer request per pass against somebody else's server.
+        self::assertSame([null, '2', '3'], $client->pages, 'page one carries no page param');
     }
 
     public function testTheWalkStopsAtTheFirstPageWithNoListings(): void
@@ -452,10 +458,10 @@ final class HtmlSourceTest extends TestCase
         self::assertSame(['a', 'b', 'c', 'd', 'e'], array_map(static fn ($r) => $r->externalId, $rows));
         self::assertSame([
             'https://www.cdc-habitat.fr/recherche/location/ile-de-france',
-            'https://www.cdc-habitat.fr/recherche/location/ile-de-france/page-2/',
-            'https://www.cdc-habitat.fr/recherche/location/ile-de-france/page-3/',
-            'https://www.cdc-habitat.fr/recherche/location/ile-de-france/page-4/',
-        ], $client->urls, 'page one is the bare url; the rest carry the path segment');
+            'https://www.cdc-habitat.fr/recherche/location/ile-de-france/page-2',
+            'https://www.cdc-habitat.fr/recherche/location/ile-de-france/page-3',
+        ], $client->urls, 'page one is the bare url; the rest carry the path segment, and the '
+            . 'declared total of 5 ends the walk without a fourth request');
         self::assertSame([], $client->queries, 'no query string is ever added — the site disallows those');
     }
 
@@ -474,7 +480,7 @@ final class HtmlSourceTest extends TestCase
         $robots = Robots::parse("User-agent: *\nDisallow: /recherche/location/ile-de-france/page-\n");
 
         $this->expectException(SourceError::class);
-        $this->expectExceptionMessageMatches('~robots.txt disallows /recherche/location/ile-de-france/page-2/~');
+        $this->expectExceptionMessageMatches('~robots.txt disallows /recherche/location/ile-de-france/page-2~');
 
         $this->pathPaged($client, [], $robots)->fetch();
     }
@@ -487,7 +493,44 @@ final class HtmlSourceTest extends TestCase
         $this->expectException(SourceError::class);
         $this->expectExceptionMessageMatches('~\{page\}~');
 
-        $this->pathPaged($client, ['pagePath' => '/page-2/'])->fetch();
+        $this->pathPaged($client, ['pagePath' => '/page-2'])->fetch();
+    }
+
+    /**
+     * The declared total ENDS the walk, rather than only auditing it afterwards.
+     *
+     * Walking one page past the end was the terminator, and it assumed a page past the end comes
+     * back empty. CDC Habitat's does not — it **301s** [measured 2026-08-20: page 11 of a 9-page
+     * result set redirects], and the adapter refuses a non-2xx on purpose, because a redirect that
+     * lands back on page one ends a walk exactly like a real last page. So the probe turned a
+     * complete, correct walk into `broken / 0 items`.
+     *
+     * Stopping at the declared total is not new trust: that number was already the assertion the
+     * whole mechanism exists to make. Using it to stop as well as to check costs one fewer request
+     * to somebody else's server every pass, which hard rule 5 asks for anyway.
+     */
+    public function testTheWalkStopsOnceTheSitesDeclaredTotalIsReached(): void
+    {
+        // 5 declared, 2+2+1 across three pages — and a fourth request would fail outright.
+        $client = new PathPagedHttpClient([
+            1 => self::page(['a', 'b'], 5),
+            2 => self::page(['c', 'd'], 5),
+            3 => self::page(['e'], 5),
+        ], throwBeyond: 3);
+
+        $rows = $this->pathPaged($client)->fetch();
+
+        self::assertCount(5, $rows);
+        self::assertCount(3, $client->urls, 'no probe past the last page once the count is satisfied');
+    }
+
+    /** With NO declared total there is nothing to stop on, so the empty-page probe still applies. */
+    public function testWithoutADeclaredTotalTheWalkStillProbesForAnEmptyPage(): void
+    {
+        $client = new PathPagedHttpClient([1 => self::page(['a'], null)]);
+
+        self::assertCount(1, $this->pathPaged($client)->fetch());
+        self::assertCount(2, $client->urls, 'one probe past the end, then stop');
     }
 
     /** @param array<string, mixed> $overrides */
@@ -510,7 +553,7 @@ final class HtmlSourceTest extends TestCase
                 rent: ['.featured-price .demi-condensed'],
                 chargesIncluded: true,
             ),
-            pagePath: array_key_exists('pagePath', $overrides) ? $overrides['pagePath'] : '/page-{page}/',
+            pagePath: array_key_exists("pagePath", $overrides) ? $overrides["pagePath"] : "/page-{page}",
             totalSelector: '.sf-results-head h5',
             maxPages: $overrides['maxPages'] ?? 20,
             rateLimitMs: 0,
@@ -564,7 +607,10 @@ final class PathPagedHttpClient implements \RentWatch\Adapters\Http\HttpClient
     public array $queries = [];
 
     /** @param array<int, string> $bodies */
-    public function __construct(private readonly array $bodies) {}
+    public function __construct(
+        private readonly array $bodies,
+        private readonly ?int $throwBeyond = null,
+    ) {}
 
     public function send(\RentWatch\Adapters\Http\HttpRequest $request): HttpResponse
     {
@@ -575,7 +621,14 @@ final class PathPagedHttpClient implements \RentWatch\Adapters\Http\HttpClient
             $this->queries[] = $query;
         }
 
-        $page = preg_match('~/page-(\d+)/~', $request->url, $m) === 1 ? (int) $m[1] : 1;
+        $page = preg_match('~/page-(\d+)~', $request->url, $m) === 1 ? (int) $m[1] : 1;
+
+        // Stands in for CDC Habitat, whose out-of-range page redirects rather than emptying: a fake
+        // that always answers an empty page cannot express "asking is itself the failure".
+        if ($this->throwBeyond !== null && $page > $this->throwBeyond) {
+            throw new \RentWatch\Adapters\Http\HttpError('HTTP 301 from ' . $request->url);
+        }
+
         $body = $this->bodies[$page] ?? '<html><body><div class="featured-items"></div></body></html>';
 
         return new HttpResponse(200, $body);
