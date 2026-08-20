@@ -933,6 +933,53 @@ final class ConfigTest extends TestCase
     }
 
     /**
+     * A detail map may not redefine `ref`, and the loader says so rather than ignoring it.
+     *
+     * Identity belongs to the card, because the seen-set is keyed on it: a listing re-identified
+     * from its detail page has never been seen before and is announced again on every run. The
+     * merge already ignores detail identity, so a `ref` here would be config that reads as
+     * behaviour and does nothing — the shape this file exists to refuse.
+     */
+    public function testADetailMapMayNotRedefineTheRef(): void
+    {
+        $this->expectException(ConfigError::class);
+        $this->expectExceptionMessageMatches('/identity comes from the card/');
+
+        ConfigLoader::sourcesFromArray(['sources' => ['x' => [
+            '_verified_at' => '2026-08-21',
+            '_source' => 'a test',
+            'enabled' => true,
+            'family' => 'institutional',
+            'type' => 'html',
+            'mixed_tenure' => true,
+            'url' => 'https://example.test/search',
+            'item_selector' => 'a.card',
+            'map' => ['ref' => '@href', 'url' => '@href'],
+            'detail_map' => ['ref' => '.detail-id', 'description' => '.description'],
+        ]]]);
+    }
+
+    /** A detail map on a source whose adapter would never read it is refused, not ignored. */
+    public function testADetailMapOnANonHtmlSourceIsRefused(): void
+    {
+        $this->expectException(ConfigError::class);
+        $this->expectExceptionMessageMatches('/only an html source/');
+
+        ConfigLoader::sourcesFromArray(['sources' => ['x' => [
+            '_verified_at' => '2026-08-21',
+            '_source' => 'a test',
+            'enabled' => true,
+            'family' => 'institutional',
+            'type' => 'json',
+            'mixed_tenure' => true,
+            'url' => 'https://example.test/api',
+            'items_path' => 'results',
+            'map' => ['ref' => 'id', 'url' => 'url'],
+            'detail_map' => ['description' => 'description'],
+        ]]]);
+    }
+
+    /**
      * Q15, answered by measurement on 2026-08-20 — and this test is now the answer's guard.
      *
      * The question was whether CDC Habitat's listing endpoint sits inside the `Disallow` space. It
