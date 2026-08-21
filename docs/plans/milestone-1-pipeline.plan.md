@@ -1244,14 +1244,23 @@ observable only through a caller that neutralises it is assumed, not tested. Fix
 (`tests/php/Core/RawListingMergeTest.php`, plus two ConfigTest cases), and the three re-run
 **3/3 detected**.
 
-**Full ledger vs `c1cf190`: LAUNCHED, NOT YET COUNTED.** 315 cases, running in a pinned
-`git worktree` at that commit (the way `e4e3ef0` was, so the next session's work cannot change what
-the cases test halfway through), logging to `var/claude/ledger-c1cf190.log`. ~2 h, so it outlives
-the session that started it. A filtered run is a PARTIAL RUN and the script says so on every line of
-one; until a count is written here, the ledger-level claim for this tree is OWED. Expected result,
-recorded before it finishes so it can be wrong: **315 detected, 0 undetected** — 303 carried over
-from `e4e3ef0` plus the twelve Cityloger cases, each already verified individually.
+**Full ledger vs `c1cf190`: COUNTED 2026-08-21 10:31 — 315 detected, 0 undetected.** Exactly the
+prediction recorded below before the run finished, which is the only reason the prediction is worth
+anything. It ran to completion in the pinned `git worktree` at that commit (so the session's later
+work could not change what the cases tested halfway through), logging to
+`var/claude/ledger-c1cf190.log`. Four things were checked rather than assumed, because a ledger can
+report a number without having measured one: the log opens with `baseline: suite is green` (a red
+baseline makes every subsequent RED meaningless and the harness aborts on it); `grep -c 'suite went
+red'` returns **315**, matching the tally line rather than merely accompanying it; there is no
+`PARTIAL RUN` line, so this is a full ledger and not a `SABOTAGE_FILTER` subset; and no case timed
+out — `SABOTAGE_SUITE_TIMEOUT` counts a hang as a FAILURE precisely so a suite that never finished
+cannot be read as a detection. This is the first full ledger for this tree produced by a harness
+whose **exit status can actually fail** (the positional-tally and positional-exit defects were fixed
+in `e4e3ef0`, and `tests/test-ci-workflow.sh` now pins both structurally).
 
-**Next session, after counting it:** `git worktree remove --force <scratch>/ledger-c1cf190` — the
-run lives in a worktree registered in `.git/worktrees` that points into session scratch, so it
-outlives the session by design and needs pruning by hand once the count is written here.
+The prediction as recorded before the run, kept unedited: **315 detected, 0 undetected** — 303
+carried over from `e4e3ef0` plus the twelve Cityloger cases, each already verified individually.
+
+**Worktree pruned** the same turn: `git worktree remove --force <scratch>/ledger-c1cf190`. It was
+registered in `.git/worktrees` pointing into session scratch, so it outlived its session by design
+and needed removing by hand once the count was written here.
