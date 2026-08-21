@@ -411,6 +411,20 @@ this way" is never authority, and extending it in place contradicts the brief.
    as a fix for a blocked source — propose the email-alert route instead.
    `demande-logement-social.gouv.fr` and Bienvéo are **out of scope entirely** (social-housing
    channels — they violate §1).
+
+   **`robots.txt` is enforced at RUNTIME as of 2026-08-21, and was not before.** `Robots` was fully
+   implemented and both network adapters consulted it — index, every paginated page, each detail
+   page — but every check was guarded by `$this->robots !== null` and both production construction
+   sites in `Scout::buildSource()` passed `null`. So it was enforced in tests, by injection, and
+   never once on a real poll. Two things follow for anyone touching this. **A `null` robots does not
+   mean "check later", it means "never check"** — which is why `Scout::robotsFor()` returns a
+   fail-closed verdict for a source it cannot derive an origin for, rather than `null`. And **the
+   status table is not uniform**: 2xx parses, `404`/`410` **allow** (RFC 9309 §2.3.1.3 — an absent
+   file is knowledge, not a failed read, and treating it as a disallow would silently disable most
+   of the web), everything else including `403` and `5xx` **fails closed**. `Scout` takes an
+   injectable `HttpClient` purely so this is observable at all; the once-per-host cache is a local
+   in `sources()`, not a property, because `RobotsResolver` must stay `readonly`. Full reasoning:
+   `docs/plans/milestone-1-pipeline.plan.md` § Decisions Log, 2026-08-21.
 6. **No auto-application** or auto-form-submission to landlords. No multi-user support. No web UI (a
    read-only HTML digest is acceptable later). These are ruled non-goals, not gaps.
 7. **Secrets live in `.env`, gitignored.** IMAP credentials, notification tokens, the IDFM API key, the

@@ -241,7 +241,10 @@ final class CitylogerFixtureTest extends TestCase
             $this->definition(),
             $this->store(),
             $client,
-            null,
+            // Not the subject of this test: an explicit allow-all verdict, stated rather than
+            // defaulted. `HtmlSource` requires a `Robots` precisely because the old `= null` default
+            // meant "never check" and both production call sites silently took it.
+            Robots::parse(''),
             static fn (RawListing $l): bool => $l->externalId === $ref,
         );
 
@@ -307,7 +310,7 @@ final class CitylogerFixtureTest extends TestCase
             {
                 throw new \LogicException('a fixture test must not make a request: ' . $request->url);
             }
-        });
+        }, Robots::parse(''));
     }
 }
 

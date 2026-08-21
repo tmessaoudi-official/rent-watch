@@ -7,7 +7,6 @@ namespace RentWatch\Adapters;
 use Dom\Element;
 use Dom\HTMLDocument;
 use RentWatch\Adapters\Html\Selector;
-use RentWatch\Adapters\Http\CurlHttpClient;
 use RentWatch\Adapters\Http\HttpClient;
 use RentWatch\Adapters\Http\HttpError;
 use RentWatch\Adapters\Http\HttpRequest;
@@ -72,8 +71,16 @@ final readonly class HtmlSource implements Source
     public function __construct(
         private SourceDefinition $definition,
         private Store $store,
-        private HttpClient $client = new CurlHttpClient(),
-        private ?Robots $robots = null,
+        private HttpClient $client,
+        /**
+         * REQUIRED, and deliberately not nullable. It was `?Robots $robots = null` until
+         * 2026-08-21, and that default is the whole reason hard rule 5 went unenforced for months:
+         * a `null` here does not mean *"check later"*, it means *"never check"*, silently, on every
+         * real poll — and both production construction sites took the default. A caller that has no
+         * verdict must pass a fail-closed one from {@see RobotsResolver}, or an explicit
+         * `Robots::parse('')` to say in as many words that this call site is not about robots.
+         */
+        private Robots $robots,
         private ?\Closure $detailGate = null,
     ) {}
 
@@ -144,10 +151,10 @@ final readonly class HtmlSource implements Source
             );
         }
 
-        if ($this->robots !== null && !$this->robots->allows(Robots::pathOf($url))) {
+        if (!$this->robots->allows(Robots::pathOf($url))) {
             throw new SourceError(
                 $this->name(),
-                'robots.txt disallows ' . Robots::pathOf($url) . ' — this source must not be polled. '
+                $this->robots->refusal(Robots::pathOf($url)) . ' — this source must not be polled. '
                     . 'Use the email-alert route instead',
             );
         }
@@ -194,10 +201,10 @@ final readonly class HtmlSource implements Source
 
         $firstUrl = $urlTemplate ? str_replace('{page}', '1', $url) : $url;
 
-        if ($urlTemplate && $this->robots !== null && !$this->robots->allows(Robots::pathOf($firstUrl))) {
+        if ($urlTemplate && !$this->robots->allows(Robots::pathOf($firstUrl))) {
             throw new SourceError(
                 $this->name(),
-                'robots.txt disallows ' . Robots::pathOf($firstUrl) . ' — this source must not be '
+                $this->robots->refusal(Robots::pathOf($firstUrl)) . ' — this source must not be '
                     . 'polled. Use the email-alert route instead',
             );
         }
@@ -238,10 +245,10 @@ final readonly class HtmlSource implements Source
                 // site may publish an index it welcomes and paginated forms it does not, and a
                 // one-shot check on the index would walk into those with every request returning
                 // 200 — a hard rule 5 breach that is invisible from the outside.
-                if ($this->robots !== null && !$this->robots->allows(Robots::pathOf($pageUrl))) {
+                if (!$this->robots->allows(Robots::pathOf($pageUrl))) {
                     throw new SourceError(
                         $this->name(),
-                        'robots.txt disallows ' . Robots::pathOf($pageUrl) . ' — the index is '
+                        $this->robots->refusal(Robots::pathOf($pageUrl)) . ' — the index is '
                             . 'pollable but its paginated form is not, so this walk must stop here',
                     );
                 }
@@ -374,10 +381,10 @@ final readonly class HtmlSource implements Source
         // Its own robots verdict, because a detail page is a different path from the search index.
         // A site may publish a search it welcomes and listing pages it does not, and a check made
         // once on the index would walk into every one of them returning 200 (hard rule 5).
-        if ($this->robots !== null && !$this->robots->allows(Robots::pathOf($url))) {
+        if (!$this->robots->allows(Robots::pathOf($url))) {
             throw new SourceError(
                 $this->name(),
-                'robots.txt disallows ' . Robots::pathOf($url) . ' — the search index is pollable '
+                $this->robots->refusal(Robots::pathOf($url)) . ' — the search index is pollable '
                     . 'but the listing pages are not, so this source cannot be hydrated',
             );
         }

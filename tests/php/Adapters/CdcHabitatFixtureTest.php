@@ -8,6 +8,7 @@ use PHPUnit\Framework\TestCase;
 use RentWatch\Adapters\Http\HttpClient;
 use RentWatch\Adapters\Http\HttpRequest;
 use RentWatch\Adapters\Http\HttpResponse;
+use RentWatch\Adapters\Http\Robots;
 use RentWatch\Adapters\HtmlSource;
 use RentWatch\Config\ConfigLoader;
 use RentWatch\Config\SourceDefinition;
@@ -186,6 +187,6 @@ final class CdcHabitatFixtureTest extends TestCase
             {
                 throw new \LogicException('a fixture test must not make a request: ' . $request->url);
             }
-        });
+        }, Robots::parse(''));
     }
 }

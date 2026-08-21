@@ -167,7 +167,7 @@ final class NetworkAdaptersTest extends TestCase
             map: new FieldMap(ref: ['id'], title: ['title'], commune: ['city'], rent: ['rent'], chargesIncluded: true),
         );
 
-        return new HttpJsonSource($definition, $this->store(), $client, $robots);
+        return new HttpJsonSource($definition, $this->store(), $client, $robots ?? Robots::parse(''));
     }
 
     public function testAWorkingEndpointMapsListingsThroughTheSameCodeTheFixtureAdapterUses(): void

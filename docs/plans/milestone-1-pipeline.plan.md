@@ -104,6 +104,66 @@ usable" row from 0% to something real in a single afternoon; nothing else on thi
 
 ## Decisions Log
 
+- [2026-08-22 00:24] NOTED (latent, deliberately not built): **a detail page is judged against the
+  SEARCH origin's `robots.txt`.** `Robots::pathOf()` strips the host, and `HtmlSource` holds one
+  `Robots` for the source, so a `detail_map` whose cards linked to a DIFFERENT host would have those
+  URLs checked against the wrong site's file. True and harmless today — every `detail_map` in
+  `config/sources.json` is same-host, and Cityloger's detail pages sit under its own domain — and it
+  becomes wrong the day a source's cards link out. Not fixed here: a per-URL resolver is real work
+  for a case no source exhibits, and building it now would be speculation. Recorded so that
+  `/add-source` trips over it rather than discovering it in production.
+
+- [2026-08-21 23:58] AGREED: **`robots.txt` is enforced at RUNTIME, and the CLI grew an
+  `HttpClient` seam so that it can be.** `Robots` was fully implemented and both network adapters
+  consulted it for the index, for every paginated page and for each detail page — but every check
+  was guarded by `$this->robots !== null`, and the only two production construction sites
+  (`Scout::buildSource()`) passed `null`. Robots was therefore enforced in tests, by injection, and
+  never once on a real poll: `scout doctor --source=inli` fetched four pages of a live landlord's
+  site without reading its `robots.txt`, while `HttpJsonSource`'s own docblock claimed *"it checks
+  robots.txt before fetching (hard rule 5), and fails CLOSED when it cannot"*. The defect was
+  invisible to the whole suite because a `null` robots does not mean *"check later"* — it means
+  *"never check"*, silently.
+- [2026-08-21 23:58] AGREED: **the status-code table for an unreadable `robots.txt` is
+  2xx → parse · 404/410 → ALLOW · everything else, including 403 and 5xx → FAIL CLOSED.** The 404
+  row is the one that needed arguing, because `Robots::unavailable()` disallows everything and the
+  class docblock makes that a deliberate posture. The distinction that resolves it: a 404 is not
+  *"we could not read it"* — it is *we successfully established that no file exists*, which is the
+  ordinary no-restrictions case on the open web, and reading it as a disallow would have silently
+  disabled every host that never wrote one. This is exactly RFC 9309's own split, and exactly the
+  reading recorded in `docs/SOURCES.md` on 2026-08-21: §2.3.1.3 *unavailable* (4xx) → a crawler MAY
+  access; §2.3.1.4 *unreachable* (5xx) → a crawler MUST assume complete disallow. The project stays
+  STRICTER than the standard on `401`/`403`, deliberately: a site answering 403 to `robots.txt` is
+  refusing this client, and hard rule 5 takes that at face value.
+- [2026-08-21 23:58] AGREED: **redirects need no row of their own, and that is a property of
+  `CurlHttpClient` rather than a gap.** It already follows up to three redirects and refuses to
+  leave the original host, so an apex→www or http→https redirect on `/robots.txt` is followed
+  transparently. A robots file redirecting to a DIFFERENT host arrives as a transport failure and
+  fails closed — correct rather than incidental, since `robots.txt` speaks for one origin and a file
+  served by another host has no authority over this one. Worth recording because the row looked
+  missing: `toitetjoie.com` had just been measured 301-ing to its real host, so a redirecting
+  robots is not hypothetical here.
+- [2026-08-21 23:58] AGREED: **the once-per-host cache lives in `Scout::sources()` as a local, NOT
+  in `RobotsResolver`.** The first cut put it in the resolver and
+  `TenureCorpusTest::testEveryCoreValueObjectIsImmutable()` caught it: every class under `src/php/`
+  must be `readonly` unless it implements `MutableByDesign`, whose bar is explicitly *"its mutation
+  must BE the mechanism, not an optimisation"*. A memoisation table does not clear that bar. Taking
+  the exemption anyway is how such a rule stops meaning anything — so the resolver was made
+  stateless and the cache became a local whose lifetime is one build of the source list. The
+  guarantee is unchanged and still asserted end to end
+  (`ScoutRobotsTest::testRobotsIsFetchedOncePerHostAndNotOncePerPage`); only its home moved.
+- [2026-08-21 23:58] AGREED: **a `scout run --watch` process holds the robots verdict it read at
+  startup, and that is a KNOWN bounded limitation rather than an oversight.** Sources are built once
+  per process and the loop re-polls them, so a watcher running longer than a day is outside RFC 9309
+  §2.4's 24-hour caching norm. Closing it means handing the adapters a resolver instead of a
+  `Robots`, which changes the `Source` construction contract — deliberately not done in this change,
+  and recorded here so the next reader finds a decision rather than a bug.
+- [2026-08-21 23:58] AGREED: **an unreadable `robots.txt` must not be reported as a rule that
+  disallows.** `Robots::refusal()` now says *"illisible (HTTP 500 sur …) — posture fail-closed"* for
+  the unavailable case and keeps the exact `robots.txt disallows <path>` wording — asserted by
+  several suites — for the rule case. Reporting a 500 as a disallow sends the reader hunting through
+  a robots file for a line that is not there, when the fault is a broken server or an expired
+  certificate.
+
 - [2026-08-20 18:41] AGREED: **ICF Habitat Novedis (A2) is not a pollable source and is dropped from
   the build queue.** It was ranked second in `docs/SOURCES.md` on PORTFOLIO value — 10 000 non-social
   units aimed at incomes above the social ceilings — and that ranking survived because a `200` was

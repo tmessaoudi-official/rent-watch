@@ -7,6 +7,9 @@ namespace RentWatch\Cli;
 use RentWatch\Adapters\EmailAlertSource;
 use RentWatch\Adapters\FixtureSource;
 use RentWatch\Adapters\Http\CurlHttpClient;
+use RentWatch\Adapters\Http\HttpClient;
+use RentWatch\Adapters\Http\Robots;
+use RentWatch\Adapters\Http\RobotsResolver;
 use RentWatch\Adapters\HtmlSource;
 use RentWatch\Adapters\HttpJsonSource;
 use RentWatch\Adapters\Mail\FileMailbox;
@@ -62,20 +65,50 @@ final readonly class Scout
     private mixed $err;
 
     /**
+     * The one HTTP client this process uses, shared by every adapter AND by the robots resolver.
+     *
+     * Sharing is not an optimisation: {@see CurlHttpClient} pins the honest User-Agent and refuses
+     * a caller-supplied override, so a robots request made through the same client is guaranteed to
+     * identify as the same tool that polls the page. A second client built somewhere else would be
+     * one edit away from asking permission as somebody different.
+     */
+    private HttpClient $http;
+
+    /**
+     * Turns an HTTP answer for `/robots.txt` into a verdict. Stateless — the once-per-host cache is
+     * a local in {@see sources()}, so that its lifetime is one build of the source list and this
+     * class stays `readonly` without taking a {@see \RentWatch\Core\MutableByDesign} exemption it
+     * does not qualify for.
+     */
+    private RobotsResolver $robotsResolver;
+
+    /**
      * @param resource|null $out
      * @param resource|null $err
      * @param string|null   $nowIso a FIXED clock for tests. Without one, `STALE` and the counting
      *                              window depend on wall time, and a test that passes at 23:59 and
      *                              fails at 00:01 teaches people to re-run rather than to read.
+     * @param ?HttpClient   $http   a TEST SEAM, and the reason hard rule 5 is enforceable at all.
+     *                              Until it existed the two network adapters were built with
+     *                              `new CurlHttpClient()` inline, so nothing could observe what the
+     *                              CLI requested — and what it requested, on every real poll, did
+     *                              not include `robots.txt`. See
+     *                              {@see \RentWatch\Tests\Cli\ScoutRobotsTest}.
      */
     public function __construct(
         private string $rootDir,
         mixed $out = null,
         mixed $err = null,
         private ?string $nowIso = null,
+        ?HttpClient $http = null,
     ) {
         $this->out = $out ?? STDOUT;
         $this->err = $err ?? STDERR;
+        // Built eagerly because the class is readonly and cannot memoise later. Neither
+        // constructor touches the network — the resolver fetches on first `forUrl()` — so a
+        // command that never polls (`dump`, `digest`, `reclassify`) still makes no request.
+        $this->http = $http ?? new CurlHttpClient();
+        $this->robotsResolver = new RobotsResolver($this->http);
     }
 
     /** @param list<string> $argv command-line arguments, WITHOUT the program name */
@@ -576,6 +609,12 @@ final readonly class Scout
     {
         $out = [];
         $known = [];
+        // One `robots.txt` per host per build, and the cache is a LOCAL rather than a property so
+        // its lifetime is exactly this call. Hard rule 5 is about load as well as permission:
+        // re-reading robots for every page of a four-page walk is a request the site did not need
+        // to serve. See {@see RobotsResolver} on why the resolver itself does not hold this.
+        /** @var array<string, Robots> $robotsByOrigin */
+        $robotsByOrigin = [];
 
         foreach (ConfigLoader::loadSources($this->rootDir . '/config/sources.json') as $definition) {
             if ($only !== null && !in_array($definition->name, $only, true)) {
@@ -597,7 +636,7 @@ final readonly class Scout
                 continue;
             }
 
-            $source = $this->buildSource($definition, $store, $criteria);
+            $source = $this->buildSource($definition, $store, $criteria, $robotsByOrigin);
             if ($source === null) {
                 $this->warn('source ' . $definition->name . ' ignorée : aucun adaptateur pour le type `'
                     . $definition->type . '`');
@@ -652,8 +691,12 @@ final readonly class Scout
      *        source with a `detail_map` REFUSES without one rather than guessing — see
      *        {@see HtmlSource::hydrate()}.
      */
-    private function buildSource(SourceDefinition $definition, Store $store, ?Criteria $criteria = null): ?Source
-    {
+    private function buildSource(
+        SourceDefinition $definition,
+        Store $store,
+        ?Criteria $criteria = null,
+        array &$robotsByOrigin = [],
+    ): ?Source {
         // WHY the geographic filter and not the whole criteria set: a detail fetch is one request
         // per listing, so something must narrow it — and `matchesCommune()` is the only filter whose
         // inputs a CARD already carries in full. Gating on rent or surface would reject on a field
@@ -669,15 +712,40 @@ final readonly class Scout
             // `config/sources.json`. Hard rule 1 forbids writing an endpoint from memory, and the
             // loader refuses `enabled: true` next to a REMPLACER placeholder — so this can never
             // poll something nobody verified, while still being ready the moment a capture lands.
-            'json' => new HttpJsonSource($definition, $store, new CurlHttpClient()),
+            'json' => new HttpJsonSource($definition, $store, $this->http, $this->robotsFor($definition, $robotsByOrigin)),
             // Same shape as `json`, one step different in the middle: the payload is parsed as
             // HTML5 by the language's own `Dom\HTMLDocument` and the field map is read as CSS
             // selectors. In'li is the first real source to use it — its search page is
             // server-rendered, so there is no JSON endpoint to prefer.
-            'html' => new HtmlSource($definition, $store, new CurlHttpClient(), null, $gate),
+            'html' => new HtmlSource($definition, $store, $this->http, $this->robotsFor($definition, $robotsByOrigin), $gate),
             'email_alert' => $this->buildEmailSource($definition, $store),
             default => null,
         };
+    }
+
+    /**
+     * The `robots.txt` verdict governing this source, read once per host per process.
+     *
+     * Never `null`. A `null` here is precisely the defect this method was added to close: both
+     * adapters guard every robots check with `$this->robots !== null`, so passing `null` does not
+     * mean *"check later"* — it means *"never check"*, silently, on every real poll. A source whose
+     * url carries no usable host therefore gets a fail-closed verdict rather than an exemption.
+     */
+    private function robotsFor(SourceDefinition $definition, array &$robotsByOrigin): Robots
+    {
+        $url = $definition->url;
+
+        if ($url === null || trim($url) === '') {
+            return Robots::unavailable('la source ne déclare aucune url');
+        }
+
+        $origin = $this->robotsResolver->originFor($url);
+
+        if ($origin === null) {
+            return $this->robotsResolver->forUrl($url);   // yields the fail-closed verdict, with its reason
+        }
+
+        return $robotsByOrigin[$origin] ??= $this->robotsResolver->forUrl($url);
     }
 
     /**

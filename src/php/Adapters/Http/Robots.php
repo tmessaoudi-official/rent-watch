@@ -32,12 +32,22 @@ final readonly class Robots
         private array $rules,
         public ?int $crawlDelaySeconds,
         public bool $parsed,
+        public ?string $unavailableReason = null,
     ) {}
 
-    /** A `robots.txt` we could not read. Everything is disallowed — see the class docblock. */
-    public static function unavailable(): self
+    /**
+     * A `robots.txt` we could not read. Everything is disallowed — see the class docblock.
+     *
+     * @param ?string $reason what stopped us, in words a person can act on: `HTTP 500 sur …`, a
+     *                        cURL message, a refused cross-host redirect. It is carried so that
+     *                        {@see refusal()} can say *"illisible"* rather than *"disallows"* — a
+     *                        distinction that matters, because reporting an unread file as a RULE
+     *                        sends the reader hunting through a robots.txt for a line that is not
+     *                        there, when the actual fault is a 500 or an expired certificate.
+     */
+    public static function unavailable(?string $reason = null): self
     {
-        return new self([], null, false);
+        return new self([], null, false, $reason);
     }
 
     public static function parse(string $body, string $userAgent = 'rent-watch'): self
@@ -143,6 +153,28 @@ final readonly class Robots
         }
 
         return $best ?? true;
+    }
+
+    /**
+     * Why this path is refused, in the words that are actually true of it.
+     *
+     * Two different facts reach the same refusal and must not print the same sentence. A parsed
+     * file with a matching `Disallow` genuinely *disallows* the path — the reader should go and
+     * read that line. An unread file disallows nothing; the fail-closed posture is what refuses,
+     * and the reader should go and look at a 500, a certificate or a firewall. Collapsing the
+     * second into the first is a false statement about a site's own configuration.
+     *
+     * The `robots.txt disallows` wording is asserted by several suites and is deliberately
+     * unchanged: it is the rule case, and the rule case still says exactly what it always said.
+     */
+    public function refusal(string $path): string
+    {
+        if ($this->parsed) {
+            return 'robots.txt disallows ' . $path;
+        }
+
+        return 'robots.txt illisible (' . ($this->unavailableReason ?? 'cause inconnue')
+            . ') — posture fail-closed, ' . $path . ' est refusé';
     }
 
     /** The path portion of a URL, which is what {@see allows()} judges. */

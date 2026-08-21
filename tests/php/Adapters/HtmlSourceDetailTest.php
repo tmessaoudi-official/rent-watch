@@ -242,7 +242,7 @@ final class HtmlSourceDetailTest extends TestCase
     ): HtmlSource {
         $this->dbPath = sys_get_temp_dir() . '/rentwatch-detail-' . bin2hex(random_bytes(8)) . '.sqlite3';
 
-        return new HtmlSource($definition, Store::open($this->dbPath), $client, $robots, $gate);
+        return new HtmlSource($definition, Store::open($this->dbPath), $client, $robots ?? Robots::parse(''), $gate);
     }
 }
 

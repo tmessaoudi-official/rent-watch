@@ -393,7 +393,7 @@ final class HtmlSourceTest extends TestCase
             rateLimitMs: 0,
         );
 
-        return new HtmlSource($definition, $this->store(), $client);
+        return new HtmlSource($definition, $this->store(), $client, Robots::parse(''));
     }
 
     // ---------------------------------------------------------------- helpers
@@ -425,7 +425,7 @@ final class HtmlSourceTest extends TestCase
             ),
         );
 
-        return new HtmlSource($definition, $this->store(), $client ?? new FakeHttpClient(null), $robots);
+        return new HtmlSource($definition, $this->store(), $client ?? new FakeHttpClient(null), $robots ?? Robots::parse(''));
     }
 
     private function store(): Store
@@ -559,7 +559,7 @@ final class HtmlSourceTest extends TestCase
             rateLimitMs: 0,
         );
 
-        return new HtmlSource($definition, $this->store(), $client, $robots);
+        return new HtmlSource($definition, $this->store(), $client, $robots ?? Robots::parse(''));
     }
 
 
@@ -648,7 +648,7 @@ final class HtmlSourceTest extends TestCase
             rateLimitMs: 0,
         );
 
-        return new HtmlSource($definition, $this->store(), $client, $robots);
+        return new HtmlSource($definition, $this->store(), $client, $robots ?? Robots::parse(''));
     }
 
 }

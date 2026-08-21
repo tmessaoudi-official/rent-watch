@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace RentWatch\Adapters;
 
-use RentWatch\Adapters\Http\CurlHttpClient;
 use RentWatch\Adapters\Http\HttpClient;
 use RentWatch\Adapters\Http\HttpError;
 use RentWatch\Adapters\Http\HttpRequest;
@@ -40,13 +39,16 @@ final readonly class HttpJsonSource implements Source
     public function __construct(
         private SourceDefinition $definition,
         private Store $store,
-        private HttpClient $client = new CurlHttpClient(),
+        private HttpClient $client,
         /**
          * Injected rather than fetched inside, so a test can state the site's posture without a
          * network round trip — and so the run loop can cache one `robots.txt` per host per pass
          * instead of re-fetching it for every source on that host.
+         *
+         * REQUIRED, and deliberately not nullable — see {@see HtmlSource::__construct()} for the
+         * defect the old `= null` default caused.
          */
-        private ?Robots $robots = null,
+        private Robots $robots,
     ) {}
 
     public function name(): string
@@ -110,12 +112,12 @@ final readonly class HttpJsonSource implements Source
             );
         }
 
-        if ($this->robots !== null && !$this->robots->allows(Robots::pathOf($url))) {
+        if (!$this->robots->allows(Robots::pathOf($url))) {
             // Refused, and NEVER worked around. Hard rule 5 has no exception, and the documented
             // alternative for a site that does not want polling is the email-alert route.
             throw new SourceError(
                 $this->name(),
-                'robots.txt disallows ' . Robots::pathOf($url) . ' — this source must not be polled. '
+                $this->robots->refusal(Robots::pathOf($url)) . ' — this source must not be polled. '
                     . 'Use the email-alert route instead',
             );
         }
