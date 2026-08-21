@@ -1251,3 +1251,7 @@ the session that started it. A filtered run is a PARTIAL RUN and the script says
 one; until a count is written here, the ledger-level claim for this tree is OWED. Expected result,
 recorded before it finishes so it can be wrong: **315 detected, 0 undetected** — 303 carried over
 from `e4e3ef0` plus the twelve Cityloger cases, each already verified individually.
+
+**Next session, after counting it:** `git worktree remove --force <scratch>/ledger-c1cf190` — the
+run lives in a worktree registered in `.git/worktrees` that points into session scratch, so it
+outlives the session by design and needs pruning by hand once the count is written here.
