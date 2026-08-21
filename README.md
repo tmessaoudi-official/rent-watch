@@ -75,9 +75,12 @@ against them.
 
 ## Why this exists
 
-Nothing on the market aggregates institutional LLI stock. In'li, CDC Habitat, Seqens, Immobilière 3F,
-Vilogia, ICF and 1001 Vies each publish to their own site, several of them mixing social and
-intermediate stock on the same page — and good LLI units are gone within hours. The private portals
+Nothing on the market aggregates institutional LLI stock, and most of these landlords do not even
+aggregate their own. In'li, CDC Habitat and Cityloger (the Immobilière 3F group's lettings platform)
+publish real feeds, two of the three mixing social and intermediate stock on the same page — and good
+LLI units are gone within hours. Seqens, 3F's corporate site, ICF Novedis, 1001 Vies and Batigère
+publish **no availability at all** on their own domains: they route applicants to AL'in or to the SNE.
+`docs/SOURCES.md` carries the measurement behind each row. The private portals
 (SeLoger, Leboncoin, Bien'ici, PAP, Logic-Immo) are well covered by their own alert emails, so this
 tool ingests those rather than scraping them.
 

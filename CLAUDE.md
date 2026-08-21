@@ -107,13 +107,17 @@ Cityloger skews to the intermediate and libre stock this project is looking for.
 > JS-rendered" objection a sitemap scan cannot); on any site scan the index page for `€`, `m²` and
 > `disponib`.
 >
-> **Three more went the same way on 2026-08-21, and Track 1 is now measured out.** A10 Batigère was
+> **Three more went the same way on 2026-08-21, and Track 1's pollable stock is now three sources.** A10 Batigère was
 > the catalogue's starred best-remaining candidate; its search is a third-party widget whose bundle
 > names its backend, and that host's `robots.txt` answers **500** while the endpoint answers **401**.
 > A7 1001 Vies has no listings post type and routes tenants to `demande-logement-social.gouv.fr`
 > (out of scope, §1). A8 Antin's one recorded lettings route is a **404**. What remains in Track 1 is
-> **A4 AL'in** (authenticated — an INPUT, not a decision) and the Tier B email-alert route. Two rules
-> came out of it, both in `docs/SOURCES.md` and `/add-source`: **a client-rendered page is not a dead
+> **A4 AL'in** (authenticated — an INPUT, not a decision), the Tier B email-alert route, and **three
+> second-tier rows that have had a homepage marker scan and nothing more** — A11 Toit et Joie, A12
+> Logirep, A13 Erilia, A12 first. "Measured out" would be the same overclaim that starred A10: those
+> three are unmeasured, not dead.
+>
+> Two rules came out of this round, both recorded in `docs/SOURCES.md` and `/add-source`: **a client-rendered page is not a dead
 > end** — follow the widget's `script src` to its bundle, the bundle to its API host, then check that
 > host; and **an unreadable `robots.txt` has two verdicts** — RFC 9309 makes 5xx *unreachable* (MUST
 > assume complete disallow, stricter than this repo's own posture) and 4xx *unavailable* (MAY access,
