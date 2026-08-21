@@ -1244,6 +1244,10 @@ observable only through a caller that neutralises it is assumed, not tested. Fix
 (`tests/php/Core/RawListingMergeTest.php`, plus two ConfigTest cases), and the three re-run
 **3/3 detected**.
 
-**Full ledger vs the Cityloger commit: OWED, NOT YET RUN.** A filtered run is a PARTIAL RUN and the
-script says so on every line of one. Run it in a pinned worktree, the way `e4e3ef0` was, so the next
-session's work cannot change what the cases test halfway through.
+**Full ledger vs `c1cf190`: LAUNCHED, NOT YET COUNTED.** 315 cases, running in a pinned
+`git worktree` at that commit (the way `e4e3ef0` was, so the next session's work cannot change what
+the cases test halfway through), logging to `var/claude/ledger-c1cf190.log`. ~2 h, so it outlives
+the session that started it. A filtered run is a PARTIAL RUN and the script says so on every line of
+one; until a count is written here, the ledger-level claim for this tree is OWED. Expected result,
+recorded before it finishes so it can be wrong: **315 detected, 0 undetected** — 303 carried over
+from `e4e3ef0` plus the twelve Cityloger cases, each already verified individually.
