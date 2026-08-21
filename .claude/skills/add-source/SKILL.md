@@ -71,6 +71,20 @@ JS-rendered" objection that a sitemap scan cannot — only core types means noth
 `sitemap_index.xml` is the weaker version of the same question (Seqens); on any site scan the candidate
 index page for `€`, `m²` and `disponib`.
 
+**And a marker count is not a route census — submit the form before ranking the site.** A page can
+scan as "a couple of markers, no lettings route" and *be* a lettings search: Logirep's homepage carries
+exactly two `€` and two `m²` and no lettings link, and those four markers are a search form with
+`ss_trnsctntp=leasing` checked by default. It POSTs to `/`, and its results route exists **only as a
+303 `Location`** — `/recherche?…`, 113 leasing ads embedded as JSON in `drupalSettings`. On any
+candidate that scans as "some markers, no route": read the `<form action>` and submit it with the
+fields the page ships. **Do not follow the redirect blindly — read the `Location`, then check it
+against `robots.txt` before fetching it.** Logirep disallows `/search/`, and robots matching is literal,
+so it does not reach `/recherche`; one path over and the answer would have been no. Two corollaries.
+On Drupal the analogue of `wp-json/wp/v2/types` is **`/jsonapi`** — an empty HTML doc there means the
+module is off, which is a platform fact and not a verdict. And **a site's `sitemap.xml` may not be its
+own**: every one of the 247 `<loc>` entries on Logirep's host points at a 403-ing sibling, which a
+sitemap scan alone would read as a blocked empty site. Check the host inside `<loc>`.
+
 **A client-rendered page is not a dead end — follow the widget to its API host before concluding
 anything.** Zero `€`/`m²` on a large page means rendered elsewhere, not absent. Three greps, two
 fetches: third-party `script src` hosts on the page → absolute URLs and quoted paths inside the widget

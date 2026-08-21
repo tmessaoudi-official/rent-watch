@@ -107,17 +107,38 @@ Cityloger skews to the intermediate and libre stock this project is looking for.
 > JS-rendered" objection a sitemap scan cannot); on any site scan the index page for `€`, `m²` and
 > `disponib`.
 >
-> **Three more went the same way on 2026-08-21, and Track 1's pollable stock is now three sources.** A10 Batigère was
+> **Three more went the same way on 2026-08-21, and Track 1's BUILT stock is still three sources — a fourth is now measured pollable (A12, below).** A10 Batigère was
 > the catalogue's starred best-remaining candidate; its search is a third-party widget whose bundle
 > names its backend, and that host's `robots.txt` answers **500** while the endpoint answers **401**.
 > A7 1001 Vies has no listings post type and routes tenants to `demande-logement-social.gouv.fr`
 > (out of scope, §1). A8 Antin's one recorded lettings route is a **404**. What remains in Track 1 is
-> **A4 AL'in** (authenticated — an INPUT, not a decision), the Tier B email-alert route, and **three
-> second-tier rows that have had a homepage marker scan and nothing more** — A11 Toit et Joie, A12
-> Logirep, A13 Erilia, A12 first. "Measured out" would be the same overclaim that starred A10: those
-> three are unmeasured, not dead.
+> **A4 AL'in** (authenticated — an INPUT, not a decision), the Tier B email-alert route, and **two
+> second-tier rows that have had a homepage marker scan and nothing more** — A11 Toit et Joie and A13
+> Erilia. "Measured out" would be the same overclaim that starred A10: those two are unmeasured, not dead.
 >
-> Two rules came out of this round, both recorded in `docs/SOURCES.md` and `/add-source`: **a client-rendered page is not a dead
+> **A12 Logirep/Polylogis was measured on 2026-08-21 and it is POLLABLE — the best Track 1 find since
+> Cityloger, and it was the row ranked WEAKEST.** Its homepage carries two `€` and two `m²` and no
+> lettings link; those four markers *are* a lettings search form, and its results route exists only as a
+> **303 `Location`** (`/recherche?ss_trnsctntp=leasing`), where the page embeds **113 leasing ads as
+> structured JSON** in `drupalSettings` with no pagination to walk. One endpoint covers four Polylogis
+> landlords; **19 of the 113 are Île-de-France** and 8 of those are in the 78/95 departments the criteria
+> filter on, so unlike Cityloger — live yield 0 — this one would plausibly yield on day one. Their rents sit
+> far above social levels (Rueil-Malmaison 62 m² @ 1116 € h.c.), which reads as *not social* rather than as a
+> tenure: the plafonds that would make it a measurement are still a missing INPUT. So the
+> rule is **a marker count is not a route census** — submit the form, then read the `Location` and check
+> it against `robots.txt` *before* following it (here it mattered: Logirep disallows `/search/`, which
+> does not reach `/recherche`). It is **measured, not built**: `/add-source` still has to solve two
+> things — the card quotes rent **`h.c.`** with charges on the detail page (hard rule 9 wants charges
+> comprises, and reading the card alone under-reports every rent by ~15%), and **neither surface states
+> tenure**, so everything would resolve `UNKNOWN` into the *à vérifier* digest. Every apparent tenure hit on
+> the source is a false one and they came from **UI furniture**, not prose — `PLAI` inside the facet
+> `Plain-pied`, `LLI` inside `Ce·lli·er`, `PLUS` inside `plusieurs`, `SNE` inside `SURESNES`. All five real
+> strings were run through `TenureClassifier`: every one returns `UNKNOWN`/`DIGEST` at 0.00, so the guards
+> hold and **nothing needs fixing** — but that is the fourth outing of this failure class, and the first from
+> a filter facet rather than a sentence.
+>
+> Three rules came out of this round, all recorded in `docs/SOURCES.md` and `/add-source`. The A12 one is
+> above; the other two: **a client-rendered page is not a dead
 > end** — follow the widget's `script src` to its bundle, the bundle to its API host, then check that
 > host; and **an unreadable `robots.txt` has two verdicts** — RFC 9309 makes 5xx *unreachable* (MUST
 > assume complete disallow, stricter than this repo's own posture) and 4xx *unavailable* (MAY access,
