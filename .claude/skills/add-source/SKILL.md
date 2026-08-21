@@ -63,13 +63,30 @@ source stays `enabled: false` until its URL has been confirmed against the live 
 
 **Before asking for a capture, check whether one is needed.** Every source live so far was
 server-rendered and needed none: read `robots.txt` first, then fetch the search page and look for the
-listings in the HTML. And check the site publishes vacancies AT ALL before going deep — three ranked
-candidates (ICF Novedis, Seqens, 3F's own site) turned out to publish a directory of buildings and no
-availability. The cheap pre-check: on WordPress read `sitemap_index.xml` for a listings post type; on
-any site scan the candidate index page for `€`, `m²` and `disponib`.
+listings in the HTML. And check the site publishes vacancies AT ALL before going deep — **five** ranked
+candidates (ICF Novedis, Seqens, 3F's own site, 1001 Vies, Batigère) turned out to publish no
+availability this project can poll. The cheap pre-check, best form first: on WordPress ask
+`wp-json/wp/v2/types`, which enumerates **custom** post types and so settles the "maybe the search is
+JS-rendered" objection that a sitemap scan cannot — only core types means nothing to poll (1001 Vies);
+`sitemap_index.xml` is the weaker version of the same question (Seqens); on any site scan the candidate
+index page for `€`, `m²` and `disponib`.
 
-If it really is an XHR app, ask the developer for the DevTools capture — they have a browser, you do
-not:
+**A client-rendered page is not a dead end — follow the widget to its API host before concluding
+anything.** Zero `€`/`m²` on a large page means rendered elsewhere, not absent. Three greps, two
+fetches: third-party `script src` hosts on the page → absolute URLs and quoted paths inside the widget
+bundle (Batigère's named its own backend, `api.app.quadral-eservices.fr/api` + `/offers/offers`) →
+**that** host's `robots.txt`, plus one unauthenticated probe of the path.
+
+**Then read the robots status code as TWO verdicts, not one.** RFC 9309 §2.3.1.4: *unreachable* (5xx)
+→ a crawler **MUST assume complete disallow**, and the standard is stricter here than this repo's own
+posture — that is what stopped Batigère. §2.3.1.3: *unavailable* (4xx) → a crawler MAY access, so a 403
+is blocked by this repo's stricter posture rather than by the standard. Record which one applies and
+date it: a 500 can be transient, and a row that blurs the two overclaims. A 401 on the endpoint is an
+independent stop — the only way past it is replaying the widget's credential, which hard rule 5
+refuses outright.
+
+If it really is an XHR app whose API host is crawlable, ask the developer for the DevTools capture —
+they have a browser, you do not:
 
 > Open the site's search page, set the filters you actually want (78/95, T4+, the communes), then
 > DevTools → Network → Fetch/XHR → re-run the search. Copy the request as cURL and paste it here.

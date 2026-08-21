@@ -102,9 +102,23 @@ Cityloger skews to the intermediate and libre stock this project is looking for.
 > (A5) and Immobilière 3F's own site (A6) publish no vacancies at all — both dead-end at `al-in.fr`,
 > because Action Logement's ESH allocate by commission. That makes **A4 AL'in the only route to that
 > group's stock**, not one source among many. `docs/SOURCES.md` carries the measurements and the
-> cheap pre-check that would have caught A2, A5 and A6 before any deep crawl: on WordPress read
-> `sitemap_index.xml` for a listings post type; on any site scan the index page for `€`, `m²` and
+> cheap pre-check that would have caught A2, A5 and A6 before any deep crawl: on WordPress ask
+> `wp-json/wp/v2/types` (it enumerates CUSTOM post types, so it settles the "maybe the search is
+> JS-rendered" objection a sitemap scan cannot); on any site scan the index page for `€`, `m²` and
 > `disponib`.
+>
+> **Three more went the same way on 2026-08-21, and Track 1 is now measured out.** A10 Batigère was
+> the catalogue's starred best-remaining candidate; its search is a third-party widget whose bundle
+> names its backend, and that host's `robots.txt` answers **500** while the endpoint answers **401**.
+> A7 1001 Vies has no listings post type and routes tenants to `demande-logement-social.gouv.fr`
+> (out of scope, §1). A8 Antin's one recorded lettings route is a **404**. What remains in Track 1 is
+> **A4 AL'in** (authenticated — an INPUT, not a decision) and the Tier B email-alert route. Two rules
+> came out of it, both in `docs/SOURCES.md` and `/add-source`: **a client-rendered page is not a dead
+> end** — follow the widget's `script src` to its bundle, the bundle to its API host, then check that
+> host; and **an unreadable `robots.txt` has two verdicts** — RFC 9309 makes 5xx *unreachable* (MUST
+> assume complete disallow, stricter than this repo's own posture) and 4xx *unavailable* (MAY access,
+> so a 403 is blocked by this repo's posture, not by the standard). Record which one applies, with
+> the date: a 500 can be transient.
 
 **SOURCE #2 IS LIVE, AND IT IS THE FIRST MIXED-TENURE ONE (2026-08-20).** CDC Habitat is
 `enabled: true`; `scout doctor --source=cdc_habitat` returns **139 annonces, ~21 s**. In'li is pure

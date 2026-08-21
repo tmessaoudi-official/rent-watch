@@ -163,6 +163,32 @@ usable" row from 0% to something real in a single afternoon; nothing else on thi
   `page_param` and `page_path`, validated at load. For a site whose page number sits mid-path. The
   rejected alternative — `url` = the site root, so page one is the homepage widget whose ten cards
   are identical today — fails silently the day that widget becomes "featured" rather than ranks 1-10.
+- [2026-08-21 10:52] AGREED: **A10 Batigère, A7 1001 Vies and A8 Antin are dropped; source #4 ends
+  in a finding rather than a source, and that is the honest terminus.** A10 was the catalogue's
+  starred best-remaining candidate: its offers subdomain is Liferay with a third-party search widget
+  whose bundle names its backend, `api.app.quadral-eservices.fr/api`. Two independent stops, either
+  alone sufficient — that host's `robots.txt` answers **500**, and RFC 9309 §2.3.1.4 says an
+  unreachable robots means a crawler MUST assume complete disallow; and `GET /api/offers/offers`
+  answers **401**, so the only way in would be replaying the widget's credential, which hard rule 5
+  refuses. A7's WordPress REST API enumerates only core post types — no listings type, no
+  client-rendered search behind it — and its tenant route links out to
+  `demande-logement-social.gouv.fr`, which is out of scope entirely (§1). A8's single recorded
+  lettings route, `/louer-acheter`, answers **404**. What remains in Track 1 is A4 AL'in
+  (authenticated — an INPUT, alongside the IMAP credentials and the `plafonds` figures) and the
+  Tier B email-alert route. Enabling A15 instead, which is predominantly social stock, to have a
+  fourth source would be strictly worse than having three.
+- [2026-08-21 10:52] AGREED: **an unreadable `robots.txt` has TWO verdicts, and a row that blurs them
+  overclaims.** 5xx is *unreachable* → MUST assume complete disallow (the standard is stricter than
+  this repo's own posture). 4xx is *unavailable* → a crawler MAY access, so the 403 on
+  `offres.batigere.fr` is blocked by this repo's stricter posture, not by RFC 9309. Both are recorded
+  with their status codes and dated, because a 500 can be transient and the row should invite a
+  re-check rather than close the source forever.
+- [2026-08-21 10:52] AGREED: **when a search is client-rendered, follow the widget to its API host
+  before concluding anything.** Zero `€`/`m²` on a 197 KB page means rendered elsewhere, not absent.
+  Three greps settle it: third-party `script src` hosts on the page → absolute URLs and quoted paths
+  in the widget bundle → the API host's own robots plus one unauthenticated probe. On WordPress the
+  faster form is `wp-json/wp/v2/types`, which enumerates custom post types and so answers the
+  JS-rendered-search objection that a sitemap scan cannot.
 - [2026-08-21 01:39] AGREED: **rank a source by a verified FEED, never by portfolio size.** A2, A5
   and A6 were each ranked on how much stock the landlord owns and each publishes no vacancies at
   all; Seqens and 3F both dead-end at `al-in.fr`, which makes A4 AL'in the only route to the Action

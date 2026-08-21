@@ -43,6 +43,12 @@ where a native alert subscription is the correct route, and the sites worth poll
 
 This is not a reason to work around a 403. It is the reason not to have to.
 
+**Read this claim narrowly.** It says a 403 predicts *which route to use*, and it holds. It does NOT
+say a 200 predicts a pollable feed — five Tier A rows answered 200 and turned out to publish no
+availability this project can poll (A2, A5, A6, A7, A10). "The sites worth polling mostly welcome it"
+was the optimistic reading, and the tally that survives measurement is **3 of 15 built** (In'li, CDC
+Habitat, Cityloger).
+
 ---
 
 ## TWO TRACKS, kept separate end to end (ruled 2026-08-06)
@@ -96,11 +102,40 @@ Three consequences, and the first is the one that changes plans:
 - **In'li is the exception that explains the rule.** It publishes its own feed because it is the group's
   *intermediate* arm and allocates directly — no commission, no SNE number. The ESH delegate because
   their stock is allocated by commission, through the social channel.
-- **A `200` still is not a feed.** Three rows in this table (A2, A5, A6) were ranked on portfolio size
-  and each turned out to publish no availability at all. The cheap pre-check that would have caught all
-  three, before any deep crawl: on WordPress, read `sitemap_index.xml` and look for a **listings post
-  type** (Seqens, 1001 Vies and Batigère have none); on any site, scan the candidate index page for
-  `€`, `m²` and `disponib` — a directory of buildings has none of the three.
+- **A `200` still is not a feed.** Five rows in this table (A2, A5, A6, A7, A10) were ranked on
+  portfolio size and each turned out to publish no availability this project can poll. The cheap
+  pre-check that would have caught them, before any deep crawl: on WordPress, ask the REST API
+  directly — `wp-json/wp/v2/types` enumerates every post type including custom ones, so a site with
+  only core types has **no listings to poll and no JS-rendered search hiding one** (1001 Vies, settled
+  2026-08-21); `sitemap_index.xml` is the weaker version of the same question (Seqens); and on any
+  site, scan the candidate index page for `€`, `m²` and `disponib` — a directory of buildings has none
+  of the three.
+
+### A client-rendered search is not a dead end — follow the widget to its API, then check THAT host (2026-08-21)
+
+Batigère (A10) is the shape worth knowing, because the first three signals all said "keep going" and
+the fourth stopped it dead. Its offers subdomain answers 200 with ~197 KB and **zero** `€`/`m²`, which
+means client-rendered rather than absent — so the question becomes *which* backend renders it. The
+route to that answer is three greps and costs two fetches:
+
+1. Grep the page for third-party `script src` hosts. Batigère's search is a vendor widget:
+   `static.app.quadral-eservices.fr/static/quadral-map-search-engine`.
+2. Fetch the widget bundle and grep it for absolute URLs and quoted paths. It names its own backend —
+   **`https://api.app.quadral-eservices.fr/api`**, with `/offers/offers`, `/offers/programs`,
+   `/offers/references`, `/offers/leads`.
+3. Check **that** host's `robots.txt`, and probe one path unauthenticated. Both answers were stops.
+
+Two rules fell out of it, and they generalise past Batigère:
+
+- **The robots status code is not one verdict, it is two.** RFC 9309 §2.3.1.4: an *unreachable* robots
+  (5xx) means a crawler **MUST assume complete disallow** — the standard is stricter than this project
+  is, and `api.app.quadral-eservices.fr` answers **500**. §2.3.1.3: an *unavailable* robots (4xx) means
+  a crawler MAY access, so the **403** on `offres.batigere.fr` is blocked by this repo's own posture
+  rather than by the standard. Record which one applies; a row that blurs them overclaims.
+- **Quadral is multi-tenant, so this is a lead and not only a dead end.** `api.app.quadral-eservices.fr`
+  serves Batigère through a `/offers/leads/batigere` path, which implies sibling landlords behind the
+  same API. Any future candidate whose search is a `quadral-` widget is the same 401 and the same 500 —
+  check for it early. And a 500 can be transient: re-check before treating A10 as permanent.
 
 ## Tier A — Track 1: institutional, intermediate / LLI. **Where this project earns its keep**
 
@@ -115,12 +150,12 @@ Nothing on the market aggregates these. Status column = HTTP response to a singl
 | **A5** | **Seqens** | `www.seqens.fr` | **200, but NO VACANCY FEED** | n/a | ⛔ **NOT POLLABLE — measured 2026-08-20.** `robots.txt` is clean (`/wp-admin/` only), and there is nothing behind it to poll. Its Yoast `sitemap_index.xml` enumerates every public post type — `post`, `page`, `beetween`, `evenement`, `job`, `metiers`, `publication`, `question_faq`, `realisation`, `theme_faq`, `profil_ideal` — and **none of them is a listings type**. The whole `/louer/` section offers exactly three routes: a *local commercial*, a *parking*, and *un logement social* — and that last page's own outbound link is **`https://al-in.fr/`**. `patrimoine/nos-residences-hlm/` is a résidence directory with **zero** `disponib`, `€` or `m²`, i.e. A2's shape exactly. Seqens does not publish its vacancies; it delegates them to AL'in (A4). |
 | **A6** | **Immobilière 3F** | `www.groupe3f.fr` | **200, but NO VACANCY FEED ON THIS DOMAIN** | Mixed | ⛔ **The corporate site is not pollable — measured 2026-08-20.** Drupal, stock robots (`/search/` and `/search?` disallowed, `/location` allowed). `/location` is editorial: zero `€`, `m²` or `pièce`. `/je-cherche-un-logement` carries no listings either and its outbound routes are **`al-in.fr`**, `logement-actionlogement.fr` and **`cityloger.fr`**. The stock is real; it is published elsewhere — see A6b. |
 | **A6b** | **Cityloger** (the 3F group's own lettings platform) | `www.cityloger.fr` | **200 — REAL FEED, verified 2026-08-20** | Mixed, national | ✅ Pollable today, and the shape is good: `robots.txt` disallows only `/composants/ /classes/ /include/ /dpe/ /newdpe/` — nothing near the search. Results are **server-rendered** and paginated by PATH through an infinite-scroll partial, `resultats-location-{page}-defaut-`, which is **stateless GET** (pages 2 and 3 return disjoint sets with no cookie or token) and terminates cleanly on an empty page. Cards carry filiale, type, rooms, postcode, commune, address, rent **cc**, and floor. **The catch is volume and tenure placement:** the whole national inventory is **51 rentals**, of which **3 are IDF** (2×92, 1×77) — and the tenure lives on the DETAIL page, never on the card. Detail pages do carry the tier-1 field (`Financement`: `LI15P` on the Antony T4, `PEXNC` on an Occitanie social one). ⚠️ Those detail pages also carry generic boilerplate — *"Numéro de demande de logement social"*, *"Commission d'attribution"*, *"catégories de logements sociaux"* — sitting on a listing whose own financement code is **intermediate**. That is the CDC `au plus près` failure class again, on a new surface. |
-| **A7** | **1001 Vies Habitat** | `www.1001vieshabitat.fr` | **200** | Mixed | ⚠️ *[Unverified as a feed — measured 2026-08-20: its `sitemap_index.xml` carries only `post`, `page` and `category` sitemaps, i.e. no listings post type, and the homepage shows zero `€`, `m²` or `disponib`. Not dropped, because a JS-rendered search would not show in either signal — but do not rank it as pollable until something is fetched.]* **Domain corrected** — not `1001vies-habitat.fr`. `robots.txt` sets `Content-Signal: use=reference`, blocks named AI crawlers, `Allow: /` for a generic client. |
-| **A8** | **Antin Résidences** | `www.antin-residences.fr` | **200** | Mixed | Action Logement group — so the A5/A6 finding predicts it delegates to AL'in too. Drupal. Homepage shows zero `€`, `m²` or `disponib`; the only lettings route is `/louer-acheter`. *[Unverified beyond that one fetch, 2026-08-20 — capped deliberately rather than crawled.]* |
+| **A7** | **1001 Vies Habitat** | `www.1001vieshabitat.fr` | **200** | Mixed | ⛔ **NOT POLLABLE — settled 2026-08-21, and it is the A5/A6 delegation pattern a third time.** The 2026-08-20 row left this open because "a JS-rendered search would not show in either signal"; the WordPress REST API answers that directly. `wp-json/wp/v2/types` enumerates **only core types** — `post`, `page`, `attachment`, `nav_menu_item`, `wp_block`, `wp_template`, `wp_template_part`, `wp_global_styles`, `wp_navigation`, `wp_font_family`, `wp_font_face` — so there is no listings post type to poll, and no custom one hiding behind the sitemap. Nor is the search rendered client-side by somebody else's widget: `/devenir-locataire/` and `/nos-residences/` carry **zero** `€`, `louer` or `annonce`, and their only third-party script hosts are a cookie banner, YouTube, LinkedIn and Twitter — no offers widget of the Quadral shape found at A10. What `/devenir-locataire/` links out to is **`www.demande-logement-social.gouv.fr`**, which is out of scope entirely (§1, hard rule 5): 1001 Vies routes its lettings through the SNE, exactly as Seqens and 3F route theirs through AL'in. **Domain corrected** — not `1001vies-habitat.fr`. `robots.txt` sets `Content-Signal: use=reference` and blocks named AI crawlers; `rent-watch/1.0` is a generic client and unaffected — moot now. |
+| **A8** | **Antin Résidences** | `www.antin-residences.fr` | **200** | Mixed | ⛔ **The one lettings route this table recorded does not exist — measured 2026-08-21: `/louer-acheter` answers 404** (a 109 KB styled error page, which is why a size-only check would have passed it). Zero `€`, zero `disponib`, and no outbound `al-in.fr` link on that page to confirm the delegation prediction either way. Action Logement group, so the A5/A6 finding still predicts AL'in delegation — but that is now a prediction with one refuted route behind it, not a measurement. Do not rank it as pollable. *[Unverified: the real lettings route, if any, was not searched for — capped deliberately rather than crawled.]* |
 | **A9** | **Vilogia** | `www.vilogia.fr` | **403** | Mixed, has an intermediate line | Blocks a plain client. Treat as Tier B in practice: email alert, or skip. |
-| **A10** | **Batigère IDF** | `www.batigere.fr` | **200** | Mixed | ⭐ **The best remaining unbuilt candidate — it has a real offers subdomain, `offres.batigere.fr`.** Measured 2026-08-20: the main site advertises it, and the subdomain answers 200 with ~197 KB carrying 75/78 postcodes. Two caveats before building: the page shows **zero** `€`/`m²`/`pièce`, so results are almost certainly rendered client-side (an XHR/JSON endpoint to find — which would be the config-only `json` adapter); and **`offres.batigere.fr/robots.txt` answers 403** (Microsoft-Azure-Application-Gateway), so the robots posture must be settled before any walk — an unreadable robots is not a permission. |
+| **A10** | **Batigère IDF** | `www.batigere.fr` | **200** | Mixed | ⛔ **NOT POLLABLE — measured 2026-08-21. It was ranked ⭐ best-remaining on a 200 and a page size; the feed behind it is authenticated and its host forbids crawling.** `offres.batigere.fr` is **Liferay**, and the search is a third-party widget — `static.app.quadral-eservices.fr/static/quadral-map-search-engine` — whose bundle names its own backend: **`https://api.app.quadral-eservices.fr/api`**, paths `/offers/offers`, `/offers/programs`, `/offers/references`, `/offers/leads`. Two independent stops, either alone sufficient: (1) **`api.app.quadral-eservices.fr/robots.txt` answers 500**, and RFC 9309 §2.3.1.4 is explicit that an *unreachable* (5xx) robots means a crawler **MUST assume complete disallow** — this is the standard's own conservative branch, not merely this project's posture; (2) a plain `GET /api/offers/offers` answers **401**, so the feed is not public and the only way in would be replaying the widget's credential, which hard rule 5 refuses outright. The **403** on `offres.batigere.fr/robots.txt` (Microsoft-Azure-Application-Gateway) is a weaker stop and should be read as such: RFC 9309 §2.3.1.3 treats 4xx as *unavailable*, under which a crawler MAY access — it is this repo's stricter posture that blocks it, not the standard. No email-alert fallback either: `alerte` appears **zero** times on the offers page. A 500 can be transient, so this row invites a re-check on another day rather than closing the source forever. |
 | **A11** | **Toit et Joie** | `www.toitetjoie.com` | **200** | Mixed | Second tier. Homepage marker scan 2026-08-20: zero `€`, zero `m²`; the four `disponib` hits are on `/Nos-offres-d-emploi` (jobs). No lettings route found from the homepage. |
-| **A12** | **Logirep / Polylogis** | `www.logirep.fr` | **200** | Mixed | Second tier. Homepage marker scan 2026-08-20: two `€` and two `m²` hits, no lettings route in the markup. Weakest of the "some markers" group; check only after A10. |
+| **A12** | **Logirep / Polylogis** | `www.logirep.fr` | **200** | Mixed | Second tier. Homepage marker scan 2026-08-20: two `€` and two `m²` hits, no lettings route in the markup. Weakest of the "some markers" group. It is now the LAST unmeasured Tier A candidate rather than a deferred one — A10 is dead, so "check only after A10" no longer orders anything. Settle it with the `wp-json/wp/v2/types` / widget-follow pre-check above before ranking it. |
 | **A13** | **Erilia** | `www.erilia.fr` | **200** | Mixed | Second tier. Homepage marker scan 2026-08-20: zero `€`, `m²`, `disponib`; `/decouvrir-erilia/nos-offres` is corporate, not lettings. |
 | **A14** | **RIVP** | `www.rivp.fr` | **200** | Mixed | ⚠️ Paris-focused — **outside the commune filter**. Listed for completeness; do not enable unless the commune set expands into Paris. |
 | **A15** | **Val d'Oise Habitat** | `www.valdoisehabitat.fr` | **200** | Predominantly **social** | ⚠️ A departmental office. Mostly out of scope by Q4. Low expected yield; enable last, if ever. |
