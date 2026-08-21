@@ -44,7 +44,7 @@ stop and say why config was not enough — a contract every source bypasses is n
 
 | Family | Path | Why |
 |---|---|---|
-| **Institutional** (In'li, CDC Habitat, Seqens, 3F, Vilogia, ICF, 1001 Vies, AL'in…) | HTTP JSON endpoint → `type: json` | These sites have real XHR search endpoints and no serious anti-bot. This is where the project earns its keep — nothing on the market aggregates them. |
+| **Institutional** (In'li, CDC Habitat, Cityloger/3F, AL'in…) | a JSON endpoint → `type: json`, or a server-rendered page → `type: html` | No serious anti-bot, and this is where the project earns its keep — nothing on the market aggregates them. **`json` is not the common case in practice**: all three live sources turned out to be server-rendered, so look for the XHR endpoint, and reach for `html` when there is none rather than inventing one. |
 | **Private portal** (SeLoger, Leboncoin, Bien'ici, PAP, Logic-Immo) | `type: email_alert` | **Primary path, not a workaround.** Within ToS, defeats DataDome entirely because there is no bot, *faster* than polling (alerts fire on publication), and immune to markup churn. |
 
 Direct HTTP scraping of a private portal is opt-in only: `legal_risk: true`, disabled by default, and it
@@ -61,7 +61,15 @@ filter can be applied reliably at the source. Both are social-housing channels a
 Hard rule 1. Placeholder URLs must read `REMPLACER` so they cannot be mistaken for verified ones, and a
 source stays `enabled: false` until its URL has been confirmed against the live site.
 
-Ask the developer to do the DevTools capture — they have a browser, you do not:
+**Before asking for a capture, check whether one is needed.** Every source live so far was
+server-rendered and needed none: read `robots.txt` first, then fetch the search page and look for the
+listings in the HTML. And check the site publishes vacancies AT ALL before going deep — three ranked
+candidates (ICF Novedis, Seqens, 3F's own site) turned out to publish a directory of buildings and no
+availability. The cheap pre-check: on WordPress read `sitemap_index.xml` for a listings post type; on
+any site scan the candidate index page for `€`, `m²` and `disponib`.
+
+If it really is an XHR app, ask the developer for the DevTools capture — they have a browser, you do
+not:
 
 > Open the site's search page, set the filters you actually want (78/95, T4+, the communes), then
 > DevTools → Network → Fetch/XHR → re-run the search. Copy the request as cURL and paste it here.
@@ -120,6 +128,41 @@ is what keeps that convention from doubling as a typo swallower.
   }
 }
 ```
+
+### Pagination, and the detail page — what sources #2 and #3 forced
+
+A first cut reads page one and stops. Three sources in, neither half of that is enough:
+
+| Key | When | Why it exists |
+|---|---|---|
+| `page_param` | the page number is a query parameter | the ordinary case |
+| `page_path` | it is a suffix on the path (`/page-2`) | CDC Habitat disallows its *query* search in `robots.txt` but publishes a query-free path tree. Robots is then re-checked **per page**, because the path is what changes |
+| `{page}` in `url` | it sits mid-path (`resultats-location-{page}-defaut-`) | Cityloger. Page one substitutes like every other page — pointing `url` at the site root so page one is the homepage widget works today and fails silently the day that widget becomes *featured* rather than ranks 1–10 |
+| `total_selector` | the page states how many results it has | **the walk's only proof.** Walking until a page comes back empty is a termination rule, not a correctness check: CDC's out-of-range page answers `301`, which ends a walk exactly like a genuine last page |
+
+Exactly one pagination mechanism per source — two is refused at load, because whichever the adapter
+picks, the ignored one fails silently.
+
+**`detail_map`** is a second field map resolved against a listing's own detail page, for a source
+whose card does not carry what the classifier needs. Cityloger's cards carry no tenure at all, so
+without it every listing resolved `UNKNOWN` and went to the *à vérifier* digest forever — correct
+under §1, and useless. Three rules, none of them stylistic:
+
+- **It costs a request per listing, so it runs behind a gate** — the run's own
+  `Criteria::matchesCommune()`, injected by the CLI. That is the only filter whose inputs the CARD
+  already carries in full, so gating on it cannot reject on a field the detail page would have
+  filled (hard rule 8). A `detail_map` with no gate **refuses**: hydrating everything is a crawl,
+  hydrating nothing is a source that looks healthy and can never match.
+- **Its selectors address the LISTING, never the page.** Measured on Cityloger's frozen payload: the
+  scoped `.description` classifies LLI 0.90; the same listing fed its whole detail page classifies
+  UNKNOWN 0.00, because *"Commission d'attribution"* and *"demande de logement social"* are furniture
+  sitting on social and intermediate pages alike.
+- **It must not define `ref`** — identity comes from the card, and the loader refuses one here.
+  A listing re-identified mid-pass has never been seen, so it is announced again on every run.
+
+Anchor a `tenure_field` selector on its LABEL, not its position: Cityloger's financement value sits
+in the third of three indistinguishable `table.table` elements, and selecting by position feeds a
+DATE into the tenure field the day a label is added above it.
 
 - `default_tenure` — hint only, the classifier still runs. See Step 4.
 - `mixed_tenure` — the fail-closed switch. **Required**, never defaulted in the file. See Step 4.

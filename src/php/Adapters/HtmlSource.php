@@ -40,12 +40,26 @@ use RentWatch\Store\Store;
  * is not a value, and a missing `ref` is a loud source failure — all of it decided in one place for
  * both adapters. An HTML-specific mapper would have had to re-derive every one of those.
  *
- * **What it does NOT do, stated so it is not mistaken for a bug:** it reads page one only, and it
- * never follows a card through to its detail page. Both are deliberate for a first cut — pagination
- * is a separate failure profile (a page-2 fetch that quietly 404s looks exactly like a short result
- * set), and a detail fetch multiplies request count by the number of listings, which is precisely
- * the polling burst Q37 pacing exists to prevent. Floor and lift therefore stay `null`, which Q5
- * already accounts for: they are score components, never disqualifiers.
+ * **It paginates, three ways, and exactly one per source:** `page_param` (a query parameter),
+ * `page_path` (a suffix appended to the url) or a `{page}` template in the url itself, for a site
+ * whose page number sits mid-path. Configuring two is refused at load AND here, because whichever
+ * one the adapter picks, the ignored mechanism fails silently. A walk ends on the site's own
+ * declared total where it publishes one, on an empty page otherwise, and on `maxPages` as a
+ * FAILURE — a page that quietly 404s or redirects to page one otherwise terminates a walk exactly
+ * like a genuine last page.
+ *
+ * **It follows a card to its detail page only when told to, and only for listings that matter.**
+ * A `detail_map` costs one request PER LISTING, which is the polling burst Q37 pacing exists to
+ * prevent, so hydration runs behind a gate the CALLER supplies — the run's own geographic criteria
+ * — and a `detail_map` with no gate is refused rather than defaulted either way. Two things about
+ * that path are load-bearing rather than incidental: it does not add `_text` (on a detail page that
+ * would be the whole page, whose furniture conflicts a correct verdict into UNKNOWN), and a detail
+ * value never erases what the card knew (hard rule 9, in {@see RawListing::mergedWith()}).
+ *
+ * **What it still does NOT do, stated so it is not mistaken for a bug:** nothing here reads a
+ * source's own filters. Fields a source publishes only behind a form — `bedrooms` on every source
+ * so far — stay `null`, which Q5 and hard rule 9 already account for: unknown is not zero, and the
+ * criteria engine must not disqualify on it.
  */
 final readonly class HtmlSource implements Source
 {
