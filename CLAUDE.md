@@ -112,9 +112,24 @@ Cityloger skews to the intermediate and libre stock this project is looking for.
 > names its backend, and that host's `robots.txt` answers **500** while the endpoint answers **401**.
 > A7 1001 Vies has no listings post type and routes tenants to `demande-logement-social.gouv.fr`
 > (out of scope, §1). A8 Antin's one recorded lettings route is a **404**. What remains in Track 1 is
-> **A4 AL'in** (authenticated — an INPUT, not a decision), the Tier B email-alert route, and **two
-> second-tier rows that have had a homepage marker scan and nothing more** — A11 Toit et Joie and A13
-> Erilia. "Measured out" would be the same overclaim that starred A10: those two are unmeasured, not dead.
+> **A4 AL'in** (authenticated — an INPUT, not a decision) and the Tier B email-alert route.
+>
+> **A11 and A13 were the last two marker-scan rows, and both were measured on 2026-08-21 — so Track 1
+> is now measured out, and this time the word is earned.** The exhaustive pass produced a THIRD kind
+> of verdict, which the catalogue had no column for. **A11 Toit et Joie is `www.postehabitat.com`**
+> (301; the domain was stale, the third in three rows) and it is the delegation pattern a fourth
+> time: its availability search is real and returns **0 dwellings** — but that zero is only worth
+> anything because the same form returns **8 parkings and 2 commerces**, which is the rule the row
+> adds, *a search that answers 0 needs a CONTROL query*. Its lettings route links
+> `demande-logement-social.gouv.fr`, out of scope under §1. **A13 Erilia is POLLABLE and worthless**:
+> `/louer/recherche` is clean, stable, GET-paginated and quotes rent `cc` on all 49 listings — and
+> **zero of the 49 are in Île-de-France**. *Pollable* and *useful* are different columns; a catalogue
+> recording only the first keeps proposing work that cannot pay. Erilia also carries the furniture
+> class a FIFTH time, in its worst shape yet: the footer widget *"Ai-je droit à un logement social ?"*
+> classifies **SOCIAL 0.90 → REJECT**, so a selector capturing the page rather than the card would
+> reject every listing on the source while its health stayed green. One thing is worth keeping from
+> A11 — its `/Plafonds-de-ressources` page carries the **PLAI/PLUS/PLS ceiling tables** for IdF, the
+> social half of the missing tier-4 input; it states **no year**, so it is a pointer, not a figure.
 >
 > **A12 Logirep/Polylogis was measured on 2026-08-21 and it is POLLABLE — the best Track 1 find since
 > Cityloger, and it was the row ranked WEAKEST.** Its homepage carries two `€` and two `m²` and no

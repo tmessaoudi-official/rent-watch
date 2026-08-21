@@ -85,6 +85,28 @@ module is off, which is a platform fact and not a verdict. And **a site's `sitem
 own**: every one of the 247 `<loc>` entries on Logirep's host points at a 403-ing sibling, which a
 sitemap scan alone would read as a blocked empty site. Check the host inside `<loc>`.
 
+**A search that answers "0 results" needs a CONTROL query, and a zero-marker homepage still needs the
+form treatment.** A11's zero markers were as misleading as A12's two: Poste Habitat's real availability
+search sits at `/Groupe-Poste-Habitat/Outils/Nos-logements-disponibles` and renders *"Pas de résultats"*
+client-side, so nothing shows in the markup. Submitting it returns **0 dwellings** — a number that on
+its own is equally consistent with *"publishes none"* and *"my POST was malformed"*. **Send a query you
+expect to succeed in the same shape**: the same form answers **8** for `type-bien=parking` and **2** for
+`commerce`, which proves the engine and the field names and makes the zero the site's. Read the criteria
+echo too — that form silently dropped the `region` it was sent, so the 0 was national, not IdF. A filter
+a form accepts and drops is invisible unless the page states what it applied. **Only submit a form that
+reads as a SEARCH** (selects, checkboxes, hidden fields); a form with free-text name/email/message fields
+is a contact or application form, and posting into a landlord's inbox is not a measurement.
+
+**Scope every selector to the CARD, because page furniture can be genuinely social.** The known failure
+class is now five instances deep and Erilia is the worst shape of it: its site-wide footer widget reads
+*"Ai-je droit à un logement social ?"*, which is a correct tier-2 label and classifies **SOCIAL 0.90 →
+REJECT**. Where CDC's *"au plus près"* vetoed one badge, a selector capturing the page here would reject
+**every listing on the source** — and `SourceHealth` would stay green throughout, because the listings
+are still fetched and counted. That is hard rule 2's silent failure arriving through the classifier
+rather than the parser, and no test on the source's own count would catch it. `HtmlSource` keeps `_text`
+off the detail path structurally; on the search path the card element is the scope, so never widen a
+selector to a page-level container to "pick up more text".
+
 **A client-rendered page is not a dead end — follow the widget to its API host before concluding
 anything.** Zero `€`/`m²` on a large page means rendered elsewhere, not absent. Three greps, two
 fetches: third-party `script src` hosts on the page → absolute URLs and quoted paths inside the widget
