@@ -1235,8 +1235,14 @@ per-detail-page robots, detail pacing, the `{page}` url template in two directio
 redefining `ref`. Three were written first as MULTI-LINE seds and came back `sabotage was a no-op` —
 GNU sed matches within a line — so they were rewritten line-scoped, two of them with a
 `/private function withDetail/,$` range because the search-page robots check and the page walk's
-`usleep` are textually identical to the detail ones. The filtered verification confirmed the first
-five before it was stopped (four `ok`, and the no-op that exposed the sed problem).
+`usleep` are textually identical to the detail ones. The filtered verification then went **9/12**, and all three
+failures were holes in the TESTS rather than defects in the cases — the same thing the CDC cases
+found on 2026-08-20. `mergedWith()` had no direct unit test at all: its guarantees were exercised
+only through `HtmlSource`, which injects the CARD's ref into the detail listing before merging, so a
+merge preferring the detail's identity behaved identically and the suite stayed green. A guarantee
+observable only through a caller that neutralises it is assumed, not tested. Fixed in `0309936`
+(`tests/php/Core/RawListingMergeTest.php`, plus two ConfigTest cases), and the three re-run
+**3/3 detected**.
 
 **Full ledger vs the Cityloger commit: OWED, NOT YET RUN.** A filtered run is a PARTIAL RUN and the
 script says so on every line of one. Run it in a pinned worktree, the way `e4e3ef0` was, so the next
