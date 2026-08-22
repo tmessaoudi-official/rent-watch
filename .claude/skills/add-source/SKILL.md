@@ -191,10 +191,41 @@ A first cut reads page one and stops. Three sources in, neither half of that is 
 | `page_param` | the page number is a query parameter | the ordinary case |
 | `page_path` | it is a suffix on the path (`/page-2`) | CDC Habitat disallows its *query* search in `robots.txt` but publishes a query-free path tree. Robots is then re-checked **per page**, because the path is what changes |
 | `{page}` in `url` | it sits mid-path (`resultats-location-{page}-defaut-`) | Cityloger. Page one substitutes like every other page — pointing `url` at the site root so page one is the homepage widget works today and fails silently the day that widget becomes *featured* rather than ranks 1–10 |
+| `embedded_json_selector` | the results are JSON inside a `<script>` tag (`type: json` only) | Logirep/Polylogis. Not pagination — listed here because it is the other "where do the items actually live" key, and its whole result set arrived in one payload with no pages to walk |
 | `total_selector` | the page states how many results it has | **the walk's only proof.** Walking until a page comes back empty is a termination rule, not a correctness check: CDC's out-of-range page answers `301`, which ends a walk exactly like a genuine last page |
 
 Exactly one pagination mechanism per source — two is refused at load, because whichever the adapter
 picks, the ignored one fails silently.
+
+**`embedded_json_selector`** is for a page that serves its results as JSON *inside HTML* rather than
+as an API response — a shape neither adapter could read before Logirep (A12). Its search page ships
+all 113 records in
+`<script type="application/json" data-drupal-selector="drupal-settings-json">` while the visible
+markup carries two `€` — the search form. `html` maps selectors over repeated card elements and there
+is only ONE script tag; `json` parses the response body, which is HTML. Set the key on a `type: json`
+source and the element's text is extracted first; everything after that — `items_path`, the field
+map, `ListingMapper`, and so hard rule 9 — is the ordinary JSON path, unchanged. Three rules:
+
+- **The loader refuses it on any type but `json`**, exactly as it refuses `detail_map` outside
+  `html`. A key the adapter for this type will never read is worse than absent, because it looks
+  like behaviour somebody switched on.
+- **A selector matching nothing THROWS, and so does an empty element.** The likeliest way such a
+  source breaks is the site renaming a `data-` attribute, and the payload then simply is not where it
+  was while the response is still 200 and still a valid page. An empty list there reads as a quiet
+  rental market forever (hard rule 3).
+- **On a Drupal/Solr payload, expect every text field to be a ONE-ELEMENT LIST** —
+  `"…address_locality": ["AVON"]`. `Payload::scalarOf()` unwraps that, and did not until 2026-08-22:
+  before it, commune and cp read as `null` on all 113 rows, `matchesCommune()` refuses a null
+  commune, and the source would have matched nothing ever while `SourceHealth` reported 113 items
+  and a green status. If a new source maps cleanly but matches nothing, look here first.
+
+**And check whether the card's rent is `h.c.` before mapping it.** Logirep quotes hors charges, and
+its charges are not reliably recoverable — a `Charges locatives` field on one detail page (17%), free
+prose on another (30%), nothing at all on a third. Two shapes, two ratios, one absence, so no uplift
+is defensible. `charges_included: false` is the honest answer and `CriteriaEngine` is already built
+for it (*"charges comprises, and never on an HC-only figure"*): the value lands in `rentHc`,
+`max_rent_cc` never fires on it, and the score line says the ceiling is unverifiable. Never estimate
+charges to make a rent comparable — that is hard rule 9's failure with extra steps.
 
 **`detail_map`** is a second field map resolved against a listing's own detail page, for a source
 whose card does not carry what the classifier needs. Cityloger's cards carry no tenure at all, so
