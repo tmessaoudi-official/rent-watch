@@ -635,6 +635,7 @@ bash tests/test-ci-workflow.sh          # proves ci.yml still wires every step C
                                         #   AND that the ledger's baseline gate cannot redden itself
                                         #   (needs tools/phpunit.phar — it executes that gate)
 bash .claude/skills/rw-repair/drift-scan.sh                         # config/doc drift; exit 1 on P0/P1
+bash tests/test-drift-scan.sh           # proves that gate can still go RED (S8: .env.example sync)
 bash -n .claude/hooks/*.sh tests/*.sh tools/*.sh
 python3 prototype/scout.py --help       # the superseded prototype, reference only
 ```
@@ -747,6 +748,7 @@ tests/fixtures/<source>/    Frozen payloads, one dir per source               [n
 tests/sabotage-check.sh     Proves the classifier suite detects a regression
 tests/test-tenure-guard.sh  Proves the §1 tripwire fires, and stays quiet on ordinary PHP
 tests/test-fetch-phpunit.sh Proves the runner fetch refuses a bad signature
+tests/test-drift-scan.sh    Proves drift-scan's S8 still fires — a gate nobody has seen red is untested
 tools/fetch-phpunit.sh      Fetches the runner; pinned SHA-256, refuses to install on a mismatch
 tools/phpunit.phar          Test runner (gitignored — see README § Getting started)
 var/claude/                 Reports, review outputs — gitignored scratch (handoffs are the
@@ -860,6 +862,7 @@ tests/test-tenure-guard.sh         Sabotage test FOR that hook — must-fire and
 .claude/skills/rw-repair/drift-scan.sh  The mechanical half of /rw-repair — run it in a gate
 tests/sabotage-check.sh            Breaks the classifier many ways; the suite must catch every one
 tests/test-fetch-phpunit.sh        Proves the runner fetch refuses a bad signature
+tests/test-drift-scan.sh           Sabotage test FOR that gate — each S8 sub-check must go red
 tests/test-ci-workflow.sh          Proves ci.yml still wires every step this file claims CI runs,
                                    and that the ledger's baseline gate is satisfiable (executes it)
 .github/workflows/ci.yml           CI: suite+guards on every push/PR; sabotage ledger nightly+dispatch

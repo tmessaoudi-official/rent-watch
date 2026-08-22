@@ -70,6 +70,7 @@ check "runs the PHPUnit suite"               has "tools/phpunit.phar"
 check "runs the tenure §1 tripwire test"     has "tests/test-tenure-guard.sh"
 check "runs the runner-fetch signature test" has "tests/test-fetch-phpunit.sh"
 check "runs the config/doc drift scan"       has "drift-scan.sh"
+check "runs the drift-scan self-test"        has "tests/test-drift-scan.sh"
 check "runs the sabotage ledger"             has "tests/sabotage-check.sh"
 
 # The sabotage ledger must NOT be on the per-push fast path — it re-runs the whole suite once per

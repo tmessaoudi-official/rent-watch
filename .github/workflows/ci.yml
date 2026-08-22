@@ -93,6 +93,13 @@ jobs:
       - name: Runner fetch refuses a bad signature
         run: bash tests/test-fetch-phpunit.sh
 
+      # BEFORE the scan itself, deliberately. The scan is a gate, and a gate that has been silently
+      # disabled reports clean — which is exactly how an earlier version of it printed a P0 and
+      # still exited 0. Running the self-test first means a gutted check fails the build instead of
+      # waving the build through.
+      - name: Drift-scan self-test (proves the gate can still go red)
+        run: bash tests/test-drift-scan.sh
+
       - name: Config/doc drift scan (fails on P0/P1)
         run: bash .claude/skills/rw-repair/drift-scan.sh
 
