@@ -86,6 +86,21 @@ final readonly class Criteria
      */
     public function matchesCommune(?string $commune, ?string $postcode): bool
     {
+        // REGION MODE (2026-08-22). An empty `communes` means "do not check the name — the postcode
+        // prefixes decide", which is the only way to say "anywhere in 78 or 95": the prefixes are
+        // an AND that otherwise only ever narrows a name that already matched, so a departement-wide
+        // watch had to be spelled out commune by commune and anything not thought of was silently
+        // invisible. The loader refuses empty prefixes here, so this can never widen to everything.
+        //
+        // An unknown postcode is REJECTED, deliberately reversing the rule below. That is not a
+        // hard-rule-9 violation, it is what hard rule 9 actually says: below, the NAME has already
+        // matched and the postcode is narrowing a decision made on real evidence, so an unknown one
+        // takes nothing away. Here the postcode is the only evidence there is, and "unknown" would
+        // admit every listing anywhere that failed to state one.
+        if ($this->communes === []) {
+            return $this->postcodeMatchesPrefix($postcode);
+        }
+
         if ($commune === null) {
             return false;
         }
@@ -103,6 +118,29 @@ final readonly class Criteria
         if ($digits === '') {
             // A postcode field that carries no digits told us nothing. Unknown, not wrong.
             return true;
+        }
+
+        foreach ($this->postcodePrefixes as $prefix) {
+            if (str_starts_with($digits, $prefix)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Region mode's whole filter: does this postcode start with one of the configured prefixes?
+     *
+     * Separate from the name path on purpose. Sharing one method would have meant threading a flag
+     * through it to invert the unknown-postcode answer, and a boolean that flips a fail-open
+     * decision is the kind of parameter that gets passed wrong once and never noticed.
+     */
+    private function postcodeMatchesPrefix(?string $postcode): bool
+    {
+        $digits = preg_replace('~\D+~', '', (string) $postcode) ?? '';
+        if ($digits === '') {
+            return false;
         }
 
         foreach ($this->postcodePrefixes as $prefix) {

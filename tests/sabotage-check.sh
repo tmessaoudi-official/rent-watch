@@ -1760,6 +1760,39 @@ run_sabotage "the in-loop beat loses an argument to the closure boundary (dies o
   src/php/Cli/Scout.php \
   's%$heartbeat, $watched, \&$passes%$heartbeat, \&$passes%'
 
+# ── region mode (2026-08-22) ─────────────────────────────────────────────────────────────────────
+# `communes: []` means "the postcode prefixes are the whole location filter". It is the first
+# LOOSENING this config has taken, so all four cases below are about the two directions it can fail
+# in, and both are silent.
+#
+# Dead: the filter rejects everything, which is indistinguishable from a quiet rental market — the
+# exact shape hard rule 2 exists for, arriving through config rather than a selector.
+run_sabotage "region mode reverts to matching nothing (reads as a quiet market for ever)" \
+  src/php/Config/Criteria.php \
+  's%return $this->postcodeMatchesPrefix($postcode);%return false;%'
+
+# Open, direction one: the prefix check is skipped along with the name check, so `communes: []`
+# quietly becomes "anywhere in France". Over-matching does not look broken — it looks busy. Same
+# line as the case above, mutated the other way, because that one line IS the region-mode decision.
+run_sabotage "region mode stops checking the postcode prefix (anywhere in France matches)" \
+  src/php/Config/Criteria.php \
+  's%return $this->postcodeMatchesPrefix($postcode);%return true;%'
+
+# Open, direction two: the loader stops refusing the one combination that has no filter left at all.
+# The refusal is what makes the loosening safe, so it is load-bearing, not defensive decoration.
+run_sabotage "the empty-communes + empty-prefixes refusal is removed (config fails open)" \
+  src/php/Config/ConfigLoader.php \
+  's%if ($communes === \[\] && $prefixes === \[\]) {%if (false) {%'
+
+# And the regression region mode actually caused, which no test of region mode itself would find:
+# `communeLabels` is the vocabulary EmailAlertSource reads a commune out of an alert body with.
+# Built from `communes` alone it is empty in region mode, and every emailed listing silently loses
+# its commune — no S1 score, nothing to name in the notification, a weaker dedup key — while still
+# matching on its postcode, so nothing looks wrong.
+run_sabotage "a ranked commune stops being alert-parser vocabulary (emails lose their commune)" \
+  src/php/Config/ConfigLoader.php \
+  's%$communeLabels\[$key\] ??= $label;%%'
+
 printf '\n  %d sabotage(s) detected, %d undetected\n' "$pass" "$fail"
 
 if [[ -n "$_filter" ]]; then

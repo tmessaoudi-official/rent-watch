@@ -65,7 +65,10 @@ final class ConfigLoader
 
         $communeLabels = [];
         $communes = [];
-        foreach ($r->requireStringList('communes') as $label) {
+        // An EMPTY list is legal and means region mode: the postcode prefixes alone decide. See
+        // Criteria::matchesCommune(). The pairing with `postcode_prefixes` is checked below, once
+        // both have been read — neither is meaningful on its own.
+        foreach ($r->requireStringList('communes', allowEmptyList: true) as $label) {
             $key = Criteria::communeKey($label);
             if ($key === '') {
                 throw ConfigError::at($pointer . '.communes', 'commune ' . var_export($label, true) . ' has no letters or digits');
@@ -92,6 +95,24 @@ final class ConfigLoader
             $prefixes[] = $prefix;
         }
 
+        // THE ONE COMBINATION THAT FAILS OPEN. Every other shape of these two keys narrows: a name
+        // list narrows, a prefix list narrows, and the two together narrow twice. Both empty is the
+        // single arrangement that widens to everything, and it is reachable by an ordinary edit —
+        // emptying `communes` to go departement-wide and not noticing the prefixes were never set.
+        //
+        // Refused rather than defaulted, because over-matching is INVISIBLE: a filter that admits
+        // the whole country looks exactly like a suddenly busy rental market, and nothing in the
+        // health model can tell the difference (hard rule 2's failure shape, arriving through
+        // config instead of a selector).
+        if ($communes === [] && $prefixes === []) {
+            throw ConfigError::at(
+                $pointer . '.communes',
+                'empty with no `postcode_prefixes` either — in region mode the prefixes are the only '
+                    . 'filter left, so this asks to be notified about every rental in France. Name at '
+                    . 'least one commune, or at least one postcode prefix',
+            );
+        }
+
         $minRooms = $r->optInt('min_rooms', null, 1, 20);
         $minSurface = $r->optFloat('min_surface_m2', null, 1.0, 1000.0);
         $maxRent = $r->optInt('max_rent_cc', null, 1, 100000);
@@ -108,13 +129,33 @@ final class ConfigLoader
         if ($rankReader !== null) {
             foreach ($rankReader->keys() as $label) {
                 $key = Criteria::communeKey($label);
-                if (!in_array($key, $communes, true)) {
+                // Skipped in REGION MODE, where there is no list for a rank to be outside of. The
+                // check exists to catch dead config; applied to an empty `communes` it would reject
+                // every rank instead, forcing anyone who widens to a departement to delete the half
+                // of their configuration that says where they actually want to live. A rank never
+                // filters, so a rank on a commune the prefixes exclude is inert, not dangerous.
+                if ($communes !== [] && !in_array($key, $communes, true)) {
                     throw ConfigError::at(
                         $pointer . '.commune_rank.' . $label,
                         'ranked but not in `communes` — a rank for a commune that is filtered out is dead config',
                     );
                 }
                 $rank[$key] = $rankReader->requireInt($label, 1, 1000);
+
+                // A ranked commune is also VOCABULARY, not only a preference. `communeLabels` is
+                // what EmailAlertSource scans an alert body with — it is the one field an alert
+                // reliably carries and the criteria engine cannot do without (Q32). Built from
+                // `communes` alone, region mode emptied it, and every listing arriving by email
+                // silently lost its commune: no S1 score, nothing to show in the notification, and
+                // a weaker dedup key, while the listing still matched on its postcode so nothing
+                // looked broken.
+                //
+                // In list mode this changes nothing — the check above already requires every ranked
+                // commune to be in `communes`, so the key is present. In region mode it is the only
+                // vocabulary there is. An alert for an UNRANKED commune still resolves its location
+                // by postcode prefix; it just cannot name it. Recognising arbitrary French place
+                // names would mean geocoding, which this deliberately stays out of.
+                $communeLabels[$key] ??= $label;
             }
             $rankReader->done();
         }

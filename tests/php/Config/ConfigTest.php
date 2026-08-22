@@ -574,7 +574,17 @@ final class ConfigTest extends TestCase
 
     public function testAnUnknownPostcodeIsNotADisqualification(): void
     {
-        self::assertTrue($this->shipped()->matchesCommune('Chatou', null));
+        // LIST MODE only, and now built explicitly rather than read from the shipped file — the
+        // shipped config went to region mode on 2026-08-22, where an unknown postcode IS a
+        // disqualification because it is the only evidence there is. Both rules are real; this one
+        // belongs to the mode that has a name to match on first. See
+        // testRegionModeRefusesAListingWhosePostcodeIsUnknown for the other half.
+        $listMode = ConfigLoader::criteriaFromArray([
+            'communes' => ['Chatou'],
+            'postcode_prefixes' => ['78'],
+        ]);
+
+        self::assertTrue($listMode->matchesCommune('Chatou', null));
     }
 
     public function testAPostcodeFromAnotherDepartementRejectsASameNamedCommune(): void
@@ -589,9 +599,29 @@ final class ConfigTest extends TestCase
         // The stated justification for removing prefix 92 was "every commune is in 78 or 95". If a
         // commune is ever added that is not, this fails — because the two keys would then silently
         // disagree and the new commune could never match.
+        //
+        // Now written to hold in BOTH modes rather than pinning the count of ten, which the shipped
+        // file stopped having on 2026-08-22. The invariant was never really "there are ten"; it was
+        // "no configured commune sits outside the configured prefixes", and that is what is checked
+        // — vacuously true in region mode, where the check that matters instead is that the prefixes
+        // are non-empty, since they are then the entire filter.
         $c = $this->shipped();
         self::assertSame(['78', '95'], $c->postcodePrefixes);
-        self::assertCount(10, $c->communes);
+
+        $outside = array_values(array_filter(
+            array_keys($c->communeLabels),
+            static fn (string $key): bool => !in_array($key, $c->communes, true),
+        ));
+
+        if ($c->communes === []) {
+            // Region mode: the prefixes ARE the filter, so an empty one would be a filter that
+            // admits everything. The loader refuses that; this is the shipped-file half of it.
+            self::assertNotSame([], $c->postcodePrefixes, 'region mode with no prefixes admits all of France');
+
+            return;
+        }
+
+        self::assertSame([], $outside, 'a commune with a label but no filter entry can never match');
     }
 
     public function testARankedCommuneMustAlsoBeFiltered(): void
@@ -602,6 +632,136 @@ final class ConfigTest extends TestCase
         ConfigLoader::criteriaFromArray(self::minimalCriteria([
             'commune_rank' => ['Poissy' => 1],
         ]));
+    }
+
+    // ---------------------------------------------------------------- region mode (2026-08-22)
+    //
+    // `communes: []` means "do not check the NAME — the postcode prefixes decide". It exists
+    // because there was no way to say "anywhere in 78 or 95": the prefixes are an AND that only
+    // ever narrows a name match, so a departement-wide watch had to be written out commune by
+    // commune, and any commune not thought of was silently invisible.
+    //
+    // It is the one loosening in this file that can fail OPEN, so the tests below are written from
+    // that direction: what still gets REJECTED matters more than what now passes.
+
+    public function testRegionModeMatchesAnyCommuneInsideTheConfiguredPrefixes(): void
+    {
+        $c = ConfigLoader::criteriaFromArray([
+            'communes' => [],
+            'postcode_prefixes' => ['78', '95'],
+        ]);
+
+        self::assertSame([], $c->communes);
+        // None of these is in the shipped ten-commune list; all are in the two departements.
+        self::assertTrue($c->matchesCommune('Saint-Germain-en-Laye', '78100'));
+        self::assertTrue($c->matchesCommune('Osny', '95520'));
+        self::assertTrue($c->matchesCommune('Mantes-la-Jolie', '78200'));
+    }
+
+    public function testRegionModeStillRejectsEverythingOutsideThePrefixes(): void
+    {
+        // The whole safety of region mode rests on this. If the prefix check were skipped along
+        // with the name check, `communes: []` would quietly become "anywhere in France" — and the
+        // failure is invisible, because over-matching looks like a busy market, not a broken filter.
+        $c = ConfigLoader::criteriaFromArray([
+            'communes' => [],
+            'postcode_prefixes' => ['78', '95'],
+        ]);
+
+        self::assertFalse($c->matchesCommune('Paris 17e', '75017'));
+        self::assertFalse($c->matchesCommune('Nantes', '44300'));
+        self::assertFalse($c->matchesCommune('Vincennes', '94300'));
+    }
+
+    public function testRegionModeRefusesAListingWhosePostcodeIsUnknown(): void
+    {
+        // DELIBERATELY the opposite of list mode, where an unknown postcode is not a
+        // disqualification (hard rule 9: unknown is not wrong). In list mode the NAME has already
+        // matched, so the postcode is only narrowing a decision already made on real evidence. In
+        // region mode the postcode is the ONLY evidence there is — accepting an unknown one would
+        // admit every listing on earth that failed to state one, which is fail-open.
+        $c = ConfigLoader::criteriaFromArray([
+            'communes' => [],
+            'postcode_prefixes' => ['78', '95'],
+        ]);
+
+        self::assertFalse($c->matchesCommune('Sartrouville', null));
+        self::assertFalse($c->matchesCommune('Sartrouville', 'n/a'));
+    }
+
+    public function testRegionModeWithNoPrefixesIsRefused(): void
+    {
+        // Both filters empty is "notify me about every rental in France". Nobody means that, and
+        // the shape it arrives in is an edit that empties `communes` and forgets the prefixes.
+        // Pinned to the SPECIFIC refusal, not just to the word "communes". Written loosely first,
+        // this passed before region mode existed at all — an empty `communes` was refused outright,
+        // so the assertion was satisfied by the very rule it is meant to outlive.
+        $this->expectException(ConfigError::class);
+        $this->expectExceptionMessageMatches('~region mode.*every rental in France~');
+
+        ConfigLoader::criteriaFromArray([
+            'communes' => [],
+            'postcode_prefixes' => [],
+        ]);
+    }
+
+    public function testRegionModeKeepsCommuneRankAsPurePreference(): void
+    {
+        // In list mode a rank outside `communes` is dead config and is refused. In region mode
+        // there is no list to be outside of, so the same check would reject EVERY rank — forcing
+        // anyone who widens to a departement to delete their ordering, which is the half of the
+        // configuration that says where they actually want to live.
+        $c = ConfigLoader::criteriaFromArray([
+            'communes' => [],
+            'postcode_prefixes' => ['78', '95'],
+            'commune_rank' => ['Sartrouville' => 1, 'Poissy' => 3],
+        ]);
+
+        self::assertSame(1, $c->communeRank[Criteria::communeKey('Sartrouville')] ?? null);
+        self::assertSame(3, $c->communeRank[Criteria::communeKey('Poissy')] ?? null);
+    }
+
+    public function testRegionModeStillGivesTheAlertParserAVocabulary(): void
+    {
+        // A REGRESSION REGION MODE CAUSED, caught by an unrelated suite. `communeLabels` is not
+        // only for `reasons[]` — EmailAlertSource scans an alert body with it, because a commune is
+        // the one field an alert reliably carries and Q32 makes missing location a rejection. Built
+        // from `communes` alone, region mode emptied it and every emailed listing lost its commune:
+        // no S1 score, nothing to name in the notification, a weaker dedup key — and the listing
+        // still matched on its postcode, so nothing looked broken.
+        $c = ConfigLoader::criteriaFromArray([
+            'communes' => [],
+            'postcode_prefixes' => ['78', '95'],
+            'commune_rank' => ['Sartrouville' => 1, 'Le Vésinet' => 2],
+        ]);
+
+        self::assertSame('Sartrouville', $c->communeLabels[Criteria::communeKey('Sartrouville')] ?? null);
+        self::assertSame('Le Vésinet', $c->communeLabels[Criteria::communeKey('Le Vésinet')] ?? null);
+    }
+
+    public function testInListModeARankAddsNoVocabularyBeyondTheCommuneList(): void
+    {
+        // The other half: the union must not become a back door for naming a commune that is not
+        // filtered on. It cannot, because a rank outside `communes` is still refused in list mode —
+        // this pins that the two rules stay consistent with each other.
+        $c = ConfigLoader::criteriaFromArray([
+            'communes' => ['Sartrouville', 'Houilles'],
+            'postcode_prefixes' => ['78'],
+            'commune_rank' => ['Sartrouville' => 1],
+        ]);
+
+        self::assertSame(
+            ['houilles', 'sartrouville'],
+            self::sorted(array_keys($c->communeLabels)),
+        );
+    }
+
+    /** @param list<string> $values @return list<string> */
+    private static function sorted(array $values): array
+    {
+        sort($values);
+
+        return $values;
     }
 
     // ---------------------------------------------------------------- exclusion scope
@@ -830,7 +990,10 @@ final class ConfigTest extends TestCase
     {
         $c = $this->shipped();
 
-        self::assertSame(4, $c->minRooms);
+        // T3 since 2026-08-22, reversing Q3's T4 on the developer's ruling. Measured that day:
+        // 10 of the 13 listings that got past the location filter were rejected here alone, every
+        // one of them under the rent ceiling. `min_surface_m2` below keeps it a real filter.
+        self::assertSame(3, $c->minRooms);
         self::assertSame(75.0, $c->minSurfaceM2);
         self::assertSame(1800, $c->maxRentCc);
         self::assertFalse($c->commuteEnabled);

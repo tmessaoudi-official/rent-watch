@@ -203,12 +203,21 @@ final class LogirepFixtureTest extends TestCase
 
     // ── the gate, measured rather than assumed ───────────────────────────────────────────────────
 
-    public function testTheCommuneGateIsNarrowerThanTheDepartmentAndThatIsRecorded(): void
+    public function testTheLocationGateOnTheShippedConfigIsMeasuredNotAssumed(): void
     {
         // Guards a premise that was WRONG when this source was proposed: "8 rows are in the 78/95
-        // departments the criteria filter on" was read as 8 matches. `matchesCommune()` requires the
-        // commune NAME to be in the list as well, and only one row overlaps. Asserted so the real
-        // number is visible in a test run rather than in a note somebody has to remember.
+        // departments the criteria filter on" was read as 8 matches.
+        //
+        // REWRITTEN 2026-08-22, and the number it pins changed for a real reason rather than to make
+        // a change pass. It used to assert exactly ONE row (Bezons), because the shipped config
+        // named ten communes and `matchesCommune()` needs the NAME as well as the prefix. The
+        // shipped config is now REGION MODE — `communes: []`, so the two prefixes are the whole
+        // filter — which is precisely the widening this test's old message called "the event worth
+        // noticing". Four rows are in 78/95: Bezons plus three in Osny.
+        //
+        // Deliberately still bound to the SHIPPED file rather than to a fixture-local config: its
+        // job is to make the live consequence of a criteria edit visible in a test run, so it must
+        // fail when that file changes. It reads whichever mode is configured.
         $criteria = ConfigLoader::loadCriteria(self::root() . '/config/criteria.json');
         self::assertInstanceOf(Criteria::class, $criteria);
 
@@ -217,13 +226,27 @@ final class LogirepFixtureTest extends TestCase
             static fn (RawListing $r): bool => $criteria->matchesCommune($r->commune, $r->postcode),
         ));
 
-        self::assertCount(
-            1,
+        // Compared on the CANONICAL key, not the raw label. This source publishes the same commune
+        // in two casings — `Les Clayes-sous-Bois` and `les clayes sous bois` both appear in the
+        // frozen payload — so a raw-string assertion would pin the site's typography rather than
+        // the gate's behaviour, and would churn on an editorial change that means nothing here.
+        // Criteria::communeKey() folds them together, which is the same normalisation the filter
+        // itself uses.
+        $keys = array_map(
+            static fn (RawListing $r): string => Criteria::communeKey((string) $r->commune),
             $passing,
-            'on the frozen payload exactly one row passes the commune gate — if this changes, the '
-                . 'source has started publishing in the target communes, which is the event worth noticing',
         );
-        self::assertSame('BEZONS', $passing[0]->commune);
+        $distinct = array_values(array_unique($keys));
+        sort($distinct);
+
+        self::assertCount(
+            8,
+            $passing,
+            'on the frozen payload exactly eight rows pass the location gate under the shipped '
+                . 'region-mode config — a change here means the criteria were edited or the source '
+                . 'started publishing elsewhere, and both are worth noticing',
+        );
+        self::assertSame(['bezons', 'les clayes sous bois', 'osny'], $distinct);
     }
 
     /** @return list<RawListing> */

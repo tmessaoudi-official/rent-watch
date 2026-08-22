@@ -97,11 +97,39 @@ sharing a sentence with words that describe who manages the flat, not its tenure
 `au plus près`, `bailleur social`: the pattern is excluded vocabulary appearing as ordinary French on
 an eligible listing, and it has now cost three fixes.
 
-**Live yield today is 0 matches, and that is not a defect.** All 51 listings are outside the 78/95
-commune filter (the 3 IDF ones are 92 and 77), so nothing is hydrated on a real pass right now. The
+**Cityloger's live yield is 0 matches, and that is not a defect.** All 51 listings are outside the
+78/95 filter (the 3 IDF ones are 92 and 77), so nothing is hydrated on a real pass right now. The
 machinery is proven by fixtures, not by yield. `docs/SOURCES.md` A6b records why the source is worth
 having anyway: 3F's *social* stock is allocated through AL'in and the SNE, so what surfaces on
 Cityloger skews to the intermediate and libre stock this project is looking for.
+
+> **THE PROJECT-WIDE "0 matches" CLAIM THAT USED TO STAND HERE WAS WRONG, and the way it was wrong
+> is the lesson.** It read *"live yield is 0 because everything is outside the commune filter"* —
+> true of Cityloger, and false of the tree. Measured 2026-08-22 by running all four sources against
+> live payloads: **474 listings, 457 rejected on location — and 13 got past it.** Twelve of those
+> were near-misses (9 In'li LLI at 1017–1353 € CC and a CDC 82 m² at 1669 €, all rejected by
+> `min_rooms: 4` alone; two CDC 5-pièces at 112 and 117 m² rejected by the rent ceiling). The
+> headline number was right and its explanation was invented, which is worse than being wrong twice:
+> a true number attached to a false cause stops anyone looking. **Never generalise one source's
+> measurement to the tree** — `scout run --seed -v --source=<name>` on a throwaway
+> `RENT_WATCH_DB` prints every rejection with its reason and costs one poll.
+
+**Location is REGION MODE as of 2026-08-22, and `min_rooms` is 3.** `communes: []` means the name is
+not checked and `postcode_prefixes` is the entire location filter; `commune_rank` still orders
+results, so the Boucle de Seine is a preference rather than a hard reject. Both changes are ruled
+(Q1, Q3 in `docs/OPEN-QUESTIONS.md`, each naming the one line that reverses it) and both are
+measured: together they take the live yield from **0 to 8 matches**. Three things to know before
+touching this. **Region mode is the first LOOSENING this config has taken**, so it is guarded from
+both sides — the loader REFUSES `communes` and `postcode_prefixes` both being empty (the one shape
+that fails open, and over-matching is invisible because it looks like a busy market), and an unknown
+postcode is REFUSED in region mode though it is forgiven in list mode. That is not a hard-rule-9
+violation but what hard rule 9 actually says: in list mode the name already matched and the postcode
+only narrows, while in region mode the postcode is the only evidence there is. **And it caused a
+regression no test of region mode itself would have found**: `Criteria::communeLabels` is the
+vocabulary `EmailAlertSource` reads a commune out of an alert body with, and building it from
+`communes` alone left it empty — every emailed listing would have silently lost its commune (no S1
+score, nothing to name in the notification, a weaker dedup key) while still matching on its
+postcode, so nothing would have looked broken. Ranked communes now feed that vocabulary too.
 
 > **Two ranked sources were dropped the same day, and the catalogue was wrong in nine rows.** Seqens
 > (A5) and Immobilière 3F's own site (A6) publish no vacancies at all — both dead-end at `al-in.fr`,

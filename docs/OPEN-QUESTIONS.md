@@ -46,9 +46,9 @@ bundle integration raised on its own.
 | # | Shipped in `config/criteria.json` | Resolution |
 |---|---|---|
 | F1 | (not a config key) | `Tenure::isExcluded()` is hard-coded. §1 is not user-overridable, so it is deliberately absent from config. |
-| F2 | `communes` — the same 10 | **Kept as a hard filter** (Q1). The named neighbours are **not** added: adding a commune is a one-line config edit the day it is wanted, and adding ten unrequested ones widens the search on my judgement rather than the developer's. Matching is on **normalised commune + postcode only**, never a substring search over the description — the prototype's *"proche Chatou"* over-match is fixed by construction. |
+| F2 | `communes` — **now empty: REGION MODE** | **REVERSED 2026-08-22** (see Q1). The ten named communes yielded **zero matches** across all four live sources when measured that day, while 60 listings sat in 78/95; the list is now empty and the prefixes are the whole location filter. Ranking still prefers the Boucle de Seine. Originally **kept as a hard filter** (Q1). The named neighbours are **not** added: adding a commune is a one-line config edit the day it is wanted, and adding ten unrequested ones widens the search on my judgement rather than the developer's. Matching is on **normalised commune + postcode only**, never a substring search over the description — the prototype's *"proche Chatou"* over-match is fixed by construction. |
 | F3 | `postcode_prefixes` — `78`, `95` | **`92` REMOVED.** F2 and F3 both apply, so `92` only ever admitted Bezons-adjacent spillover — and every commune in F2 is in 78 or 95. A prefix that can never match anything the commune filter also passes is dead config that reads as intent. If a 92 commune is ever wanted, it is added to F2 and F3 together. |
-| F4 | `min_rooms: 4` | Kept (Q3). Unknown room count does **not** disqualify. |
+| F4 | `min_rooms: 3` | **REVERSED 2026-08-22** (see Q3): 10 of the 13 listings that got past the location filter were rejected here alone, every one under the rent ceiling. Originally kept at `4` (Q3). Unknown room count does **not** disqualify. |
 | F5 | `min_surface_m2: 75` | Kept (Q3). Unknown surface does **not** disqualify. |
 | F6 | `max_rent_cc: 1800` | Kept, **charges comprises**, hard (Q2). An unknown CC rent does not disqualify. |
 | F7 | *(absent)* | **Removed as a disqualifier** (Q5) — it is score component S5/S6 now. |
@@ -133,7 +133,23 @@ These are from the brief §5; **none has a weight yet**, and the weights are a d
 
 ## Part 2 — Blocking architecture decisions
 
-### Ⓐ Q1 — ANSWERED 2026-08-07: commune stays the hard filter
+### Ⓐ Q1 — ANSWERED 2026-08-07: commune stays the hard filter — **WIDENED 2026-08-22**
+
+> **WIDENED 2026-08-22 to REGION MODE, and location is still a hard filter.** `communes` is now
+> empty, which means the name is not checked and `postcode_prefixes` (78, 95) is the whole location
+> filter. The reason is measured, not preferential: on live payloads that day the ten named communes
+> matched **nothing at all** across four sources, while **60 listings** sat inside those two
+> departements. The Boucle de Seine preference is not lost — `commune_rank` still orders results, so
+> what changed is that a neighbouring commune stopped being a silent rejection and became a
+> lower-scoring match.
+>
+> This does NOT reopen the commute question: S2 is still weight 0 and inert until an IDFM key
+> exists. If anything it makes that question sharper, because a departement-wide filter is exactly
+> the case where *"≤ N minutes door-to-door"* would beat a geographic one.
+>
+> **Reverses with one line:** put the ten communes back in `config/criteria.json` — they are listed
+> verbatim in that file's own `_communes` note. The loader refuses `communes` and
+> `postcode_prefixes` both being empty, so the widened form cannot degrade into no filter at all.
 
 **ANSWERED 2026-08-07 — the default applies.** F2 remains a hard filter; S2 (commute) ships with
 weight 0 and is inert until an IDFM key exists. `src/php/Enrich/Transit.php` is therefore NOT
@@ -156,7 +172,16 @@ on rent (hard rule 9 — `null` is not zero), it loses the rent-headroom score c
 **Default if unanswered:** hard cutoff at 1800 **charges comprises**, and normalise every source to CC.
 Changes: the criteria engine's return type (boolean vs. graded).
 
-### Ⓐ Q3 — ANSWERED 2026-08-07: T4 / 75 m², both hard
+### Ⓐ Q3 — ANSWERED 2026-08-07: T4 / 75 m², both hard — **T4 REVERSED 2026-08-22**
+
+> **REVERSED 2026-08-22, on measurement rather than preference.** `min_rooms` is now **3**. The
+> question this entry left open was its own words — *"is a large T3 ever acceptable?"* — and the
+> live data answered it: of the 13 listings that got past the location filter that day, **10 were
+> rejected by this filter alone**, and every one of them was under the rent ceiling (9 In'li LLI at
+> 1017–1353 € CC, plus a CDC 82 m² at 1669 €). T4-or-larger at ≤1800 € CC did not exist across the
+> four live sources. `min_surface_m2: 75` is **unchanged** and is what keeps this a real filter — an
+> 80 m² T3 is now in scope, a 55 m² one is not. **Reverses with one line:** `min_rooms` back to `4`
+> in `config/criteria.json`.
 
 **ANSWERED 2026-08-07 — the default applies.** `min_rooms: 4`, `min_surface_m2: 75`, both hard
 disqualifiers. A large T3 is not in scope. An **unknown** room count or surface does not disqualify —

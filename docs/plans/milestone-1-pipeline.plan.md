@@ -1347,6 +1347,71 @@ A changelog that overstates is worse than one that omits, because the next sessi
   a false explanation, which is the worse of the two errors. The bottleneck is **delivery**, not
   discovery; a fifth institutional source does not move it.
 
+- [2026-08-22 16:20] AGREED: **region mode.** `communes: []` means the name is not checked and
+  `postcode_prefixes` is the entire location filter. Developer-ruled after being shown the
+  measurement, and it widens Q1 rather than reversing it — location is still a hard filter. The
+  measurement: 474 live listings across four sources, **457 rejected on location**, 60 of them
+  sitting inside 78/95 in communes nobody had listed (Saint-Germain-en-Laye alone, 13). Writing a
+  departement out commune by commune was the only way to express this before, and anything not
+  thought of was invisible. `commune_rank` still orders results, so the Boucle de Seine became a
+  preference instead of a silent rejection. Reverses by putting the ten names back — they are in
+  `criteria.json`'s own `_communes` note.
+
+- [2026-08-22 16:20] AGREED: **`min_rooms: 3`**, reversing Q3's T4. Measured, not preferential: of
+  the 13 listings that got past the location filter, **10 were rejected by this filter alone** and
+  every one was under the rent ceiling (9 In'li LLI at 1017–1353 € CC, one CDC 82 m² at 1669 €).
+  T4-or-larger at ≤1800 € CC did not exist across the four live sources that day. Q3's own open
+  question was *"is a large T3 ever acceptable?"*; the live data answered it. `min_surface_m2: 75`
+  is unchanged and is what stops this becoming a firehose. **Together the two changes take the live
+  yield from 0 to 8 matches.**
+
+- [2026-08-22 16:20] NOTED: **region mode is the first LOOSENING this config has taken, so it is
+  guarded from both sides.** The loader REFUSES `communes` and `postcode_prefixes` both being empty
+  — the single shape of these two keys that widens to everything, reachable by an ordinary edit, and
+  invisible once made because over-matching looks like a busy market rather than a broken filter.
+  And an unknown postcode is REFUSED in region mode while it stays forgiven in list mode. That
+  inversion is not a hard-rule-9 violation but what hard rule 9 actually says: in list mode the NAME
+  has already matched and the postcode merely narrows a decision made on real evidence, so unknown
+  takes nothing away; in region mode the postcode is the only evidence there is, and forgiving it
+  would admit every listing anywhere that failed to state one.
+
+- [2026-08-22 16:20] NOTED: **region mode caused a regression that no test of region mode would have
+  found, and an unrelated suite caught it.** `Criteria::communeLabels` is not only for `reasons[]` —
+  it is the vocabulary `EmailAlertSource` scans an alert body with, because a commune is the one
+  field an alert reliably carries and Q32 makes missing location a rejection. Built from `communes`
+  alone it was empty in region mode, so every listing arriving by email would have lost its commune:
+  no S1 score, nothing to name in the notification, a weaker dedup key — while still matching on its
+  postcode, so nothing would have looked wrong. Ranked communes now feed the vocabulary too, which
+  is a no-op in list mode (a rank is already required to be in `communes`). The fix was verified by
+  the ORIGINAL failing test going green **unmodified**, which is the only evidence that separates a
+  cause fix from a test edit. An alert for an unranked commune still resolves by postcode prefix; it
+  just cannot be named. Recognising arbitrary French place names means geocoding, deliberately out
+  of scope.
+
+- [2026-08-22 16:20] AGREED: **channel choice lives in the gitignored `criteria.local.json`, not in
+  the committed `criteria.json`.** `console` stays shipped; `ntfy` and `email` are enabled locally.
+  Committing `ntfy` would make the shipped config attempt a push in CI, in the test suite and on any
+  fresh clone with no `.env` — and the topic is a secret, which has no business in a tracked file.
+  The reason this is safe rather than a silent loss: `compose.yaml` mounts `./config` read-only into
+  the container, so a local override DOES reach the deployment. Both channels verified end to end —
+  the ntfy message was read back off ntfy.sh by polling the topic, and the `.eml` was read from
+  `var/outbox`. Email runs `SMTP_TRANSPORT=file` until real SMTP credentials exist, which produces a
+  readable message rather than pretending to send.
+
+- [2026-08-22 16:20] NOTED (latent, not fixed): **nothing loads `.env`.** The code reads `getenv()`,
+  and only Compose's `env_file:` populates it — so on the host `.env` is inert and a channel
+  configured there is simply disabled. It fails LOUDLY (`⚠ canal ntfy désactivé : NTFY_TOPIC is not
+  set`), which is why this is a note and not a defect, but the host and the container behave
+  differently for the same file. Workaround on the host: `set -a; . ./.env; set +a`.
+
+- [2026-08-22 16:20] NOTED (latent, not fixed): **In'li's field map has no `title`** — 174/174 live
+  listings carry a blank one. Two consequences: `exclude_title_patterns` can never fire on the
+  flagship source, so a parking ad would have to be caught by rooms or surface, and hard rule 9 says
+  an unknown measurement is not a disqualification. Theoretical today — all 19 card links in the
+  frozen payload are `/location-appartement-…` — and the notification headline is synthesised from
+  commune, rooms and surface, so it reads correctly. Worth a `title` mapping the day In'li lists
+  anything that is not a flat.
+
 ## Formal plan — schema v4, the `group_key` history overlay (2026-08-19 23:02)
 
 Ruled above. Two holes were found while planning that the ruling's own doctrine settles, and one
