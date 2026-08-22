@@ -1500,6 +1500,63 @@ A changelog that overstates is worse than one that omits, because the next sessi
     those exact characters. Turning `\w` into anything would corrupt a credential silently, which is
     this same defect arriving from the other direction.
 
+- [2026-08-22 21:10] MEASURED, and it settles what "add more information to the notification" can
+  cost: **what each live source actually puts on its CARD.** Read off the frozen payloads and the
+  committed field maps, not inferred:
+
+  | source | matches | title | floor | lift | description |
+  |---|---:|---|---|---|---|
+  | In'li | 54 | ✗ | ✗ | ✗ | ✗ |
+  | CDC Habitat | 33 | ✓ | ✓ | ✓ | ✓ |
+  | Cityloger | 0 | ✓ | ✓ | detail page | detail page |
+  | Logirep | 5 | ✓ | ✗ | ✗ | ✗ |
+
+  An In'li card's ENTIRE text content is `1 005 € cc 3 pièces · 55.32 m² Longjumeau`. Four facts.
+  There is nothing further to map, so no field-map change can produce a floor, a lift, a
+  description or a title for the source that supplies two thirds of the matches — only a second
+  request can.
+
+- [2026-08-22 21:10] NOTED (blocks the obvious fix, and nobody had noticed): **widening the region
+  to all of Île-de-France made the detail-fetch gate nearly vacuous.** `detail_map` hydration is
+  gated on `Criteria::matchesCommune()`, which was chosen because it is the only filter whose inputs
+  the CARD carries in full (hard rule 8). That was cheap while the filter was ten communes —
+  Cityloger hydrates 3 of 51. It is not cheap now: In'li's 174 listings are Île-de-France-wide, so a
+  `detail_map` on In'li would issue **~170 requests per pass, every 15 minutes**. That is a crawl,
+  not a poll, and hard rule 5 forbids it.
+
+  **The way out is to gate on NOVELTY, not location**: hydrate a listing the first time it is ever
+  seen and store the result. Steady state is a handful of new listings per pass. It does not weaken
+  hard rule 8 — that rule is about not rejecting on a field enrichment would have filled, and this
+  changes WHEN a page is fetched, not WHICH listings are judged on what.
+
+- [2026-08-22 21:10] AGREED (developer choice, `AskUserQuestion`): **richer listing details ship in
+  TWO phases.** Phase 1 is what is already extracted and merely never displayed — no new request, no
+  new parsing. Phase 2 is novelty-gated hydration, which is what unlocks title, floor, lift,
+  description and kitchen type on the sources that put none of it on the card.
+
+  Splitting them is not just delivery cadence: phase 2 changes request VOLUME while phase 1 changes
+  only display, and landing both together would mean a source polling harder had two suspects.
+
+- [2026-08-22 21:10] SHIPPED (phase 1): **the notification carries the postcode, the departement,
+  the floor and the lift.** The headline is now `82/100 — Sartrouville 78500 · T4 88 m² · 1450 € CC`
+  and a first reason line reads `Yvelines (78) · 2e étage · avec ascenseur`. `Core/Department` is
+  the lookup — Île-de-France only, because those eight prefixes are what the criteria admit, and an
+  unknown postcode returns `null` so the line is omitted rather than guessed.
+
+  Every rule on that line is hard rule 9 at the display layer, and each has its own sabotage case:
+  `floor === 0` is **RDC and real** (read as falsy it vanishes, which is the display twin of
+  rejecting a listing for not stating a floor); an **unmentioned** lift is not an absent one, so
+  `null` says nothing while `false` says *sans ascenseur*; and the postcode is in the headline
+  because a commune name alone is ambiguous — three Île-de-France departements have a Neuilly — and
+  on In'li, which ships no title, the headline is the ONLY text in the notification.
+
+- [2026-08-22 21:10] MEASURED, on a report of parkings reaching the list: **none of the 92 notified
+  rows is a parking.** Every one is a flat. But the report pointed at something real: In'li ships no
+  title at all, and `exclude_title_patterns` matches on the TITLE — so that filter is structurally
+  dead on the source that produces two thirds of the matches. Nothing slipped through because In'li
+  happens to list only flats and every card link reads `/location-appartement-…`; that is luck, not
+  a filter working. Phase 2 closes it, because a detail page is where In'li's title lives.
+
 ## Formal plan — schema v4, the `group_key` history overlay (2026-08-19 23:02)
 
 Ruled above. Two holes were found while planning that the ruling's own doctrine settles, and one

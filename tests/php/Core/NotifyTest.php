@@ -46,11 +46,13 @@ final class NotifyTest extends TestCase
             title: $pick('title', 'SUPERBE APPARTEMENT RARE SUR LE MARCHE'),
             url: $pick('url', 'https://example.test/a/1'),
             commune: $pick('commune', 'Sartrouville'),
-            postcode: '78500',
+            postcode: $pick('postcode', '78500'),
             rentCc: $pick('rentCc', 1450),
             rentHc: $pick('rentHc', null),
             surfaceM2: $pick('surface', 88.0),
             rooms: $pick('rooms', 4),
+            floor: $pick('floor', null),
+            hasElevator: $pick('hasElevator', null),
         );
     }
 
@@ -66,8 +68,81 @@ final class NotifyTest extends TestCase
             Verdict::matched(82, ['mention explicite « LLI »'], true),
         );
 
-        self::assertSame('82/100 — Sartrouville · T4 88 m² · 1450 € CC', $n->title);
+        // The postcode joined the commune on 2026-08-22 — see
+        // testTheHeadlineNamesThePostcodeAsWellAsTheCommune, which owns that decision. What this
+        // test is about is unchanged and is the reason it keeps its own name: the source's TITLE is
+        // still absent, and still must be.
+        self::assertSame('82/100 — Sartrouville 78500 · T4 88 m² · 1450 € CC', $n->title);
         self::assertStringNotContainsString('SUPERBE', $n->title);
+    }
+
+    public function testTheHeadlineNamesThePostcodeAsWellAsTheCommune(): void
+    {
+        // Added 2026-08-22, on a real complaint: In'li ships no title and the headline carried the
+        // commune alone, so a notification read as a bare price and a link. A commune name without
+        // its postcode is genuinely ambiguous in Île-de-France — there is a Neuilly in three
+        // departements — and the postcode is the one fact every source already provides.
+        $n = (new Formatter())->match(
+            $this->listing(),
+            Verdict::matched(82, ['mention explicite « LLI »'], true),
+        );
+
+        self::assertSame('82/100 — Sartrouville 78500 · T4 88 m² · 1450 € CC', $n->title);
+    }
+
+    public function testTheFactsLineNamesTheDepartmentAndWhatIsKnownAboutTheBuilding(): void
+    {
+        // Everything on this line was ALREADY extracted and simply never shown. It costs no request
+        // and no new parsing — which is why it ships before the detail-page hydration that floor and
+        // lift need on the sources that do not put them on the card.
+        $n = (new Formatter())->match(
+            $this->listing(['floor' => 2, 'hasElevator' => true]),
+            Verdict::matched(82, ['mention explicite « LLI »'], true),
+        );
+
+        self::assertContains('Yvelines (78) · 2e étage · avec ascenseur', $n->reasons);
+    }
+
+    public function testTheGroundFloorIsSaidRatherThanTreatedAsAbsent(): void
+    {
+        // Hard rule 9 at the display layer: `floor === 0` is falsy and REAL. A RDC flat that
+        // silently loses its floor is the same defect as one rejected for not stating it.
+        $n = (new Formatter())->match(
+            $this->listing(['floor' => 0]),
+            Verdict::matched(50, [], true),
+        );
+
+        self::assertContains('Yvelines (78) · RDC', $n->reasons);
+    }
+
+    public function testAnUNMENTIONEDLiftIsNotReportedAsAbsentOne(): void
+    {
+        // `null` is not `false`. "sans ascenseur" about a building nobody described is a fact the
+        // notification invented, and it is the kind that makes someone skip a flat that has one.
+        $withoutInfo = (new Formatter())->match($this->listing(), Verdict::matched(50, [], true));
+        $knownAbsent = (new Formatter())->match(
+            $this->listing(['hasElevator' => false]),
+            Verdict::matched(50, [], true),
+        );
+
+        self::assertContains('Yvelines (78)', $withoutInfo->reasons);
+        self::assertContains('Yvelines (78) · sans ascenseur', $knownAbsent->reasons);
+    }
+
+    public function testAListingOutsideTheKnownDepartmentsStillFormats(): void
+    {
+        // Logirep publishes nationally. Nothing outside Île-de-France can match today, but a
+        // formatter that throws on an unexpected postcode would take the whole pass down for a
+        // listing it was only ever going to reject.
+        $n = (new Formatter())->match(
+            $this->listing(['postcode' => '33000', 'commune' => 'Bordeaux']),
+            Verdict::matched(50, [], true),
+        );
+
+        self::assertSame('50/100 — Bordeaux 33000 · T4 88 m² · 1450 € CC', $n->title);
+        foreach ($n->reasons as $reason) {
+            self::assertStringNotContainsString('(33)', $reason, 'an unknown departement is omitted, never guessed');
+        }
     }
 
     public function testAnHorsChargesRentIsFLAGGEDRatherThanShownAsIfComparable(): void

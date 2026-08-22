@@ -1852,6 +1852,30 @@ run_sabotage "wrapping quotes are kept, so every quoted secret is wrong by two c
   src/php/Config/DotEnv.php \
   's%return substr($value, 1, -1);%return $value;%'
 
+# ── the notification's facts line (2026-08-22) ─────────────────────────────────────────────────────
+#
+# This is the product's ONLY user-facing surface -- there is no web UI by design -- so a defect here
+# is not cosmetic: it is the whole output. All three below are hard rule 9 at the display layer,
+# where `null` and `0` and `false` are three different facts about a building.
+
+# `floor === 0` is RDC and REAL. Read as falsy it vanishes, which is the display twin of rejecting a
+# listing for not stating a floor.
+run_sabotage "the ground floor is treated as no floor at all (RDC vanishes)" \
+  src/php/Core/Notify/Formatter.php \
+  's%if ($listing->floor !== null) {%if (!empty($listing->floor)) {%'
+
+# An UNMENTIONED lift becomes an absent one -- the notification asserting something no source said,
+# about the one feature that makes a 5th-floor flat unlivable for some people.
+run_sabotage "a lift nobody mentioned is reported as absent (a fact the tool invented)" \
+  src/php/Core/Notify/Formatter.php \
+  's%if ($listing->hasElevator !== null) {%if (true) {%'
+
+# The postcode leaves the headline. On In'li -- 54 of 83 matches, and it ships NO title -- the
+# headline is the only text in the notification, so this returns it to a bare commune and a price.
+run_sabotage "the postcode is dropped from the headline (ambiguous commune, no title)" \
+  src/php/Core/Notify/Formatter.php \
+  "s%\$where = \$where === '' ? \$postcode : \$where . ' ' . \$postcode;%%"
+
 printf '\n  %d sabotage(s) detected, %d undetected\n' "$pass" "$fail"
 
 if [[ -n "$_filter" ]]; then

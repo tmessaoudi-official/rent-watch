@@ -121,6 +121,28 @@ Cityloger skews to the intermediate and libre stock this project is looking for.
 > measurement to the tree** — `scout run --seed -v --source=<name>` on a throwaway
 > `RENT_WATCH_DB` prints every rejection with its reason and costs one poll.
 
+**The notification carries the postcode, the departement, the floor and the lift** (phase 1,
+2026-08-22). Headline: `82/100 — Sartrouville 78500 · T4 88 m² · 1450 € CC`; first reason line:
+`Yvelines (78) · 2e étage · avec ascenseur`. `Core/Department` is the lookup, Île-de-France only —
+those eight prefixes are what the criteria admit, and an unknown postcode returns `null` so the line
+is omitted rather than guessed. Every rule on it is **hard rule 9 at the display layer**, each with
+its own sabotage case: `floor === 0` is RDC and REAL (read as falsy it vanishes — the display twin
+of rejecting a listing for not stating a floor), and an UNMENTIONED lift is not an absent one, so
+`null` says nothing while `false` says *sans ascenseur*.
+
+> **Phase 2 — floor, lift, description and title on the sources that ship none of it — is blocked on
+> a request-volume problem the region change created, and it is worth knowing before proposing a
+> `detail_map` anywhere.** An In'li card's ENTIRE text is `1 005 € cc 3 pièces · 55.32 m²
+> Longjumeau`: four facts, no title, so `exclude_title_patterns` is **structurally dead on the
+> source that produces two thirds of the matches** (nothing has slipped through because In'li lists
+> only flats — luck, not a filter). The obvious fix is a `detail_map`, and hydration is gated on
+> `Criteria::matchesCommune()` because that is the only filter whose inputs the CARD carries in full
+> (hard rule 8). That gate was cheap at ten communes — Cityloger hydrates 3 of 51 — and is nearly
+> VACUOUS now that the region is all of Île-de-France: In'li would hydrate ~170 of 174 listings
+> every 15 minutes, which is a crawl and forbidden by hard rule 5. **Gate on NOVELTY instead** —
+> hydrate a listing the first time it is ever seen, store the result — which changes *when* a page
+> is fetched, not *which* listings are judged on what, so hard rule 8 is untouched.
+
 **Location is REGION MODE as of 2026-08-22 — and by the end of that day it covered ALL of
 Île-de-France, at `min_rooms: 3`, `min_surface_m2: 50` and `max_rent_cc: 1200`.** `communes: []`
 means the name is not checked and `postcode_prefixes` is the entire location filter; `commune_rank`

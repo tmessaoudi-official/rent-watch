@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace RentWatch\Core\Notify;
 
+use RentWatch\Core\Department;
 use RentWatch\Core\RawListing;
 use RentWatch\Core\SourceHealth;
 use RentWatch\Core\SourceStatus;
@@ -26,6 +27,15 @@ final readonly class Formatter
     public function match(RawListing $listing, Verdict $verdict, array $duplicates = []): Notification
     {
         $reasons = $verdict->reasons;
+
+        // Context first, because it answers "where is this?" before "why did it match?". Everything
+        // on it was ALREADY extracted and simply never displayed, which is why it costs no request
+        // and no new parsing. Omitted entirely when nothing is known — a line reading `· ·` would
+        // be worse than its absence.
+        $facts = $this->factsLine($listing);
+        if ($facts !== null) {
+            array_unshift($reasons, $facts);
+        }
 
         if ($duplicates !== []) {
             // Shown rather than dropped. Knowing the same flat is on two portals is actionable — it
@@ -172,7 +182,17 @@ final readonly class Formatter
      */
     private function headline(RawListing $listing, ?int $score): string
     {
-        $parts = [$listing->commune ?? ($listing->postcode ?? 'commune inconnue')];
+        // Commune AND postcode, since 2026-08-22. The commune alone was ambiguous — three of the
+        // eight Île-de-France departements have a Neuilly — and on a source that ships no title
+        // (In'li does not) the headline was the only text in the whole notification, so a bare
+        // commune left the reader with a price and a link.
+        $where = $listing->commune ?? '';
+        $postcode = trim((string) $listing->postcode);
+        if ($postcode !== '') {
+            $where = $where === '' ? $postcode : $where . ' ' . $postcode;
+        }
+
+        $parts = [$where === '' ? 'commune inconnue' : $where];
 
         $size = $this->sizeLine($listing);
         if ($size !== null) {
@@ -190,6 +210,39 @@ final readonly class Formatter
         $headline = implode(' · ', $parts);
 
         return $score === null ? $headline : $score . '/100 — ' . $headline;
+    }
+
+    /**
+     * Departement, floor and lift — whichever of them the source actually said.
+     *
+     * Hard rule 9 governs every entry. `floor === 0` is RDC and REAL, not absent: a ground-floor
+     * flat that silently loses its floor is the display-layer twin of one rejected for not stating
+     * it. And an UNMENTIONED lift is not an absent one — `null` says nothing, `false` says there is
+     * none — because "sans ascenseur" invented about a building nobody described is exactly the
+     * kind of fabrication that makes someone skip a flat that has one.
+     */
+    private function factsLine(RawListing $listing): ?string
+    {
+        $bits = [];
+
+        $department = Department::label($listing->postcode);
+        if ($department !== null) {
+            $bits[] = $department;
+        }
+
+        if ($listing->floor !== null) {
+            $bits[] = match (true) {
+                $listing->floor <= 0 => 'RDC',
+                $listing->floor === 1 => '1er étage',
+                default => $listing->floor . 'e étage',
+            };
+        }
+
+        if ($listing->hasElevator !== null) {
+            $bits[] = $listing->hasElevator ? 'avec ascenseur' : 'sans ascenseur';
+        }
+
+        return $bits === [] ? null : implode(' · ', $bits);
     }
 
     private function sizeLine(RawListing $listing): ?string

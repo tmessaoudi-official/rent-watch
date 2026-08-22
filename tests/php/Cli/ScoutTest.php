@@ -324,7 +324,7 @@ final class ScoutTest extends TestCase
         self::assertSame(0, $r['code'], $r['err']);
         // The high-priority match, with its score, its commune, its rent and its reasons — the
         // shape that has to be readable on a lock screen.
-        self::assertStringContainsString('!! [MATCH] 75/100 — Sartrouville · T4 88 m² · 1450 € CC', $r['out']);
+        self::assertStringContainsString('!! [MATCH] 75/100 — Sartrouville 78500 · T4 88 m² · 1450 € CC', $r['out']);
         self::assertStringContainsString('champ structuré financement = « LLI »', $r['out']);
         self::assertStringContainsString('1450 € CC — 350 € sous le plafond', $r['out']);
         self::assertStringContainsString('https://example.test/annonces/demo-0001', $r['out']);
