@@ -34,9 +34,14 @@ cURL capture to replace a `REMPLACER` URL in `config/sources.json` (hard rule 1 
 from memory), and the `plafonds` figures for classifier tier 4. CI now exists
 (`.github/workflows/ci.yml`): the fast job runs the PHPUnit suite, the tenure tripwire,
 runner-fetch and ci-workflow self-tests, the drift scan and shell syntax on every push and
-PR; the sabotage ledger runs nightly and on demand. **A red nightly now opens a GitHub issue** —
-it previously notified nobody, and failed 7/7 unnoticed from 2026-08-13 to 2026-08-19 (hard rule 2:
-an alert computed and never sent is worse than none). **`scout run --watch` now runs** (2026-08-19):
+PR; the sabotage ledger runs nightly and on demand. **A red nightly opens a GitHub issue, and a
+green one closes every open ledger issue again** — it previously notified nobody, and failed 7/7
+unnoticed from 2026-08-13 to 2026-08-19 (hard rule 2: an alert computed and never sent is worse than
+none). The retraction half landed 2026-08-22 and is the same rule read backwards: nothing ever
+closed one, so issues #1 and #2 stood open for days after the regression they reported was fixed and
+pushed, and an alert nobody retracts becomes furniture. Both halves are pinned by
+`tests/test-ci-workflow.sh` — by step NAME *and* by the API call that does the work, since a name
+alone survives the body being gutted. **`scout run --watch` now runs** (2026-08-19):
 `Core/Pacer` holds the Q37 cadence (15 min ± 5, 5 s between distinct hosts, 60 s per host, order
 shuffled each pass), `Adapters/PacedSource` is the decorator that applies it — so `Pipeline` never
 learns that time exists and `--once` stays unpaced — and `Cli/WatchLoop` is the loop, which SURVIVES
