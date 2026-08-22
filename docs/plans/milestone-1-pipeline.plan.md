@@ -1454,6 +1454,16 @@ A changelog that overstates is worse than one that omits, because the next sessi
   than in the caller that happened to need it first. The scraping opt-in gate (hard rule 4) sits
   below the enabled check and is asserted to still fire on a force-run private portal.
 
+- [2026-08-22 19:40] ON HOLD (developer instruction): **real SMTP is deferred; email stays on the
+  `file` transport.** Turning it on needs a Gmail app password, which needs 2-step verification —
+  minutes of the developer's time, on their account, for a SECOND channel when ntfy is already live
+  and verified. Deferred rather than dropped, and the deferral is written into `README.md`
+  § "Notifications — turning a channel on" rather than left in a chat log, because a credential
+  step that lives only in a conversation is a step nobody can find later. `SMTP_TRANSPORT=file`
+  keeps writing complete, readable `.eml` files to `var/outbox`, so the path stays exercised and the
+  day the credentials arrive the only change is three `.env` lines. Reversed by filling in
+  `SMTP_HOST`/`SMTP_USER`/`SMTP_PASSWORD` and setting `SMTP_TRANSPORT=smtp`.
+
 ## Formal plan — schema v4, the `group_key` history overlay (2026-08-19 23:02)
 
 Ruled above. Two holes were found while planning that the ruling's own doctrine settles, and one

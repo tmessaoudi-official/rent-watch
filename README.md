@@ -120,6 +120,92 @@ fight the 24-hour interval and report to a dashboard nobody is watching.
 **Back up `state/rent-watch.sqlite3`.** Deleting it re-notifies everything, and the price history
 cannot be reconstructed — a listing only ever shows its *current* rent.
 
+## Notifications — turning a channel on
+
+Q9 rules every channel optional and `console` always available, so the stack starts and says what it
+can and cannot reach rather than refusing to parse. A channel is turned on in **two** places and
+neither alone is enough: it is listed under `notify.channels`, and its credentials are in `.env`. A
+channel listed without its credentials is **disabled loudly** at startup (`⚠ canal ntfy désactivé :
+NTFY_TOPIC is not set…`) — never silently, because hard rule 2 counts an alert computed and never
+sent as worse than no alert at all.
+
+Put the channel list in **`config/criteria.local.json`**, which is gitignored, rather than in the
+committed `config/criteria.json`. Compose mounts `./config` into the container, so it reaches the
+deployment; and the committed file stays free of anything that would make a fresh clone, a CI job or
+the test suite try to push somewhere real.
+
+```json
+{
+  "notify": { "channels": ["console", "ntfy", "email"] }
+}
+```
+
+### ntfy — push to a phone, no account
+
+Install the ntfy app, subscribe to a topic, and put the same topic in `.env`:
+
+```bash
+NTFY_TOPIC=rw-<something long and random>     # openssl rand -hex 16
+NTFY_SERVER=https://ntfy.sh
+```
+
+**The topic IS the credential.** ntfy has no accounts: anyone who knows the string reads every
+notification, so generate it rather than choosing it, and keep it out of anything committed.
+`Redact` masks it in error text on the way to the store.
+
+### email — the SMTP keys, and what they mean
+
+`SMTP_TRANSPORT` chooses how mail leaves, and the interesting value is the one that sends nothing:
+
+| value | behaviour |
+|---|---|
+| *(empty)* | `smtp` when `SMTP_HOST` is set, `sendmail` otherwise |
+| `smtp` | speak SMTP directly, with the credentials below |
+| `file` | write real `.eml` files to `MAIL_OUTBOX` and send NOTHING |
+
+`file` is not a stub. The messages are complete and readable, which is how `scout test-notify`
+proves the whole email path offline with no server and no credential — and it is the right setting
+to leave configured while you have not got round to the rest.
+
+**With Gmail** (any provider works; Gmail is the one with an extra step). Google refuses a plain
+account password over SMTP, so it needs an *app password*, and an app password needs 2-step
+verification switched on first:
+
+1. **myaccount.google.com** → **Sécurité** → turn on **Validation en deux étapes**.
+2. Same page, or `myaccount.google.com/apppasswords` → create one, name it `rent-watch`.
+3. Google shows a **16-character password once**. Copy it before closing the box — it is not
+   retrievable afterwards, only replaceable.
+
+Then in `.env`:
+
+```bash
+SMTP_TRANSPORT=smtp
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_SECURITY=starttls
+SMTP_USER=you@gmail.com
+SMTP_PASSWORD=<the 16 characters, spaces removed>
+SMTP_FROM=you@gmail.com
+SMTP_TO=you@gmail.com
+```
+
+`SMTP_SECURITY=starttls` is not a preference: the transport **refuses to authenticate on a
+connection the server did not upgrade**, and that refusal is proven by a sabotage case against a
+scripted loopback server and its wire transcript. Sending yourself mail from your own address is
+normal and Gmail delivers it.
+
+Then verify — and verify the delivery, not the exit code:
+
+```bash
+scout test-notify              # console prints; ntfy and email are SILENT on success
+ls -t var/outbox | head -1     # `file` transport: the message that was not sent
+```
+
+> **On the host, `.env` is inert.** The code reads `getenv()`, and only Compose's `env_file:`
+> populates it — so a channel configured in `.env` is simply disabled when you run `bin/scout`
+> directly. It says so at startup rather than failing quietly. Load it yourself for a host run:
+> `set -a; . ./.env; set +a`.
+
 ## Why this exists
 
 Nothing on the market aggregates institutional LLI stock, and most of these landlords do not even
