@@ -104,6 +104,51 @@ usable" row from 0% to something real in a single afternoon; nothing else on thi
 
 ## Decisions Log
 
+- [2026-08-22 01:10] CORRECTED, and it reverses part of the 00:40 ruling: **A12's rent is mapped
+  `charges_included: false` and NOTHING is hydrated.** The 00:40 decision to hydrate detail pages
+  for charges rested on three premises, all measured false the same night:
+  1. **"8 rows in the 78/95 departments the criteria filter on" → actually ONE row passes.**
+     `Criteria::matchesCommune()` requires the commune NAME to be in `communes` *and* the postcode
+     prefix to match; the department prefix alone is not the filter. Of 113 rows, 19 are
+     Île-de-France and exactly **1** — a 382 m² commercial unit in BEZONS — passes the gate. So
+     A12's live yield today is **0 matches, the same as Cityloger**, not "would yield on day one".
+  2. **Charges are not a detail-page FIELD.** They appear as free prose inside the description
+     (*"Loyer hors charges : 1 278,82 € / Provision pour charges : 383,85 € / Loyer charges
+     comprises : 1 662,67 €"*), present on the one dwelling measured and absent on the commerce —
+     evidence of n=1. The gap is **30%**, not the ~15% previously recorded.
+  3. **`detail_map` is refused by the loader on any non-`html` source** (`ConfigLoader:433`, so it
+     cannot sit unread while looking like configuration), and Logirep's payload is JSON in a script
+     tag. There was no "Cityloger machinery to reuse" without a cross-adapter refactor.
+  What settled it is that `CriteriaEngine` was **already designed for this exact source shape** —
+  its own comment reads *"rent (F6), charges comprises, and never on an HC-only figure"*. With
+  `charges_included: false` the value lands in `rentHc`, the `max_rent_cc` disqualifier never fires
+  on it (it is guarded on `$rentCc !== null`), and the score line prints *"… € HORS CHARGES — total
+  réel inconnu, plafond non vérifiable"*. Honest, zero refactor, zero extra requests. **The cost,
+  stated:** for this source the rent ceiling is never checkable. **The reversing line:** if a
+  Polylogis DWELLING ever passes the commune gate, revisit — and gather more than one sample of the
+  charges prose before regexing it.
+- [2026-08-22 01:10] NOTED: **the full sabotage ledger was stopped at 117/~315 cases (0 undetected)
+  and re-run once at the end**, rather than twice. It copies `src`, `tests` AND `config` per case,
+  so it cannot run while a source is being built; at ~0.5 min/case it had ~100 minutes left. The
+  partial is kept at `var/claude/sabotage-ledger-20260822-partial.log`.
+
+- [2026-08-22 00:40] AGREED: **A12 Logirep/Polylogis is onboarded as source #4, now.** It is the
+  best unbuilt source measured: one endpoint covering four Polylogis landlords, 113 leasing ads, 19
+  of them Île-de-France and 8 in the 78/95 departments `criteria.json` filters on — so unlike
+  Cityloger, whose live yield is 0, this one would plausibly yield on day one.
+- [2026-08-22 00:40] AGREED: **its `h.c.` rent is resolved by hydrating the DETAIL page, gated on
+  `Criteria::matchesCommune()`** — the Cityloger pattern, unchanged. The card quotes rent *hors
+  charges* and only the detail page carries charges, so reading the card alone under-reports every
+  rent by ~15% and would compare the wrong number against `max_rent_cc`, which is hard rule 9's
+  exact failure. Gating on commune keeps the cost at ~8 detail fetches out of 113. The rejected
+  alternative was a fixed ~15% uplift: it invents a figure the source never stated, and hard rule 9
+  exists against precisely that.
+- [2026-08-22 00:40] AGREED: **every Logirep listing resolves `UNKNOWN` and goes to the *à vérifier*
+  digest, and that stays.** Neither the card nor the detail page states tenure, so §1's fail-closed
+  default applies and no classifier change is made to accommodate the source. The flooding worry
+  resolves itself: the commune gate means ~8 listings reach the digest, not 113. Revisit only if a
+  second tenure-silent source is added — the reversing line is a per-source digest cap.
+
 - [2026-08-22 00:24] NOTED (latent, deliberately not built): **a detail page is judged against the
   SEARCH origin's `robots.txt`.** `Robots::pathOf()` strips the host, and `HtmlSource` holds one
   `Robots` for the source, so a `detail_map` whose cards linked to a DIFFERENT host would have those

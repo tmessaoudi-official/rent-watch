@@ -302,4 +302,60 @@ final class PayloadTest extends TestCase
         );
     }
 
+    // ── single-element lists, which Solr-backed payloads use for every text field ─────────────────
+
+    public function testASingleElementListYieldsItsOneValue(): void
+    {
+        // Logirep/Polylogis (Drupal + Solr) returns EVERY text field as a one-element list:
+        // `"tcngramm_X3b_fr_address_locality": ["AVON"]`. Before this, `string()` saw an array and
+        // returned null, so `commune` and `cp` mapped to null for all 113 listings — and the failure
+        // is the silent kind hard rule 2 exists for: `matchesCommune()` refuses a null commune, so
+        // the source could never match a single listing while `SourceHealth` reported 113 items and
+        // a green status. Nothing would have looked wrong.
+        self::assertSame('AVON', Payload::string(['city' => ['AVON']], ['city']));
+        self::assertSame('77210', Payload::string(['cp' => ['77210']], ['cp']));
+    }
+
+    public function testAListOfSeveralYieldsTheFirstUsableOne(): void
+    {
+        // Same convention, more than one value. The first is the one the source ranked first; there
+        // is no better rule available and inventing a join would fabricate a commune name.
+        self::assertSame('AVON', Payload::string(['city' => ['AVON', 'Avon Cedex']], ['city']));
+    }
+
+    public function testALeadingNullishEntryIsSkippedRatherThanWinning(): void
+    {
+        // A list whose first entry is empty must not resolve to null: that is the same "unknown vs
+        // absent" confusion hard rule 9 is about, one container deeper.
+        self::assertSame('AVON', Payload::string(['city' => ['', null, 'AVON']], ['city']));
+    }
+
+    public function testAListOfOnlyNullishEntriesIsUnknownNotEmptyString(): void
+    {
+        self::assertNull(Payload::string(['city' => ['', '  ', null]], ['city']));
+    }
+
+    public function testANestedListIsNotFlattenedIntoAValue(): void
+    {
+        // Guard against "unwrap until something sticks". A list of lists is a shape nobody mapped,
+        // and inventing a value from it would put an arbitrary token into a commune field.
+        self::assertNull(Payload::string(['city' => [['AVON']]], ['city']));
+    }
+
+    public function testAnIntegerInAListIsStillReadAsItsNumber(): void
+    {
+        // Solr returns numeric fields boxed the same way. Zero must survive as "0", not vanish —
+        // it is a real floor number, and hard rule 9 turns on exactly that.
+        self::assertSame('0', Payload::string(['floor' => [0]], ['floor']));
+        self::assertSame(0, Payload::int(['floor' => [0]], ['floor']));
+        self::assertSame(35, Payload::int(['surface' => [35]], ['surface']));
+    }
+
+    public function testAnAssociativeArrayIsNotTreatedAsAList(): void
+    {
+        // `{"city": {"name": "AVON"}}` is an object to descend into with a dotted path, not a value
+        // to unwrap. Unwrapping it would silently pick whichever key happened to come first.
+        self::assertNull(Payload::string(['city' => ['name' => 'AVON']], ['city']));
+        self::assertSame('AVON', Payload::string(['city' => ['name' => 'AVON']], ['city.name']));
+    }
 }

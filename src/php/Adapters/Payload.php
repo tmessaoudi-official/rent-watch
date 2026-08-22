@@ -96,10 +96,45 @@ final class Payload
         return false;
     }
 
+    /**
+     * Unwrap a LIST-of-scalars to the one value a scalar reader can use.
+     *
+     * Solr-backed payloads — Drupal search, which is what Logirep/Polylogis serves — box every text
+     * field as a one-element list: `"…address_locality": ["AVON"]`. Without this, every such field
+     * read as `null`, and that failure is invisible in the worst way: `matchesCommune()` refuses a
+     * null commune, so a source maps 113 listings, matches none of them, and reports a green
+     * `SourceHealth` with a plausible item count the whole time. Hard rule 2 is written about
+     * exactly this shape, and the mapper is where it hides best.
+     *
+     * Three things it deliberately does NOT do:
+     *
+     * - **It does not unwrap an ASSOCIATIVE array.** `{"city": {"name": "AVON"}}` is an object to
+     *   descend into with a dotted path, and unwrapping it would silently return whichever key came
+     *   first — a value nobody mapped.
+     * - **It does not recurse.** A list of lists is a shape no field map declared; picking a token
+     *   out of it would be fabrication, and `null` (unknown) is the honest answer.
+     * - **It does not treat `0` or `false` as absent.** They go through {@see isNullish()} like
+     *   everything else, so a boxed ground floor stays 0 — hard rule 9 turns on precisely that.
+     */
+    private static function scalarOf(mixed $value): mixed
+    {
+        if (!is_array($value) || !array_is_list($value)) {
+            return $value;
+        }
+
+        foreach ($value as $entry) {
+            if (!is_array($entry) && !self::isNullish($entry)) {
+                return $entry;
+            }
+        }
+
+        return null;
+    }
+
     /** @param list<string> $paths */
     public static function string(mixed $item, array $paths): ?string
     {
-        $value = self::first($item, $paths);
+        $value = self::scalarOf(self::first($item, $paths));
 
         if (is_string($value)) {
             return trim($value);
@@ -149,7 +184,7 @@ final class Payload
      */
     public static function floor(mixed $item, array $paths): ?int
     {
-        $value = self::first($item, $paths);
+        $value = self::scalarOf(self::first($item, $paths));
 
         if (is_int($value)) {
             return $value;
@@ -205,7 +240,7 @@ final class Payload
      */
     public static function bool(mixed $item, array $paths): ?bool
     {
-        $value = self::first($item, $paths);
+        $value = self::scalarOf(self::first($item, $paths));
 
         if (is_bool($value)) {
             return $value;
@@ -274,7 +309,7 @@ final class Payload
     /** @param list<string> $paths */
     private static function number(mixed $item, array $paths): ?float
     {
-        $value = self::first($item, $paths);
+        $value = self::scalarOf(self::first($item, $paths));
 
         if (is_int($value) || is_float($value)) {
             return is_float($value) && !is_finite($value) ? null : (float) $value;

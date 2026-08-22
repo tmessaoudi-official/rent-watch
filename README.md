@@ -28,7 +28,7 @@ adapter, no notification channel and no CLI yet.
 | [`docs/OPEN-QUESTIONS.md`](docs/OPEN-QUESTIONS.md) | **Start here.** Every filter enumerated, and the decisions still owed |
 | `src/php/Core/` | The tenure classifier, the models it works on, and the source-health verdict |
 | `src/php/Store/` | The SQLite seen-set, price history and run log. Deleting the database re-notifies the entire market on the next run, and the price history cannot be reconstructed — a listing only ever shows its *current* rent |
-| `tests/fixtures/tenure/corpus.json` | 118 hand-labelled listing texts — the classifier's ground truth, and language-neutral so the phorj port reads the same file. **114 synthetic + 4 captured**: `spec/PROJECT_BRIEF.md` §4 asks for *real* texts, and they arrived on 2026-08-20 with the first two mixed-tenure sources (CDC Habitat card text, then Cityloger detail prose — including the corpus's first captured SOCIAL case). Every case declares its `provenance` and a test asserts the counts, so the remaining gap is data rather than a promise |
+| `tests/fixtures/tenure/corpus.json` | 120 hand-labelled listing texts — the classifier's ground truth, and language-neutral so the phorj port reads the same file. **114 synthetic + 6 captured**: `spec/PROJECT_BRIEF.md` §4 asks for *real* texts, and they arrived from 2026-08-20 with the live sources (CDC Habitat card text, Cityloger detail prose — including the corpus's first captured SOCIAL case — and Logirep, whose second capture is the site's own FILTER FACET STRIP, containing `PLAI` inside `Plain-pied`, `LLI` inside `Ce·lli·er` and `PLUS` inside `plusieurs`). Every case declares its `provenance` and a test asserts the counts, so the remaining gap is data rather than a promise |
 | `prototype/` | A pre-existing single-file prototype, kept as reference. **Not** the shipping implementation — it has no tenure classifier at all |
 | [`CLAUDE.md`](CLAUDE.md) | How code gets delivered here: rules, gates, the eligibility boundary |
 | `.claude/` | Claude Code configuration ([details](CLAUDE.md#claude-config-in-this-repo)) |
@@ -93,7 +93,7 @@ is blocked on a mailbox, an endpoint capture or a phorj module that does not exi
 
 1. **Core skeleton** — models ✅, SQLite store ✅ (seen-set, price history, run log, source health),
    config loading, CLI, one notification channel. Proven end-to-end with a fake source.
-2. **Tenure classifier + tests.** ✅ **Done in PHP**, against a 118-case corpus (114 synthetic, 4 captured) — spec §4's
+2. **Tenure classifier + tests.** ✅ **Done in PHP**, against a 120-case corpus (114 synthetic, 6 captured) — spec §4's
    *real* listing texts are still outstanding and are blocked on capturing a payload. The phorj port
    waits on `Core.Imap`, an HTML parser and `sleep` (see `docs/PHORJ-REQUIREMENTS.md`). Before any
    real source; everything depends on it.

@@ -304,6 +304,7 @@ final class ConfigLoader
         $method = $r->optString('method', 'GET', ['GET', 'POST']) ?? 'GET';
         $body = $r->optString('body', null);
         $itemsPath = $r->optString('items_path', null);
+        $embeddedJsonSelector = $r->optString('embedded_json_selector', null);
         $itemSelector = $r->optString('item_selector', null);
         $pageParam = $r->optString('page_param', null);
         $pagePath = $r->optString('page_path', null);
@@ -426,6 +427,17 @@ final class ConfigLoader
                     );
                 }
 
+                // The mirror of the detail_map refusal below, and for the same reason: only the
+                // json adapter extracts an embedded payload, so this key on an html or email source
+                // would be read by nobody while looking like behaviour somebody switched on.
+                if ($embeddedJsonSelector !== null && $type !== 'json') {
+                    throw ConfigError::at(
+                        $where . '.embedded_json_selector',
+                        'only a json source extracts an embedded payload — this selector would be '
+                            . 'silently ignored',
+                    );
+                }
+
                 // A detail map is a request PER LISTING. Only the html adapter implements it, and a
                 // detail_map sitting on a json source would be read by nobody while looking like
                 // configured behaviour — the shape of a mapping that fails silently at runtime
@@ -466,6 +478,7 @@ final class ConfigLoader
             itemSelector: $itemSelector,
             pageParam: $pageParam,
             pagePath: $pagePath,
+            embeddedJsonSelector: $embeddedJsonSelector,
             detailMap: $detailMap,
             totalSelector: $totalSelector,
             maxPages: $maxPages,

@@ -57,6 +57,23 @@ final readonly class SourceDefinition
         /** JSON request body for a `POST` source — CDC Habitat's search is one. */
         public ?string $body = null,
         public ?string $itemsPath = null,
+        /**
+         * CSS selector for an element whose TEXT is the JSON payload, for `type: json`.
+         *
+         * For a page that serves its results as JSON embedded in HTML rather than as an API
+         * response. Logirep/Polylogis is Drupal and ships 113 records inside
+         * `<script type="application/json" data-drupal-selector="drupal-settings-json">`, while its
+         * visible markup carries two `€` — the search form. Neither adapter could read that: `html`
+         * maps selectors over repeated card elements and there is only one script tag, and `json`
+         * parses the response body, which is HTML.
+         *
+         * When set, the element's text is extracted and everything downstream — `items_path`, the
+         * field map, `ListingMapper`, and so hard rule 9 — is the ordinary JSON path, unchanged. The
+         * loader refuses this key on any type but `json`, for the same reason it refuses
+         * `detail_map` outside `html`: a key nobody reads is worse than absent, because it looks
+         * like configuration that is switched on.
+         */
+        public ?string $embeddedJsonSelector = null,
         /** CSS selector picking one listing element, for `type: html`. `items_path` is its JSON twin. */
         public ?string $itemSelector = null,
         /**

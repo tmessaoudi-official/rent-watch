@@ -216,6 +216,36 @@
         "ref": "url",
         "charges_included": true
       }
+    },
+    "logirep": {
+      "_comment": "A12, docs/SOURCES.md. Logirep is one of four landlords under the Polylogis group, and this ONE endpoint covers all four -- 113 leasing ads nationally on 2026-08-22, 19 of them Ile-de-France. It was ranked WEAKEST of the some-markers group and that ranking was wrong: its homepage carries exactly two euro signs and two m2 and no lettings link, and those four markers ARE a lettings search form with ss_trnsctntp=leasing checked by default. mixed_tenure is true because neither the card nor the detail page states tenure at all, so every listing resolves UNKNOWN and goes to the a-verifier digest -- correct under CLAUDE.md section 1, and deliberate (ruled 2026-08-22).",
+      "_verified_at": "2026-08-22",
+      "_source": "www.logirep.fr 301s to logirep.polylogis.immo (single hop, measured without -L). robots.txt read FIRST and frozen at tests/fixtures/logirep/robots.txt: standard Drupal, and it disallows /search/ -- robots matching is LITERAL, so it does not reach /recherche; one path over and the answer would have been no. The results route exists only as a 303 Location from the form POST. Frozen payload: search.html, the page as served, scrubbed (scanned for emails, French phone numbers and SIRETs -- the only pattern hits were gallery filenames and screenshot timestamps).",
+      "_why": "EMBEDDED JSON: the page serves its 113 records as JSON inside a script tag and its visible markup carries two euro signs -- the form. So neither adapter fitted: html maps selectors over repeated card elements and there is only ONE script tag, and json parses the response body, which is HTML. embedded_json_selector is the one step in the middle; everything after it is the ordinary JSON path, so items_path, the field map and ListingMapper keep exactly one implementation. NO PAGINATION: the whole result set is in that one payload. RENT IS HORS CHARGES -- charges_included is false, and that is the ruling of 2026-08-22: the card quotes h.c., the detail page states charges only as free prose that is present on some listings and absent on others, and CriteriaEngine is already built for this ('charges comprises, and never on an HC-only figure') -- it files the value in rentHc, never compares it to max_rent_cc, and says the ceiling is unverifiable. The gap is ~30 percent, so filing it as CC would understate every rent against the cap. LIST-VALUED FIELDS: Drupal/Solr boxes every text field as a one-element list, which Payload::scalarOf now unwraps -- before that, commune read as null for all 113 rows and matchesCommune() would have refused every one while health stayed green.",
+      "enabled": true,
+      "family": "institutional",
+      "type": "json",
+      "default_tenure": null,
+      "mixed_tenure": true,
+      "url": "https://logirep.polylogis.immo/recherche",
+      "method": "GET",
+      "params": {
+        "ss_trnsctntp": "leasing"
+      },
+      "embedded_json_selector": "script[data-drupal-selector=\"drupal-settings-json\"]",
+      "items_path": "searchResults.results",
+      "base_url": "https://logirep.polylogis.immo",
+      "map": {
+        "ref": "zs_field_ad_id",
+        "title": "zs_field_short_title",
+        "url": "zs_url",
+        "commune": "tcngramm_X3b_fr_address_locality",
+        "cp": "tcngramm_X3b_fr_address_postalcode",
+        "rent": "zs_field_public_price",
+        "charges_included": false,
+        "surface": "fts_field_living_space",
+        "rooms": "its_field_typology"
+      }
     }
   }
 }

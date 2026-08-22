@@ -929,7 +929,11 @@ final class ConfigTest extends TestCase
 
         // Named rather than counted: the day a second source is enabled, this line is the one that
         // makes someone confirm it was a decision.
-        self::assertSame(['inli', 'cdc_habitat', 'cityloger'], $enabled, 'the set of enabled network sources changed');
+        self::assertSame(
+            ['inli', 'cdc_habitat', 'cityloger', 'logirep'],
+            $enabled,
+            'the set of enabled network sources changed',
+        );
     }
 
     /**

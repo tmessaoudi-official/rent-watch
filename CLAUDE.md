@@ -19,7 +19,7 @@ Status: **milestone 1 is functionally complete against a frozen payload.** The p
 (schema v4), the config layer, the adapter contract, the criteria engine, dedup, the notification
 layer and the `scout` CLI all exist. What is missing is a NETWORK adapter, and that is blocked on an
 input rather than a decision. As of 2026-08-07 there is a PHP 8.5
-implementation of `models` + `tenure` under `src/php/Core/`, a 118-case language-neutral classifier
+implementation of `models` + `tenure` under `src/php/Core/`, a 120-case language-neutral classifier
 corpus at `tests/fixtures/tenure/corpus.json`, the seen-set / price-history / run-log store under
 `src/php/Store/` with `SourceHealth` + `SourceStatus` in `Core/`, a strict JSON config layer under
 `src/php/Config/` with both files committed, the `Source` contract plus `Payload` / `ListingMapper` /
@@ -107,7 +107,7 @@ Cityloger skews to the intermediate and libre stock this project is looking for.
 > JS-rendered" objection a sitemap scan cannot); on any site scan the index page for `€`, `m²` and
 > `disponib`.
 >
-> **Three more went the same way on 2026-08-21, and Track 1's BUILT stock is still three sources — a fourth is now measured pollable (A12, below).** A10 Batigère was
+> **Three more went the same way on 2026-08-21, and Track 1's BUILT stock is now FOUR sources — A12 was measured pollable that day and built on 2026-08-22 (below).** A10 Batigère was
 > the catalogue's starred best-remaining candidate; its search is a third-party widget whose bundle
 > names its backend, and that host's `robots.txt` answers **500** while the endpoint answers **401**.
 > A7 1001 Vies has no listings post type and routes tenants to `demande-logement-social.gouv.fr`
@@ -131,26 +131,48 @@ Cityloger skews to the intermediate and libre stock this project is looking for.
 > A11 — its `/Plafonds-de-ressources` page carries the **PLAI/PLUS/PLS ceiling tables** for IdF, the
 > social half of the missing tier-4 input; it states **no year**, so it is a pointer, not a figure.
 >
-> **A12 Logirep/Polylogis was measured on 2026-08-21 and it is POLLABLE — the best Track 1 find since
-> Cityloger, and it was the row ranked WEAKEST.** Its homepage carries two `€` and two `m²` and no
-> lettings link; those four markers *are* a lettings search form, and its results route exists only as a
-> **303 `Location`** (`/recherche?ss_trnsctntp=leasing`), where the page embeds **113 leasing ads as
-> structured JSON** in `drupalSettings` with no pagination to walk. One endpoint covers four Polylogis
-> landlords; **19 of the 113 are Île-de-France** and 8 of those are in the 78/95 departments the criteria
-> filter on, so unlike Cityloger — live yield 0 — this one would plausibly yield on day one. Their rents sit
-> far above social levels (Rueil-Malmaison 62 m² @ 1116 € h.c.), which reads as *not social* rather than as a
-> tenure: the plafonds that would make it a measurement are still a missing INPUT. So the
-> rule is **a marker count is not a route census** — submit the form, then read the `Location` and check
-> it against `robots.txt` *before* following it (here it mattered: Logirep disallows `/search/`, which
-> does not reach `/recherche`). It is **measured, not built**: `/add-source` still has to solve two
-> things — the card quotes rent **`h.c.`** with charges on the detail page (hard rule 9 wants charges
-> comprises, and reading the card alone under-reports every rent by ~15%), and **neither surface states
-> tenure**, so everything would resolve `UNKNOWN` into the *à vérifier* digest. Every apparent tenure hit on
-> the source is a false one and they came from **UI furniture**, not prose — `PLAI` inside the facet
-> `Plain-pied`, `LLI` inside `Ce·lli·er`, `PLUS` inside `plusieurs`, `SNE` inside `SURESNES`. All five real
-> strings were run through `TenureClassifier`: every one returns `UNKNOWN`/`DIGEST` at 0.00, so the guards
-> hold and **nothing needs fixing** — but that is the fourth outing of this failure class, and the first from
-> a filter facet rather than a sentence.
+> **A12 Logirep/Polylogis IS SOURCE #4, live since 2026-08-22** — and it was the row ranked WEAKEST.
+> `scout doctor --source=logirep` returns **113 annonces, 428 ms, `ok`**: one request, no pagination,
+> so it is the cheapest source in the tree by a factor of fifty (In'li takes 24 s). One endpoint
+> covers four Polylogis landlords. Four things about it are worth carrying forward:
+>
+> - **Its homepage carries two `€` and two `m²` and no lettings link — and those four markers ARE a
+>   lettings search form.** It POSTs to `/` and its results route exists only as a **303 `Location`**
+>   (`/recherche?ss_trnsctntp=leasing`). Hence the rule: *a marker count is not a route census* —
+>   submit the form, read the `Location`, and check it against `robots.txt` **before** following it.
+>   Here that mattered: Logirep disallows `/search/`, and robots matching is LITERAL, so it does not
+>   reach `/recherche`. One path over and the answer would have been no.
+> - **The payload is JSON inside a `<script>` tag**, which neither adapter could read: `html` maps
+>   selectors over repeated card elements and there is only ONE tag, and `json` parses the response
+>   body, which is HTML. `type: json` gained **`embedded_json_selector`** — one step in the middle
+>   that pulls the element's text and hands it to the ordinary JSON path, so `items_path`, the field
+>   map and `ListingMapper` keep exactly one implementation and hard rule 9 is not re-decided. A
+>   selector matching nothing **THROWS**; returning `[]` would read as a quiet market forever.
+> - **Drupal/Solr boxes every text field as a ONE-ELEMENT LIST** (`"…locality": ["AVON"]`), and
+>   `Payload::string()` returned `null` for those. That is the most dangerous bug this build turned
+>   up and it is invisible: `matchesCommune()` refuses a null commune, so the source would have
+>   mapped 113 listings, matched none of them, ever, and reported a green `SourceHealth` with a
+>   plausible count throughout. `Payload::scalarOf()` unwraps a list of scalars — never an
+>   associative array, never recursively, and never treating `0` as absent.
+> - **Rent is `h.c.` and its charges are NOT reliably recoverable**: a `Charges locatives` field on
+>   one detail page (17%), free prose on another (30%), and nothing at all on a third. Two shapes,
+>   two ratios, one absence — so no uplift is defensible. It is mapped `charges_included: false`,
+>   which `CriteriaEngine` was already built for (*"charges comprises, and never on an HC-only
+>   figure"*): the value lands in `rentHc`, `max_rent_cc` never fires on it, and the score line says
+>   the ceiling is unverifiable. **Stated cost: the rent ceiling is not checkable for this source.**
+>
+> **Its live yield today is 0, and the catalogue said otherwise.** A12's row read *"8 of the 19 are
+> in the 78/95 departments the criteria filter on… would plausibly yield on day one"*. Running the
+> real gate over the frozen payload gives **1 of 113** — `matchesCommune()` needs the commune NAME as
+> well as the prefix, and Bezons is the only overlap, on a commercial unit that `exclude_title_patterns`
+> then rejects. A department is not a commune; the row said so one sentence after claiming the
+> opposite. It is asserted by test now, so the number cannot drift back into prose.
+>
+> Every apparent tenure hit on the source is false and they come from **UI furniture**, not prose —
+> `PLAI` inside the facet `Plain-pied`, `LLI` inside `Ce·lli·er`, `PLUS` inside `plusieurs`, `SNE`
+> inside `SURESNES`. All were run through `TenureClassifier`: every one returns `UNKNOWN`/`DIGEST` at
+> 0.00, so the guards hold and **nothing needed fixing**. Two are now captured corpus cases, because
+> a filter LABEL is not something careful listing copy can ever remove.
 >
 > Three rules came out of this round, all recorded in `docs/SOURCES.md` and `/add-source`. The A12 one is
 > above; the other two: **a client-rendered page is not a dead
@@ -187,9 +209,13 @@ Two smaller things landed with it, both hard rule 9: `Payload::floor()` reads fl
 they are (`RDC` is **0**, not unknown; and the generic number reader would return the ROOM COUNT from
 `3 pièces - 4ème étage - 82m²`), and `Payload::bool()` accepts the amenity noun `ascenseur`, which
 can only ever yield `true` or `null` and so cannot manufacture the explicit `false` the high-floor
-penalty needs. **`tests/fixtures/tenure/corpus.json` now has CAPTURED cases** (118
-total, 114 synthetic + 4 real), both real CDC card text — including the `au plus près` one, which is
-what stops the classifier fix from being quietly undone.
+penalty needs. **`tests/fixtures/tenure/corpus.json` now has CAPTURED cases** (120
+total, 114 synthetic + 6 real): two CDC cards — including the `au plus près` one, which is what
+stops that classifier fix from being quietly undone — two Cityloger detail pages, and two Logirep
+captures added 2026-08-22, one an ordinary card that states no tenure at all and one the site's own
+FILTER FACET STRIP, which contains `PLAI` inside `Plain-pied`, `LLI` inside `Ce·lli·er` and `PLUS`
+inside `plusieurs`. That last one is the furniture failure class in a shape listing copy cannot
+avoid: a UI label, not prose.
 
 **ICF Habitat Novedis (A2) is NOT pollable** and was dropped: measured three levels deep, its site
 publishes a directory of *résidences* with zero rents, zero surfaces and zero occurrences of
@@ -604,11 +630,11 @@ Required coverage, per spec §11 — non-negotiable once `src/` exists:
   Offline. No network in CI. A parser test that reaches the network is a monitoring check, not a test.
 - **Classifier tests.** ≥30 hand-labelled listing texts covering pure-LLI In'li, mixed CDC Habitat,
   an explicit PLAI, an explicit PLS, and an ambiguous case. The suite must go red if the classifier
-  regresses. **Done** — `tests/fixtures/tenure/corpus.json`, 118 cases, and the suite asserts all five
-  shapes are present so "30 easy ones" cannot satisfy it. The corpus is **114 synthetic + 2 CAPTURED**
-  (2026-08-20, real CDC Habitat card text — the first non-synthetic entries; the spec asks for real
-  texts and until a source was live there were none. Append as sources come online, never renumber
-  captures). Every case declares its `provenance` and a test asserts the declared counts, so the gap
+  regresses. **Done** — `tests/fixtures/tenure/corpus.json`, 120 cases, and the suite asserts all five
+  shapes are present so "30 easy ones" cannot satisfy it. The corpus is **114 synthetic + 6 CAPTURED**
+  (2026-08-20 onward — CDC Habitat cards, Cityloger detail pages and Logirep card + filter facets;
+  the spec asks for real texts and until a source was live there were none. Append as sources come
+  online, never renumber captures). Every case declares its `provenance` and a test asserts the declared counts, so the gap
   is visible as data. Replace them with captured texts as sources come online — append, never
   renumber.
 - **Sabotage-verification is part of the classifier's test contract**, not an extra. See

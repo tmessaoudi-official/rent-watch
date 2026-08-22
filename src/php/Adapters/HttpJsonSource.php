@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace RentWatch\Adapters;
 
+use Dom\HTMLDocument;
 use RentWatch\Adapters\Http\HttpClient;
 use RentWatch\Adapters\Http\HttpError;
 use RentWatch\Adapters\Http\HttpRequest;
@@ -146,13 +147,66 @@ final readonly class HttpJsonSource implements Source
             );
         }
 
+        $payload = $this->payloadIn($response->body);
+
         try {
-            $decoded = json_decode($response->body, true, 64, JSON_THROW_ON_ERROR);
+            $decoded = json_decode($payload, true, 64, JSON_THROW_ON_ERROR);
         } catch (\JsonException $e) {
             throw new SourceError($this->name(), 'response was not valid JSON: ' . $e->getMessage(), $e);
         }
 
         return $this->extract($decoded);
+    }
+
+
+    /**
+     * The JSON text to parse: the response body, or the text of one element inside it.
+     *
+     * `embedded_json_selector` is for a page that serves its results as JSON embedded in HTML rather
+     * than as an API response — see {@see \RentWatch\Config\SourceDefinition::$embeddedJsonSelector}.
+     * Everything after this method is the ordinary JSON path, so `items_path`, the field map and
+     * `ListingMapper` keep exactly one implementation and hard rule 9 is not re-decided here.
+     *
+     * **A selector that matches nothing THROWS.** That is the point of the method, not a detail. The
+     * likeliest way this source breaks is the site renaming a `data-` attribute, and the payload
+     * then simply is not where it was — while the response is still 200 and still a valid page.
+     * Returning an empty list there would read as a quiet rental market and stay green for as long
+     * as nobody checked, which `CLAUDE.md` names as this codebase's highest-frequency defect class
+     * (hard rule 3).
+     *
+     * @throws SourceError
+     */
+    private function payloadIn(string $body): string
+    {
+        $selector = $this->definition->embeddedJsonSelector;
+
+        if ($selector === null || trim($selector) === '') {
+            return $body;
+        }
+
+        $document = HTMLDocument::createFromString($body, LIBXML_NOERROR);
+        $element = $document->querySelector($selector);
+
+        if ($element === null) {
+            throw new SourceError(
+                $this->name(),
+                'embedded_json_selector `' . $selector . '` matched nothing in the response — the '
+                    . 'payload has moved or the page changed. Refusing to report an empty result set '
+                    . 'for what is a broken selector',
+            );
+        }
+
+        $text = trim($element->textContent);
+
+        if ($text === '') {
+            throw new SourceError(
+                $this->name(),
+                'embedded_json_selector `' . $selector . '` matched an element with no content — '
+                    . 'the same breakage as no match, wearing a match',
+            );
+        }
+
+        return $text;
     }
 
     public function health(?string $nowIso = null): SourceHealth
