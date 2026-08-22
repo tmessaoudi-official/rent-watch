@@ -476,6 +476,98 @@ PY
 # `items` rename: both produced `P0=0 P1=0 P2=0` and exit 0.
 [[ $? -eq 0 ]] || printf 'P0  a drift-scan python section exited non-zero — it checked NOTHING. Re-run without --quiet and read the traceback; do not trust this run.\n' >>"$FINDINGS"
 
+# ── S8: `.env.example` is the only place a deployer can DISCOVER a setting ───────────────────────
+# Hard rule 7 makes keeping `.env` and this template in sync an obligation, and nothing checked it.
+# Both defects it now catches were live on 2026-08-22, in a file committed the day before:
+#
+#   * `IMAP_PORT` was declared TWICE. Compose's env_file takes the LAST occurrence — measured on a
+#     scratch stack, `IMAP_PORT=143` above `IMAP_PORT=993` starts the container with 993 — so an
+#     operator editing the key where it belongs is silently overridden by a copy further down. The
+#     misconfiguration is invisible: the value is plausible and nothing errors.
+#   * `RW_UID`/`RW_GID` were read by `compose.yaml` and absent from the template, while compose's own
+#     comment said to set them "in `.env`". The failure that produces is the one already observed on
+#     a real container: uid mismatch on the bind-mounted `state/`, and PDO cannot create the database.
+#
+# Both are the same shape as this repo's source-health rule — a thing that is wrong while everything
+# reports fine. Hence P1 rather than P2: nobody finds these by looking.
+say "── S8 .env.example ↔ getenv() ↔ compose.yaml"
+python3 - <<'PY' >>"$FINDINGS"
+import pathlib, re
+
+tpl = pathlib.Path('.env.example')
+if not tpl.exists():
+    print("P0  .env.example is missing — it is the committed template hard rule 7 names, and the "
+          "only place a deployer can discover a setting.")
+    raise SystemExit(0)
+
+lines = tpl.read_text().splitlines()
+# A commented-out declaration still COUNTS as listed: a documented key the operator is meant to
+# leave unset (RFR_N2, RENT_WATCH_MAX_PASSES) is discoverable, which is the whole requirement.
+declared, active = {}, []
+for n, line in enumerate(lines, 1):
+    m = re.match(r'^(#?)([A-Z_][A-Z0-9_]*)=', line)
+    if m:
+        declared.setdefault(m.group(2), []).append(n)
+        if not m.group(1):
+            active.append((m.group(2), n))
+
+# (a) duplicate ACTIVE keys — the last-wins trap. A commented twin is documentation, not a conflict.
+seen = {}
+for key, n in active:
+    seen.setdefault(key, []).append(n)
+for key, ns in sorted(seen.items()):
+    if len(ns) > 1:
+        print(f"P1  .env.example declares {key} {len(ns)} times (lines {', '.join(map(str, ns))}) — "
+              f"env_file takes the LAST occurrence, so editing the first one silently does nothing. "
+              f"Keep one declaration.")
+
+# (b) every getenv() the shipped code performs must be discoverable here.
+#     RENT_WATCH_OFFLINE is deliberately absent and the template says why: it is the test seam that
+#     makes CurlHttpClient refuse third-party hosts, and setting it in a deployment would disable
+#     every source while health stayed plausible. Listing it as a setting would invite exactly that.
+TEST_SEAMS = {'RENT_WATCH_OFFLINE'}
+read = set()
+for path in list(pathlib.Path('src/php').rglob('*.php')) + [pathlib.Path('bin/scout')]:
+    if path.exists():
+        read |= set(re.findall(r"getenv\('([A-Z_][A-Z0-9_]*)'\)", path.read_text()))
+for key in sorted(read - set(declared) - TEST_SEAMS):
+    print(f"P1  {key} is read by getenv() and is not in .env.example — a setting nobody deploying "
+          f"this can discover. Add it, or add it to TEST_SEAMS here with the reason.")
+
+# (c) every ${VAR} compose substitutes. These have no getenv() to find them by, so (b) cannot see
+#     them: Compose resolves them before the container exists.
+compose = pathlib.Path('compose.yaml')
+if compose.exists():
+    subst = set(re.findall(r'\$\{([A-Z_][A-Z0-9_]*)(?::-[^}]*)?\}', compose.read_text()))
+    for key in sorted(subst - set(declared)):
+        print(f"P1  compose.yaml substitutes ${{{key}}} and .env.example does not declare it — "
+              f"Compose reads it from `.env`, so the deployer is told to set a key the template "
+              f"never mentions.")
+
+# (d) the reverse: a template key nothing reads. Three different things look identical here — a
+#     stale leftover, a key declared ahead of its feature, and a key declared PRECISELY BECAUSE it
+#     is unsupported — so each deliberate one is named with its reason and anything else reports.
+#     The reason is repeated here rather than trusted to the comment above the key, because every
+#     key in that file has explanatory prose above it and "there is a comment" would match all of
+#     them. A gate that fires on cases the repo has already reasoned about gets ignored within a
+#     week — see this script's own preamble, which was written after exactly that.
+DECLARED_UNREAD = {
+    'IDFM_API_KEY': 'transit enrichment, spec §6 milestone 8 — not built',
+    'RFR_N2': 'income-eligibility checking, Q6 — ruled off by default',
+    # Not a gap and not a plan: Q9 rules the channels console/ntfy/email, and these are left
+    # commented so that filling them in cannot produce silence. An unsupported name in
+    # `notify.channels` is a config validation error, and `Redact` masks Telegram tokens anyway.
+    'TELEGRAM_BOT_TOKEN': 'deliberately UNSUPPORTED under Q9 — commented so filling it cannot fail silently',
+    'TELEGRAM_CHAT_ID': 'deliberately UNSUPPORTED under Q9 — commented so filling it cannot fail silently',
+}
+subst = set(re.findall(r'\$\{([A-Z_][A-Z0-9_]*)(?::-[^}]*)?\}', compose.read_text())) if compose.exists() else set()
+for key in sorted(set(declared) - read - subst - set(DECLARED_UNREAD)):
+    print(f"P2  .env.example declares {key} and no code reads it — stale, or ahead of its feature. "
+          f"If deliberate, name it in DECLARED_UNREAD here with the reason.")
+PY
+# A python section that CRASHES must not read as a section that found nothing — see S4b.
+[[ $? -eq 0 ]] || printf 'P0  a drift-scan python section exited non-zero — it checked NOTHING. Re-run without --quiet and read the traceback; do not trust this run.\n' >>"$FINDINGS"
+
 # ── S5: tool availability (informational — compare against any doc that claims or hedges) ────────
 say "── S5 tool availability (informational)"
 if (( ! QUIET )); then
