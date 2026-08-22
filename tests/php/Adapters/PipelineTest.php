@@ -41,7 +41,7 @@ final class PipelineTest extends TestCase
     /** @return array<string, Verdict> keyed by external id */
     private function pipeline(): array
     {
-        $criteria = ConfigLoader::loadCriteria(self::ROOT . '/config/criteria.json');
+        $criteria = ConfigLoader::loadCriteria(self::ROOT . '/tests/fixtures/criteria/pipeline.json');
         $sources = ConfigLoader::loadSources(self::ROOT . '/config/sources.json');
         $source = new FixtureSource($sources['fixture_demo'], $this->store(), self::ROOT);
 
@@ -96,7 +96,7 @@ final class PipelineTest extends TestCase
         $classifier = new TenureClassifier();
         $sources = ConfigLoader::loadSources(self::ROOT . '/config/sources.json');
         $source = new FixtureSource($sources['fixture_demo'], $this->store(), self::ROOT);
-        $engine = new CriteriaEngine(ConfigLoader::loadCriteria(self::ROOT . '/config/criteria.json'));
+        $engine = new CriteriaEngine(ConfigLoader::loadCriteria(self::ROOT . '/tests/fixtures/criteria/pipeline.json'));
 
         foreach ($source->fetch() as $listing) {
             $classification = $classifier->classify($listing, $source->profile());
@@ -144,7 +144,7 @@ final class PipelineTest extends TestCase
         // the lift to be EXPLICITLY absent. Most listings simply do not mention one, so a penalty
         // that fired on silence would dock nearly every listing in the market — and it would look
         // like the scoring was working.
-        $engine = new CriteriaEngine(ConfigLoader::loadCriteria(self::ROOT . '/config/criteria.json'));
+        $engine = new CriteriaEngine(ConfigLoader::loadCriteria(self::ROOT . '/tests/fixtures/criteria/pipeline.json'));
         $classifier = new TenureClassifier();
         $profile = new \RentWatch\Core\SourceProfile('t', 'institutional', \RentWatch\Core\Tenure::LLI, false);
 
@@ -200,7 +200,7 @@ final class PipelineTest extends TestCase
 
     public function testARentOverTheCeilingIsDisqualified(): void
     {
-        $criteria = ConfigLoader::loadCriteria(self::ROOT . '/config/criteria.json');
+        $criteria = ConfigLoader::loadCriteria(self::ROOT . '/tests/fixtures/criteria/pipeline.json');
         self::assertSame(1800, $criteria->maxRentCc);
 
         $sources = ConfigLoader::loadSources(self::ROOT . '/config/sources.json');
@@ -250,7 +250,7 @@ final class PipelineTest extends TestCase
 
     public function testAListingWithNeitherCommuneNorPostcodeIsRejected(): void
     {
-        $engine = new CriteriaEngine(ConfigLoader::loadCriteria(self::ROOT . '/config/criteria.json'));
+        $engine = new CriteriaEngine(ConfigLoader::loadCriteria(self::ROOT . '/tests/fixtures/criteria/pipeline.json'));
         $classifier = new TenureClassifier();
         $profile = new \RentWatch\Core\SourceProfile('t', 'institutional', \RentWatch\Core\Tenure::LLI, false);
 

@@ -114,12 +114,28 @@ Cityloger skews to the intermediate and libre stock this project is looking for.
 > measurement to the tree** — `scout run --seed -v --source=<name>` on a throwaway
 > `RENT_WATCH_DB` prints every rejection with its reason and costs one poll.
 
-**Location is REGION MODE as of 2026-08-22, and `min_rooms` is 3.** `communes: []` means the name is
-not checked and `postcode_prefixes` is the entire location filter; `commune_rank` still orders
-results, so the Boucle de Seine is a preference rather than a hard reject. Both changes are ruled
-(Q1, Q3 in `docs/OPEN-QUESTIONS.md`, each naming the one line that reverses it) and both are
-measured: together they take the live yield from **0 to 8 matches**. Three things to know before
-touching this. **Region mode is the first LOOSENING this config has taken**, so it is guarded from
+**Location is REGION MODE as of 2026-08-22 — and by the end of that day it covered ALL of
+Île-de-France, at `min_rooms: 3`, `min_surface_m2: 50` and `max_rent_cc: 1200`.** `communes: []`
+means the name is not checked and `postcode_prefixes` is the entire location filter; `commune_rank`
+still orders results, so the Boucle de Seine is a preference rather than a hard reject. Every change
+is ruled (Q1, Q2, Q3 in `docs/OPEN-QUESTIONS.md`, each naming the one line that reverses it) and
+every one is measured on a live poll: region mode over 78/95 took the yield from **0 to 8**, and
+widening to all eight departements while dropping the surface floor to 50 m² and the ceiling to
+1200 € took it to **83 matches out of 478**.
+
+> **That 83 is the number that should be quoted, and predicting it would have got it wrong.** All
+> eight of the old matches quoted 1258–1669 € CC, so the ceiling alone kills every one of them — a
+> first draft of the Q2 entry reasoned exactly that far and wrote *"the live yield is zero"*. The
+> other two changes had opened a pool the old criteria never looked at. **Never predict a yield from
+> the previous filter's matches**; `scout run --once --seed` on a throwaway `RENT_WATCH_DB` costs
+> one poll. Two live consequences worth knowing: nearly every match is OUTSIDE the ranked communes
+> (91/93/94 — Les Ulis, Aulnay, Pierrefitte, Vitry — with Dourdan and Dammarie-les-Lys scoring
+> highest), because there is nothing under 1200 € CC in the Boucle de Seine; and scores run
+> **16–48**, so `high_priority_score: 70` can never fire and the `!!` marker is currently dead.
+> Left alone on purpose — lowering the threshold to make the marker appear is tuning the instrument
+> to the reading.
+
+Three things to know before touching this. **Region mode is the first LOOSENING this config has taken**, so it is guarded from
 both sides — the loader REFUSES `communes` and `postcode_prefixes` both being empty (the one shape
 that fails open, and over-matching is invisible because it looks like a busy market), and an unknown
 postcode is REFUSED in region mode though it is forgiven in list mode. That is not a hard-rule-9

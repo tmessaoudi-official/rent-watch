@@ -567,7 +567,18 @@ final class ConfigTest extends TestCase
         // The prototype searched `commune + cp + title + raw_text` as one haystack, so a Paris flat
         // whose description said "proche Chatou" passed the commune filter. There is no way to
         // reproduce that here, because the description is not an argument.
-        $c = $this->shipped();
+        //
+        // Built explicitly rather than read from the shipped file, since 2026-08-22. It used to use
+        // the shipped criteria and assert that Paris 17e was refused — which stopped being true
+        // when the region widened to all eight Île-de-France departements, and 75 became a
+        // perfectly good match. That would have been a test failing for a reason that has nothing
+        // to do with what it is named after: this is about WHICH FIELD is read, not about which
+        // communes are wanted this month.
+        $c = ConfigLoader::criteriaFromArray([
+            'communes' => ['Chatou'],
+            'postcode_prefixes' => ['78'],
+        ]);
+
         self::assertFalse($c->matchesCommune('Paris 17e', '75017'));
         self::assertTrue($c->matchesCommune('Chatou', '78400'));
     }
@@ -605,8 +616,11 @@ final class ConfigTest extends TestCase
         // "no configured commune sits outside the configured prefixes", and that is what is checked
         // — vacuously true in region mode, where the check that matters instead is that the prefixes
         // are non-empty, since they are then the entire filter.
+        // The literal prefix list is pinned by `testTheShippedCriteriaFileLoads`, which is where a
+        // criteria edit should fail. Here only the property this test is ABOUT is asserted, so a
+        // region change does not redden two tests for one reason.
         $c = $this->shipped();
-        self::assertSame(['78', '95'], $c->postcodePrefixes);
+        self::assertNotSame([], $c->postcodePrefixes);
 
         $outside = array_values(array_filter(
             array_keys($c->communeLabels),
@@ -994,8 +1008,17 @@ final class ConfigTest extends TestCase
         // 10 of the 13 listings that got past the location filter were rejected here alone, every
         // one of them under the rent ceiling. `min_surface_m2` below keeps it a real filter.
         self::assertSame(3, $c->minRooms);
-        self::assertSame(75.0, $c->minSurfaceM2);
-        self::assertSame(1800, $c->maxRentCc);
+
+        // WIDENED and TIGHTENED together on 2026-08-22, developer ruling: all eight Île-de-France
+        // departements instead of 78/95, a 50 m² floor instead of 75, and a 1200 € ceiling instead
+        // of 1800. The three move as one decision — more places and a smaller flat, in exchange for
+        // a real budget — so they are asserted together and a change to any of them fails here.
+        //
+        // The rent is the binding one, measured rather than assumed: all EIGHT listings that
+        // matched under the 1800 ceiling quoted 1258–1669 € CC, so none of them survives 1200.
+        self::assertSame(['75', '77', '78', '91', '92', '93', '94', '95'], $c->postcodePrefixes);
+        self::assertSame(50.0, $c->minSurfaceM2);
+        self::assertSame(1200, $c->maxRentCc);
         self::assertFalse($c->commuteEnabled);
         self::assertSame(70, $c->notify->highPriorityScore);
         self::assertSame(['console'], $c->notify->channels);
@@ -1258,12 +1281,23 @@ final class ConfigTest extends TestCase
 
     public function testAnAbsentLocalOverrideIsNotAnError(): void
     {
+        // Pointed at a path that CANNOT exist, since 2026-08-22. It named
+        // `config/criteria.local.json`, which is gitignored and therefore absent in CI and on a
+        // fresh clone — but present on any machine where somebody actually configured the tool, and
+        // this one has had one since channels were wired. So on the developer's own machine the
+        // test named "absent" was silently exercising the PRESENT path, and passed only because
+        // that override happens not to touch `max_rent_cc`. A test whose premise depends on
+        // untracked local state is a test that means something different for every reader.
         $c = ConfigLoader::loadCriteria(
             self::ROOT . '/config/criteria.json',
-            self::ROOT . '/config/criteria.local.json',
+            self::ROOT . '/config/criteria.local-' . bin2hex(random_bytes(8)) . '.json',
         );
 
-        self::assertSame(1800, $c->maxRentCc);
+        // Reads whatever the shipped file says rather than pinning a number here — that number is
+        // pinned once, in testTheShippedCriteriaFileLoads, and a second copy of it would make one
+        // criteria edit redden two tests for one reason.
+        $shipped = $this->shipped();
+        self::assertSame($shipped->maxRentCc, $c->maxRentCc);
     }
 
     public function testAMissingConfigFileIsALoudRefusal(): void

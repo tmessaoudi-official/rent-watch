@@ -61,7 +61,7 @@ final class PipelineRunTest extends TestCase
 
     private function criteria(): Criteria
     {
-        return ConfigLoader::loadCriteria(self::ROOT . '/config/criteria.json');
+        return ConfigLoader::loadCriteria(self::ROOT . '/tests/fixtures/criteria/pipeline.json');
     }
 
     private function listing(string $id = 'a1', array $o = []): RawListing

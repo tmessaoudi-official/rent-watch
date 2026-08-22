@@ -1,0 +1,80 @@
+{
+    "_comment": "PIPELINE TEST CRITERIA — not the shipped file, and deliberately frozen.\n\nCopied from config/criteria.json as it stood on 2026-08-22 before the region was widened to all of Île-de-France and the ceiling dropped to 1200 € CC. tests/fixtures/fixture_demo/search.json was authored against THESE numbers: demo-0009 (Nanterre, 92000) exists to be rejected on location, and several listings sit between 1200 and 1800 € to exercise the rent ceiling from both sides.\n\nWhy a fixture at all: PipelineTest and PipelineRunTest assert how the PIPELINE behaves — that an unknown room count does not disqualify, that a ground floor is real rather than falsy, that a rejection names its reason. None of that is a claim about the developer.'.s budget, and binding them to the shipped file meant one preference change reddened fifteen tests that had nothing to do with it. What the shipped file says is asserted in exactly two places that MEAN to: ConfigTest::testTheShippedCriteriaFileLoads, and LogirepFixtureTest, which measures the live consequence of a criteria edit on a real payload.",
+    "communes": [],
+    "postcode_prefixes": [
+        "78",
+        "95"
+    ],
+    "min_rooms": 3,
+    "min_surface_m2": 75,
+    "max_rent_cc": 1800,
+    "_exclude_patterns": "Property KIND and letting KIND, never tenure. Tenure exclusion lives in Tenure::isExcluded() and is deliberately absent from config: a user-editable regex duplicating CLAUDE.md §1 would be a second, weaker copy of the one guarantee that must not be config-overridable. Patterns are PCRE fragments matched case-insensitively against ACCENT-FOLDED text, so write `meuble`, not `meublé` — the loader refuses an accented pattern rather than letting it silently never match. Matched against title AND description.",
+    "exclude_patterns": [
+        "\\bcolocation\\b",
+        "\\bcoloc\\b",
+        "\\b(?:location|louer|loue|appartement|logement|studio|bien|t[1-9])\\s+meuble",
+        "\\bmeuble\\s+de\\s+tourisme\\b",
+        "\\bbail\\s+mobilite\\b",
+        "\\bresidence\\s+(?:etudiante|etudiant|senior|seniors|services|service|autonomie|intergenerationnelle|geree)\\b",
+        "\\bviager\\b",
+        "\\blmnp\\b",
+        "\\bsaisonnier\\b",
+        "\\bsaisonniere\\b",
+        "\\bsous[-\\s]location\\b",
+        "\\bfoyer\\s+(?:de\\s+)?(?:jeunes|travailleurs)\\b",
+        "\\bresidence\\s+foyer\\b",
+        "\\behpad\\b",
+        "\\blocal\\s+commercial\\b",
+        "\\blocal\\s+professionnel\\b",
+        "\\bfonds\\s+de\\s+commerce\\b",
+        "\\bmurs\\s+commerciaux\\b"
+    ],
+    "_exclude_title_patterns": "Matched against the TITLE ONLY, and that is the point. `parking`, `box`, `garage`, `cave` and `bureau` are property types in a title and ordinary amenities in a description — 'T4 avec parking' is wanted, 'Parking en sous-sol' is not. Matching these against the description would drop every flat that has a parking space; not matching them at all would let a parking ad through, because a parking ad states no rooms and no surface and an unknown measurement is never a disqualification. Most are anchored at the start of the title, which is where a property type sits — but not all, and that is deliberate. While EVERY pattern was anchored, the title-only scope protected nothing a sabotage could disprove: a `^` with no `m` flag cannot match inside an appended description either way, so widening the scope was a semantic no-op and the guarantee was untestable. The unanchored entries are phrases unambiguous wherever they sit in a title (`loue parking`, `emplacement de stationnement`) and ordinary in a description ('emplacement de stationnement inclus'), which gives the scope something real to protect.",
+    "exclude_title_patterns": [
+        "^\\s*(?:location\\s+)?(?:de\\s+)?(?:parking|box|garage|cave|cellier|local|bureau|bureaux|entrepot|terrain|hangar|emplacement)\\b",
+        "\\b(?:loue|a\\s+louer|location)\\s+(?:de\\s+)?(?:parking|box|garage|emplacement)\\b",
+        "\\bemplacement\\s+de\\s+stationnement\\b"
+    ],
+    "_commune_rank": "1 = most wanted. Drives score component S1 only; it never filters. In REGION MODE (empty `communes`) this is the only place the Boucle de Seine preference survives, which is why the loader stops requiring a rank to appear in `communes` when that list is empty — applied there, the check would reject every rank and force anyone widening to a departement to delete their ordering. With a NAMED commune list the check is back on: a rank for a commune that is filtered out is dead config.",
+    "commune_rank": {
+        "Sartrouville": 1,
+        "Houilles": 1,
+        "Maisons-Laffitte": 1,
+        "Le Vésinet": 2,
+        "Chatou": 2,
+        "Carrières-sur-Seine": 2,
+        "Montesson": 2,
+        "Bezons": 3,
+        "Cormeilles-en-Parisis": 3,
+        "Argenteuil": 3
+    },
+    "_weights": "spec/PROJECT_BRIEF.md §5, weights ruled 2026-08-07. Normalised, so a disabled component does not silently depress every score by its share. `high_floor_no_lift` is the one weight that must be negative, and it is excluded from the normalising total: a penalty is subtracted from what a listing earned, not part of what it could earn.",
+    "weights": {
+        "commune": 25,
+        "commute": 0,
+        "rent_headroom": 15,
+        "surface": 10,
+        "lift": 15,
+        "high_floor_no_lift": -20,
+        "freshness": 10
+    },
+    "_commute": "Off until an IDFM/PRIM key exists (Q1). The loader refuses `enabled: true` with a commute weight of 0, and refuses a non-zero weight while disabled — either way the score would misreport. Turning it on means: set enabled, name the station, set max_minutes, and give weights.commute a value.",
+    "commute": {
+        "enabled": false,
+        "station": null,
+        "max_minutes": null
+    },
+    "_freshness_minutes": "A listing first seen within this window earns the full freshness bonus (S7). The brief notes good LLI units go within hours.",
+    "freshness_minutes": 60,
+    "_notify": "Routing, ruled 2026-08-07. Nothing is batched: the premise of the whole tool is that good stock goes within hours. `channels` ships as console only, because a channel needing a credential cannot be the default in a repo whose .env is not filled in — enabling ntfy or email without its credential is a startup refusal, never a silent no-op.",
+    "notify": {
+        "channels": [
+            "console"
+        ],
+        "high_priority_score": 70,
+        "rent_drop_min_eur": 20,
+        "rent_drop_min_pct": 2,
+        "source_broken_cooldown_hours": 24,
+        "digest_hour": 8
+    }
+}

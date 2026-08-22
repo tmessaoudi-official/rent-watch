@@ -201,10 +201,19 @@ scout test-notify              # console prints; ntfy and email are SILENT on su
 ls -t var/outbox | head -1     # `file` transport: the message that was not sent
 ```
 
-> **On the host, `.env` is inert.** The code reads `getenv()`, and only Compose's `env_file:`
-> populates it — so a channel configured in `.env` is simply disabled when you run `bin/scout`
-> directly. It says so at startup rather than failing quietly. Load it yourself for a host run:
-> `set -a; . ./.env; set +a`.
+> **`bin/scout` loads `.env` itself** (2026-08-22), so the host and the container read the same
+> file the same way. Do **not** use `set -a; . ./.env; set +a`, which this file recommended for one
+> afternoon: that is the SHELL, and it executes the file rather than parsing it. A Gmail app
+> password pasted with the spaces Google displays it with — `abcd efgh ijkl mnop` — is not an
+> assignment to bash but a one-command environment prefix, so the variable is never exported *and*
+> bash runs the rest as a command. Observed: the CLI reported `SMTP_PASSWORD is empty` while the
+> file plainly held one, and four characters of a live credential were printed to the terminal by
+> `command not found`. A value containing backticks would have been executed.
+>
+> The parser takes values literally — no expansion, no substitution — and **the real environment
+> still wins**, so `RENT_WATCH_DB=/tmp/throwaway bin/scout run` works as before. A line that is not
+> `KEY=VALUE` is a startup refusal naming the line NUMBER and never the line, because this file
+> holds credentials.
 
 ## Why this exists
 

@@ -1398,7 +1398,9 @@ A changelog that overstates is worse than one that omits, because the next sessi
   `var/outbox`. Email runs `SMTP_TRANSPORT=file` until real SMTP credentials exist, which produces a
   readable message rather than pretending to send.
 
-- [2026-08-22 16:20] NOTED (latent, not fixed): **nothing loads `.env`.** The code reads `getenv()`,
+- [2026-08-22 16:20] NOTED, and **FIXED 2026-08-22 20:40 — see the entry below**: nothing loads `.env`.
+
+  ORIGINAL NOTE, kept because the reasoning in it turned out to be wrong in the way that matters: The code reads `getenv()`,
   and only Compose's `env_file:` populates it — so on the host `.env` is inert and a channel
   configured there is simply disabled. It fails LOUDLY (`⚠ canal ntfy désactivé : NTFY_TOPIC is not
   set`), which is why this is a note and not a defect, but the host and the container behave
@@ -1463,6 +1465,40 @@ A changelog that overstates is worse than one that omits, because the next sessi
   keeps writing complete, readable `.eml` files to `var/outbox`, so the path stays exercised and the
   day the credentials arrive the only change is three `.env` lines. Reversed by filling in
   `SMTP_HOST`/`SMTP_USER`/`SMTP_PASSWORD` and setting `SMTP_TRANSPORT=smtp`.
+
+- [2026-08-22 20:40] FIXED, and the earlier note UNDERSTATED it: **`bin/scout` now parses `.env`
+  itself** (`src/php/Config/DotEnv.php`). The 16:20 note called this latent and not a defect,
+  because the failure is loud — a channel says it is disabled. That reasoning held only while the
+  workaround was assumed to work. It does not.
+
+  `set -a; . ./.env; set +a` is not a parser, it is the SHELL. Observed within a minute of each
+  other on a Gmail app password pasted with the spaces Google displays it with
+  (`abcd efgh ijkl mnop`): bash read the line as a ONE-COMMAND environment prefix, so the variable
+  was never exported and the CLI reported `SMTP_PASSWORD is empty` while the file plainly held one;
+  and bash **executed** the remaining words, printing four characters of a live credential through
+  `command not found`. A value containing backticks or `$(…)` would have run. So the host and the
+  container disagreed about what a config file MEANT — Compose parses `env_file:`, the shell
+  executes it — and the printed fragment was a symptom of that, not the defect.
+
+  Four decisions inside the fix, each of which could have gone the other way:
+
+  - **Loaded in `bin/scout`, not in `Scout`.** The PHPUnit suite constructs `Scout` directly against
+    the real repo root, so a load inside the class would pull the developer's actual IMAP and SMTP
+    credentials into every test run — a suite that mails somebody because it instantiated a CLI. The
+    executable is the one place that is never a test subject. The cost is one untested line, which
+    `tests/test-dotenv-cli.sh` covers by running the real executable in a throwaway root; removing
+    the call was verified to turn that suite red, and the restore verified byte-identical.
+  - **The real environment WINS over the file.** `RENT_WATCH_DB=/tmp/throwaway bin/scout run` is how
+    a live source is measured without touching the real seen-set, and Compose's `environment:`
+    outranks its own `env_file:` the same way. A file that could override the environment would
+    silently point a throwaway run at the real database, and the run would look completely normal.
+  - **A malformed line is a startup refusal naming the LINE NUMBER and never the line.** This file
+    holds the IMAP password, the SMTP password and the ntfy topic; `ConfigError` messages reach a
+    terminal and, for `run`, `state/last-refusal.txt`. A parser that echoes what it could not parse
+    leaks a credential the day someone fat-fingers one.
+  - **Nothing is expanded and nothing is unescaped.** `${HOME}`, `$(id -u)` and `p@ss\word` are
+    those exact characters. Turning `\w` into anything would corrupt a credential silently, which is
+    this same defect arriving from the other direction.
 
 ## Formal plan — schema v4, the `group_key` history overlay (2026-08-19 23:02)
 

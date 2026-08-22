@@ -69,6 +69,11 @@ check "fetches the pinned runner"            has "tools/fetch-phpunit.sh"
 check "runs the PHPUnit suite"               has "tools/phpunit.phar"
 check "runs the tenure §1 tripwire test"     has "tests/test-tenure-guard.sh"
 check "runs the runner-fetch signature test" has "tests/test-fetch-phpunit.sh"
+# The one line of `.env` loading PHPUnit cannot reach — it lives in `bin/scout` so the suite
+# never loads a developer's real credentials. Uncovered by PHP, covered by that shell test,
+# and worth nothing unless CI runs it.
+check "runs the .env CLI test (bin/scout's loader is outside the PHP suite)" \
+  has "tests/test-dotenv-cli.sh"
 check "runs the config/doc drift scan"       has "drift-scan.sh"
 check "runs the drift-scan self-test"        has "tests/test-drift-scan.sh"
 check "runs the sabotage ledger"             has "tests/sabotage-check.sh"

@@ -1826,6 +1826,32 @@ run_sabotage "the demo fixture ships enabled again (fake listings in a real depl
   config/sources.json \
   '/"fixture_demo"/,/^    },/ s%"enabled": false%"enabled": true%'
 
+# ── `.env` is parsed, never executed (2026-08-22) ──────────────────────────────────────────────────
+#
+# The bug that produced this class was silent in the worst way: the CLI reported "SMTP_PASSWORD is
+# empty" while the file plainly contained one, because bash had read `KEY=a b c` as a one-command
+# prefix and never exported it -- and had EXECUTED `b c`, printing part of a live credential.
+
+# Precedence. `RENT_WATCH_DB=/tmp/throwaway bin/scout run` is how a live source is measured without
+# touching the real seen-set; a file that could override the environment would silently point that
+# at the real database, and the run would look completely normal.
+run_sabotage "the file overrides the real environment (a throwaway run hits the real store)" \
+  src/php/Config/DotEnv.php \
+  's%if (self::alreadySet($name)) {%if (false) {%'
+
+# A malformed line stops being a refusal. The line is then skipped in silence, so a fat-fingered
+# credential means a channel that is simply absent, with nothing said about why.
+run_sabotage "a malformed .env line is skipped instead of refused" \
+  src/php/Config/DotEnv.php \
+  's%throw self::malformed($index + 1);%continue;%'
+
+# Quote stripping. Quotes are the only way to express a value with meaningful trailing whitespace,
+# so keeping them makes every quoted password wrong by exactly two characters -- an authentication
+# failure that looks like a wrong password rather than a parser bug.
+run_sabotage "wrapping quotes are kept, so every quoted secret is wrong by two characters" \
+  src/php/Config/DotEnv.php \
+  's%return substr($value, 1, -1);%return $value;%'
+
 printf '\n  %d sabotage(s) detected, %d undetected\n' "$pass" "$fail"
 
 if [[ -n "$_filter" ]]; then

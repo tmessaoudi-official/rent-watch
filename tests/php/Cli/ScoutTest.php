@@ -27,6 +27,8 @@ final class ScoutTest extends TestCase
     /** @var list<string> */
     private array $tempRoots = [];
 
+    private ?string $demoRootPath = null;
+
     protected function setUp(): void
     {
         $this->dbPath = sys_get_temp_dir() . '/rentwatch-cli-' . bin2hex(random_bytes(8)) . '.sqlite3';
@@ -313,10 +315,11 @@ final class ScoutTest extends TestCase
     {
         // Seeded, then the stored rows are renamed so the fixture's listings are new again — which
         // is the closest an offline test gets to "a source published something".
-        $this->scout(['run', '--seed']);
+        $root = $this->demoRoot();
+        $this->scoutIn($root, ['run', '--seed']);
         $this->republishEverything();
 
-        $r = $this->scout(['run', '--once']);
+        $r = $this->scoutIn($root, ['run', '--once']);
 
         self::assertSame(0, $r['code'], $r['err']);
         // The high-priority match, with its score, its commune, its rent and its reasons — the
@@ -329,10 +332,11 @@ final class ScoutTest extends TestCase
 
     public function testTheDigestEntryExplainsItselfRatherThanBeingABareLink(): void
     {
-        $this->scout(['run', '--seed']);
+        $root = $this->demoRoot();
+        $this->scoutIn($root, ['run', '--seed']);
         $this->republishEverything();
 
-        $r = $this->scout(['run', '--once']);
+        $r = $this->scoutIn($root, ['run', '--once']);
 
         self::assertStringContainsString('[DIGEST] À vérifier : 1 annonce(s)', $r['out']);
         self::assertStringContainsString('aucun signal dans l\'annonce', $r['out']);
@@ -341,10 +345,11 @@ final class ScoutTest extends TestCase
     public function testNothingWithAnExcludedTenureAppearsInTheOutput(): void
     {
         // §1, at the only surface the developer actually sees. The fixture carries a PLAI listing.
-        $this->scout(['run', '--seed']);
+        $root = $this->demoRoot();
+        $this->scoutIn($root, ['run', '--seed']);
         $this->republishEverything();
 
-        $r = $this->scout(['run', '--once']);
+        $r = $this->scoutIn($root, ['run', '--once']);
 
         // COUNTERWEIGHT FIRST. Two assertions of absence pass perfectly on a run that was refused
         // and printed nothing at all — which is exactly what happened when the Q36 guard started
@@ -360,10 +365,11 @@ final class ScoutTest extends TestCase
     {
         // A hard disqualifier rejects silently and is logged only (hard rule 8), so `-v` is the ONLY
         // way a mis-scoped filter is ever noticed — nothing arrives either way.
-        $this->scout(['run', '--seed']);
+        $root = $this->demoRoot();
+        $this->scoutIn($root, ['run', '--seed']);
         $this->republishEverything();
 
-        $r = $this->scout(['run', '--once', '-v']);
+        $r = $this->scoutIn($root, ['run', '--once', '-v']);
 
         self::assertStringContainsString('écartée fixture_demo:demo-0002 — tenure: PLAI', $r['out']);
         self::assertStringContainsString('écartée fixture_demo:demo-0009 — commune: Nanterre', $r['out']);
@@ -516,10 +522,10 @@ final class ScoutTest extends TestCase
         // inventing a rule.
         $root = $this->fixtureRoot(enabled: false);
 
-        $r = $this->scoutIn($root, ['doctor', '--source=demo']);
+        $r = $this->scoutIn($root, ['doctor', '--source=fixture_demo']);
 
         self::assertSame(0, $r['code'], $r['err']);
-        self::assertMatchesRegularExpression('~demo\s+ok\s+10~', $r['out']);
+        self::assertMatchesRegularExpression('~fixture_demo\s+ok\s+10~', $r['out']);
         self::assertStringContainsString(
             'désactivée',
             $r['err'],
@@ -537,7 +543,7 @@ final class ScoutTest extends TestCase
 
         $r = $this->scoutIn($root, ['doctor']);
 
-        self::assertDoesNotMatchRegularExpression('~demo\s+ok~', $r['out']);
+        self::assertDoesNotMatchRegularExpression('~fixture_demo\s+ok~', $r['out']);
     }
 
     public function testAnExplicitlyNamedSourceWithAnUnverifiedUrlIsRefused(): void
@@ -590,25 +596,25 @@ final class ScoutTest extends TestCase
      */
     private function fixtureRoot(bool $enabled): string
     {
-        $root = $this->tempRoot(sources: ['demo' => [
-            'enabled' => $enabled,
-            'family' => 'institutional',
-            'type' => 'fixture',
-            'mixed_tenure' => true,
-            'fixture' => 'tests/fixtures/fixture_demo/search.json',
-            'items_path' => 'results.items',
-            'map' => [
-                'ref' => 'id',
-                'title' => 'title',
-                'url' => 'url',
-                'commune' => 'city',
-                'cp' => 'zipCode',
-                'rent' => 'rent.total',
-                'charges_included' => true,
-                'surface' => 'surface',
-                'rooms' => 'rooms',
-            ],
-        ]]);
+        // The SHIPPED block, with only `enabled` overridden — never a hand-written copy of it.
+        //
+        // It was a copy for one afternoon, and the copy silently dropped `elevator`, `floor`,
+        // `description` and `tenure_field` from the field map. Nothing errored: the listings still
+        // parsed, the run still passed, and the demo flat simply scored 55 instead of 75 because it
+        // had lost its lift. A test fixture that is a partial duplicate of production config does
+        // not fail, it drifts — and it drifts into asserting the behaviour of a mapping nobody
+        // ships.
+        $shipped = json_decode(
+            (string) file_get_contents(self::ROOT . '/config/sources.json'),
+            true,
+            flags: JSON_THROW_ON_ERROR,
+        );
+        self::assertIsArray($shipped);
+        $block = $shipped['sources']['fixture_demo'] ?? null;
+        self::assertIsArray($block, 'the committed config must carry a fixture_demo block');
+        $block['enabled'] = $enabled;
+
+        $root = $this->tempRoot(sources: ['fixture_demo' => $block]);
 
         mkdir($root . '/tests/fixtures/fixture_demo', 0o775, true);
         copy(
@@ -616,7 +622,29 @@ final class ScoutTest extends TestCase
             $root . '/tests/fixtures/fixture_demo/search.json',
         );
 
+        // FROZEN criteria, not the shipped file. `tests/fixtures/fixture_demo/search.json` was
+        // authored against a 1800 € ceiling and a 78/95 region: demo-0001 at 1450 € is the match,
+        // demo-0009 (Nanterre, 92000) exists to be rejected on location. Read the shipped file
+        // instead and one preference change — the region widened to all of Île-de-France, the
+        // ceiling dropped to 1200 € on 2026-08-22 — silently turns every one of those into a
+        // different listing, and four tests about the NOTIFICATION PAYLOAD start failing for a
+        // reason that has nothing to do with payloads.
+        copy(
+            self::ROOT . '/tests/fixtures/criteria/pipeline.json',
+            $root . '/config/criteria.json',
+        );
+
         return $root;
+    }
+
+    /**
+     * The demo root, built once per test so `run --seed` and the `run --once` after it share a
+     * config. Memoised rather than rebuilt, because a second root would mean a second seen-set and
+     * the second command would find nothing.
+     */
+    private function demoRoot(): string
+    {
+        return $this->demoRootPath ??= $this->fixtureRoot(enabled: true);
     }
 
     public function testAnUnknownNotificationChannelIsRefusedRatherThanDropped(): void

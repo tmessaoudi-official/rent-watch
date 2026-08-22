@@ -135,9 +135,11 @@ These are from the brief §5; **none has a weight yet**, and the weights are a d
 
 ### Ⓐ Q1 — ANSWERED 2026-08-07: commune stays the hard filter — **WIDENED 2026-08-22**
 
-> **WIDENED 2026-08-22 to REGION MODE, and location is still a hard filter.** `communes` is now
-> empty, which means the name is not checked and `postcode_prefixes` (78, 95) is the whole location
-> filter. The reason is measured, not preferential: on live payloads that day the ten named communes
+> **WIDENED TWICE ON 2026-08-22, and location is still a hard filter.** `communes` is empty — the
+> name is not checked and `postcode_prefixes` is the whole location filter — and those prefixes are
+> now **all eight Île-de-France departements** (75, 77, 78, 91, 92, 93, 94, 95), having been 78/95
+> for the first half of the day. The second widening is a developer ruling rather than a
+> measurement; the first was measured, and its reasoning is below. The reason is measured, not preferential: on live payloads that day the ten named communes
 > matched **nothing at all** across four sources, while **60 listings** sat inside those two
 > departements. The Boucle de Seine preference is not lost — `commune_rank` still orders results, so
 > what changed is that a neighbouring commune stopped being a silent rejection and became a
@@ -147,9 +149,14 @@ These are from the brief §5; **none has a weight yet**, and the weights are a d
 > exists. If anything it makes that question sharper, because a departement-wide filter is exactly
 > the case where *"≤ N minutes door-to-door"* would beat a geographic one.
 >
-> **Reverses with one line:** put the ten communes back in `config/criteria.json` — they are listed
-> verbatim in that file's own `_communes` note. The loader refuses `communes` and
-> `postcode_prefixes` both being empty, so the widened form cannot degrade into no filter at all.
+> **Reverses with one line, at either level:** cut `postcode_prefixes` back to `["78", "95"]` for
+> the departements, or put the ten communes back in `config/criteria.json` for the named list —
+> they are listed verbatim in that file's own `_communes` note. The loader refuses `communes` and
+> `postcode_prefixes` both being empty, so neither form can degrade into no filter at all.
+>
+> One consequence of the second widening, worth stating because it is invisible: `commune_rank`
+> still names only the ten Boucle de Seine communes, so a Seine-Saint-Denis flat matches and simply
+> scores 25 points lower. The preference survived the widening; it did not become uniform.
 
 **ANSWERED 2026-08-07 — the default applies.** F2 remains a hard filter; S2 (commute) ships with
 weight 0 and is inert until an IDFM key exists. `src/php/Enrich/Transit.php` is therefore NOT
@@ -161,7 +168,32 @@ to a named station"* via the IDFM/PRIM API, with commune as a score weight inste
 **Default if unanswered:** keep F2 as the hard filter, ship S2 disabled, revisit after milestone 8.
 Changes: whether `src/php/Enrich/Transit.php` is milestone-1 infrastructure or a later add-on.
 
-### Ⓐ Q2 — ANSWERED 2026-08-07: hard cutoff, charges comprises
+### Ⓐ Q2 — ANSWERED 2026-08-07: hard cutoff, charges comprises — **CEILING LOWERED 2026-08-22**
+
+> **LOWERED to 1200 € CC on 2026-08-22**, developer ruling. The MECHANISM is unchanged and that is
+> what this question was about — still a hard cutoff, still charges comprises, still `null`-safe.
+> Only the number moved. **Measured after the change rather than inferred from before it: the live
+> yield is 83 matches out of 478 listings** across the four institutional sources.
+> **Reverses with one line:** `max_rent_cc` in `config/criteria.json`.
+>
+> That number is worth dwelling on, because the obvious prediction was ZERO — all eight listings
+> that matched under the old 1800 ceiling quoted 1258–1669 € CC, so every one of them dies at 1200,
+> and a first draft of this entry said exactly that and stopped. It was wrong for the reason this
+> repo keeps re-learning: the ceiling did not move alone. The region went to all eight departements
+> and the surface floor to 50 m² in the same change, opening a pool the old criteria never looked
+> at. The eight became zero and a different 83 appeared. **Never predict a yield from the previous
+> filter's matches** — one poll on a throwaway `RENT_WATCH_DB` settles it.
+>
+> Two consequences of the 83, both real, neither a defect to quietly fix:
+>
+> - **Almost none is in the Boucle de Seine.** Les Ulis, Aulnay-sous-Bois, Pierrefitte, Épinay,
+>   Vitry, Fresnes — 91, 93, 94 — with Dourdan, Dammarie-les-Lys and Savigny-le-Temple scoring
+>   highest. `commune_rank` names only the ten Boucle communes, so nearly every match scores 0 on
+>   S1. The ranking is not broken; there is simply nothing under 1200 € CC in the ranked communes.
+> - **Nothing reaches `high_priority_score: 70`.** Scores run **16–48**, so the `!!` marker cannot
+>   fire under this combination of filters and that distinction is currently dead. Left alone
+>   deliberately: lowering the threshold to make the marker appear would be tuning the instrument to
+>   the reading.
 
 **ANSWERED 2026-08-07 — the default applies.** Hard cutoff at 1800 € **charges comprises**. Every
 source is normalised to CC before comparison; a listing whose CC rent is unknown is NOT disqualified
@@ -179,9 +211,13 @@ Changes: the criteria engine's return type (boolean vs. graded).
 > live data answered it: of the 13 listings that got past the location filter that day, **10 were
 > rejected by this filter alone**, and every one of them was under the rent ceiling (9 In'li LLI at
 > 1017–1353 € CC, plus a CDC 82 m² at 1669 €). T4-or-larger at ≤1800 € CC did not exist across the
-> four live sources. `min_surface_m2: 75` is **unchanged** and is what keeps this a real filter — an
-> 80 m² T3 is now in scope, a 55 m² one is not. **Reverses with one line:** `min_rooms` back to `4`
-> in `config/criteria.json`.
+> four live sources. `min_surface_m2` was **unchanged at 75** when this was written and is what kept
+> this a real filter. **BOTH HALVES HAVE NOW MOVED: the surface floor went to 50 m² later the same
+> day**, developer ruling, so a 55 m² T3 IS in scope — the sentence above is preserved rather than
+> rewritten because the reasoning it records is still why `min_rooms` is 3, and the floor beneath it
+> is now lower rather than absent. What still holds: an unknown surface does not disqualify, and 50
+> m² is a floor a real T3 clears and a converted studio does not. **Reverses with one line each:**
+> `min_rooms` back to `4`, `min_surface_m2` back to `75`, in `config/criteria.json`.
 
 **ANSWERED 2026-08-07 — the default applies.** `min_rooms: 4`, `min_surface_m2: 75`, both hard
 disqualifiers. A large T3 is not in scope. An **unknown** room count or surface does not disqualify —

@@ -93,6 +93,13 @@ jobs:
       - name: Runner fetch refuses a bad signature
         run: bash tests/test-fetch-phpunit.sh
 
+      # The one line of `.env` loading that PHPUnit cannot reach. `bin/scout` loads the file, not
+      # `Scout`, so that the suite — which constructs `Scout` against the real repo root — never
+      # pulls a developer's real credentials into a test run. That placement is right and it leaves
+      # the call itself uncovered, so this runs the actual executable in a throwaway root.
+      - name: .env is parsed, not executed (through the real CLI)
+        run: bash tests/test-dotenv-cli.sh
+
       # BEFORE the scan itself, deliberately. The scan is a gate, and a gate that has been silently
       # disabled reports clean — which is exactly how an earlier version of it printed a P0 and
       # still exited 0. Running the self-test first means a gutted check fails the build instead of

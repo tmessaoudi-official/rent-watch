@@ -208,12 +208,19 @@ final class LogirepFixtureTest extends TestCase
         // Guards a premise that was WRONG when this source was proposed: "8 rows are in the 78/95
         // departments the criteria filter on" was read as 8 matches.
         //
-        // REWRITTEN 2026-08-22, and the number it pins changed for a real reason rather than to make
-        // a change pass. It used to assert exactly ONE row (Bezons), because the shipped config
-        // named ten communes and `matchesCommune()` needs the NAME as well as the prefix. The
-        // shipped config is now REGION MODE — `communes: []`, so the two prefixes are the whole
-        // filter — which is precisely the widening this test's old message called "the event worth
-        // noticing". Four rows are in 78/95: Bezons plus three in Osny.
+        // REWRITTEN TWICE on 2026-08-22, and both times the number moved for a real reason rather
+        // than to make a change pass — which is the distinction this test exists to force someone
+        // to make out loud. It first asserted ONE row (Bezons), because the shipped config named
+        // ten communes and `matchesCommune()` needs the NAME as well as the prefix. Region mode —
+        // `communes: []`, prefixes are the whole filter — took it to EIGHT across 78/95. Widening
+        // the region to all eight Île-de-France departements takes it to NINETEEN, across eleven
+        // communes in six departements, which is the widening measured rather than asserted.
+        //
+        // Nineteen rows past the LOCATION gate is not nineteen matches: the rent ceiling dropped to
+        // 1200 € CC in the same change, and this source quotes hors charges, so `max_rent_cc` never
+        // fires on it at all. That is deliberate and recorded in CLAUDE.md — the ceiling is not
+        // checkable for Logirep — and it is exactly why this test asserts the LOCATION gate alone
+        // and names it in its own title.
         //
         // Deliberately still bound to the SHIPPED file rather than to a fixture-local config: its
         // job is to make the live consequence of a criteria edit visible in a test run, so it must
@@ -240,13 +247,25 @@ final class LogirepFixtureTest extends TestCase
         sort($distinct);
 
         self::assertCount(
-            8,
+            19,
             $passing,
-            'on the frozen payload exactly eight rows pass the location gate under the shipped '
+            'on the frozen payload exactly nineteen rows pass the location gate under the shipped '
                 . 'region-mode config — a change here means the criteria were edited or the source '
                 . 'started publishing elsewhere, and both are worth noticing',
         );
-        self::assertSame(['bezons', 'les clayes sous bois', 'osny'], $distinct);
+        self::assertSame([
+            'avon',
+            'bagneux',
+            'bezons',
+            'chennevieres sur marne',
+            'le plessis trevise',
+            'les clayes sous bois',
+            'montreuil',
+            'neuilly sur marne',
+            'osny',
+            'rueil malmaison',
+            'vincennes',
+        ], $distinct);
     }
 
     /** @return list<RawListing> */

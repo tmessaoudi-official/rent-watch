@@ -19,6 +19,26 @@ if (!is_file($autoload)) {
 
 require $autoload;
 
+// `.env` is loaded HERE rather than inside `Scout`, and the placement is load-bearing. The test
+// suite constructs `Scout` directly against the real repo root, so a load inside the class would
+// pull the developer's actual credentials into every test run — a suite that mails somebody, or
+// polls their mailbox, because it instantiated a CLI. The executable is the one place that is never
+// a test subject.
+//
+// Before this existed, `.env` was inert outside Docker and the documented workaround was
+// `set -a; . ./.env; set +a` — the SHELL, which executes the file rather than reading it. See
+// `RentWatch\Config\DotEnv` for what that cost on 2026-08-22. The real environment still wins over
+// the file, so `RENT_WATCH_DB=/tmp/throwaway bin/scout run` behaves as it always did.
+try {
+    RentWatch\Config\DotEnv::load(dirname(__DIR__) . '/.env');
+} catch (RentWatch\Config\ConfigError $e) {
+    // Not routed through Scout's handler: this runs before one exists, and a `.env` the parser
+    // refuses is a startup refusal in the most literal sense. The message names a line NUMBER and
+    // never the line, because the file holds credentials.
+    fwrite(STDERR, 'configuration : ' . $e->getMessage() . "\n");
+    exit(2);
+}
+
 // Ruled 2026-08-07 (Q34): a Docker container without TZ runs UTC, so "08:00 local" silently becomes
 // 10:00 Paris in summer. Read from the environment, with the same default `.env.example` documents.
 $tz = getenv('TZ');
