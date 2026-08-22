@@ -236,6 +236,32 @@ final class ScoutHeartbeatTest extends TestCase
         );
     }
 
+    public function testAnUnwritableDatabaseIsARefusalRatherThanAStackTrace(): void
+    {
+        // The first thing a new deployment hits, and it was a fatal PDOException with a stack trace:
+        // Q8 bind-mounts `state/` from the host, the image runs as a non-root uid, and a host
+        // directory owned by somebody else is not writable — measured, running the real container.
+        //
+        // A malformed config is already ruled "an ordinary, expected, user-caused condition — caught
+        // and printed, never a stack trace" (ConfigError). An unmounted or unwritable volume is the
+        // same kind of condition and the likeliest one in production, so it gets the same treatment,
+        // and the message has to name the PATH — that is the whole diagnosis.
+        // An UNWRITABLE directory, not a missing one: `Store::open()` creates missing directories,
+        // and in the container the directory existed and was owned by another uid. Getting this
+        // wrong the first time is the point — the reproduction has to match the real failure.
+        $root = $this->tempRoot();
+        $locked = $root . '/locked';
+        mkdir($locked, 0o500, true);
+        $r = $this->scoutIn($root, ['run', '--once'], $locked . '/rent-watch.sqlite3');
+        $text = $r['out'] . $r['err'];
+        chmod($locked, 0o700);
+
+        self::assertSame(2, $r['code'], 'an unusable store is a startup refusal');
+        self::assertStringNotContainsString('Stack trace', $text);
+        self::assertStringNotContainsString('PDOException', $text);
+        self::assertStringContainsString('locked', $text, 'the refusal must name the path it could not open');
+    }
+
     public function testADoctorRefusalDoesNotWriteTheNote(): void
     {
         // Scoped to `run`. A doctor refusal is read by whoever typed it, in the terminal they typed
@@ -268,14 +294,17 @@ final class ScoutHeartbeatTest extends TestCase
      *
      * @return array{code: int, out: string, err: string}
      */
-    private function scoutIn(string $root, array $argv): array
+    private function scoutIn(string $root, array $argv, ?string $db = null): array
     {
         $out = fopen('php://memory', 'r+');
         $err = fopen('php://memory', 'r+');
         self::assertIsResource($out);
         self::assertIsResource($err);
 
-        putenv('RENT_WATCH_DB=' . $root . '/state/rent-watch.sqlite3');
+        // The override exists because this helper used to set the path unconditionally, which
+        // silently discarded the one a test had just chosen — the unwritable-store test then
+        // exercised a perfectly good database and failed for a reason unrelated to its subject.
+        putenv('RENT_WATCH_DB=' . ($db ?? $root . '/state/rent-watch.sqlite3'));
 
         $code = (new Scout($root, $out, $err, self::NOW))->run($argv);
         rewind($out);

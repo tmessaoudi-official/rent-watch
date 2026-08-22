@@ -1,12 +1,16 @@
 {
     "name": "tmessaoudi/rent-watch",
-    "description": "Self-hosted watcher for rental listings in Île-de-France — PHP implementation of the pure core",
+    "description": "Self-hosted watcher for rental listings in \u00cele-de-France \u2014 PHP implementation of the pure core",
     "type": "project",
     "license": "proprietary",
     "require": {
         "php": ">=8.5",
+        "ext-curl": "*",
+        "ext-dom": "*",
+        "ext-json": "*",
         "ext-mbstring": "*",
-        "ext-json": "*"
+        "ext-openssl": "*",
+        "ext-pdo_sqlite": "*"
     },
     "autoload": {
         "psr-4": {
@@ -24,5 +28,8 @@
     },
     "scripts": {
         "test": "php tools/phpunit.phar"
+    },
+    "suggest": {
+        "ext-pcntl": "Clean shutdown of `scout run --watch`: without it a SIGTERM kills the process mid-pass instead of after it, which is how a redeploy produces duplicate notifications. WatchLoop degrades gracefully and says so on its banner."
     }
 }

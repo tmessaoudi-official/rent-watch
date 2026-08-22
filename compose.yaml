@@ -1,0 +1,71 @@
+# Q8's deployment: Docker on a VPS, `state/` on a mounted volume, `scout run --watch`.
+#
+# FIRST RUN ON A FRESH HOST — seed before you start the watcher:
+#
+#     cp .env.example .env && $EDITOR .env      # a push channel, or nothing reaches you
+#     docker compose run --rm scout doctor      # sources reachable? journal WAL? channels usable?
+#     docker compose run --rm scout run --once --seed
+#     docker compose up -d
+#
+# The seed step is not optional and skipping it is not silent-but-fine. Q36 makes `run` REFUSE on an
+# empty seen-set, because an empty seen-set is what a forgotten volume mount looks like and the
+# alternative is notifying the entire back catalogue at once. Combined with `restart: unless-stopped`
+# that refusal becomes a restart loop — visible, thanks to Q27's `last-refusal.txt`, but a loop. Seed
+# first and it starts clean.
+
+services:
+  scout:
+    build:
+      context: .
+    image: rent-watch:local
+    # `no-new-privileges` because nothing here ever needs to escalate, and the image already runs as
+    # a non-root user. Cheap, and it closes a class of surprise from a future base-image change.
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp
+    # The image runs as uid 10001, and a bind-mounted host directory belongs to whoever created it.
+    # Measured, running the real container against a host `state/`: PDO could not create the database
+    # and the process died. So the uid is configurable and defaults to the operator's — set
+    # `RW_UID`/`RW_GID` in `.env`, or run `RW_UID=$(id -u) RW_GID=$(id -g) docker compose up -d`.
+    # 1000:1000 is the ordinary first-user id on a Debian/Ubuntu VPS, which is what Q8 prescribes.
+    user: "${RW_UID:-1000}:${RW_GID:-1000}"
+    volumes:
+      # THE mounted volume of Q8. Everything that must outlive the container lives here: the
+      # seen-set, the price history, the run log, the Q27 heartbeat marker and `last-refusal.txt`.
+      # Deleting it makes the next run re-notify the entire market, and the price history is not
+      # reconstructible — a listing only ever shows its CURRENT rent.
+      #
+      # A bind mount rather than a named volume, deliberately: this file is the thing the project
+      # tells you to back up, and `docker compose down -v` deletes a named one without ceremony.
+      - ./state:/app/state
+      # Read-only, so a running container cannot rewrite the criteria that decide what is filtered.
+      # A wrong filter is invisible: the user sees plausible results forever.
+      - ./config:/app/config:ro
+    env_file:
+      # OPTIONAL, and that is the point. A fresh clone has no `.env` — it is gitignored — and a
+      # mandatory entry makes even `docker compose config` fail before the operator has done
+      # anything wrong. Q9 also rules every channel optional: `console` always works, so the stack
+      # must be able to start without credentials and say so, rather than refusing to parse.
+      - path: .env
+        required: false
+    environment:
+      # Q34. Named here as well as in the image so that changing the deployment's timezone does not
+      # need a rebuild.
+      TZ: ${TZ:-Europe/Paris}
+    restart: unless-stopped
+    # Docker's default is 10 SECONDS, which is less than a single In'li fetch (~24 s measured). A
+    # redeploy would therefore SIGKILL the watcher mid-pass every time — and a pass killed between
+    # "notification sent" and "notified_at written" is the duplicate-notification storm that
+    # WatchLoop's clean-shutdown design exists to prevent. Sized to comfortably exceed one full pass
+    # across every enabled source.
+    stop_grace_period: 5m
+    # The logs are a diagnostic, not the notification channel — a container log is explicitly NOT a
+    # usable channel under Q9. Bounded so a watcher running for months cannot fill the VPS disk and
+    # take the seen-set down with it.
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "5"

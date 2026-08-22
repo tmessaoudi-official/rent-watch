@@ -73,6 +73,50 @@ the code stopped working. It has earned that twice over — a three-lens review 
 in the store's first cut, and five of its guarantees were shown untested by running this very script
 against them.
 
+## Deploying it
+
+Ruled by Q8: **Docker on a VPS, `state/` on a mounted volume, `scout run --watch` owning its own
+schedule.** Not cron — the process keeps its jitter and a continuous run log. Not GitHub Actions,
+explicitly: no persistent disk means no seen-set, which means re-notifying the entire market on
+every run.
+
+```bash
+cp .env.example .env && $EDITOR .env      # a push channel — or nothing ever reaches you
+docker compose run --rm scout doctor      # sources reachable? journal WAL? channels usable?
+docker compose run --rm scout run --once --seed
+docker compose up -d
+```
+
+**The seed step is not optional.** An empty seen-set makes `run` refuse (Q36), because an empty
+seen-set is exactly what a forgotten volume mount looks like and the alternative is notifying the
+entire back catalogue at once. With `restart: unless-stopped` that refusal becomes a restart loop —
+visible, since Q27 records it to `state/last-refusal.txt` and reports it on the next successful
+start, but still a loop. Seed first and it starts clean.
+
+**File ownership is the one thing that bites on a first deploy.** `state/` is bind-mounted from the
+host, so it belongs to whoever created it, while the container runs as its own uid. Compose defaults
+to `1000:1000` — the ordinary first user on a Debian/Ubuntu VPS. If yours differs:
+
+```bash
+RW_UID=$(id -u) RW_GID=$(id -g) docker compose up -d
+```
+
+Get it wrong and the refusal now says so by name (`base de données inutilisable (…) : le volume
+est-il monté et accessible en écriture…`) instead of dying with a stack trace, which is what it did
+before this was measured against a real container.
+
+**What is in the image, and what is not.** No test suite, no `tools/phpunit.phar`, no `.env` — an
+image layer is a distributable artifact and a baked-in credential survives any later layer that
+deletes it. The demo fixture *is* shipped, because `fixture_demo` is enabled in the committed config
+and it lets a fresh VPS prove the whole pipeline before a single landlord is polled.
+
+**There is deliberately no Docker `HEALTHCHECK`.** Q27's heartbeat is the liveness mechanism and it
+reports through a channel you actually read; a container healthcheck polling the marker file would
+fight the 24-hour interval and report to a dashboard nobody is watching.
+
+**Back up `state/rent-watch.sqlite3`.** Deleting it re-notifies everything, and the price history
+cannot be reconstructed — a listing only ever shows its *current* rent.
+
 ## Why this exists
 
 Nothing on the market aggregates institutional LLI stock, and most of these landlords do not even

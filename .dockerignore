@@ -1,0 +1,44 @@
+# What must never reach an image layer.
+#
+# An image is a distributable artifact: a layer that once held a secret still holds it after a later
+# layer deletes the file. Hard rule 7 says secrets live in `.env` and `.env` is gitignored — the same
+# reasoning applies one step further out, because `docker build` does not read `.gitignore`.
+
+# ── secrets and personal data ─────────────────────────────────────────────────────────────────────
+.env
+.env.*
+!.env.example
+config/criteria.local.json
+
+# `state/` is the mounted volume, and a development seen-set is a record of flats a real person
+# looked at. Baking it into a layer both ships that and masks a forgotten volume mount, since the
+# container would find a populated database where Q36 expects an empty one.
+state/
+
+# ── build noise and things the runtime has no use for ─────────────────────────────────────────────
+.git/
+.gitignore
+.github/
+.claude/
+var/
+vendor/
+tools/
+prototype/
+docs/
+spec/
+Dockerfile
+.dockerignore
+compose.yaml
+*.md
+
+# The test suite is not deployed — EXCEPT the demo fixture, which `fixture_demo` reads at runtime.
+# Excluding `tests/` wholesale is the reflexive choice and it is wrong here: the shipped config has
+# `fixture_demo` enabled, so an image without that file throws a SourceError on every pass, forever.
+# The nested negation is Docker's documented way to re-include a path under an excluded parent, and
+# each level has to be reopened in turn — `!tests/fixtures` alone does nothing once `tests/*` has
+# matched. Everything else under `tests/` is frozen landlord payloads: several hundred KB with no
+# runtime purpose.
+tests/*
+!tests/fixtures
+tests/fixtures/*
+!tests/fixtures/fixture_demo

@@ -150,6 +150,20 @@ final readonly class Scout
             return $command === 'run' ? $this->failRun($text) : $this->fail($text);
         } catch (SourceError $e) {
             return $command === 'run' ? $this->failRun($e->getMessage()) : $this->fail($e->getMessage());
+        } catch (\PDOException $e) {
+            // The store could not be opened, and under Q8's deployment that is the LIKELIEST failure
+            // in production rather than an exotic one: `state/` is bind-mounted from the host, the
+            // image runs as a non-root uid, and a host directory owned by somebody else is simply
+            // not writable. Measured by running the real container, where it produced a fatal
+            // PDOException and a stack trace.
+            //
+            // Named path, named cause, no stack trace — the same treatment `ConfigError` already
+            // gets for being "an ordinary, expected, user-caused condition". Redacted because a DSN
+            // can carry credentials, even though SQLite's does not today.
+            $text = 'base de données inutilisable (' . $this->dbPath() . ') : ' . Redact::text($e->getMessage())
+                . '. Le volume est-il monté et accessible en écriture par l\'utilisateur du conteneur ?';
+
+            return $command === 'run' ? $this->failRun($text) : $this->fail($text);
         }
     }
 
