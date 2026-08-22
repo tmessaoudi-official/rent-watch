@@ -1735,6 +1735,31 @@ run_sabotage "a startup refusal is written to disk unredacted (a credential leak
   src/php/Cli/Scout.php \
   's%Redact::text($text)%$text%'
 
+# The beat's health figure counts what the run WATCHES. Reverting it to every enabled source is the
+# bug this replaced, and it is invisible from inside: the number is plausible, the watcher is
+# healthy, and the line simply reports faults that do not exist. Observed on a real container as
+# "1/5 source(s) en bon état" while one source was deliberately scoped and four were never polled.
+run_sabotage "the beat counts CONFIGURED sources again (a scoped watcher invents faults)" \
+  src/php/Cli/Scout.php \
+  's%foreach ($watched as $name) {%foreach ($this->sourceNames() as $name) {%'
+
+# And the other direction, which is why the fix is not just "count fewer". Drop the disclosure and a
+# deployment carrying a forgotten `--source` reports a flawless 1/1 for ever while the landlords it
+# is not watching go unwatched. The beat is what reaches the phone; the startup banner is a log line
+# read once.
+run_sabotage "the beat stops disclosing that it is scoped (a forgotten --source looks perfect)" \
+  src/php/Cli/Scout.php \
+  's%if ($configured !== \\count($watched)) {%if (false) {%'
+
+# The in-loop beat — the one that fires on day two — lives inside a closure, so an argument that is
+# not captured is `null` at the call site and the watcher dies on its first due beat, 24 hours into
+# an unattended run. This is not hypothetical: it was written that way, and every existing heartbeat
+# test missed it because the fixed clock makes the in-loop beat unreachable. The case that catches
+# it had to reach that call site deliberately.
+run_sabotage "the in-loop beat loses an argument to the closure boundary (dies on day two)" \
+  src/php/Cli/Scout.php \
+  's%$heartbeat, $watched, \&$passes%$heartbeat, \&$passes%'
+
 printf '\n  %d sabotage(s) detected, %d undetected\n' "$pass" "$fail"
 
 if [[ -n "$_filter" ]]; then

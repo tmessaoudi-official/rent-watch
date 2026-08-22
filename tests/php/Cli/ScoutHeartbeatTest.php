@@ -262,6 +262,113 @@ final class ScoutHeartbeatTest extends TestCase
         self::assertStringContainsString('locked', $text, 'the refusal must name the path it could not open');
     }
 
+    public function testAScopedWatcherReportsHealthForTheSourcesItActuallyWatches(): void
+    {
+        // Observed on a real container, running `--watch --source=fixture_demo` against the shipped
+        // five-source config: the startup beat said "1/5 source(s) en bon état". Four of those five
+        // were never polled — the operator excluded them — so the beat was reporting four faults
+        // that did not exist, in the ONE channel whose entire value is that it can be believed.
+        //
+        // It gets worse the longer it runs: an unpolled source's health record goes STALE, so the
+        // beat would eventually alarm about sources nobody asked it to watch, every single day. A
+        // health line that always reads "4 broken" trains its reader to skip the health line.
+        $root = $this->tempRoot();
+        $this->enableASecondSource($root);
+
+        // Seeded UNSCOPED, so the excluded source has a healthy record in the store before the
+        // scoped run starts. That is the real sequence — an operator adds `--source` to a
+        // deployment that was already running — and it is what makes the assertion sharp in BOTH
+        // directions: counting configured sources then yields a nonsensical "2/1", where an
+        // excluded-but-unhealthy source would have coincidentally produced the correct "1/1".
+        // The first version of this test seeded scoped and could not tell the two apart; the
+        // mutation in `tests/sabotage-check.sh` stayed green and said so.
+        $this->scoutIn($root, ['run', '--once', '--seed']);
+        $r = $this->scoutIn($root, ['run', '--watch', '--source=fixture_demo']);
+
+        self::assertStringContainsString('1/1 source(s) en bon état', $r['out']);
+        self::assertStringNotContainsString('2/1 source(s)', $r['out'], 'an excluded source is not counted as healthy either');
+        self::assertStringNotContainsString('1/2 source(s)', $r['out'], 'an excluded source is not a fault');
+    }
+
+    public function testAScopedWatcherSaysThatItIsScoped(): void
+    {
+        // The other half, and the reason the fix above is not simply "count fewer sources". If the
+        // beat silently reported 1/1, a deployment that carries a forgotten `--source` would look
+        // perfect forever while four landlords went unwatched — and the beat is what reaches the
+        // phone, whereas the startup banner is a log line nobody re-reads. So the scope has to
+        // travel WITH the health figure, not merely be absent from it.
+        $root = $this->tempRoot();
+        $this->enableASecondSource($root);
+
+        $this->scoutIn($root, ['run', '--once', '--seed', '--source=fixture_demo']);
+        $r = $this->scoutIn($root, ['run', '--watch', '--source=fixture_demo']);
+
+        self::assertStringContainsString('--source', $r['out'], 'the beat must disclose that it is scoped');
+        self::assertStringContainsString('2 configurée', $r['out'], 'and say how many it is NOT watching');
+    }
+
+    public function testAnUnscopedWatcherSaysNothingAboutScope(): void
+    {
+        // The counterweight: the note must appear only when it is true. A permanent parenthetical
+        // on every beat is noise, and noise on the liveness channel is the same defect as a false
+        // alarm — one more line the reader learns to skim past.
+        $r = $this->watch();
+
+        self::assertStringContainsString('1/1 source(s) en bon état', $r['out']);
+        self::assertStringNotContainsString('--source', $r['out']);
+    }
+
+    public function testTheINLOOPBeatIsExercisedAtAllAndAnUnwritableMarkerDoesNotSuppressIt(): void
+    {
+        // Two guarantees, and they are inseparable because the second is the only way to reach the
+        // first with a FIXED clock.
+        //
+        // The in-loop beat — the one that fires on day two of an unattended run — is unreachable in
+        // every other test here: the startup beat writes the marker at NOW, and every later check
+        // asks `isDue(NOW, NOW)`. That is deliberate and it is what makes "exactly one beat"
+        // assertable, but it means the loop's own call site is never executed. It was ALSO wrong:
+        // the call gained an argument that lives outside the closure's `use` list, so the first
+        // real due beat would have thrown a TypeError and killed the watcher 24 hours in. Nothing
+        // in this file could see it.
+        //
+        // Making the marker unwritable is the way in, and it is a real scenario rather than a
+        // contrivance: `beat()` writes it with `@file_put_contents`, deliberately swallowing
+        // failure so a full or read-only volume cannot turn a liveness signal into a crash. A
+        // directory where the file goes fails that write while leaving the database alone, and
+        // `lastHeartbeat()` reads `is_file()`, so every check is due. The documented bias is one
+        // beat too many, never one suppressed — so two beats here is the CORRECT behaviour, and
+        // asserting it is what proves the loop's call site runs at all.
+        $root = $this->tempRoot();
+        mkdir($root . '/state/heartbeat.txt', 0o775, true);
+
+        $this->scoutIn($root, ['run', '--once', '--seed']);
+        $r = $this->scoutIn($root, ['run', '--watch']);
+
+        self::assertSame(
+            2,
+            substr_count($r['out'], 'toujours actif'),
+            'startup beat, then the in-loop beat — an unwritable marker suppresses neither',
+        );
+        self::assertStringNotContainsString('TypeError', $r['out'] . $r['err']);
+        self::assertDirectoryExists($root . '/state/heartbeat.txt', 'the write failed, as the setup intends');
+    }
+
+    /**
+     * A second enabled source in the same root, reading the same frozen payload.
+     *
+     * Deliberately a copy of the first rather than a new fixture: what is under test is the
+     * arithmetic between "configured" and "watched", and a second source that behaved differently
+     * would let a health difference explain a count difference.
+     */
+    private function enableASecondSource(string $root): void
+    {
+        $path = $root . '/config/sources.json';
+        $config = json_decode((string) file_get_contents($path), true, 512, JSON_THROW_ON_ERROR);
+        self::assertIsArray($config);
+        $config['sources']['fixture_other'] = $config['sources']['fixture_demo'];
+        file_put_contents($path, json_encode($config, JSON_THROW_ON_ERROR));
+    }
+
     public function testADoctorRefusalDoesNotWriteTheNote(): void
     {
         // Scoped to `run`. A doctor refusal is read by whoever typed it, in the terminal they typed

@@ -438,17 +438,24 @@ final readonly class Scout
         }
         $passes = 0;
 
+        // What this run actually polls, which is NOT the same as what the config enables whenever
+        // `--source` is in play. Taken from the built list rather than re-read from the config,
+        // because the built list is the thing the loop will iterate: any future reason a source is
+        // dropped between config and loop is then reflected here for free, rather than silently
+        // reintroducing the mismatch this replaced.
+        $watched = array_map(static fn (Source $source): string => $source->name(), $sources);
+
         // Read and CLEARED once, here. Q27: "the next successful start can report what happened
         // while it was down." Clearing it at startup rather than after sending means a refusal is
         // reported once, not on every beat for the life of the process.
         $refusal = $this->takeLastRefusal();
 
         if ($heartbeat->isDue($this->lastHeartbeat(), $this->now())) {
-            $this->beat($notifier, $store, $passes, 0, $refusal);
+            $this->beat($notifier, $store, $passes, 0, $refusal, $watched);
         }
 
         $loop = new WatchLoop(
-            pass: function () use ($criteria, $store, $notifier, $sources, $verbose, $pacer, $heartbeat, &$passes): void {
+            pass: function () use ($criteria, $store, $notifier, $sources, $verbose, $pacer, $heartbeat, $watched, &$passes): void {
                 $this->onePass($criteria, $store, $notifier, PacedSource::wrapAll($sources, $pacer), false, $verbose);
                 ++$passes;
 
@@ -456,7 +463,7 @@ final readonly class Scout
                 // message that must still go out when passes are failing, since a watcher whose
                 // sources are all broken is exactly the state silence would hide.
                 if ($heartbeat->isDue($this->lastHeartbeat(), $this->now())) {
-                    $this->beat($notifier, $store, $passes, 0, null);
+                    $this->beat($notifier, $store, $passes, 0, null, $watched);
                 }
             },
             pacer: $pacer,
@@ -689,23 +696,48 @@ final readonly class Scout
      * The marker is written only after a successful send. A heartbeat that failed to deliver must
      * not mark itself done, or a broken channel would be papered over by its own bookkeeping.
      */
-    private function beat(Notifier $notifier, Store $store, int $passes, int $matches, ?string $refusal): void
-    {
+    /** @param list<string> $watched the sources this run actually polls — see below */
+    private function beat(
+        Notifier $notifier,
+        Store $store,
+        int $passes,
+        int $matches,
+        ?string $refusal,
+        array $watched,
+    ): void {
         $now = $this->now();
         $reasons = [
             $passes === 0 ? 'démarrage de la surveillance' : $passes . ' passe(s) terminée(s)',
             $matches . ' annonce(s) notifiée(s)',
         ];
 
+        // The health figure counts WHAT THIS RUN WATCHES, not what the config enables. It used to
+        // read every enabled source, so `--watch --source=x` against the shipped config reported
+        // "1/5 source(s) en bon état" — four faults that did not exist, in the one channel whose
+        // whole value is that it can be believed. It also degrades: an unpolled source's health
+        // record goes STALE, so the beat would eventually alarm every day about sources nobody
+        // asked it to watch, and a health line that always reads "4 broken" is a line its reader
+        // learns to skip.
         $ok = 0;
-        $total = 0;
-        foreach ($this->sourceNames() as $name) {
-            ++$total;
+        foreach ($watched as $name) {
             if ($store->health($name, $now)->status === SourceStatus::OK) {
                 ++$ok;
             }
         }
-        $reasons[] = $ok . '/' . $total . ' source(s) en bon état';
+        $reasons[] = $ok . '/' . \count($watched) . ' source(s) en bon état';
+
+        // But silence about the scope would replace one wrong reading with another: a deployment
+        // carrying a forgotten `--source` would report a flawless 1/1 forever while four landlords
+        // went unwatched. The startup banner already states the count, and it is a log line nobody
+        // re-reads; the beat is what reaches the phone, so the scope has to travel WITH the figure.
+        // Only when it is true — a permanent parenthetical on every beat is noise, and noise on the
+        // liveness channel costs the same as a false alarm.
+        $configured = \count($this->sourceNames());
+
+        if ($configured !== \count($watched)) {
+            $reasons[] = 'limité par --source : ' . $configured . ' configurée(s), '
+                . \count($watched) . ' surveillée(s)';
+        }
 
         if ($refusal !== null) {
             // Q27's other half: "the next successful start can report what happened while it was

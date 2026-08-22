@@ -1217,6 +1217,46 @@ A changelog that overstates is worse than one that omits, because the next sessi
   and re-pointed only if none does. Applied to the old `wasCreated()` Q36 case, whose three
   `isSeenSetEmpty()` successors cover both halves of the ruling.
 
+- [2026-08-22 09:40] AGREED: the Q27 beat's health figure counts the sources the RUN WATCHES, and
+  DISCLOSES the scope whenever a `--source` narrows it. Found by running the real container, not by
+  review: `--watch --source=fixture_demo` against a five-source config reported *"1/5 source(s) en
+  bon état"*, four faults that did not exist, in the one channel whose value is that it can be
+  believed — and it would have worsened, since an unpolled source goes `STALE` and the beat would
+  then alarm daily about sources nobody asked it to watch. Counting fewer is only half: silently
+  reporting `1/1` lets a deployment with a forgotten flag look flawless while landlords go
+  unwatched, so both counts travel with the figure. The banner already states the count and is a log
+  line read once; the beat is what reaches the phone.
+- [2026-08-22 09:40] AGREED: a guarantee reached only through a closure needs a test that REACHES
+  that call site, and for the in-loop beat the way in is an unwritable marker. The fixed clock makes
+  the day-two beat unreachable by construction — the startup beat writes the marker at `NOW` and
+  every later check asks `isDue(NOW, NOW)` — which is what makes *"exactly one beat"* assertable and
+  also meant no test ever executed the loop's own call. The new argument was not in the closure's
+  `use` list, so the first genuinely due beat would have thrown a `TypeError` and killed the watcher
+  24 hours into an unattended run. `beat()` writes the marker with `@file_put_contents` so a full
+  volume cannot crash a liveness signal, and `lastHeartbeat()` reads `is_file()` — so a DIRECTORY
+  where the file goes makes every check due, and two beats is then the correct result per the
+  documented one-too-many bias.
+- [2026-08-22 09:40] NOTED: a mutation can pass while testing less than it names. `the beat counts
+  CONFIGURED sources again` reverted the loop's source but not the denominator, and the first
+  version of the test pinned only the denominator — so the case reported UNDETECTED and was RIGHT.
+  The fix was to the TEST, not the case: seed unscoped so the excluded source is HEALTHY in the
+  store before the scoped run, which turns the mutated output into a nonsensical `2/1`. An
+  excluded-but-unhealthy source coincidentally produces the correct `1/1`, and a test that cannot
+  tell those apart is not testing the numerator at all.
+- [2026-08-22 09:40] AGREED: `.env.example` is checked mechanically against `getenv()` and against
+  `compose.yaml`'s `${VAR}` substitutions — drift-scan S8, in CI on every push. Two live defects
+  prompted it: `IMAP_PORT` declared twice (env_file takes the LAST occurrence, measured on a scratch
+  stack, so editing the key where it belongs silently does nothing), and `RW_UID`/`RW_GID` read by
+  compose while its own comment told the operator to set them in a file that never listed them. A
+  compose substitution has no `getenv()` to find it by, which is why the check runs in both
+  directions. All four sub-checks were proven red by sabotage and restored byte-identical.
+- [2026-08-22 09:40] NOTED: the CI ledger has been OBSERVED end to end — run 22, 22 min 09 s, green,
+  315 cases, i.e. 4.2 s/case against ~60 s/case here. The local:CI ratio is ~14x, not the ~7x
+  recorded before, because the suite gained interpreter-bound sweeps and a ZTS debug build is
+  punished hardest there. Two readings this corrected in one session: a local ledger is a ~5 h job
+  and belongs in a pinned worktree, and a ledger failing well INSIDE its budget has found something
+  rather than timed out.
+
 ## Formal plan — schema v4, the `group_key` history overlay (2026-08-19 23:02)
 
 Ruled above. Two holes were found while planning that the ruling's own doctrine settles, and one

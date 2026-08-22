@@ -237,6 +237,27 @@ FUTURE is due — the bias is always one beat too many, never one suppressed), a
 unusable `HEARTBEAT_HOURS` is a **loud refusal at startup**, not a silent fallback: `0` would
 disable the one signal that distinguishes a dead watcher from a quiet market.
 
+**Its health figure counts what the run WATCHES, not what the config enables** (fixed 2026-08-22,
+found by running the real container). It read every enabled source, so `--watch --source=x` against
+the shipped config reported *"1/5 source(s) en bon état"* — four faults that did not exist, in the
+one channel whose entire value is that it can be believed; and it degrades, because an unpolled
+source's health record goes `STALE`, so the beat would eventually alarm every day about sources
+nobody asked it to watch. **The scope travels with the figure**: when a `--source` is in play the
+beat says so and gives both counts, because silently reporting `1/1` would let a deployment with a
+forgotten flag look flawless for ever while four landlords went unwatched. The banner states the
+count too, but a banner is a log line read once and the beat is what reaches the phone.
+
+Two things about that call site are worth knowing before touching it. **The in-loop beat — the one
+that fires on day two — is unreachable under a fixed clock**, because the startup beat writes the
+marker at `NOW` and every later check asks `isDue(NOW, NOW)`. That is what makes *"exactly one
+beat"* assertable, and it also meant the loop's own call site was never executed by any test: the
+argument added above lives outside the closure's `use` list, and the first genuinely due beat would
+have thrown a `TypeError` and killed the watcher 24 hours into an unattended run. The way in is to
+make the marker **unwritable** (a directory where the file goes): `beat()` writes it with
+`@file_put_contents` precisely so a full volume cannot crash a liveness signal, `lastHeartbeat()`
+reads `is_file()`, so every check is due — and two beats is then the *correct* result, per the
+documented bias. All three guarantees are in `tests/sabotage-check.sh`.
+
 Q27's other half landed with it: a startup refusal from `run` writes `state/last-refusal.txt`, and
 the next successful start reports it on the beat and clears it. That covers the failure that reaches
 nobody — the process exits before any channel exists, and under Docker its stderr scrolls past in a
