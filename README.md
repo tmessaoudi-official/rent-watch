@@ -201,9 +201,19 @@ data; never log credentials; scrub any fixture captured from a live payload befo
 private is still recommended and is the developer's action; the mitigation that makes it survivable
 either way ships regardless (Q11, ruled 2026-08-07):
 
-- The committed `config/criteria.json` carries **only values that were already public** in
-  `prototype/sources.yaml` — the ten communes, the 78/95 prefixes, `min_rooms: 4`,
-  `min_surface_m2: 75`, `max_rent_cc: 1800`. No name, no employer, no income figure, no address.
+- The committed `config/criteria.json` carries the 78/95 prefixes, `min_rooms: 3`,
+  `min_surface_m2: 75`, `max_rent_cc: 1800`, and an EMPTY `communes` list — region mode, ruled
+  2026-08-22, where the prefixes are the whole location filter. **No name, no employer, no income
+  figure, no address**, which is the part of this that matters.
+
+  Two corrections to what this bullet used to claim, both dated 2026-08-22. It said *"only values
+  that were already public in `prototype/sources.yaml`"*, and that stopped being true the moment
+  `min_rooms` went from the prototype's `4` to a measured `3` — one committed value is now the
+  developer's own decision rather than an inherited default. It is a preference about flat size, not
+  personal data, so the Q11 mitigation still holds; but "already public" was load-bearing wording
+  and is no longer accurate, and a privacy claim that quietly drifts is worse than a narrower one
+  stated plainly. The ten communes are also no longer a filter — they survive as `commune_rank`
+  (which orders results) and as a note in the file recording what to restore.
 - **`config/criteria.local.json` is gitignored** and overrides the committed file field by field, so
   real budget and real preferences never have to enter git. That claim was written in four documents
   before anything enforced it; `/config/*.local.json` is now in `.gitignore`, and
