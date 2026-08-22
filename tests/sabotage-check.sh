@@ -1216,7 +1216,7 @@ run_sabotage "the freshness bonus is given to every listing forever" \
 
 run_sabotage "robots.txt stops being consulted before a fetch (hard rule 5)" \
   src/php/Adapters/HttpJsonSource.php \
-  's%if (\$this->robots !== null \&\& !\$this->robots->allows(Robots::pathOf(\$url))) {%if (false) {%'
+  's%if (!\$this->robots->allows(Robots::pathOf(\$url))) {%if (false) {%'
 
 run_sabotage "an unreadable robots.txt starts allowing everything (fails OPEN)" \
   src/php/Adapters/Http/Robots.php \
@@ -1635,7 +1635,7 @@ run_sabotage "a floor is read with the generic number parser (the room count bec
 
 run_sabotage "robots is checked for the index only, never for the pages the walk visits" \
   src/php/Adapters/HtmlSource.php \
-  's%if (\$this->robots !== null \&\& !\$this->robots->allows(Robots::pathOf(\$pageUrl))) {%if (false) {%'
+  's%if (!\$this->robots->allows(Robots::pathOf(\$pageUrl))) {%if (false) {%'
 
 run_sabotage "page_path silently falls back to appending a query parameter" \
   src/php/Adapters/HtmlSource.php \
@@ -1683,7 +1683,7 @@ run_sabotage "the detail page re-identifies the listing, so it re-notifies forev
 
 run_sabotage "robots is checked for the search page only, never for the detail pages" \
   src/php/Adapters/HtmlSource.php \
-  '/private function withDetail/,$ s%if ($this->robots !== null \&\& !$this->robots->allows(Robots::pathOf($url))) {%if (false) {%'
+  '/private function withDetail/,$ s%if (!$this->robots->allows(Robots::pathOf($url))) {%if (false) {%'
 
 run_sabotage "detail fetches stop being paced (a per-listing burst, hard rule 5)" \
   src/php/Adapters/HtmlSource.php \
