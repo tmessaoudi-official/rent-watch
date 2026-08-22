@@ -225,6 +225,26 @@ as a feed. See `docs/SOURCES.md`, whose A2 and A3 rows were both corrected.
 `src/phorj/` is **ON INDEFINITE HOLD** (developer ruling, 2026-08-19) — not blocked, deprioritised.
 Do not start it; `docs/PHORJ-REQUIREMENTS.md` remains the record of what it would need.
 
+**Q27's LIVENESS SIGNAL IS LIVE (2026-08-22), and it was ruled but unbuilt.** `HEARTBEAT_HOURS` sat
+in `.env.example` read by no code at all: `NotificationKind::HEARTBEAT` existed, but only
+`test-notify` used it, so a watcher that died at 03:00 was indistinguishable from one watching a
+quiet market until somebody thought to look. `scout run --watch` now emits a LOW-priority beat on
+startup and every `HEARTBEAT_HOURS` (default 24) — **whether or not anything matched**, which is the
+entire point — carrying passes completed, listings notified and sources OK. `Core/Heartbeat` is the
+pure policy (clock injected; a cold start is due, an unreadable marker is due, a marker in the
+FUTURE is due — the bias is always one beat too many, never one suppressed), and the marker lives at
+`state/heartbeat.txt`, on Q8's mounted volume, so it survives the container being replaced. An
+unusable `HEARTBEAT_HOURS` is a **loud refusal at startup**, not a silent fallback: `0` would
+disable the one signal that distinguishes a dead watcher from a quiet market.
+
+Q27's other half landed with it: a startup refusal from `run` writes `state/last-refusal.txt`, and
+the next successful start reports it on the beat and clears it. That covers the failure that reaches
+nobody — the process exits before any channel exists, and under Docker its stderr scrolls past in a
+log nobody reads. **`ConfigError` and `SourceError` during `run` are recorded too**, because a
+malformed config is the commonest startup refusal there is. The note is `Redact`ed before it touches
+the disk — a `ConfigError` message quotes the offending VALUE back, which is exactly how a pasted
+`imap://user:password@host` ends up in a file.
+
 **No test reaches the network, and that is now structural rather than accidental.**
 `tests/bootstrap.php` sets `RENT_WATCH_OFFLINE=1` and `CurlHttpClient::send()` refuses any
 third-party host (loopback stays allowed — the wire tests need a real socket). Before In'li was

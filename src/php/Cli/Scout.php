@@ -22,6 +22,7 @@ use RentWatch\Config\ConfigError;
 use RentWatch\Config\ConfigLoader;
 use RentWatch\Config\Criteria;
 use RentWatch\Config\SourceDefinition;
+use RentWatch\Core\Heartbeat;
 use RentWatch\Core\Notify\Channel;
 use RentWatch\Core\Notify\ConsoleChannel;
 use RentWatch\Core\Notify\EmailChannel;
@@ -36,6 +37,7 @@ use RentWatch\Core\Notify\SmtpTransport;
 use RentWatch\Core\Pacer;
 use RentWatch\Core\RawListing;
 use RentWatch\Core\Redact;
+use RentWatch\Core\SourceStatus;
 use RentWatch\Core\TenureClassifier;
 use RentWatch\Store\Store;
 
@@ -136,9 +138,18 @@ final readonly class Scout
         } catch (ConfigError $e) {
             // Caught and printed, never a stack trace. A malformed config is an ordinary,
             // expected, user-caused condition — see ConfigError's own docblock.
-            return $this->fail('configuration : ' . $e->getMessage());
+            //
+            // RECORDED when it refused `run`, because this is the commonest startup refusal there
+            // is and Q27's note exists for exactly it: under Docker the process exits before any
+            // channel is used and its stderr scrolls past in a log nobody reads, so without the note
+            // a container that has been refusing to start since Tuesday is indistinguishable from a
+            // quiet market. A ConfigError message quotes the offending VALUE, which is why
+            // `recordRefusal()` redacts before writing.
+            $text = 'configuration : ' . $e->getMessage();
+
+            return $command === 'run' ? $this->failRun($text) : $this->fail($text);
         } catch (SourceError $e) {
-            return $this->fail($e->getMessage());
+            return $command === 'run' ? $this->failRun($e->getMessage()) : $this->fail($e->getMessage());
         }
     }
 
@@ -314,7 +325,7 @@ final readonly class Scout
             // `--seed` marks everything already seen WITHOUT notifying, to bootstrap the seen-set.
             // Repeating that every fifteen minutes would suppress every notification forever while
             // the process looked perfectly healthy — a watcher that watches and never speaks.
-            return $this->fail(
+            return $this->failRun(
                 '`--seed` amorce le seen-set en une passe ; combiné à `--watch` il n\'émettrait '
                 . 'jamais aucune notification. Lancez `scout run --once --seed`, puis `--watch`.',
             );
@@ -331,7 +342,7 @@ final readonly class Scout
         // running doctor once — the first thing a new machine invites you to do — let the next run
         // notify the entire back catalogue.
         if ($store->isSeenSetEmpty() && !$seed) {
-            return $this->fail(
+            return $this->failRun(
                 'base vide : première exécution, ou volume non monté. Rien n\'a été notifié. '
                 . 'Relancez avec `--seed` pour amorcer le seen-set sans notifier, puis sans le flag.',
             );
@@ -340,7 +351,7 @@ final readonly class Scout
         $notifier = $this->notifier($criteria);
         $fatal = $notifier->fatalProblem();
         if ($fatal !== null && !$seed) {
-            return $this->fail($fatal);
+            return $this->failRun($fatal);
         }
 
         foreach ($notifier->disabledReport() as $name => $problem) {
@@ -398,9 +409,41 @@ final readonly class Scout
             rand: static fn (int $min, int $max): int => random_int($min, $max),
         );
 
+        // Q27. Built BEFORE the loop so an unusable HEARTBEAT_HOURS refuses at startup rather than
+        // on the first beat — which, on the default, would be a day into an unattended run.
+        //
+        // Converted to a REFUSAL rather than allowed to propagate: a bad env value is an ordinary,
+        // expected, user-caused condition, and `ConfigError`'s docblock already rules that those are
+        // caught and printed, never shown as a stack trace. It goes through `failRun()` so the next
+        // successful start reports it, which is the case Q27's refusal note exists for — an operator
+        // who typo'd this in a compose file would otherwise see nothing at all.
+        try {
+            $heartbeat = Heartbeat::fromEnv(($raw = getenv('HEARTBEAT_HOURS')) === false ? null : $raw);
+        } catch (\InvalidArgumentException $e) {
+            return $this->failRun($e->getMessage());
+        }
+        $passes = 0;
+
+        // Read and CLEARED once, here. Q27: "the next successful start can report what happened
+        // while it was down." Clearing it at startup rather than after sending means a refusal is
+        // reported once, not on every beat for the life of the process.
+        $refusal = $this->takeLastRefusal();
+
+        if ($heartbeat->isDue($this->lastHeartbeat(), $this->now())) {
+            $this->beat($notifier, $store, $passes, 0, $refusal);
+        }
+
         $loop = new WatchLoop(
-            pass: function () use ($criteria, $store, $notifier, $sources, $verbose, $pacer): void {
+            pass: function () use ($criteria, $store, $notifier, $sources, $verbose, $pacer, $heartbeat, &$passes): void {
                 $this->onePass($criteria, $store, $notifier, PacedSource::wrapAll($sources, $pacer), false, $verbose);
+                ++$passes;
+
+                // AFTER the pass, and outside its try/catch by construction: a heartbeat is the one
+                // message that must still go out when passes are failing, since a watcher whose
+                // sources are all broken is exactly the state silence would hide.
+                if ($heartbeat->isDue($this->lastHeartbeat(), $this->now())) {
+                    $this->beat($notifier, $store, $passes, 0, null);
+                }
             },
             pacer: $pacer,
             onError: function (\Throwable $e): void {
@@ -430,6 +473,10 @@ final readonly class Scout
             // like one that is still watching — right up until the listing it missed.
             $maxPasses === null ? '' : sprintf(' · RENT_WATCH_MAX_PASSES=%d : arrêt après %d passe(s)', $maxPasses, $maxPasses),
         ));
+
+        // Said out loud so the operator knows what silence will mean. An interval nobody was told
+        // about cannot be used to judge whether the watcher has gone quiet.
+        $this->line(sprintf('battement de cœur toutes les %d h (Q27) — le silence au-delà est un signal', $heartbeat->intervalHours));
 
         return $loop->run($maxPasses);
     }
@@ -580,6 +627,106 @@ final readonly class Scout
         }
 
         return (int) trim($configured);
+    }
+
+    /**
+     * Where the Q27 liveness marker and the last startup refusal live.
+     *
+     * Beside the database, under `state/`, because Q8 rules that `state/` is the MOUNTED VOLUME on
+     * the VPS — the one directory that survives a container being replaced. A marker in the image
+     * would reset on every deploy, which for the refusal note means losing exactly the message it
+     * exists to carry across a restart.
+     *
+     * Files rather than store rows, deliberately. A lost marker costs one extra low-priority
+     * heartbeat, which is the benign direction; and `src/php/Store/**` is on
+     * `tests/sabotage-check.sh`'s mandatory trigger list, so putting a liveness marker there would
+     * owe a multi-hour ledger run for a timestamp. Q27 already rules `last-refusal.txt` to be a file
+     * in `state/`, so its sibling matches the ruling's own shape.
+     */
+    private function stateFile(string $name): string
+    {
+        $db = $this->dbPath();
+        $dir = $db === ':memory:' ? $this->rootDir . '/state' : \dirname($db);
+
+        return $dir . '/' . $name;
+    }
+
+    /** The instant of the last heartbeat, or `null` when none has been sent by this deployment. */
+    private function lastHeartbeat(): ?string
+    {
+        $path = $this->stateFile('heartbeat.txt');
+
+        if (!is_file($path)) {
+            return null;
+        }
+
+        $raw = file_get_contents($path);
+
+        return \is_string($raw) && trim($raw) !== '' ? trim($raw) : null;
+    }
+
+    /**
+     * Emit the Q27 heartbeat if it is due, and record that it was.
+     *
+     * Q27: low priority, *"stating runs completed, sources OK and matches sent"*, and emitted
+     * **whether or not anything matched** — that is the entire point, since a watcher that only
+     * speaks when it has news is silent in exactly the two cases that must be told apart.
+     *
+     * The marker is written only after a successful send. A heartbeat that failed to deliver must
+     * not mark itself done, or a broken channel would be papered over by its own bookkeeping.
+     */
+    private function beat(Notifier $notifier, Store $store, int $passes, int $matches, ?string $refusal): void
+    {
+        $now = $this->now();
+        $reasons = [
+            $passes === 0 ? 'démarrage de la surveillance' : $passes . ' passe(s) terminée(s)',
+            $matches . ' annonce(s) notifiée(s)',
+        ];
+
+        $ok = 0;
+        $total = 0;
+        foreach ($this->sourceNames() as $name) {
+            ++$total;
+            if ($store->health($name, $now)->status === SourceStatus::OK) {
+                ++$ok;
+            }
+        }
+        $reasons[] = $ok . '/' . $total . ' source(s) en bon état';
+
+        if ($refusal !== null) {
+            // Q27's other half: "the next successful start can report what happened while it was
+            // down". Carried on the startup beat, because a refusal that only sat in a file would
+            // be read by somebody who already knew to look.
+            $reasons[] = 'refus au démarrage précédent : ' . $refusal;
+        }
+
+        $failures = $notifier->send(new \RentWatch\Core\Notify\Notification(
+            kind: \RentWatch\Core\Notify\NotificationKind::HEARTBEAT,
+            priority: Priority::LOW,
+            title: 'rent-watch : toujours actif',
+            reasons: $reasons,
+        ));
+
+        foreach ($failures as $failure) {
+            $this->warn(Redact::text($failure->getMessage()));
+        }
+
+        if ($notifier->delivered($failures)) {
+            @file_put_contents($this->stateFile('heartbeat.txt'), $now . "\n");
+        }
+    }
+
+    /** @return list<string> */
+    private function sourceNames(): array
+    {
+        $names = [];
+        foreach (ConfigLoader::loadSources($this->rootDir . '/config/sources.json') as $definition) {
+            if ($definition->enabled) {
+                $names[] = $definition->name;
+            }
+        }
+
+        return $names;
     }
 
     private function dbPath(): string
@@ -945,5 +1092,53 @@ final readonly class Scout
         $this->warn($text);
 
         return 2;
+    }
+
+    /**
+     * A startup refusal from `scout run`: reported now, and RECORDED for the next start (Q27).
+     *
+     * Scoped to `run` on purpose. A `doctor` refusal is read by whoever typed it, in the terminal
+     * they typed it in, so recording it would make the next watch start report noise the operator
+     * already saw and already acted on.
+     */
+    private function failRun(string $text): int
+    {
+        $this->recordRefusal($text);
+
+        return $this->fail($text);
+    }
+
+    /**
+     * Record why `scout run` refused to start, for the next successful start to report (Q27).
+     *
+     * A startup refusal is the one failure that reaches nobody: the process exits before any
+     * notification channel is used, and under Docker its stderr scrolls past in a log the operator
+     * is not reading. Q27's answer is to leave it on the mounted volume so the next start can say
+     * what happened while it was down.
+     *
+     * **Redacted before it touches the disk.** A refusal text can carry a channel credential problem
+     * or a URL with a key in it — `Store::recordRun()` redacts at its funnel for the same reason,
+     * and this is a second disk-write funnel, so it needs the same guard rather than trusting the
+     * caller. Failure to write is swallowed on purpose: a full or read-only volume must not turn a
+     * refusal-with-a-reason into a crash with none.
+     */
+    private function recordRefusal(string $text): void
+    {
+        @file_put_contents($this->stateFile('last-refusal.txt'), $this->now() . ' — ' . Redact::text($text) . "\n");
+    }
+
+    /** The previous startup refusal, removed as it is read so it is reported exactly once. */
+    private function takeLastRefusal(): ?string
+    {
+        $path = $this->stateFile('last-refusal.txt');
+
+        if (!is_file($path)) {
+            return null;
+        }
+
+        $raw = file_get_contents($path);
+        @unlink($path);
+
+        return \is_string($raw) && trim($raw) !== '' ? trim($raw) : null;
     }
 }

@@ -1701,6 +1701,40 @@ run_sabotage "a detail map may redefine ref, so identity comes from the wrong pa
   src/php/Config/FieldMap.php \
   's%if ($map->ref !== \[\]) {%if (false) {%'
 
+
+# ── Q27: the watcher's liveness signal ────────────────────────────────────────
+# Every case here is silent by construction. A heartbeat that stops arriving looks exactly like a
+# quiet rental market, which is the observation the whole feature exists to make distinguishable —
+# so a regression in it removes the ONE guard against a dead watcher going unnoticed for days.
+
+run_sabotage "the cold start stops beating (a watcher that dies in hour one is invisible for a day)" \
+  src/php/Core/Heartbeat.php \
+  's%if ($lastSentIso === null || trim($lastSentIso) === %if (false \&\& %'
+
+run_sabotage "the heartbeat marker is never written (so every restart beats)" \
+  src/php/Cli/Scout.php \
+  's%@file_put_contents($this->stateFile(.heartbeat.txt.), $now%@file_put_contents("/dev/null", $now%'
+
+run_sabotage "an unreadable heartbeat marker suppresses the beat instead of forcing one" \
+  src/php/Core/Heartbeat.php \
+  's%if ($last === null || $now === null) {%if (false) {%'
+
+run_sabotage "a marker in the future suppresses liveness until the clock catches up" \
+  src/php/Core/Heartbeat.php \
+  's%if ($last > $now) {%if (false) {%'
+
+run_sabotage "HEARTBEAT_HOURS=0 silently disables liveness instead of refusing" \
+  src/php/Core/Heartbeat.php \
+  's%if ($intervalHours < 1) {%if (false) {%'
+
+run_sabotage "the previous startup refusal is never cleared (reported forever)" \
+  src/php/Cli/Scout.php \
+  's%@unlink($path);%%'
+
+run_sabotage "a startup refusal is written to disk unredacted (a credential leak)" \
+  src/php/Cli/Scout.php \
+  's%Redact::text($text)%$text%'
+
 printf '\n  %d sabotage(s) detected, %d undetected\n' "$pass" "$fail"
 
 if [[ -n "$_filter" ]]; then
