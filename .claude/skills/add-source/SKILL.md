@@ -124,7 +124,7 @@ refuses outright.
 If it really is an XHR app whose API host is crawlable, ask the developer for the DevTools capture —
 they have a browser, you do not:
 
-> Open the site's search page, set the filters you actually want (78/95, T4+, the communes), then
+> Open the site's search page, set the filters you actually want (Île-de-France, T3+, ≥ 50 m², ≤ 1200 € CC — check `config/criteria.json`, these moved twice on 2026-08-22), then
 > DevTools → Network → Fetch/XHR → re-run the search. Copy the request as cURL and paste it here.
 
 From the cURL, extract: method, URL, query params or JSON body, and the **minimum** headers that make it

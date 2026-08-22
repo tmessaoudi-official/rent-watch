@@ -299,9 +299,11 @@ data; never log credentials; scrub any fixture captured from a live payload befo
 private is still recommended and is the developer's action; the mitigation that makes it survivable
 either way ships regardless (Q11, ruled 2026-08-07):
 
-- The committed `config/criteria.json` carries the 78/95 prefixes, `min_rooms: 3`,
-  `min_surface_m2: 75`, `max_rent_cc: 1800`, and an EMPTY `communes` list — region mode, ruled
-  2026-08-22, where the prefixes are the whole location filter. **No name, no employer, no income
+- The committed `config/criteria.json` carries the eight Île-de-France prefixes (75, 77, 78, 91, 92,
+  93, 94, 95), `min_rooms: 3`, `min_surface_m2: 50`, `max_rent_cc: 1200`, and an EMPTY `communes`
+  list — region mode, ruled 2026-08-22, where the prefixes are the whole location filter. Those
+  numbers moved twice on that day; if this list and the file ever disagree, the file is right and
+  this bullet is stale. **No name, no employer, no income
   figure, no address**, which is the part of this that matters.
 
   Two corrections to what this bullet used to claim, both dated 2026-08-22. It said *"only values

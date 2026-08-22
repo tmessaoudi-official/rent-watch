@@ -97,9 +97,16 @@ sharing a sentence with words that describe who manages the flat, not its tenure
 `au plus près`, `bailleur social`: the pattern is excluded vocabulary appearing as ordinary French on
 an eligible listing, and it has now cost three fixes.
 
-**Cityloger's live yield is 0 matches, and that is not a defect.** All 51 listings are outside the
-78/95 filter (the 3 IDF ones are 92 and 77), so nothing is hydrated on a real pass right now. The
-machinery is proven by fixtures, not by yield. `docs/SOURCES.md` A6b records why the source is worth
+**Cityloger's live yield was 0 matches when it was onboarded, and that was not a defect — but the
+sentence stopped being true the same week and is kept here as an example of why a yield claim needs
+a date.** As written on 2026-08-20 it read: all 51 listings sit outside the 78/95 filter, the three
+Île-de-France ones being 92 and 77, so nothing is hydrated on a real pass. Both of those departments are INSIDE the region as of
+2026-08-22, so those three are now gated in and their detail pages ARE fetched — and the yield is
+**still 0, for a completely different reason**: all three quote 1221–1520 € CC and the ceiling is now
+1200. Measured on a live pass that day, Cityloger contributed 0 of the 92 notified rows while CDC,
+In'li and Logirep contributed 33, 54 and 5. So the claim survived a change that invalidated its
+every premise, which is the most dangerous thing a documented number can do. The machinery was
+always proven by fixtures rather than by yield, which is the part that has not changed. `docs/SOURCES.md` A6b records why the source is worth
 having anyway: 3F's *social* stock is allocated through AL'in and the SNE, so what surfaces on
 Cityloger skews to the intermediate and libre stock this project is looking for.
 
@@ -212,10 +219,13 @@ postcode, so nothing would have looked broken. Ranked communes now feed that voc
 >
 > **Its live yield today is 0, and the catalogue said otherwise.** A12's row read *"8 of the 19 are
 > in the 78/95 departments the criteria filter on… would plausibly yield on day one"*. Running the
-> real gate over the frozen payload gives **1 of 113** — `matchesCommune()` needs the commune NAME as
-> well as the prefix, and Bezons is the only overlap, on a commercial unit that `exclude_title_patterns`
-> then rejects. A department is not a commune; the row said so one sentence after claiming the
-> opposite. It is asserted by test now, so the number cannot drift back into prose.
+> real gate over the frozen payload gave **1 of 113** — `matchesCommune()` needs the commune NAME as
+> well as the prefix, and Bezons was the only overlap, on a commercial unit that
+> `exclude_title_patterns` then rejects. A department is not a commune; the row said so one sentence
+> after claiming the opposite. It is asserted by test, so the number cannot drift back into prose —
+> and that test earned its keep two days later: widening the region to all eight departements took
+> it to **19 of 113**, across eleven communes, and the assertion is what made someone write the new
+> number down rather than discover it in production.
 >
 > Every apparent tenure hit on the source is false and they come from **UI furniture**, not prose —
 > `PLAI` inside the facet `Plain-pied`, `LLI` inside `Ce·lli·er`, `PLUS` inside `plusieurs`, `SNE`
