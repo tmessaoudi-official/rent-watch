@@ -104,6 +104,39 @@ usable" row from 0% to something real in a single afternoon; nothing else on thi
 
 ## Decisions Log
 
+- [2026-08-22 02:05] MEASURED, not fixed: **`TenureClassifier::classify()` costs ~15 ms of fixed
+  overhead plus ~6 ms per mapped FIELD**, so a Logirep listing with 31 fields takes ~155 ms and the
+  113-row payload takes ~17 s. Measured on this machine, PHP 8.5.9:
+
+  | fields | ms/classify |
+  |---|---|
+  | 0 | 22.7 |
+  | 5 | 30.7 |
+  | 10 | 49.3 |
+  | 20 | 111.7 |
+  | 31 | 214.7 |
+
+  **It is pre-existing, and newly EXPOSED rather than newly caused.** A `json` source maps the whole
+  raw record into `fields`, and Logirep's records carry 31 keys; the html sources map far fewer. It
+  is not one pathological regex — `Text::fold`/`foldPreserveCase` are ~17 µs and a single `preg` is
+  ~1 µs, and `vocabularyKeys()` is already memoised. It is inherently O(fields × vocabulary):
+  ~31 fields × ~67 literals × several passes ≈ 6 000 regex operations per listing.
+
+  **Not fixed here, deliberately.** The one provably-safe cut — *a value containing no letter cannot
+  match any vocabulary literal*, verified by reflection to hold for all three tables (0 literals
+  without letters) — skips only 11 of Logirep's 31 fields, a ~35% win for a change to the
+  §1-critical file. That is a poor trade to make at the end of an unrelated build, and it deserves
+  its own gate and its own sabotage round. **What must NOT be done instead is narrowing what goes
+  into `fields`**: scanning every field is how an unmapped financing code gets caught, and
+  `SurfaceMatrixTest` exists because "a correct rule applied to a subset of the surfaces it belongs
+  on" was a P0 eight times.
+
+  **Why it is worth a plan entry rather than a shrug:** `tests/sabotage-check.sh` runs the WHOLE
+  suite once per case, ~315 times, so every second added to the suite is ~5 minutes on the ledger.
+  Merging the two full-payload §1 tests in `LogirepFixtureTest` into one walk already took the class
+  from 22 s to 9 s for identical coverage. The remaining exposure is real but bounded, and a real
+  `--watch` pass spends ~17 s of CPU classifying this one source.
+
 - [2026-08-22 01:10] CORRECTED, and it reverses part of the 00:40 ruling: **A12's rent is mapped
   `charges_included: false` and NOTHING is hydrated.** The 00:40 decision to hydrate detail pages
   for charges rested on three premises, all measured false the same night:
