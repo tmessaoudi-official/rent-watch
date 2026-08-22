@@ -32,8 +32,12 @@ compose.yaml
 *.md
 
 # The test suite is not deployed — EXCEPT the demo fixture, which `fixture_demo` reads at runtime.
-# Excluding `tests/` wholesale is the reflexive choice and it is wrong here: the shipped config has
-# `fixture_demo` enabled, so an image without that file throws a SourceError on every pass, forever.
+# Excluding `tests/` wholesale is the reflexive choice and it is wrong here. The reason CHANGED on
+# 2026-08-22 and the old one is worth keeping visible: while `fixture_demo` shipped `enabled: true`,
+# an image without the file threw a SourceError on every pass, forever. It now ships disabled, so
+# the failure is no longer continuous — it is worse in shape, arriving only when somebody runs
+# `scout doctor --source=fixture_demo` on a fresh VPS, which is exactly the first thing README tells
+# them to do to prove the pipeline before a landlord is polled.
 # The nested negation is Docker's documented way to re-include a path under an excluded parent, and
 # each level has to be reopened in turn — `!tests/fixtures` alone does nothing once `tests/*` has
 # matched. Everything else under `tests/` is frozen landlord payloads: several hundred KB with no

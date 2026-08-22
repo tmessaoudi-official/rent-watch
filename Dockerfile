@@ -68,11 +68,12 @@ COPY bin/ ./bin/
 COPY config/ ./config/
 COPY composer.json ./
 
-# The fixture source is SHIPPED, deliberately. `fixture_demo` is `enabled: true` in the committed
-# config and reads this file, so an image without it throws a SourceError on every pass — noise on
-# every heartbeat, forever. It is ~4 KB, it needs no network and no credentials, and it means a
+# The fixture source is SHIPPED, deliberately — and it is `enabled: false` since 2026-08-22, which
+# changes why rather than whether. It is ~4 KB, needs no network and no credentials, and it means a
 # fresh VPS can prove the whole pipeline (fetch → map → classify → criteria → dedup → store →
-# notify) before a single landlord is polled.
+# notify) before a single landlord is polled: `scout doctor --source=fixture_demo`, which force-runs
+# a disabled source. Omit the file and that command — the first one README hands a new operator —
+# fails on a box where nothing else is wrong.
 COPY tests/fixtures/fixture_demo/ ./tests/fixtures/fixture_demo/
 
 # `state/` is the MOUNTED VOLUME (Q8): the seen-set, the price history, the run log, the Q27
