@@ -1793,6 +1793,39 @@ run_sabotage "a ranked commune stops being alert-parser vocabulary (emails lose 
   src/php/Config/ConfigLoader.php \
   's%$communeLabels\[$key\] ??= $label;%%'
 
+# ── `--source=<name>` force-run, and the demo source that must not ship enabled (2026-08-22) ──────
+#
+# Every one of these four is silent in the direction that matters. A demo source running in a real
+# deployment does not error: it adds ten flats that do not exist to the store, the pass totals, the
+# `doctor` table and the heartbeat's source count, and it looks exactly like a landlord with a small
+# portfolio. It shipped that way for two weeks.
+
+# Direction one: the force-run is removed, so `--source=<name>` silently runs NOTHING for a disabled
+# source. The failure mode is the one this repo already names — a debugging flag that reports a
+# clean, fast, empty pass — arriving now on the onboarding path `/add-source` step 5 prescribes.
+run_sabotage "--source stops force-running a disabled source (named source runs nothing)" \
+  src/php/Cli/Scout.php \
+  's%if ($only === null) {%if (true) {%'
+
+# Direction two, and the over-correction: the enabled check goes away entirely, so every disabled
+# source runs on every ordinary pass — including the placeholder blocks kept `enabled: false`
+# precisely because nobody has verified their endpoint (hard rule 1).
+run_sabotage "the enabled check is dropped, so every disabled source runs unasked" \
+  src/php/Cli/Scout.php \
+  's%if (!$definition->enabled) {%if (false) {%'
+
+# Hard rule 1 at the funnel. Force-running brought REMPLACER back within reach of a real fetch, so
+# the refusal is what makes force-running safe rather than defensive decoration.
+run_sabotage "a REMPLACER endpoint is polled instead of refused (hard rule 1 at the funnel)" \
+  src/php/Cli/Scout.php \
+  's%if ($definition->url === ConfigLoader::UNVERIFIED_URL) {%if (false) {%'
+
+# And the config itself. This is the state the tree was actually in, so the case is a regression
+# test for a shipped defect rather than a hypothetical: the guard must notice the flag going back.
+run_sabotage "the demo fixture ships enabled again (fake listings in a real deployment)" \
+  config/sources.json \
+  '/"fixture_demo"/,/^    },/ s%"enabled": false%"enabled": true%'
+
 printf '\n  %d sabotage(s) detected, %d undetected\n' "$pass" "$fail"
 
 if [[ -n "$_filter" ]]; then

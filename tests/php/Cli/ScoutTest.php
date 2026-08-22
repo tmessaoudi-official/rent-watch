@@ -501,6 +501,124 @@ final class ScoutTest extends TestCase
         self::assertStringContainsString('ignorée', $r['err'], 'skipping must be LOUD — a silent skip is a source that quietly does not run');
     }
 
+
+    // ── `--source=<name>` is an instruction, not a filter ─────────────────────────────────────────
+
+    public function testAnExplicitlyNamedSourceRunsEvenThoughItIsDisabled(): void
+    {
+        // `/add-source` step 5 says to run `scout doctor` against a new block and only flip
+        // `enabled: true` once it is green. That was IMPOSSIBLE until 2026-08-22: `sources()`
+        // dropped every disabled definition before `--source` was consulted, so the documented
+        // onboarding order could not be followed and the only way to get a run against one block
+        // was to edit committed config — the exact edit the flag exists to avoid.
+        //
+        // `dump` has always worked this way, so this makes the two verbs agree rather than
+        // inventing a rule.
+        $root = $this->fixtureRoot(enabled: false);
+
+        $r = $this->scoutIn($root, ['doctor', '--source=demo']);
+
+        self::assertSame(0, $r['code'], $r['err']);
+        self::assertMatchesRegularExpression('~demo\s+ok\s+10~', $r['out']);
+        self::assertStringContainsString(
+            'désactivée',
+            $r['err'],
+            'force-running a disabled source must SAY so — otherwise a --source left behind in a '
+                . 'deployment looks exactly like a source somebody enabled on purpose',
+        );
+    }
+
+    public function testADisabledSourceStaysOutOfAnOrdinaryRun(): void
+    {
+        // The other half, and the half that matters: naming a source force-runs it, and NOT naming
+        // one must still honour `enabled: false`. Without this assertion the change above is
+        // indistinguishable from deleting the enabled check outright.
+        $root = $this->fixtureRoot(enabled: false);
+
+        $r = $this->scoutIn($root, ['doctor']);
+
+        self::assertDoesNotMatchRegularExpression('~demo\s+ok~', $r['out']);
+    }
+
+    public function testAnExplicitlyNamedSourceWithAnUnverifiedUrlIsRefused(): void
+    {
+        // Hard rule 1. The loader refuses `enabled: true` next to a REMPLACER placeholder, and that
+        // was the whole guard for as long as a disabled source could never run. Force-running one
+        // brings the placeholder back within reach, so the refusal moves with it — into
+        // `buildSource()`, the single funnel `dump`, `doctor` and `run` all pass through.
+        $root = $this->tempRoot(sources: ['demo' => [
+            'enabled' => false,
+            'family' => 'institutional',
+            'type' => 'json',
+            'mixed_tenure' => true,
+            'url' => 'REMPLACER',
+            'map' => ['ref' => 'id'],
+        ]]);
+
+        $r = $this->scoutIn($root, ['doctor', '--source=demo']);
+
+        self::assertNotSame(0, $r['code'], 'a named source that cannot run must FAIL, never report a clean empty pass');
+        self::assertStringContainsString('REMPLACER', $r['err']);
+    }
+
+    public function testAnExplicitlyNamedPrivatePortalStillNeedsTheLegalRiskFlag(): void
+    {
+        // Ordering, asserted because it is load-bearing: the enabled check sits ABOVE the scraping
+        // gate, so force-running has to fall THROUGH to that gate rather than past it. A disabled
+        // private portal named on the command line is the one path that could otherwise have
+        // skipped hard rule 4 entirely.
+        $root = $this->tempRoot(sources: ['portal' => [
+            'enabled' => false,
+            'family' => 'private',
+            'type' => 'json',
+            'mixed_tenure' => true,
+            'url' => 'https://example.test/search',
+            'map' => ['ref' => 'id'],
+        ]]);
+
+        $r = $this->scoutIn($root, ['doctor', '--source=portal']);
+
+        self::assertStringContainsString('--i-accept-legal-risk', $r['err'], 'hard rule 4 outranks an explicit --source');
+    }
+
+    /**
+     * A temp root whose only source is the demo fixture, at a chosen `enabled` state.
+     *
+     * The payload is COPIED into the root rather than referenced back at the repo's own tree: a
+     * fixture path is resolved against the root the CLI was given, so a test reaching back would
+     * keep passing while the resolution it claims to exercise was broken.
+     */
+    private function fixtureRoot(bool $enabled): string
+    {
+        $root = $this->tempRoot(sources: ['demo' => [
+            'enabled' => $enabled,
+            'family' => 'institutional',
+            'type' => 'fixture',
+            'mixed_tenure' => true,
+            'fixture' => 'tests/fixtures/fixture_demo/search.json',
+            'items_path' => 'results.items',
+            'map' => [
+                'ref' => 'id',
+                'title' => 'title',
+                'url' => 'url',
+                'commune' => 'city',
+                'cp' => 'zipCode',
+                'rent' => 'rent.total',
+                'charges_included' => true,
+                'surface' => 'surface',
+                'rooms' => 'rooms',
+            ],
+        ]]);
+
+        mkdir($root . '/tests/fixtures/fixture_demo', 0o775, true);
+        copy(
+            self::ROOT . '/tests/fixtures/fixture_demo/search.json',
+            $root . '/tests/fixtures/fixture_demo/search.json',
+        );
+
+        return $root;
+    }
+
     public function testAnUnknownNotificationChannelIsRefusedRatherThanDropped(): void
     {
         // A typo in `notify.channels` that silently yielded nothing would be a channel the developer

@@ -295,8 +295,15 @@ source's own field.
   rather than implying it is covered. Run it a few times, confirm the item count is stable, then:
 
 ```bash
-scout doctor            # status, timing, item count per source
+scout doctor --source=<name>    # status, timing, item count — for THIS block only
 ```
+
+**`--source=<name>` force-runs a source that is still `enabled: false`**, which is what makes the
+order below possible at all. Until 2026-08-22 it did not: `sources()` dropped disabled definitions
+before the flag was read, so the only way to get a run was to enable the block first — the edit to
+committed config this flag exists to avoid, made under exactly the time pressure that makes people
+forget to undo it. The run says the source is disabled, and a `REMPLACER` url is refused rather than
+fetched, so force-running cannot poll something nobody verified.
 
 Only flip `enabled: true` once `doctor` is green, the parser test passes offline, and the URL was
 verified live.

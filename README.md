@@ -107,8 +107,11 @@ before this was measured against a real container.
 
 **What is in the image, and what is not.** No test suite, no `tools/phpunit.phar`, no `.env` — an
 image layer is a distributable artifact and a baked-in credential survives any later layer that
-deletes it. The demo fixture *is* shipped, because `fixture_demo` is enabled in the committed config
-and it lets a fresh VPS prove the whole pipeline before a single landlord is polled.
+deletes it. The demo fixture *is* shipped, and it lets a fresh VPS prove the whole
+pipeline before a single landlord is polled — but it is `enabled: false` as of 2026-08-22, so it
+takes an explicit `scout doctor --source=fixture_demo` to run. It shipped ENABLED for two weeks,
+from before any real endpoint existed, and a real pass therefore counted ten flats that do not
+exist in its totals, its `doctor` table and its heartbeat.
 
 **There is deliberately no Docker `HEALTHCHECK`.** Q27's heartbeat is the liveness mechanism and it
 reports through a channel you actually read; a container healthcheck polling the marker file would

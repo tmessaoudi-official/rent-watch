@@ -1412,6 +1412,48 @@ A changelog that overstates is worse than one that omits, because the next sessi
   commune, rooms and surface, so it reads correctly. Worth a `title` mapping the day In'li lists
   anything that is not a flat.
 
+- [2026-08-22 19:05] FIXED (a shipped defect, found by running the real pipeline rather than by
+  reading it): **`fixture_demo` shipped `enabled: true`, so a real deployment polled a demo source.**
+  A full pass reported *"5 source(s), 491 annonce(s) · 14 correspondance(s)"* — and 10 of those
+  listings and **6 of those matches are fabricated**, from `tests/fixtures/fixture_demo/search.json`.
+  The block's own `_comment` records the fence and why it is spent: it was enabled *because* no real
+  endpoint existed and it was the only way `scout run --once` could be demonstrated end to end. Four
+  real sources have been live since 2026-08-22; nobody revisited the flag.
+
+  **The severity is narrower than it first looks, and the narrow version is the one to record.** The
+  first framing was *"6 fake flats would reach the phone on the first run"*. Traced against the
+  documented flow, that is false: `run --once --seed` marks all ten as seen, `--watch` notifies only
+  what is NEW, and a frozen payload is never new again — so under the prescribed sequence nothing
+  fake ever pushes. What it actually costs is **every number the operator reads**: pass totals,
+  `doctor`'s table, `SourceHealth`, and Q27's *"N/M sources en bon état"* beat, permanently, plus a
+  real fake-push on any path that loses the seen-set (a replaced volume, a restored backup, a first
+  run where `--seed` was skipped). Same class as the *"0 matches because of the commune filter"*
+  correction on 2026-08-22: a true observation attached to an overstated cause stops people looking.
+
+- [2026-08-22 19:05] AGREED: **`--source=<name>` FORCE-RUNS a disabled source, and only an explicit
+  name does.** Disabling `fixture_demo` broke 10 CLI tests, because `ScoutTest`'s harness appends
+  `--source=fixture_demo` to every `run`/`doctor` call and `sources()` dropped disabled definitions
+  *before* consulting `--source`. The alternative — rewriting those 10 to build temp roots — was
+  rejected: they exercise the run loop against the real repo root on purpose.
+
+  It is a repair, not a convenience. `/add-source` step 5 prescribes *"run `scout doctor` against the
+  new block, flip `enabled: true` once it is green"*, **and that order was impossible**: nothing ran
+  a disabled source, so the only way to get a run was to enable it first — the edit to committed
+  config the flag exists to avoid. `dump` has always resolved a source by name regardless of
+  `enabled`, so this makes the verbs agree rather than inventing a rule.
+
+  Three guards, each with its own test and its own sabotage case, because this is a loosening:
+  **an ordinary run still skips disabled sources** (the over-correction is deleting the check
+  outright); **the force-run is LOUD** — `source X est désactivée dans la config, exécutée parce
+  qu'elle est nommée explicitement` — because a `--source` left behind in a deployment would
+  otherwise be indistinguishable from a source somebody enabled deliberately; and **hard rule 1
+  moved with it**. That last one matters: the loader refuses `enabled: true` beside a `REMPLACER`
+  placeholder, and that was the entire guard for as long as a disabled source could never run.
+  Force-running brings the placeholder back within reach of a real fetch, so the refusal now lives in
+  `Scout::buildSource()` — the single funnel `dump`, `doctor` and `run` all pass through — rather
+  than in the caller that happened to need it first. The scraping opt-in gate (hard rule 4) sits
+  below the enabled check and is asserted to still fire on a force-run private portal.
+
 ## Formal plan — schema v4, the `group_key` history overlay (2026-08-19 23:02)
 
 Ruled above. Two holes were found while planning that the ruling's own doctrine settles, and one

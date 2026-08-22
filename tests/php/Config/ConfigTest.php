@@ -1051,6 +1051,36 @@ final class ConfigTest extends TestCase
      * - **an `item_selector` for `type: html`** — without it the adapter matches nothing, and
      *   matching nothing is this project's signature silent failure.
      */
+    /**
+     * A demo fixture may not ship enabled.
+     *
+     * `fixture_demo` is not a landlord: it is a frozen payload that exercises the pipeline offline.
+     * It shipped `enabled: true` from before any real endpoint existed, when it was the only way
+     * `scout run --once` could be demonstrated end to end — and it stayed enabled after four real
+     * sources went live, where it stopped being a demo and became ten fabricated listings inside a
+     * real deployment's store, counted in every pass total, every `doctor` table and every
+     * heartbeat source count.
+     *
+     * Deliberately NOT folded into the evidence test below, which carves fixtures out on purpose
+     * (a fixture has no endpoint to have verified). The two ask opposite questions about the same
+     * flag, so they stay separate assertions with separate failure messages.
+     */
+    public function testNoFixtureSourceShipsEnabled(): void
+    {
+        foreach (ConfigLoader::loadSources(self::ROOT . '/config/sources.json') as $name => $s) {
+            if ($s->type !== 'fixture') {
+                continue;
+            }
+
+            self::assertFalse(
+                $s->enabled,
+                "source '{$name}' is a fixture and ships enabled — a real deployment would count "
+                    . 'listings that do not exist, and would notify them on any path that loses the '
+                    . 'seen-set. Run it with `--source=' . $name . '`, which force-runs a disabled source',
+            );
+        }
+    }
+
     public function testEveryEnabledSourceCarriesTheEvidenceThatItWasVerified(): void
     {
         $raw = json_decode((string) file_get_contents(self::ROOT . '/config/sources.json'), true);

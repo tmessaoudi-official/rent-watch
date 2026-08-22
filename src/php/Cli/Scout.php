@@ -816,7 +816,24 @@ final readonly class Scout
             $known[] = $definition->name;
 
             if (!$definition->enabled) {
-                continue;
+                // `--source=<name>` FORCE-RUNS a disabled source, and only an explicit name does.
+                //
+                // Without this, `/add-source` step 5 — "run `scout doctor` against the new block,
+                // flip `enabled: true` once it is green" — could not be followed in that order: the
+                // block had to be enabled before anything would run it, which is the edit to
+                // committed config the flag exists to avoid. `dump` has always resolved a source by
+                // name regardless of `enabled`, so this makes the verbs agree rather than inventing
+                // a rule. What it is NOT is a loosening of the enabled check: an ordinary run still
+                // skips the source, which `testADisabledSourceStaysOutOfAnOrdinaryRun` pins.
+                if ($only === null) {
+                    continue;
+                }
+
+                // LOUD, because the failure this could become is a `--source` left behind in a
+                // deployment: a source nobody enabled, running every fifteen minutes, indis-
+                // tinguishable in the output from one somebody turned on deliberately.
+                $this->warn('source ' . $definition->name . ' est désactivée dans la config, '
+                    . 'exécutée parce qu\'elle est nommée explicitement');
             }
 
             if ($definition->requiresScrapingOptIn() && !$this->scrapingAllowed()) {
@@ -898,6 +915,21 @@ final readonly class Scout
         $gate = $criteria === null
             ? null
             : static fn (RawListing $listing): bool => $criteria->matchesCommune($listing->commune, $listing->postcode);
+
+        // Hard rule 1, enforced at the single funnel every verb passes through. The LOADER refuses
+        // an `enabled: true` source carrying the placeholder, and that was the whole guard for as
+        // long as a disabled source could never run; `--source=<name>` force-running one, and
+        // `dump` having always done so, both bring it back within reach. Refused rather than
+        // attempted: fetching the literal string fails anyway, but with a curl error that says
+        // nothing about why.
+        if ($definition->url === ConfigLoader::UNVERIFIED_URL) {
+            throw ConfigError::at(
+                'sources.' . $definition->name . '.url',
+                'still the ' . ConfigLoader::UNVERIFIED_URL . ' placeholder — its endpoint has never '
+                    . 'been verified against the live site (CLAUDE.md hard rule 1), so there is '
+                    . 'nothing to poll',
+            );
+        }
 
         return match ($definition->type) {
             'fixture' => new FixtureSource($definition, $store, $this->rootDir),

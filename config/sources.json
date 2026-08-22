@@ -163,8 +163,8 @@
       }
     },
     "fixture_demo": {
-      "_comment": "NOT a real landlord. A frozen-payload source that exercises the whole pipeline end to end offline — config load, fetch, field map, classify, criteria, dedup, store, notify — with no network and no credentials. It is what makes `scout run --once` verifiable before any real endpoint is captured, and it is enabled BECAUSE it reads a committed file rather than the internet. mixed_tenure is true so the fixture exercises the fail-closed path, which is the half that matters.",
-      "enabled": true,
+      "_comment": "NOT a real landlord. A frozen-payload source that exercises the whole pipeline end to end offline — config load, fetch, field map, classify, criteria, dedup, store, notify — with no network and no credentials. DISABLED 2026-08-22, having shipped enabled since before any real endpoint existed: back then it was the only way `scout run --once` could be demonstrated at all, and the reason it was safe (it reads a committed file, not the internet) was never the reason it belonged in a deployment. With four real sources live it stopped being a demo and became ten fabricated listings inside the operator's own store — counted in every pass total, every `doctor` table and every heartbeat source count, and a notification for a flat that does not exist on any path where the seen-set is lost or the seed step skipped. Still fully reachable, because `--source=<name>` force-runs a disabled source: `scout doctor --source=fixture_demo`, or `scout run --once --seed --source=fixture_demo` against a throwaway RENT_WATCH_DB. mixed_tenure is true so the fixture exercises the fail-closed path, which is the half that matters.",
+      "enabled": false,
       "family": "institutional",
       "type": "fixture",
       "default_tenure": null,

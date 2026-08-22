@@ -307,6 +307,26 @@ suite into a four-page-per-test crawler of a live landlord's site within a singl
 `scout doctor|run --source=<name>` (repeatable) limits a run to one source, which is what onboarding
 the next source needs and what keeps the CLI tests off the shipped source list.
 
+**`--source=<name>` also FORCE-RUNS a source that is `enabled: false`** (2026-08-22), and only an
+explicit name does — an ordinary pass still skips it, which is asserted separately because deleting
+the enabled check is the over-correction. It is a repair, not a convenience: `/add-source` step 5
+prescribes running `scout doctor` against a new block *before* flipping the flag, and that order was
+impossible while a disabled source could not run. `dump` always behaved this way; the verbs now
+agree. Three things travel with it. The run SAYS the source is disabled, because a `--source` left
+behind in a deployment is otherwise indistinguishable from one somebody enabled on purpose. Hard
+rule 1's `REMPLACER` refusal moved into `Scout::buildSource()` — the single funnel every verb passes
+through — because the loader's `enabled: true` check was the entire guard for as long as a disabled
+source could never be polled. And hard rule 4's scraping opt-in still fires on a force-run private
+portal, asserted, because the enabled check sits above it.
+
+**`fixture_demo` is `enabled: false` for the same reason** — it had shipped enabled since before any
+real endpoint existed, so a real pass reported *"5 source(s), 491 annonce(s) · 14 correspondance(s)"*
+where 10 listings and 6 matches were fabricated. Nothing fake ever *pushed* under the documented
+`--seed` → `--watch` flow (a frozen payload is never new after seeding), so the cost was every number
+the operator reads — pass totals, `doctor`, `SourceHealth`, the Q27 beat — plus a real fake push on
+any path that loses the seen-set. `ConfigTest::testNoFixtureSourceShipsEnabled` stops the flag
+creeping back.
+
 **Two more environment seams, both of them there so a test cannot become a hang or a crawl**
 (2026-08-19). `RENT_WATCH_MAX_PASSES=<n>` bounds `scout run --watch` to n passes; absent — the
 normal case — the loop runs until stopped, and when it is set the watcher SAYS so on its banner
