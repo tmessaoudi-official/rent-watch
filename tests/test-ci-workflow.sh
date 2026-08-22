@@ -80,6 +80,57 @@ check "runs the sabotage ledger"             has "tests/sabotage-check.sh"
 check "sabotage is gated to schedule/dispatch" \
   grep -q "github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'" "$wf"
 
+# ── BOTH halves of the ledger's notice path ──────────────────────────────────────────────────────
+# Neither half had a check until 2026-08-22 — on the one step in this workflow that has ALREADY
+# failed into the void. The ledger ran red 7/7 from 2026-08-13 to 2026-08-19 and notified nobody,
+# which is why the notice step exists at all; it could have been deleted the next day and every
+# check in this file would still have passed.
+#
+# Structural greps are the right instrument and not a compromise: both steps need a real GitHub
+# runner and an `issues: write` token, so nothing local can execute them, and their failure mode is
+# silent DELETION rather than misbehaviour. The step name alone would be defeated by gutting the
+# body, so each half is pinned by its name AND by the API call that does its work.
+check "a RED ledger opens an issue (hard rule 2: the alert must reach a human)" \
+  has "A red ledger must reach a human"
+check "…and that path really calls issues.create" \
+  has "github.rest.issues.create("
+
+# The other direction, and the reason it was added: an alert nobody retracts becomes furniture, so
+# the next real red lands on a board that already reads RED. Issues #1 and #2 stood open for days
+# after the regression they reported was fixed and pushed.
+check "a GREEN ledger retracts the alert it raised" \
+  has "A green ledger must retract the alert it raised"
+check "…and that path really closes the issue" \
+  has "state: 'closed'"
+
+# The backlog sweep. Matching today's date would close only the issue this run would have opened,
+# leaving every older one for a human to close by hand — which is the work the step exists to
+# remove. The prefix match is the behaviour, so it is what gets pinned.
+check "the retraction closes EVERY open ledger issue, not just today's" \
+  has "startsWith('sabotage ledger RED')"
+
+# GitHub returns pull requests from the issues endpoint. Without this filter a PR whose title began
+# with the same words would be closed by a green nightly.
+check "the retraction does not mistake a pull request for an issue" \
+  has "!i.pull_request"
+
+# The retraction must live in the SABOTAGE job. In the fast job it would fire on every green push
+# and close a legitimately-open RED issue while the nightly ledger was still failing — the fast job
+# never runs the ledger at all, so its green says nothing about detection. Positional, like the
+# tally check further down: the defect is a step in the wrong place, and both placements parse.
+sabotage_job_line="$(grep -n '^  sabotage:' "$wf" | head -1 | cut -d: -f1)"
+retract_line="$(grep -n 'A green ledger must retract' "$wf" | head -1 | cut -d: -f1)"
+
+# Bound first, exactly as the tally check below is. Without this the `${x:-0}` fallbacks make the
+# comparison pass VACUOUSLY when a grep misses: rename the `sabotage:` job and `0` stands in for it,
+# so any positive line number is "after the job". A positional check that cannot find its landmarks
+# must fail, not assume them.
+check "both landmarks for the placement check were found" \
+  bash -c 'test -n "$1" && test -n "$2"' _ "$sabotage_job_line" "$retract_line"
+
+check "the retraction sits in the sabotage job, not the fast push job" \
+  test "${retract_line:-0}" -gt "${sabotage_job_line:-0}"
+
 # ── The sabotage ledger's baseline gate must be SATISFIABLE ──────────────────────────────────────
 # sabotage-check.sh refuses to run unless the suite is green BEFORE any sabotage is applied. That
 # gate is correct and load-bearing. But it invokes the runner with its own flag set, and a flag that

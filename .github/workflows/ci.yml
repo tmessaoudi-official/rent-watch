@@ -185,3 +185,46 @@ jobs:
                 title, body,
               });
             }
+
+      # AND IT MUST BE RETRACTED WHEN IT STOPS BEING TRUE. The step above raises an alert; nothing
+      # ever withdrew one, so a single bad night left the board reading RED through every green night
+      # that followed. That is hard rule 2 read from the other end — "an alert that is computed and
+      # never sent is worse than none" has a twin: an alert nobody retracts becomes furniture, and
+      # the next real red arrives on a board that already says RED. Not hypothetical: issues #1 and
+      # #2 stood open for days while the regression they reported had already been fixed and pushed.
+      #
+      # EVERY open `sabotage ledger RED …` issue, not only today's. The run that finally goes green
+      # is precisely the one that should clear the whole backlog; matching on today's date would
+      # leave the older ones for a human to close by hand, which is the work this step exists to
+      # remove.
+      #
+      # `listForRepo`, NOT the `search` call the failure path uses. The search index is eventually
+      # consistent, so an issue opened minutes earlier (two `workflow_dispatch` runs in a row) can
+      # be invisible to it — and an alert that fails to close is the defect being fixed here, so
+      # this path must read live state. It returns pull requests as issues, hence the filter.
+      - name: A green ledger must retract the alert it raised
+        if: success()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const url = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}` +
+                        `/actions/runs/${context.runId}`;
+            const open = await github.paginate(github.rest.issues.listForRepo, {
+              owner: context.repo.owner, repo: context.repo.repo,
+              state: 'open', per_page: 100,
+            });
+            const stale = open.filter(
+              (i) => !i.pull_request && i.title.startsWith('sabotage ledger RED'),
+            );
+            for (const issue of stale) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner, repo: context.repo.repo,
+                issue_number: issue.number,
+                body: `The sabotage ledger is green again as of ${context.sha}.\n\nRun: ${url}`,
+              });
+              await github.rest.issues.update({
+                owner: context.repo.owner, repo: context.repo.repo,
+                issue_number: issue.number, state: 'closed', state_reason: 'completed',
+              });
+            }
+            core.info(`closed ${stale.length} stale ledger issue(s)`);

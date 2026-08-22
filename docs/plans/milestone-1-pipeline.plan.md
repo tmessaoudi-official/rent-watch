@@ -11,21 +11,24 @@ failures are silent, and they are cheapest to get right before anything depends 
 | `Store` — seen-set, price history, run log, health derivation | **done**, `src/php/Store/Store.php` |
 | `SourceHealth` / `SourceStatus` | **done**, `src/php/Core/` |
 | `Redact` — masks credentials in adapter error text | **done**, `src/php/Core/Redact.php` |
-| Cross-portal dedup (spec §7: price history per *logical* listing) | **not started** — the store keys per source; clustering the same flat across two portals is a separate problem with a separate failure profile |
-| Tenure verdict persistence, `doctor` timing | **deferred to schema v3** — Q24, Q25. v2 is spent: it carries `listings.seen_epoch` |
+| Cross-portal dedup (spec §7: price history per *logical* listing) | **done** — schema v4's `group_key`; `Store::assignGroup()` + `Store::groupPriceHistory()`. A singleton reports its OWN history rather than the empty set SQL gives you for `group_key = NULL` |
+| Tenure verdict persistence, `doctor` timing | **done** in schema v3 — Q24, Q25 |
 | Config loading (`config/criteria.json`, `config/sources.json`) | **done** — `src/php/Config/`, ruled JSON 2026-08-07 (Q22) |
 | `ConfigTest::testEveryCorpusSourceAgreesWithConfig()` — the `mixed_tenure` drift guard | **done**, `tests/php/Config/ConfigTest.php` |
 | `Source` adapter contract (`src/php/Adapters/Source.php`) | **done** — `fetch()` throws, never returns `[]` on failure |
 | `Payload` + `ListingMapper` — dotted paths, number/boolean parsing, field flattening | **done** |
 | `FixtureSource` — offline, shares the mapper with every network adapter | **done**, and it is what `scout replay` will use |
 | `criteria` (score + hard disqualifiers) | **done**, `src/php/Core/CriteriaEngine.php` + `Verdict.php` |
-| `HttpJsonSource` — the first NETWORK adapter | **blocked on an input**, not a decision: no endpoint in this repo has been verified, and hard rule 1 forbids writing one from memory. Needs a DevTools cURL capture |
+| `HttpJsonSource` — the first NETWORK adapter | **done**, and no cURL capture was ever needed: every live source turned out to be server-rendered. It now also carries `embedded_json_selector` for A12 Logirep, whose payload is JSON inside a `<script>` tag |
+| `HtmlSource` + `Html/Selector` — the adapter three of the four live sources use | **done**, on PHP 8.5's own `Dom\HTMLDocument`. ~300 lines, not the ~1 000 estimated: no selector engine had to be written |
 | `dedup` — cross-portal clustering | **done**, `src/php/Core/Dedup.php` |
 | Notification formatter + channels (console, ntfy, email) | **done**, `src/php/Core/Notify/` |
 | `scout` CLI (`doctor`, `dump`, `run --once/--seed`, `digest`, `reclassify`, `test-notify`) | **done**, `bin/scout` + `src/php/Cli/` |
 | Schema v3 — tenure verdict, `duration_ms`, `source_alerts` | **done** |
 | The run loop (fetch → classify → criteria → dedup → store → notify) | **done**, `src/php/Cli/Pipeline.php` |
-| `scout run --watch` | **refuses** rather than running unpaced — needs the Q37 cadence |
+| `scout run --watch` | **done** — `Core/Pacer` holds the Q37 cadence, `Adapters/PacedSource` applies it, `Cli/WatchLoop` survives a pass that throws |
+| Q27 liveness — heartbeat + `state/last-refusal.txt` | **done**, `src/php/Core/Heartbeat.php`. The beat counts the sources the run WATCHES, not the ones the config enables |
+| Live sources | **four**: In'li, CDC Habitat, Cityloger, Logirep. `fixture_demo` is the fifth `enabled` entry and is not a landlord |
 
 ## Settled — the config file format
 
@@ -53,7 +56,65 @@ What the ruling cost, and how each cost is paid:
   a closing quote between the name and the colon, which pattern 5 did not allow for. Both fixed with
   matching test cases.
 
-## Remaining work — estimate (2026-08-19)
+## Remaining work — estimate (2026-08-22)
+
+> **Supersedes the 2026-08-19 estimate below**, which is kept unedited for the record. It was wrong
+> in the row that mattered — it called the product `~0% usable` because there were `zero live
+> sources`, and named the `html` adapter *"the largest unblocked item, ~1 000 lines"*. Four sources
+> are live and that adapter cost ~300 lines, because PHP 8.5 ships `Dom\HTMLDocument` and
+> `querySelectorAll` and no selector engine had to be written. The `~0%` verdict happens to still
+> hold — for a completely different reason, which is the point of re-measuring rather than editing
+> a number.
+
+**Every figure below was produced by running the thing on 2026-08-22, not recalled.** 14 075 lines
+under `src/php/`, 14 428 under `tests/`, 71 classes, 31 PHPUnit suites. The suite's own closing line
+is the only authoritative tally and it reads `OK (1589 tests, 6657 assertions)`. 325 sabotage cases;
+the last full ledger was **325 detected, 0 undetected** against `fd8f3b5`. Four live landlord
+sources (In'li, CDC Habitat, Cityloger, Logirep — `fixture_demo` is the fifth `enabled` entry in
+`config/sources.json` and is not a landlord).
+
+| Axis | Complete | Why it reads that way |
+|---|---|---|
+| **Code written** (excl. `src/phorj/`) | **~90%** | Everything but `Enrich/` and the tier-4 `plafonds` data exists and is tested. The 2026-08-19 gaps — the `html` adapter, the network adapters, cross-portal price history — are all closed |
+| **Code written** (incl. `src/phorj/`) | **~70%** | The port still re-writes ~2 500 lines of pure core plus a differential harness, and is **on indefinite hold** (2026-08-19), so it does not belong on the critical path |
+| **Product delivering value to the developer** | **still ~0%** | And no longer for the 2026-08-19 reason. `notify.channels` is `["console"]` and there is no `.env`, so nothing reaches a phone; and today's live yield across all four sources is **0 matches**, because their current stock does not intersect the ten communes in `criteria.json` |
+
+**The bottleneck moved, and that is the single most useful thing on this page.** On 2026-08-19 it
+was *"no verified endpoint"*. That is solved: four sources are live, and Track 1 of
+`docs/SOURCES.md` is measured out — every remaining catalogue row is either dead, authenticated or
+publishes nothing in Île-de-France. The bottleneck is now **delivery**: a pipeline that classifies
+and scores correctly, with nowhere to send the result and nothing currently matching. Adding a
+fifth institutional source of the same kind does not move it.
+
+### Remaining items
+
+| Item | Effort | Blocked on | Milestone |
+|---|---|---|---|
+| **A push channel actually configured** (ntfy or SMTP) | **S** — both channels are built, tested and wired; this is one `.env` and one config line | the developer picking one and supplying the credential. **Highest leverage item on the page** | 6 |
+| First real `email_alert` portal | **M** — the adapter exists; a parser has to be shaped to a real message | IMAP credentials + one real alert email | 6 |
+| A source whose stock overlaps the criteria | **?** — not a coding task. Either widen the commune list or land the email route | see above | 5/7 |
+| `PlafondBands` tier-4 figures | **S** — ~150 lines of data + tests. A11 Toit et Joie's `/Plafonds-de-ressources` carries the PLAI/PLUS/PLS half for IdF but states **no year**, so it is a pointer, not a figure | the `plafonds` tables per zone/household | 2 |
+| `Enrich/transit` + `Enrich/geo` | **M** — not started | IDFM/PRIM API key | 8 |
+| Retire `icf_novedis` + `seqens` from `config/sources.json` | **S** | **nothing.** Both still carry `REMPLACER`, which reads *"to be verified"* — but A2 and A5 were MEASURED and publish no pollable vacancies at all. A placeholder and a dead end should not look alike | — |
+| Real corpus texts replacing the 114 synthetic | **M** — 6 captured so far; append, never renumber | more live sources | 2 |
+| Classifier performance (~155 ms/listing) | **S** | nothing — deferred only while the ledger held `src/` frozen. That freeze is lifted | — |
+| `src/phorj/` port of the pure core | **L** | three phorj builds; **on indefinite hold** | — |
+| Final MAXIMAL certification round | **M** — 3 lenses, two consecutive clean rounds, frozen commit | the above landing | — |
+
+### Wall-clock, in sessions of the size worked on 2026-08-19
+
+- **Unblocked right now: ~1 session** — retiring the two dead source rows, the classifier-perf work,
+  and the corpus appends that do not need new captures.
+- **The one move that changes the product: ~30 minutes**, once a push credential exists. Nothing
+  else on this list converts the third row above from `~0%` to anything.
+- **Blocked on inputs: ~2–3 sessions**, and they still unblock cheaply.
+- **phorj: on hold**, deliberately excluded from the total.
+
+**Total ≈ 4–5 sessions of engineering** — down from 8–9 — but the calendar is still set by the
+inputs, and the inputs are now *a notification credential* and *an alert mailbox*, not endpoint
+captures.
+
+## Remaining work — estimate (2026-08-19, SUPERSEDED — see above)
 
 Written down because "how much is left" is the question a compact destroys first, and because the
 answer here is not one number: the code is nearly finished and the product delivers nothing, and
@@ -1257,6 +1318,35 @@ A changelog that overstates is worse than one that omits, because the next sessi
   and belongs in a pinned worktree, and a ledger failing well INSIDE its budget has found something
   rather than timed out.
 
+- [2026-08-22 15:10] AGREED: **a green ledger CLOSES the issue a red one opened.** Hard rule 2 says
+  an alert computed and never sent is worse than none; this is its twin — an alert nobody retracts
+  becomes furniture, and the next real red lands on a board that already reads RED. Observed:
+  issues #1 and #2 stood open for days after the regression they reported had been fixed and
+  pushed, and there was no `success()` path in `ci.yml` at all, so they could never have closed by
+  themselves. The step closes **every** open `sabotage ledger RED …` issue, not just the current
+  day's — the run that finally goes green is exactly the one that should clear the backlog. It uses
+  `listForRepo` rather than the `search` call the failure path uses, because the search index is
+  eventually consistent and an alert that fails to close is the defect being fixed. Reverses if a
+  human wants to keep triaging red nights by hand: delete the step.
+
+- [2026-08-22 15:10] NOTED: **the failure-notice step had no self-test either**, on the one step in
+  this workflow that has already failed into the void (red 7/7, 2026-08-13 → 2026-08-19, notifying
+  nobody). It could have been deleted the following day with every check in
+  `tests/test-ci-workflow.sh` still passing. Both halves are now pinned by step NAME and by the API
+  call that does the work — a name alone is defeated by gutting the body. The placement is pinned
+  positionally too: in the fast job the retraction would fire on every green push and close a
+  legitimately-open issue while the nightly ledger was still red, because the fast job never runs
+  the ledger.
+
+- [2026-08-22 15:10] NOTED: the remaining-work estimate is re-measured and **superseded, not
+  edited** — the 2026-08-19 table is kept unedited above its replacement. Its `product usable ~0%`
+  verdict survives re-measurement and its REASON does not: it was "zero live sources", and it is
+  now "four live sources, `notify.channels` is `["console"]` with no `.env`, and today's live yield
+  is 0 matches because the four sources' stock does not intersect the ten communes in
+  `criteria.json`". Editing the percentage in place would have preserved a true number attached to
+  a false explanation, which is the worse of the two errors. The bottleneck is **delivery**, not
+  discovery; a fifth institutional source does not move it.
+
 ## Formal plan — schema v4, the `group_key` history overlay (2026-08-19 23:02)
 
 Ruled above. Two holes were found while planning that the ruling's own doctrine settles, and one
@@ -1468,3 +1558,21 @@ carried over from `e4e3ef0` plus the twelve Cityloger cases, each already verifi
 **Worktree pruned** the same turn: `git worktree remove --force <scratch>/ledger-c1cf190`. It was
 registered in `.git/worktrees` pointing into session scratch, so it outlived its session by design
 and needed removing by hand once the count was written here.
+
+**Full ledger vs `fd8f3b5`: COUNTED 2026-08-22 — 325 detected, 0 undetected.** Ten cases on from
+`c1cf190`'s 315: seven added with the Q27 heartbeat and the Logirep build, three with the heartbeat
+scope fix (`the beat counts CONFIGURED sources again`, `the beat stops disclosing that it is
+scoped`, `the in-loop beat loses an argument to the closure boundary`). Log:
+`var/claude/ledger-fd8f3b5.log`. The same four integrity checks, each re-run rather than assumed:
+the log opens with `baseline: suite is green`; `grep -c 'suite went red'` returns **325**, matching
+the tally rather than merely accompanying it; there is no `PARTIAL RUN` line, so this is a full
+ledger and not a `SABOTAGE_FILTER` subset; and no case timed out. Worktree pruned the same turn.
+
+**This run had to be started twice, and the reason is worth keeping.** The first attempt, pinned at
+`f15b7a3`, recorded a case as *"the suite did not terminate within 300s — inconclusive"*. Nothing
+was wrong with the tree: five PHPUnit processes of my own were running alongside it, and
+`SABOTAGE_SUITE_TIMEOUT` correctly counted the starved case as a FAILURE rather than a detection.
+That is the guard behaving exactly as designed — but a contaminated ledger cannot be repaired case
+by case, because the contention was not confined to the case that reported it. It was killed, the
+worktree removed, a fresh one pinned at `fd8f3b5`, and the machine left quiet. **A ledger run owns
+the machine for its duration**; the cost of forgetting that is the whole ~5 h, not one case.
