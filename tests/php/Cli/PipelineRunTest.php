@@ -520,17 +520,17 @@ final class PipelineRunTest extends TestCase
 
     // ---------------------------------------------------------------- schema
 
-    public function testTheSchemaVersionIsFour(): void
+    public function testTheSchemaVersionIsFive(): void
     {
         // A bare constant assertion, and it earns its place: lowering `SCHEMA_VERSION` makes
         // `migrate()` return early on an EXISTING database, so an older one opens cleanly and then
         // throws `no such column` on the first write. A fresh database hides it entirely, because
         // `CREATE TABLE IF NOT EXISTS` always writes the current DDL.
-        self::assertSame(4, Store::SCHEMA_VERSION);
-        self::assertSame(4, $this->store()->schemaVersion());
+        self::assertSame(5, Store::SCHEMA_VERSION);
+        self::assertSame(5, $this->store()->schemaVersion());
     }
 
-    public function testAVersionOneDatabaseIsUpgradedToCarryTheV4Columns(): void
+    public function testAVersionOneDatabaseIsUpgradedThroughEveryLaterStep(): void
     {
         // The path a fresh database cannot exercise. The seen-set cannot be rebuilt from anywhere,
         // so an upgrade that silently skipped its columns would be discovered as a runtime error on
@@ -545,7 +545,14 @@ final class PipelineRunTest extends TestCase
         unset($pdo, $store);
 
         $reopened = Store::open((string) $this->dbPath);
-        self::assertSame(4, $reopened->schemaVersion());
+        self::assertSame(5, $reopened->schemaVersion());
+
+        // v5's table is created by its own migration step, not by the fresh-database DDL, and this
+        // is the only path that proves the difference: a v1 database never ran that DDL.
+        $tables = (new \PDO('sqlite:' . (string) $this->dbPath))
+            ->query("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'listing_detail'")
+            ->fetchAll(\PDO::FETCH_COLUMN);
+        self::assertSame(['listing_detail'], $tables, 'the v5 step did not run on an upgrade');
 
         $columns = array_column(
             (new \PDO('sqlite:' . (string) $this->dbPath))->query('PRAGMA table_info(listings)')->fetchAll(\PDO::FETCH_ASSOC),

@@ -33,11 +33,18 @@ final class StoreGroupTest extends TestCase
 
     // ── persistence ───────────────────────────────────────────────────────────────────────────────
 
-    /** The overlay ships as v4, so an older database is upgraded rather than refused. */
-    public function testSchemaIsVersionFour(): void
+    /**
+     * The overlay shipped as v4, so an older database is upgraded rather than refused.
+     *
+     * The bare CURRENT-version assertion lives in `StoreDetailTest` and `PipelineRunTest`; what
+     * this one guards is that the overlay's own floor never moves backwards. Asserting `=== 5` here
+     * too would mean every future migration edits three files to say the same thing, and the third
+     * one is where somebody eventually writes the wrong number.
+     */
+    public function testTheOverlayShippedAtVersionFourOrLater(): void
     {
-        self::assertSame(4, Store::SCHEMA_VERSION);
-        self::assertSame(4, $this->store->schemaVersion());
+        self::assertGreaterThanOrEqual(4, Store::SCHEMA_VERSION);
+        self::assertSame(Store::SCHEMA_VERSION, $this->store->schemaVersion());
     }
 
     /**
@@ -55,7 +62,7 @@ final class StoreGroupTest extends TestCase
 
         $upgraded = Store::open($path);
 
-        self::assertSame(4, $upgraded->schemaVersion());
+        self::assertSame(Store::SCHEMA_VERSION, $upgraded->schemaVersion());
         self::assertNull($upgraded->groupKey('inli:id:ANN-1'));
     }
 
@@ -70,7 +77,7 @@ final class StoreGroupTest extends TestCase
         $second = Store::open($path);
         $second->migrate();
 
-        self::assertSame(4, $second->schemaVersion());
+        self::assertSame(Store::SCHEMA_VERSION, $second->schemaVersion());
     }
 
     // ── identity ──────────────────────────────────────────────────────────────────────────────────

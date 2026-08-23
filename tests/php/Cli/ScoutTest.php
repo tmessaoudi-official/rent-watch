@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace RentWatch\Tests\Cli;
 
 use PHPUnit\Framework\TestCase;
+use RentWatch\Store\Store;
 use RentWatch\Cli\Scout;
 
 /**
@@ -214,7 +215,10 @@ final class ScoutTest extends TestCase
     {
         $r = $this->scout(['doctor']);
 
-        self::assertStringContainsString('schéma v4', $r['out']);
+        // Symbolic, not the literal `v4` this used to hold: what the test is for is that doctor
+        // PRINTS the version, and a literal makes every migration edit a CLI test to restate a
+        // number three other tests already assert bare.
+        self::assertStringContainsString('schéma v' . Store::SCHEMA_VERSION, $r['out']);
         self::assertStringContainsString('digest à 8h', $r['out'], 'Q34: the digest hour must be visible with its timezone');
     }
 

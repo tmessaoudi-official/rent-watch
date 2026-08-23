@@ -45,7 +45,7 @@ final readonly class Store
      * without complaint and then threw a raw `no such column` at the first sighting. That is the
      * whole argument for this constant existing, demonstrated against itself.
      */
-    public const int SCHEMA_VERSION = 4;
+    public const int SCHEMA_VERSION = 5;
 
     /** Spec §8: the mean is rolling over seven days, not over a fixed number of runs. */
     public const int ROLLING_WINDOW_DAYS = 7;
@@ -299,6 +299,35 @@ final readonly class Store
                 at_epoch INTEGER NOT NULL,
                 PRIMARY KEY (source, status)
             );
+
+            -- Schema v5. What a listing's own detail page said, so it is read ONCE.
+            --
+            -- Keyed on (source, external_id) and NOT on dedup_key: cache what was OBSERVED, never
+            -- what was CONCLUDED. `dedupKey()` normalises, normalisation evolves, and a row keyed
+            -- on it would silently orphan the entire cache the day it changes -- which presents as
+            -- every listing being re-fetched on every pass, i.e. the crawl this table exists to
+            -- prevent, with no symptom but somebody else's access log.
+            --
+            -- A row appears on the first ATTEMPT, not the first success, because the failure has to
+            -- be expressible: fields_json NULL with attempts > 0 is "tried and could not read it",
+            -- which is a different fact from "read it and it said nothing" (fields_json '{}'). If
+            -- those collapse, a detail page that 404s becomes a listing that merely has no floor,
+            -- for ever, while the source's health stays green.
+            CREATE TABLE IF NOT EXISTS listing_detail (
+                source          TEXT NOT NULL,
+                external_id     TEXT NOT NULL,
+                url_fetched     TEXT,
+                -- The RAW extracted strings, so a ListingMapper improvement reaches rows captured
+                -- before it existed. Same reasoning as the stored tenure verdict.
+                fields_json     TEXT,
+                fetched_at      TEXT,
+                attempts        INTEGER NOT NULL DEFAULT 0,
+                last_attempt_at TEXT,
+                -- Redact::text() applied before it is written: a detail-fetch failure naturally
+                -- carries the URL it failed on.
+                last_error      TEXT,
+                PRIMARY KEY (source, external_id)
+            );
             SQL
         );
 
@@ -416,6 +445,20 @@ final readonly class Store
                 }
 
                 $this->pdo->exec('CREATE INDEX IF NOT EXISTS listings_group ON listings (group_key)');
+            }
+
+            if ($recorded < 5) {
+                // Additive and re-runnable, like every step above. Nothing to backfill and nothing
+                // that COULD be: a listing already in the seen-set was never hydrated, and an empty
+                // row would claim it was read and found bare. Absent is the truth, and it is what
+                // makes those listings eligible for the backlog.
+                $this->pdo->exec(
+                    'CREATE TABLE IF NOT EXISTS listing_detail ('
+                    . ' source TEXT NOT NULL, external_id TEXT NOT NULL, url_fetched TEXT,'
+                    . ' fields_json TEXT, fetched_at TEXT, attempts INTEGER NOT NULL DEFAULT 0,'
+                    . ' last_attempt_at TEXT, last_error TEXT,'
+                    . ' PRIMARY KEY (source, external_id))',
+                );
             }
 
             $stamp = $this->pdo->prepare("UPDATE schema_meta SET value = :value WHERE key = 'schema_version'");
@@ -1006,6 +1049,140 @@ final readonly class Store
         $statement->execute(['source' => $sourceName]);
 
         return $statement->rowCount() > 0;
+    }
+
+    // ── Detail hydration (schema v5) ──────────────────────────────────────────────────────────────
+
+    /**
+     * What is on record about this listing's detail page, or `null` if it was never attempted.
+     *
+     * `null` and a row with `attempts > 0` are deliberately different answers. The first means the
+     * listing is owed a request; the second means one was spent and failed, and the caller decides
+     * about a retry from `attempts` and `lastAttemptAt` rather than trying again on every pass for
+     * ever.
+     */
+    public function detail(string $sourceName, string $externalId): ?StoredDetail
+    {
+        $statement = $this->pdo->prepare(
+            'SELECT source, external_id, url_fetched, fields_json, fetched_at, attempts,
+                    last_attempt_at, last_error
+             FROM listing_detail WHERE source = :source AND external_id = :id',
+        );
+        $statement->execute(['source' => $sourceName, 'id' => $externalId]);
+        $row = $statement->fetch();
+
+        if ($row === false) {
+            return null;
+        }
+
+        $raw = $row['fields_json'];
+        $fields = null;
+
+        if (\is_string($raw)) {
+            /** @var array<string,string> $decoded */
+            $decoded = json_decode($raw, true, 512, JSON_THROW_ON_ERROR);
+            $fields = $decoded;
+        }
+
+        return new StoredDetail(
+            sourceName: (string) $row['source'],
+            externalId: (string) $row['external_id'],
+            urlFetched: $row['url_fetched'] === null ? null : (string) $row['url_fetched'],
+            fields: $fields,
+            fetchedAt: $row['fetched_at'] === null ? null : (string) $row['fetched_at'],
+            attempts: (int) $row['attempts'],
+            lastAttemptAt: $row['last_attempt_at'] === null ? null : (string) $row['last_attempt_at'],
+            lastError: $row['last_error'] === null ? null : (string) $row['last_error'],
+        );
+    }
+
+    /**
+     * A detail page was read. Store what it said, verbatim.
+     *
+     * An EMPTY map is a legitimate success and is stored as `{}`, never as SQL NULL: "the page was
+     * read and matched no selector" is a finding, and the difference from "never read" is what
+     * stops the listing being re-fetched on every pass for ever.
+     *
+     * `attempts` still increments, so a page that needed three tries says so.
+     *
+     * @param array<string,string> $fields the RAW extracted strings
+     */
+    public function recordDetail(
+        string $sourceName,
+        string $externalId,
+        ?string $urlFetched,
+        array $fields,
+        string $atIso,
+    ): void {
+        $statement = $this->pdo->prepare(
+            'INSERT INTO listing_detail
+                 (source, external_id, url_fetched, fields_json, fetched_at, attempts, last_attempt_at, last_error)
+             VALUES (:source, :id, :url, :fields, :at, 1, :at, NULL)
+             ON CONFLICT (source, external_id) DO UPDATE SET
+                 url_fetched     = excluded.url_fetched,
+                 fields_json     = excluded.fields_json,
+                 fetched_at      = excluded.fetched_at,
+                 attempts        = listing_detail.attempts + 1,
+                 last_attempt_at = excluded.last_attempt_at,
+                 last_error      = NULL',
+        );
+        $statement->execute([
+            'source' => $sourceName,
+            'id' => $externalId,
+            'url' => $urlFetched,
+            'fields' => json_encode($fields, JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE),
+            'at' => $atIso,
+        ]);
+    }
+
+    /**
+     * A detail fetch failed. Record the attempt, and do NOT touch any hydration already on record.
+     *
+     * A source that starts 500ing must not erase what it told us last week — the stored fields stay
+     * usable and the failure is recorded beside them. `Redact` is applied by the caller before the
+     * text arrives here, because a detail-fetch failure carries the URL it failed on.
+     */
+    public function recordDetailFailure(
+        string $sourceName,
+        string $externalId,
+        string $error,
+        string $atIso,
+    ): void {
+        $statement = $this->pdo->prepare(
+            'INSERT INTO listing_detail
+                 (source, external_id, url_fetched, fields_json, fetched_at, attempts, last_attempt_at, last_error)
+             VALUES (:source, :id, NULL, NULL, NULL, 1, :at, :error)
+             ON CONFLICT (source, external_id) DO UPDATE SET
+                 attempts        = listing_detail.attempts + 1,
+                 last_attempt_at = excluded.last_attempt_at,
+                 last_error      = excluded.last_error',
+        );
+        $statement->execute([
+            'source' => $sourceName,
+            'id' => $externalId,
+            'at' => $atIso,
+            'error' => $error,
+        ]);
+    }
+
+    /**
+     * How many listings on a source have failed hydration at least `$minAttempts` times and have
+     * never yet succeeded.
+     *
+     * This is a HEALTH input, not a diagnostic. One detail page that will not load is noise; fifty
+     * of a hundred and seventy-four means the landlord changed their detail markup, which is the
+     * broken-selector-forever scenario hard rule 2 exists for — and it is invisible in every other
+     * signal, because the search page still parses and the count still looks right.
+     */
+    public function detailFailureCount(string $sourceName, int $minAttempts = 1): int
+    {
+        $statement = $this->pdo->prepare(
+            'SELECT COUNT(*) FROM listing_detail
+             WHERE source = :source AND fields_json IS NULL AND attempts >= :min',
+        );
+        $statement->execute(['source' => $sourceName, 'min' => $minAttempts]);
+
+        return (int) $statement->fetchColumn();
     }
 
     // ── Tenure verdicts (schema v3, Q24) ──────────────────────────────────────────────────────────
