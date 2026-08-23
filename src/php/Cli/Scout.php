@@ -913,6 +913,7 @@ final readonly class Scout
 
         $skipped = 0;
         $unreadable = 0;
+        $unencodable = 0;
         $rejudged = 0;
         $changed = 0;
         /** @var list<array{listing: RawListing, verdict: Verdict, key: string, classification: \RentWatch\Core\Classification}> $promotions */
@@ -958,8 +959,8 @@ final readonly class Scout
                 // Every dedup MEMBER is classified; only the SURVIVOR is judged. `NULL` is exactly
                 // what distinguishes "never judged" from "judged and rejected", and manufacturing an
                 // outcome here would destroy that distinction for a row the engine never saw.
-                if (!$dryRun) {
-                    $this->writeVerdict($store, $key, $classification, $evidence);
+                if (!$dryRun && !$this->writeVerdict($store, $key, $classification, $evidence)) {
+                    ++$unencodable;
                 }
 
                 continue;
@@ -998,7 +999,9 @@ final readonly class Scout
             }
 
             if (!$dryRun) {
-                $this->writeVerdict($store, $key, $classification, $evidence);
+                if (!$this->writeVerdict($store, $key, $classification, $evidence)) {
+                    ++$unencodable;
+                }
                 $store->recordOutcome($key, $after);
             }
 
@@ -1031,6 +1034,9 @@ final readonly class Scout
         if ($unreadable > 0) {
             $this->line($unreadable . ' instantané(s) illisible(s) — voir les avertissements ci-dessus.');
         }
+        if ($unencodable > 0) {
+            $this->line($unencodable . ' instantané(s) non ré-encodable(s) — ces annonces ne seront plus re-jugeables.');
+        }
 
         if ($dryRun) {
             $this->line('--dry-run : aucun verdict réécrit, aucune notification envoyée.');
@@ -1058,8 +1064,13 @@ final readonly class Scout
         string $key,
         \RentWatch\Core\Classification $classification,
         RawListing $evidence,
-    ): void {
-        $store->recordVerdict(
+    ): bool {
+        // The bool is RETURNED rather than discarded, even though it cannot currently be `false`
+        // here: reclassify's evidence came out of `json_decode`, so it is valid UTF-8 of bounded
+        // depth by construction and cannot fail to re-encode. `Store::recordVerdict()`'s docblock
+        // says "the caller must say so out loud", and a caller typed `void` contradicts that in
+        // writing — which is the sentence the next reader trusts.
+        return $store->recordVerdict(
             $key,
             $classification->tenure->value,
             $classification->confidenceBp,
@@ -1100,7 +1111,9 @@ final readonly class Scout
 
             // ONLY NOW, and in this order: the verdict and its evidence, then the outcome, then the
             // delivery mark. Each is a fact that is true because the one before it is.
-            $this->writeVerdict($store, $promotion['key'], $promotion['classification'], $promotion['listing']);
+            if (!$this->writeVerdict($store, $promotion['key'], $promotion['classification'], $promotion['listing'])) {
+                $this->warn('instantané non capturé pour ' . $promotion['key'] . ' — annonce non re-jugeable ensuite');
+            }
             $store->recordOutcome($promotion['key'], $promotion['verdict']->outcome->value);
             $store->markNotified($promotion['key'], $now);
         }

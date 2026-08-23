@@ -975,8 +975,19 @@ final readonly class TenureClassifier
             // every other field, nor kill the listing. See `Text::foldTolerant()`.
             $folded = Text::foldTolerant((string) $value);
 
-            // `null` is UNREADABLE, not empty — `structuredFieldSignals()` raises the doubt for it,
-            // so skipping here loses no evidence. `''` is genuinely empty and equally skippable.
+            // `null` and `''` are both skippable here, and the reason for `null` is NOT the one this
+            // comment used to give. It claimed `structuredFieldSignals()` raises the unreadable
+            // doubt for `null` — it does not: that branch reads
+            // `!is_scalar($value) && !$value instanceof \Stringable && $value !== null`, which
+            // excludes `null` on purpose. A review panel checked it on 2026-08-24 and found a
+            // `financement => null` field classifying LLI/MATCH at 90 on the strength of the title
+            // alone, exactly as it does with the field absent.
+            //
+            // That is the DECIDED behaviour, not an oversight: an empty field value is an absent
+            // signal, ruled below, and a key whose value is empty says nothing about tenure by
+            // itself. What was wrong was the justification, and a docblock asserting a §1 guard
+            // that is not there is worse than one that says nothing — it is the sentence a future
+            // reader will trust instead of re-checking.
             //
             // And a surface with NO LETTER carries no procedural literal either — same invariant as
             // the fast path in `excludedVocabularyIn()`, same reflection test guarding it, and the

@@ -163,8 +163,15 @@ final class ListingSnapshot
      *
      * So: **every key survives, and every value survives as faithfully as JSON allows.** A scalar
      * becomes its string form (which is what an adapter would have produced); `null` stays `null`;
-     * an array stays an array. All three then reach the classifier, which already knows what to do
-     * with a value it cannot read — it doubts, and a doubt digests.
+     * an array stays an array. All three then reach the classifier — and for a non-scalar it doubts,
+     * which digests.
+     *
+     * **`null` is the exception, and this used to claim otherwise.** The classifier's unreadable
+     * doubt excludes `null` deliberately (`$value !== null` in `structuredFieldSignals()`), so a
+     * `null`-valued field contributes its NAME and nothing else. Preserving it is still right —
+     * `numeroUnique` and `demandeLogementSocial` are literal `PROCEDURAL` entries, so the key alone
+     * is the strongest social discriminator the domain offers — but the reason is the key, not a
+     * doubt that never fires.
      *
      * The field NAME is evidence in its own right, which is the second reason nothing may be
      * dropped: `numeroUnique` and `demandeLogementSocial` are literal `PROCEDURAL` entries, so a
