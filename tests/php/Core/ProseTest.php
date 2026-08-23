@@ -112,6 +112,25 @@ final class ProseTest extends TestCase
             'ordinal is the position, cardinal is the count — French does the discriminating',
         ];
 
+        // THE `\b` ON `etage`, and it is not redundant with the `au|en` anchor — which is what the
+        // ledger's case for it asserted while no test exercised it, so the case was one of two
+        // still reporting `ok` unconditionally through the broken harness until 2026-08-24.
+        //
+        // `en 4 étages` is a TRIPLEX spanning four floors, not the fourth floor. The anchor matches
+        // (`en` + ordinal), so only the singular `étage` separates a duplex from a position — and
+        // reading it as a position puts a ground-floor duplex on the 4th floor in the notification,
+        // and feeds the high-floor penalty a number the listing never claimed.
+        yield 'a flat spanning floors is not on that floor' => [
+            'Appartement en duplex en 4 étages, calme.',
+            null,
+            'en 4 étages is a span, not a position — the singular is the only thing distinguishing them',
+        ];
+        yield 'a span, spelled' => [
+            'Maison de ville en trois étages avec jardin.',
+            null,
+            'same distinction whether the count is spelled or in digits',
+        ];
+
         // Deliberately not extracted. Under-extraction is the safe direction (hard rule 9).
         yield 'bare ordinal without the noun' => [
             'Il compte trois étages, et cet appartement est situé au deuxième.',

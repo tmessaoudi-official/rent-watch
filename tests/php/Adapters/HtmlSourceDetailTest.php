@@ -72,7 +72,21 @@ final class HtmlSourceDetailTest extends TestCase
 
         self::assertSame([], $second->detailUrls, 'a second pass spends NO detail requests');
         self::assertCount(3, $rows);
-        self::assertNotSame('', $rows[1]->description, 'and the hydration is still merged in');
+
+        // THE CONTENT, not merely a non-empty string. This asserted `!== ''`, which the CARD already
+        // satisfies — so short-circuiting the cache branch entirely left the test green while every
+        // listing came back unhydrated. That case reported `ok` for as long as the ledger harness
+        // was vacuous, and was one of exactly two still undetected once it was fixed (2026-08-24).
+        //
+        // Reading the cache is not an optimisation: unhydrated listings are judged on their cards,
+        // so `exclude_title_patterns` and the tenure label the DETAIL page carries both stop firing
+        // — silently, and on the source producing most of the matches.
+        self::assertStringContainsString(
+            'Logement intermédiaire',
+            $rows[1]->description,
+            'the cached hydration must be merged in, not just some description',
+        );
+        self::assertSame('LI15P', $rows[1]->fields['tenureField'] ?? null, 'and its structured fields too');
     }
 
     /**
