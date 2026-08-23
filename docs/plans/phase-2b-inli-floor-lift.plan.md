@@ -221,8 +221,11 @@ fail-closed hydration gate was certified and unarmed at the same time.
 | `LLI` | `UNKNOWN` | 1 |
 
 No social-housing listing reached the user — **and not because the classifier held.** Both proven
-PLS listings (`PRV-317130`, `PRV-317131`, Viroflay) are 47.6 m² and 43.4 m², so `min_surface_m2: 50`
-rejected them upstream of tenure; both show `notified_at` NULL in the production database. The one
+PLS listings (`PRV-317130`, `PRV-317131`, Viroflay) are `T2`/`2 pièces` at 47.6 m² and 43.4 m², so
+`min_rooms: 3` and `min_surface_m2: 50` each rejected them upstream of tenure, independently; both
+show `notified_at` NULL in the production database. Measured from
+`listing_detail.fields_json`, not inferred from the surfaces in their titles — the first draft of
+this section named the surface floor as the sole cause and had not read the room count. The one
 `LLI → UNKNOWN` row is a listing notified as a match whose detail page 404s; under the gate it is a
 digest entry.
 
@@ -250,3 +253,5 @@ armed-in-repo and absent-in-production for hours — but it is stated rather tha
 
 - [2026-08-23 15:48] DONE: Phase 2/2b deployed; v4→v6 migrated in production, rehearsed first, backed up twice.
 - [2026-08-23 15:52] VERIFIED: 53/54 notified In'li rows correct, 1 over-confident, 0 social-housing false positives; the PLS pair was stopped by `min_surface_m2`, not by tenure.
+
+- [2026-08-23 16:20] VERIFIED: the PLS pair is rejected on `tenure: PLS` under the deployed build — measured with a warm detail cache, `écartée inli:PRV-317130 — tenure: PLS`. The tenure rule is now the mechanism doing the work, not a size threshold standing in front of it.

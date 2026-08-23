@@ -382,9 +382,15 @@ Do not start it; `docs/PHORJ-REQUIREMENTS.md` remains the record of what it woul
 **Q27's LIVENESS SIGNAL IS LIVE (2026-08-22), and it was ruled but unbuilt.** `HEARTBEAT_HOURS` sat
 in `.env.example` read by no code at all: `NotificationKind::HEARTBEAT` existed, but only
 `test-notify` used it, so a watcher that died at 03:00 was indistinguishable from one watching a
-quiet market until somebody thought to look. `scout run --watch` now emits a LOW-priority beat on
-startup and every `HEARTBEAT_HOURS` (default 24) — **whether or not anything matched**, which is the
-entire point — carrying passes completed, listings notified and sources OK. `Core/Heartbeat` is the
+quiet market until somebody thought to look. `scout run --watch` now emits a LOW-priority beat
+every `HEARTBEAT_HOURS` (default 24) — **whether or not anything matched**, which is the
+entire point — carrying passes completed, listings notified and sources OK. **The startup beat is
+`isDue()`-gated, not unconditional** (`Scout.php:466`): the marker is on the mounted volume, so a
+restart inside the interval sends nothing, and only a cold start — no marker — beats immediately.
+That is the correct behaviour (a redeploy loop must not spam the channel) but it is NOT a
+channel-health check, and reading it as one costs time: a redeploy on 2026-08-23 15:48 left the
+marker at the previous day's 22:15 and that looked like a fault for several minutes. To prove the
+DEPLOYED image can reach the user, run `docker compose run --rm scout test-notify`. `Core/Heartbeat` is the
 pure policy (clock injected; a cold start is due, an unreadable marker is due, a marker in the
 FUTURE is due — the bias is always one beat too many, never one suppressed), and the marker lives at
 `state/heartbeat.txt`, on Q8's mounted volume, so it survives the container being replaced. An
@@ -947,10 +953,14 @@ var/claude/                 Reports, review outputs — gitignored scratch (hand
   `docker image inspect rent-watch:local --format '{{.Created}}'` against the commit date of the
   last change under `src/`, and `SELECT value FROM schema_meta WHERE key='schema_version'` against
   the repo's current version. Redeploy recipe: `README.md` § Deploying it.
-- **What saved that seventeen hours was an unrelated filter, which is not a defence.** Both live
-  In'li listings that Phase 2b proved were **PLS** carry 47.6 m² and 43.4 m², so `min_surface_m2: 50`
-  rejected them before tenure was ever the deciding question. The disarmed §1 gate cost nothing
-  *this time* because a size threshold happened to sit in front of it. Cross-checking all 54 notified
+- **What saved that seventeen hours was two unrelated filters, which is not a defence.** Both live
+  In'li listings that Phase 2b proved were **PLS** are `T2`/`2 pièces` at 47.6 m² and 43.4 m², so
+  `min_rooms: 3` **and** `min_surface_m2: 50` each rejected them on their own, before tenure was ever
+  the deciding question. The disarmed §1 gate cost nothing *this time* because two size thresholds
+  happened to sit in front of it. A first draft of this entry named `min_surface_m2` as the sole
+  cause, inferred from the surfaces in the titles without reading the room count — the repo's own
+  *"a true number attached to an invented cause"* failure, committed while writing the entry that
+  warns about it. The room count is in `listing_detail.fields_json`, one query away. Cross-checking all 54 notified
   In'li rows against their hydrated verdicts found 53 genuinely `LLI` and one `UNKNOWN` — a listing
   notified as a match that should have gone to the digest, its detail page being a 404. **Never read
   "no harm occurred" as "the rule held"**: ask which mechanism actually did the rejecting, because a
