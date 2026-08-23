@@ -148,10 +148,11 @@ final class NotifyTest extends TestCase
     public function testAnUnlocatedListingIsNamedByItsTitleRatherThanByThePlaceholder(): void
     {
         // `commune inconnue` is a label for the ABSENCE of information, and printing it while a real
-        // title sits unused throws away the only human-readable fact the notification had. This is
-        // the standing shape of every pre-schema-v7 row `scout digest` rescues: its `listings` row
-        // holds a title and no commune, so before this rule those entries announced themselves as
-        // `commune inconnue · 1005 € CC` — a rescue nobody can act on.
+        // title sits unused throws away the only human-readable fact the notification had. It is the
+        // shape `scout digest` announces a snapshot-less row in — its `listings` row holds a title
+        // and no commune — so before this rule those entries read `commune inconnue · 1005 € CC`,
+        // which nobody can act on. In'li is the live case: it ships no title, which is why the
+        // placeholder still has to survive when there genuinely is nothing (asserted below).
         $n = (new Formatter())->match(
             $this->listing(['commune' => null, 'postcode' => null, 'title' => 'T3 à Longjumeau']),
             Verdict::matched(50, [], true),
@@ -443,6 +444,50 @@ final class NotifyTest extends TestCase
         self::assertNotNull($problem);
         self::assertStringContainsString('NTFY_TOPIC', (string) $problem);
         self::assertStringContainsString('secret', (string) $problem);
+    }
+
+    public function testNtfyIsBehindTheOfflineTripwireLikeEveryOtherOutboundPath(): void
+    {
+        // `tests/bootstrap.php` sets RENT_WATCH_OFFLINE=1 for the whole suite and calls it "the
+        // backstop for the ones that are not given fakes". This channel drives libcurl DIRECTLY, so
+        // it never passed CurlHttpClient's funnel — and its default server is a third party while
+        // its topic is a documented secret. A review panel set the flag and watched it resolve and
+        // dial a non-loopback host on 2026-08-24.
+        $channel = new NtfyChannel('a-secret-topic', 'https://rw-offline-probe.example.invalid');
+
+        try {
+            $channel->send(new Notification(
+                kind: NotificationKind::HEARTBEAT,
+                priority: Priority::LOW,
+                title: 'probe',
+            ));
+            self::fail('the offline tripwire did not fire — this channel can reach the network from a test');
+        } catch (ChannelError $e) {
+            self::assertStringContainsString('RENT_WATCH_OFFLINE', $e->getMessage());
+            self::assertStringNotContainsString('a-secret-topic', $e->getMessage(), 'and the topic is still masked');
+        }
+    }
+
+    public function testTheOfflineTripwireStillAllowsLoopback(): void
+    {
+        // The counterweight, and it is load-bearing rather than decorative: a scripted server on
+        // 127.0.0.1 is how this project proves what only a real socket can — that the honest
+        // User-Agent crosses the wire, that SMTP refuses a credential without STARTTLS, and that a
+        // failed delivery marks nothing. Refusing loopback would delete that evidence to enforce a
+        // rule it does not break. Port 1 has nothing listening, so this fails at the socket rather
+        // than at the tripwire — which is the distinction being asserted.
+        $channel = new NtfyChannel('topic', 'http://127.0.0.1:1');
+
+        try {
+            $channel->send(new Notification(
+                kind: NotificationKind::HEARTBEAT,
+                priority: Priority::LOW,
+                title: 'probe',
+            ));
+            self::fail('expected a connection failure');
+        } catch (ChannelError $e) {
+            self::assertStringNotContainsString('RENT_WATCH_OFFLINE', $e->getMessage());
+        }
     }
 
     public function testNtfyRefusesANonHttpServer(): void

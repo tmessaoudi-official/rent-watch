@@ -74,7 +74,25 @@ final readonly class NtfyChannel implements Channel
             $headers[] = 'Click: ' . self::headerSafe($n->url);
         }
 
-        $handle = curl_init(rtrim($this->server, '/') . '/' . rawurlencode($this->topic));
+        $url = rtrim($this->server, '/') . '/' . rawurlencode($this->topic);
+
+        // THE OFFLINE TRIPWIRE, and this channel needs its own call because it is not behind the
+        // HTTP funnel: it drives libcurl directly (see the CRLF note above, which repeats the same
+        // discipline for the same reason). `tests/bootstrap.php` presents `RENT_WATCH_OFFLINE=1` as
+        // the backstop for anything not given a fake, and until 2026-08-24 that backstop did not
+        // cover the one component whose default server is a third party and whose topic is a
+        // documented secret. A review panel showed the flag set and this channel still resolving
+        // and dialling a non-loopback host.
+        //
+        // Loopback stays allowed — `ScoutDigestTest` points it at a closed port on 127.0.0.1 to
+        // exercise a delivery failure without leaving the machine, which is exactly the use the
+        // exemption exists for.
+        $refusal = \RentWatch\Core\Offline::refusal($url);
+        if ($refusal !== null) {
+            throw new ChannelError($this->name(), $refusal, null, [$this->topic]);
+        }
+
+        $handle = curl_init($url);
         if ($handle === false) {
             throw new ChannelError($this->name(), 'could not initialise the HTTP client', null, [$this->topic]);
         }

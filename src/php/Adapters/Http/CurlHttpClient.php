@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace RentWatch\Adapters\Http;
 
+use RentWatch\Core\Offline;
+
 /**
  * The real transport. cURL, because it is present here and reports failures distinguishably.
  *
@@ -114,11 +116,14 @@ final readonly class CurlHttpClient implements HttpClient
         // this project proves the things only a real socket can prove: that the honest User-Agent
         // is what actually crosses the wire, and that SMTP refuses a credential without STARTTLS.
         // Banning those would delete real evidence to enforce a rule they do not break.
-        if (getenv('RENT_WATCH_OFFLINE') === '1' && !self::isLoopback($request->url)) {
-            throw new HttpError(
-                'RENT_WATCH_OFFLINE=1 — refusing to request ' . $request->url
-                    . '. Tests and dry runs must not reach the network; use a fake client or a frozen fixture',
-            );
+        //
+        // The PREDICATE moved to `RentWatch\Core\Offline` on 2026-08-24; the CALL SITE stays exactly
+        // here, for the reason the paragraph above gives. It moved because this was not the only
+        // path out: `NtfyChannel` calls libcurl directly and never passed this funnel, so the
+        // guarantee `tests/bootstrap.php` describes was smaller than it read.
+        $refusal = Offline::refusal($request->url);
+        if ($refusal !== null) {
+            throw new HttpError($refusal);
         }
 
         $responseHeaders = [];
@@ -192,16 +197,6 @@ final readonly class CurlHttpClient implements HttpClient
      * to point at 127.0.0.1 today decide whether the offline rule applies, which makes the rule
      * depend on DNS. The three spellings below are the ones a test server is ever reachable by.
      */
-    private static function isLoopback(string $url): bool
-    {
-        $host = parse_url($url, PHP_URL_HOST);
-        if (!is_string($host)) {
-            return false;
-        }
-
-        return in_array(strtolower(trim($host, '[]')), ['127.0.0.1', 'localhost', '::1'], true);
-    }
-
     public function sendFollowing(HttpRequest $request): HttpResponse
     {
         $current = $request;

@@ -2279,6 +2279,22 @@ run_sabotage "a verdict stored without its snapshot is not reported by the pass"
   src/php/Cli/Pipeline.php \
   's%++\$unencodable;%%'
 
+# ── the offline tripwire covers EVERY outbound path, not just the funnel (2026-08-24) ─────────────
+# `tests/bootstrap.php` calls RENT_WATCH_OFFLINE the backstop for anything not given a fake, and
+# `NtfyChannel` drives libcurl directly, so it never passed CurlHttpClient's guard. Its default
+# server is a third party and its topic is a documented secret. A review panel set the flag and
+# watched the channel resolve and dial a non-loopback host.
+run_sabotage "the ntfy channel escapes the offline tripwire again" \
+  src/php/Core/Notify/NtfyChannel.php \
+  's%\$refusal = .*Offline::refusal(\$url);%$refusal = null;%'
+
+# The counterweight, and it protects real evidence: a scripted server on 127.0.0.1 is how this
+# project proves what only a socket can. Refusing loopback would delete those tests to enforce a
+# rule they do not break.
+run_sabotage "the offline tripwire starts refusing loopback too" \
+  src/php/Core/Offline.php \
+  "s%if (getenv('RENT_WATCH_OFFLINE') !== '1' || self::isLoopback(\$url)) {%if (getenv('RENT_WATCH_OFFLINE') !== '1') {%"
+
 # THE TALLY LIVES HERE, BELOW EVERY CASE, and that position is load-bearing rather than tidy.
 # It sat mid-file twice: once on 2026-08-20 (295 printed for 303 cases) and again from 2026-08-23,
 # when 21 schema-v7 / digest / reclassify cases were appended past it and the headline read 354 for
