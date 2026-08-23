@@ -557,6 +557,13 @@ final readonly class Scout
             $this->warn($error);
         }
 
+        if ($result->unencodable > 0) {
+            // Named on the pass that causes it. These rows are judged and digested normally, but no
+            // snapshot could be taken, so `scout reclassify` will skip them for ever — a fact worth
+            // one line now rather than a mystery in a skip counter later.
+            $this->warn($result->unencodable . ' annonce(s) au texte illisible (encodage) — verdict enregistré sans instantané, non re-jugeable');
+        }
+
         if ($result->undelivered > 0) {
             $this->warn($result->undelivered . ' notification(s) non délivrée(s) — elles seront réessayées');
         }

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace RentWatch\Config;
 
+use RentWatch\Core\MalformedText;
 use RentWatch\Core\Text;
 
 /**
@@ -172,14 +173,34 @@ final readonly class Criteria
      */
     public function excludedBy(string $title, string $description): ?string
     {
-        $foldedTitle = Text::fold($title);
+        // TEXT THAT CANNOT BE FOLDED MEANS THIS CHECK IS INCONCLUSIVE, NOT THAT THE PASS IS OVER.
+        //
+        // `Text::fold()` refuses non-UTF-8 rather than degrading it, which is right — folding it
+        // would silently produce an empty string, and an empty string reads as a listing that named
+        // no financing scheme at all. But that refusal used to escape all the way out of
+        // `CriteriaEngine::judge()` and out of `Pipeline`'s judging loop, so ONE badly-encoded
+        // listing aborted the whole pass and every later listing went unjudged and unnotified.
+        // cp1252 under a UTF-8 declaration is an anticipated real input here, with its own `Text`
+        // test and its own classifier branch.
+        //
+        // Returning `null` cannot turn an unreadable listing into a match, and that is verified
+        // rather than assumed: the classifier refuses the same text and yields `UNKNOWN` — measured
+        // for a malformed title AND for a malformed description — so `judge()` reaches its tenure
+        // branch and digests. The listing goes to *à vérifier* with its encoding named, which is
+        // exactly where a listing nobody can read belongs.
+        try {
+            $foldedTitle = Text::fold($title);
+            $foldedAll = Text::fold($title . "\n" . $description);
+        } catch (MalformedText) {
+            return null;
+        }
+
         foreach ($this->excludeTitlePatterns as $pattern) {
             if (preg_match('~' . $pattern . '~i', $foldedTitle) === 1) {
                 return $pattern;
             }
         }
 
-        $foldedAll = Text::fold($title . "\n" . $description);
         foreach ($this->excludePatterns as $pattern) {
             if (preg_match('~' . $pattern . '~i', $foldedAll) === 1) {
                 return $pattern;

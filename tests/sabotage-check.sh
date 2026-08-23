@@ -2064,7 +2064,7 @@ run_sabotage "a field silently leaves the snapshot (the reflection guard must ca
 # later when reclassify skips the lot.
 run_sabotage "a verdict is stored with no evidence beside it" \
   src/php/Store/Store.php \
-  "s%'evidence' => ListingSnapshot::encode(\$evidence),%'evidence' => null,%"
+  "s%'evidence' => \$snapshot,%'evidence' => null,%"
 
 # Hard rule 3, in the place it costs most. A corrupt snapshot degraded to `null` is indistinguishable
 # from a pre-v7 row that never had one — so reclassify would skip it as "never captured" instead of
@@ -2248,6 +2248,36 @@ run_sabotage "an ordinary scalar field stops being normalised to a string" \
 run_sabotage "a non-object fields map is emptied instead of refused" \
   src/php/Core/ListingSnapshot.php \
   "s%throw new \\\\InvalidArgumentException('listing snapshot has a non-object \`fields\`');%return [];%"
+
+# ── One unreadable listing must not take the pass with it (2026-08-24) ────────────────────────────
+# cp1252 under a UTF-8 declaration is an anticipated real input: `Text` refuses it, the classifier
+# has a branch that turns it into UNKNOWN naming the encoding, and the store then threw from the
+# per-listing loop — which sits OUTSIDE the per-source try/catch. Every later listing in the pass
+# went unclassified and unnotified, health stayed green because `recordRun` had already committed
+# `ok = 1`, and the offending row was left with `tenure = NULL`, whose documented meaning is
+# "stored before schema v3".
+run_sabotage "an unencodable listing throws instead of being stored without a snapshot" \
+  src/php/Store/Store.php \
+  's%} catch (.*JsonException) {%} catch (\\RuntimeException) {%'
+
+# And the same failure in the criteria engine, which is reached one loop later. `Text::fold()`
+# refuses non-UTF-8 rather than degrading it — correct — but that refusal escaping `excludedBy()`
+# aborted the judging loop for every listing after the bad one.
+#
+# It RETHROWS rather than narrowing the caught class, and the obvious mutation is the instructive
+# one: `catch (MalformedText)` -> `catch (\RuntimeException)` reads like a narrowing and is a NO-OP,
+# because `MalformedText extends \RuntimeException`. It applied cleanly, parsed, changed the file,
+# and the suite stayed green — which the ledger reported as `undetected` when nothing was undetected
+# at all. A mutation has to actually mutate the behaviour, or its verdict is about the mutation.
+run_sabotage "an unfoldable title aborts the judging loop instead of being inconclusive" \
+  src/php/Config/Criteria.php \
+  's%} catch (MalformedText) {%} catch (MalformedText $e) { throw $e;%'
+
+# The count is what makes the state visible on the pass that causes it. Without it, a row that can
+# never be re-judged is discovered months later from a skip counter, if at all.
+run_sabotage "a verdict stored without its snapshot is not reported by the pass" \
+  src/php/Cli/Pipeline.php \
+  's%++\$unencodable;%%'
 
 # THE TALLY LIVES HERE, BELOW EVERY CASE, and that position is load-bearing rather than tidy.
 # It sat mid-file twice: once on 2026-08-20 (295 printed for 303 cases) and again from 2026-08-23,

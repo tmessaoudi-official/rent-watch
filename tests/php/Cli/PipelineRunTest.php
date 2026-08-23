@@ -125,6 +125,54 @@ final class PipelineRunTest extends TestCase
         self::assertSame(1, $result->matches, 'the source after the failure was still processed');
     }
 
+    public function testAListingWhoseTextIsNotUtf8DoesNotAbortThePass(): void
+    {
+        // cp1252 under a UTF-8 declaration is an anticipated real input here — `Text` has a test for
+        // it and the classifier has a branch that turns it into UNKNOWN naming the encoding. The
+        // STORE then threw: `ListingSnapshot::encode()` uses JSON_THROW_ON_ERROR, and the throw came
+        // from the per-listing loop, which sits OUTSIDE the per-source try/catch. So one badly
+        // encoded listing aborted the whole pass — every later listing unclassified and unnotified —
+        // and left the offending row in the seen-set with `tenure = NULL`, a value whose documented
+        // meaning is "stored before schema v3". `recordRun` had already committed `ok = 1`, so
+        // health stayed green throughout: hard rule 2's silent shape.
+        $store = $this->store();
+        $result = $this->pipeline($store)->runOnce([new FakeSource('fake', listings: [
+            $this->listing('b1', ['description' => "conventionn\xE9 T4", 'source' => 'fake']),
+            $this->listing('g1', ['source' => 'fake']),
+        ])], self::NOW);
+
+        self::assertSame(0, $result->sourcesFailed, 'a listing nobody can decode is not a broken source');
+        self::assertSame(1, $result->matches, 'the listing AFTER the bad one was still judged and notified');
+        self::assertSame(1, $result->unencodable, 'and the pass says a snapshot could not be taken');
+    }
+
+    public function testAnUnencodableListingIsStoredWithAVerdictAndNoSnapshot(): void
+    {
+        // The state it is left in has to be honest in both directions: a real verdict, so it is not
+        // mistaken for a row stored before schema v3 and reported for ever as one — and no snapshot,
+        // so `scout reclassify` skips it rather than re-judging text nothing can read.
+        $store = $this->store();
+        // `description`, not `title`: the helper hardcodes the title and silently ignores an
+        // override, which is the "helper that quietly ignores what a test asked for" trap this
+        // suite's sibling documents. A first draft used `title` and asserted against a listing that
+        // was perfectly well-formed.
+        $listing = $this->listing('b1', ['description' => "conventionn\xE9 T4", 'source' => 'fake']);
+
+        $this->pipeline($store)->runOnce([new FakeSource('fake', listings: [$listing])], self::NOW);
+
+        $key = $store->dedupKey($listing);
+        self::assertNull($store->evidence($key), 'no snapshot could be captured');
+        self::assertNotNull($store->snapshot($key), 'but the listing IS in the seen-set');
+
+        $stale = $store->staleVerdicts();
+        self::assertCount(1, $stale);
+        self::assertSame(
+            'UNKNOWN',
+            $stale[0]['tenure'],
+            'a REAL verdict, not NULL — NULL means "stored before schema v3" and reclassify would report it as one for ever',
+        );
+    }
+
     public function testItemCountRecordsWhatWasPARSEDNotWhatMatched(): void
     {
         // Q30. Counting matches would make source health a measure of the Île-de-France rental

@@ -1303,6 +1303,9 @@ final readonly class Store
      *
      * @param list<string> $signals the `reasons[]`, stored verbatim so the verdict can be explained
      *                              later without re-fetching an ad the source may have removed
+     *
+     * @return bool whether the evidence snapshot could be captured. `false` means the verdict was
+     *              stored WITHOUT one, and the caller must say so out loud — see below
      */
     public function recordVerdict(
         string $dedupKey,
@@ -1310,12 +1313,41 @@ final readonly class Store
         int $confidenceBp,
         array $signals,
         RawListing $evidence,
-    ): void {
-        // ONE STATEMENT, and `$evidence` is REQUIRED rather than nullable, because the property
-        // that matters is "the stored evidence is what produced the stored verdict". A second write
-        // or an optional parameter re-opens the divergence: a verdict from pass N sitting beside
-        // evidence from pass N-1 would let `reclassify` compare against something the classifier
-        // never saw, which is the §1 hole this column exists to close.
+    ): bool {
+        // A LISTING THAT CANNOT BE ENCODED MUST NOT KILL THE PASS, and until 2026-08-24 it did.
+        //
+        // `ListingSnapshot::encode()` uses JSON_THROW_ON_ERROR, and non-UTF-8 text is an explicitly
+        // anticipated real input here — cp1252 under a UTF-8 declaration has its own `Text` test and
+        // its own classifier branch, which turns it into UNKNOWN with a reason naming the encoding.
+        // So the classifier handled it and the STORE threw, from inside `Pipeline`'s per-listing
+        // loop, which sits outside the per-source try/catch. One badly-encoded listing therefore
+        // aborted the whole pass: every later listing went unclassified and unnotified, and the
+        // offending row was left in the seen-set with `tenure = NULL` — a value whose documented
+        // meaning is "stored before schema v3", so `reclassify` would report it for ever as a
+        // pre-v7 row, which is false. `recordRun` had already committed `ok=1`, so health stayed
+        // green: hard rule 2's silent shape exactly.
+        //
+        // The verdict is stored with NO snapshot instead, which is the honest state rather than a
+        // degraded one: a listing whose text cannot be read is a listing nothing can re-judge, and
+        // `reclassify` already skips evidence-less rows and counts them. That is NOT a divergence
+        // between verdict and evidence — it is the documented ABSENCE of evidence, the same state
+        // every pre-v7 row is in.
+        //
+        // Returned rather than swallowed, because the caller is the one with a channel to report on.
+        $snapshot = null;
+        $captured = true;
+
+        try {
+            $snapshot = ListingSnapshot::encode($evidence);
+        } catch (\JsonException) {
+            $captured = false;
+        }
+
+        // ONE STATEMENT, and the snapshot travels with the verdict rather than in a second write,
+        // because the property that matters is "the stored evidence is what produced the stored
+        // verdict". A second write or an optional parameter re-opens the divergence: a verdict from
+        // pass N sitting beside evidence from pass N-1 would let `reclassify` compare against
+        // something the classifier never saw, which is the §1 hole this column exists to close.
         $statement = $this->pdo->prepare(
             'UPDATE listings SET tenure = :tenure, confidence_bp = :bp, signals_json = :signals,
                     evidence_json = :evidence
@@ -1324,10 +1356,15 @@ final readonly class Store
         $statement->execute([
             'tenure' => $tenure,
             'bp' => $confidenceBp,
-            'signals' => json_encode($signals, JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE),
-            'evidence' => ListingSnapshot::encode($evidence),
+            // The reasons are encoded WITHOUT the throwing flag for the same reason, and with
+            // substitution rather than refusal: they are explanatory strings, and losing a byte of
+            // one costs a sentence, where throwing costs the pass.
+            'signals' => json_encode($signals, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE),
+            'evidence' => $snapshot,
             'key' => $dedupKey,
         ]);
+
+        return $captured;
     }
 
     /**

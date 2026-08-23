@@ -28,6 +28,16 @@ final readonly class RunResult
         public int $duplicates = 0,
         public int $rentDrops = 0,
         public int $undelivered = 0,
+        /**
+         * Listings whose own text is not valid UTF-8, so no evidence snapshot could be captured.
+         *
+         * Their verdict IS stored — the classifier reads such a listing as `UNKNOWN` and digests it
+         * — but `scout reclassify` will skip them for ever, because nothing can re-judge text
+         * nothing can read. Counted so a pass says that happened rather than leaving it to be
+         * discovered months later from a skip counter. This used to be an exception that took the
+         * entire pass with it.
+         */
+        public int $unencodable = 0,
         public array $errors = [],
         public array $rejected = [],
     ) {}

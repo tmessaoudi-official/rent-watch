@@ -115,6 +115,7 @@ final readonly class Pipeline
         $observed = [];
         /** @var array<int, list<string>> $clusterKeys survivor object id -> every member's dedup key */
         $clusterKeys = [];
+        $unencodable = 0;
 
         foreach ($clustered as $cluster) {
             $memberKeys = [];
@@ -122,7 +123,7 @@ final readonly class Pipeline
             foreach ($cluster['members'] as $member) {
                 $classification = $this->classifier->classify($member, $this->profileFor($sources, $member));
                 $sighting = $this->store->record($member, $member->effectiveRentCc(), $nowIso);
-                $this->store->recordVerdict(
+                $captured = $this->store->recordVerdict(
                     $sighting->dedupKey,
                     $classification->tenure->value,
                     $classification->confidenceBp,
@@ -134,6 +135,16 @@ final readonly class Pipeline
                     // produced and cannot drift from it.
                     $member,
                 );
+
+                if (!$captured) {
+                    // A listing whose own text is not valid UTF-8 cannot be snapshotted, so its
+                    // verdict is stored without one and `scout reclassify` will skip it for ever.
+                    // That is the honest state — nothing can re-judge text nothing can read — but it
+                    // is not a state to discover months later from a skip counter. Counted here so
+                    // the pass says it happened. It used to THROW instead, from outside the
+                    // per-source try/catch, and took the whole pass with it.
+                    ++$unencodable;
+                }
 
                 $observed[spl_object_id($member)] = ['sighting' => $sighting, 'classification' => $classification];
                 $memberKeys[] = $sighting->dedupKey;
@@ -320,6 +331,7 @@ final readonly class Pipeline
             duplicates: $duplicates,
             rentDrops: $rentDrops,
             undelivered: $undelivered,
+            unencodable: $unencodable,
             errors: $errors,
             rejected: $rejected,
         );
