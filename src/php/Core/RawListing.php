@@ -56,6 +56,19 @@ final readonly class RawListing
         public ?int $bedrooms = null,
         public ?int $floor = null,
         public ?bool $hasElevator = null,
+        /**
+         * Has this listing's OWN detail page been read?
+         *
+         * Only {@see mergedWith()} sets it, so it means what it says: a second fetch happened and
+         * its content is folded in. A hydration FAILURE never reaches that method, so a page that
+         * could not be read stays `false` — tried-and-failed is not read-and-bare, here as in the
+         * store.
+         *
+         * Read by the fail-closed rule: weak evidence on a mixed source digests while the page is
+         * unread, and matches once it has been read and found to say nothing excluding. See
+         * {@see \RentWatch\Core\TenureClassifier}.
+         */
+        public bool $detailRead = false,
     ) {}
 
     /**
@@ -95,6 +108,9 @@ final readonly class RawListing
             bedrooms: $any($this->bedrooms, $detail->bedrooms),
             floor: $any($this->floor, $detail->floor),
             hasElevator: $any($this->hasElevator, $detail->hasElevator),
+            // Reaching this method IS the detail page having been read. A failed fetch never gets
+            // here — `HtmlSource` records the failure and returns the card untouched.
+            detailRead: true,
         );
     }
 

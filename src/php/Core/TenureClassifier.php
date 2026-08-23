@@ -253,6 +253,7 @@ final readonly class TenureClassifier
                     evidence: 'malformed-text',
                 )],
                 $source,
+                $listing->detailRead,
             );
         }
 
@@ -305,7 +306,7 @@ final readonly class TenureClassifier
 
         if ($evidence === []) {
             // Either nothing at all, or nothing but doubt. Both are undetermined.
-            return $this->verdict(Tenure::UNKNOWN, 0, $flat, $source);
+            return $this->verdict(Tenure::UNKNOWN, 0, $flat, $source, $listing->detailRead);
         }
 
         $winningTier = min(array_keys(array_filter($signals)));
@@ -341,11 +342,11 @@ final readonly class TenureClassifier
                     position: $winner->position,
                 )];
 
-                return $this->verdict(Tenure::UNKNOWN, 0, $flat, $source);
+                return $this->verdict(Tenure::UNKNOWN, 0, $flat, $source, $listing->detailRead);
             }
         }
 
-        return $this->verdict($winner->tenure, $confidence, $flat, $source);
+        return $this->verdict($winner->tenure, $confidence, $flat, $source, $listing->detailRead);
     }
 
     /**
@@ -359,14 +360,44 @@ final readonly class TenureClassifier
      *
      * @param list<TenureSignal> $signals
      */
-    private function verdict(Tenure $tenure, int $confidenceBp, array $signals, SourceProfile $source): Classification
+    private function verdict(
+        Tenure $tenure,
+        int $confidenceBp,
+        array $signals,
+        SourceProfile $source,
+        bool $detailRead,
+    ): Classification
     {
         // The §1 fail-closed rule, applied to the TENURE and not merely to the routing.
         // `spec/PROJECT_BRIEF.md` §4 requires the verdict itself to become UNKNOWN, withholding
         // the notification rather than merely downgrading its priority — so a caller
         // reading `$classification->tenure` has to see UNKNOWN, or the two halves of the object
         // disagree and the next module to be written will believe the eligible one.
-        if ($tenure->isEligible() && $confidenceBp < self::FLOOR_BP && $source->mixedTenure) {
+        // `!$listing->detailRead` — the fail-closed rule fires while the EVIDENCE is still weak, and
+        // reading the listing's own detail page is the step that gathers it.
+        //
+        // In'li forced this. It shipped `mixed_tenure: false` on the claim of being pure LLI, so its
+        // listings matched on the source default alone at 50bp with this rule disarmed — and
+        // hydration then found two live listings stating `plafond de ressources PLS`, declared
+        // NOWHERE but the detail page. The premise was false.
+        //
+        // Simply arming the flag is not the fix: 166 of In'li's 168 listings sit at 50bp, so every
+        // one of them — about two thirds of the tree's entire yield — would digest for ever. That is
+        // not §1 being satisfied, it is the tool being switched off, and a tool nobody reads
+        // protects nobody.
+        //
+        // So the rule reads the evidence rather than the source: unread page, weak label, mixed
+        // source → digest. Page read and it said nothing excluding → that is evidence of absence on
+        // a source whose social stock DOES declare itself, and the source default stands. An
+        // explicit exclusion is caught by the label rules above at 90bp, which never consulted this
+        // flag and still do not — see testReadingTheDetailPageNeverLicensesAnExcludedListing.
+        //
+        // A source with no `detail_map` never hydrates, so `detailRead` is always false there and
+        // nothing about its behaviour changes.
+        if ($tenure->isEligible()
+            && $confidenceBp < self::FLOOR_BP
+            && $source->mixedTenure
+            && !$detailRead) {
             $signals = [...$signals, new TenureSignal(
                 tier: 0,
                 tenure: Tenure::UNKNOWN,
@@ -384,7 +415,7 @@ final readonly class TenureClassifier
             $confidenceBp = 0;
         }
 
-        return new Classification($tenure, $confidenceBp, $signals, $this->route($tenure, $confidenceBp, $source));
+        return new Classification($tenure, $confidenceBp, $signals, $this->route($tenure, $confidenceBp, $source, $detailRead));
     }
 
     /**
@@ -393,7 +424,7 @@ final readonly class TenureClassifier
      * The one place the fail-closed rule is applied, so no caller can re-derive it slightly
      * differently.
      */
-    private function route(Tenure $tenure, int $confidenceBp, SourceProfile $source): Outcome
+    private function route(Tenure $tenure, int $confidenceBp, SourceProfile $source, bool $detailRead): Outcome
     {
         if ($tenure->isExcluded()) {
             return Outcome::REJECT;
@@ -411,7 +442,14 @@ final readonly class TenureClassifier
         // intermediate stock means the tenure is not established. It goes to the "à vérifier"
         // digest. On a source that publishes no social stock at all there is nothing to confuse it
         // with, so a thin signal is still good enough.
-        return $source->mixedTenure ? Outcome::DIGEST : Outcome::MATCH;
+        //
+        // `$detailRead` is the third term, and it is about EVIDENCE rather than about the source.
+        // A listing whose own detail page has been read and found to say nothing excluding has been
+        // examined; one whose page has never been fetched has not, and the two must not be treated
+        // alike merely because the card text came out the same length. The reasoning, the In'li
+        // measurements that forced it and the counterweight are on the fail-closed rule above —
+        // both terms have to agree or a listing would digest here after passing there.
+        return $source->mixedTenure && !$detailRead ? Outcome::DIGEST : Outcome::MATCH;
     }
 
     /**

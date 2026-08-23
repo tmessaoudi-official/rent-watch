@@ -19,7 +19,7 @@ Status: **milestone 1 is functionally complete against a frozen payload.** The p
 (schema v4), the config layer, the adapter contract, the criteria engine, dedup, the notification
 layer and the `scout` CLI all exist. What is missing is a NETWORK adapter, and that is blocked on an
 input rather than a decision. As of 2026-08-07 there is a PHP 8.5
-implementation of `models` + `tenure` under `src/php/Core/`, a 121-case language-neutral classifier
+implementation of `models` + `tenure` under `src/php/Core/`, a 122-case language-neutral classifier
 corpus at `tests/fixtures/tenure/corpus.json`, the seen-set / price-history / run-log store under
 `src/php/Store/` with `SourceHealth` + `SourceStatus` in `Core/`, a strict JSON config layer under
 `src/php/Config/` with both files committed, the `Source` contract plus `Payload` / `ListingMapper` /
@@ -364,7 +364,7 @@ they are (`RDC` is **0**, not unknown; and the generic number reader would retur
 `3 pièces - 4ème étage - 82m²`), and `Payload::bool()` accepts the amenity noun `ascenseur`, which
 can only ever yield `true` or `null` and so cannot manufacture the explicit `false` the high-floor
 penalty needs. **`tests/fixtures/tenure/corpus.json` now has CAPTURED cases** (120
-total, 114 synthetic + 7 real): two CDC cards — including the `au plus près` one, which is what
+total, 115 synthetic + 7 real): two CDC cards — including the `au plus près` one, which is what
 stops that classifier fix from being quietly undone — two Cityloger detail pages, and two Logirep
 captures added 2026-08-22, one an ordinary card that states no tenure at all and one the site's own
 FILTER FACET STRIP, which contains `PLAI` inside `Plain-pied`, `LLI` inside `Ce·lli·er` and `PLUS`
@@ -846,8 +846,8 @@ Required coverage, per spec §11 — non-negotiable once `src/` exists:
   Offline. No network in CI. A parser test that reaches the network is a monitoring check, not a test.
 - **Classifier tests.** ≥30 hand-labelled listing texts covering pure-LLI In'li, mixed CDC Habitat,
   an explicit PLAI, an explicit PLS, and an ambiguous case. The suite must go red if the classifier
-  regresses. **Done** — `tests/fixtures/tenure/corpus.json`, 121 cases, and the suite asserts all five
-  shapes are present so "30 easy ones" cannot satisfy it. The corpus is **114 synthetic + 7 CAPTURED**
+  regresses. **Done** — `tests/fixtures/tenure/corpus.json`, 122 cases, and the suite asserts all five
+  shapes are present so "30 easy ones" cannot satisfy it. The corpus is **115 synthetic + 7 CAPTURED**
   (2026-08-20 onward — CDC Habitat cards, Cityloger detail pages and Logirep card + filter facets;
   the spec asks for real texts and until a source was live there were none. Append as sources come
   online, never renumber captures). Every case declares its `provenance` and a test asserts the declared counts, so the gap

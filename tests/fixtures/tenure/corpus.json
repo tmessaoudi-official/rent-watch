@@ -22,7 +22,7 @@
  ],
  "version": 1,
  "declared_counts": {
-  "synthetic": 114,
+  "synthetic": 115,
   "captured": 7
  },
  "sources": {
@@ -30,7 +30,7 @@
    "name": "inli",
    "family": "institutional",
    "default_tenure": "LLI",
-   "mixed_tenure": false
+   "mixed_tenure": true
   },
   "cdc_habitat": {
    "name": "cdc_habitat",
@@ -86,6 +86,13 @@
    "family": "institutional",
    "default_tenure": null,
    "mixed_tenure": true
+  },
+  "example_pure_lli": {
+   "$comment": "SYNTHETIC, and deliberately not a real landlord. Until 2026-08-23 In'li carried this shape, and hydration disproved it: the source publishes PLS stock its cards never mention. No LIVE source is pure-LLI today. The classifier still SUPPORTS the shape -- a source with no social stock has nothing to confuse a thin signal with, so `mixed_tenure: false` lets it MATCH below the floor -- and spec/PROJECT_BRIEF.md §11 requires the shape to be covered. Leaning that coverage on a real source is what let a false premise sit in the corpus for weeks, so it is a fixture now. It is absent from config/sources.json on purpose; testEveryCorpusSourceAgreesWithConfig skips sources it cannot find there.",
+   "name": "example_pure_lli",
+   "family": "institutional",
+   "default_tenure": "LLI",
+   "mixed_tenure": false
   }
  },
  "cases": [
@@ -189,7 +196,8 @@
     "outcome": "MATCH",
     "max_confidence": 59
    },
-   "why": "THE SOURCE-DEFAULT CASE. No signal in the listing at all. Confidence must stay BELOW the 0.6 floor (an absent signal lowers confidence, it does not inherit the default at full strength) — yet the outcome is still MATCH, because In'li is a pure-LLI source with no social stock to be confused with."
+   "why": "THE SOURCE-DEFAULT CASE. No signal in the listing at all. Confidence must stay BELOW the 0.6 floor (an absent signal lowers confidence, it does not inherit the default at full strength) — yet the outcome is still MATCH, because In'li is a pure-LLI source with no social stock to be confused with.",
+   "detail_read": true
   },
   {
    "id": "lli-008-icf-novedis-pure",
@@ -462,7 +470,8 @@
     "outcome": "MATCH",
     "max_confidence": 59
    },
-   "why": "THE PLUS TRAP, case 1. 'plus' is one of the commonest French words. A naive substring match classifies this In'li flat as PLUS social housing and rejects it. Nothing arrives, and the user concludes the market is quiet. Only the source default may fire here."
+   "why": "THE PLUS TRAP, case 1. 'plus' is one of the commonest French words. A naive substring match classifies this In'li flat as PLUS social housing and rejects it. Nothing arrives, and the user concludes the market is quiet. Only the source default may fire here.",
+   "detail_read": true
   },
   {
    "id": "trap-002-au-plus-tard",
@@ -857,7 +866,8 @@
     "outcome": "MATCH",
     "max_confidence": 59
    },
-   "why": "An empty structured field is an ABSENT signal, not a tier-1 verdict. If an empty string were treated as a match on the field, tier 1 would fire on every listing from a source that emits the key unconditionally."
+   "why": "An empty structured field is an ABSENT signal, not a tier-1 verdict. If an empty string were treated as a match on the field, tier 1 would fire on every listing from a source that emits the key unconditionally.",
+   "detail_read": true
   },
   {
    "id": "case-005-html-entities-in-text",
@@ -1525,7 +1535,8 @@
     "outcome": "MATCH",
     "min_confidence": 75
    },
-   "why": "A silent HARD REJECT, and the docblock said it could not happen. proceduralSignals() appended field values after a newline and asserted that 'an inflection or a sans negation cannot straddle the join between a description and a field, or between two fields'. False: inflectedTokenPosition joins a literal's words with '\\s*', which matches a newline, and only ELIGIBLE tells were blocked from spanning. So this listing -- whose own field carries 'Attribution directe par le bailleur', the brief's canonical INTERMEDIATE tell -- was hard-rejected as SOCIAL because the previous surface ended in the word 'commission' and this one began with 'attribution'. REJECT is silent by design (hard rule 8), so nothing arrived and nothing said why. Each surface is now scanned separately, which removes the class rather than patching the separator: two fragments in two surfaces cannot become one literal whatever joins them."
+   "why": "A silent HARD REJECT, and the docblock said it could not happen. proceduralSignals() appended field values after a newline and asserted that 'an inflection or a sans negation cannot straddle the join between a description and a field, or between two fields'. False: inflectedTokenPosition joins a literal's words with '\\s*', which matches a newline, and only ELIGIBLE tells were blocked from spanning. So this listing -- whose own field carries 'Attribution directe par le bailleur', the brief's canonical INTERMEDIATE tell -- was hard-rejected as SOCIAL because the previous surface ended in the word 'commission' and this one began with 'attribution'. REJECT is silent by design (hard rule 8), so nothing arrived and nothing said why. Each surface is now scanned separately, which removes the class rather than patching the separator: two fragments in two surfaces cannot become one literal whatever joins them.",
+   "detail_read": true
   },
   {
    "id": "regress-045-an-undecoded-entity-in-one-field-does-not-kill-the-listing",
@@ -1542,7 +1553,8 @@
     "outcome": "MATCH",
     "min_confidence": 90
    },
-   "why": "Round 7 regression guard, and a case where the SAFE-LOOKING answer was the wrong one. Once the classifier began reading every field, Text::fold()'s entity gate ran on URLs and surface cells -- and '&amp;' in an href is the ordinary output of an HTML scrape, so one link turned the whole listing into UNKNOWN/DIGEST. It also SOFTENED determinate rejections: a description naming PLAI went from REJECT to DIGEST because an unrelated field was encoded, which the class doctrine forbids outright. Incidental surfaces now use Text::foldTolerant(), which substitutes a space for an entity rather than refusing -- the one repair that can neither invent a match nor hide one, since every literal is matched with '\\\\s*' between its words. Detection survives: see regress-046."
+   "why": "Round 7 regression guard, and a case where the SAFE-LOOKING answer was the wrong one. Once the classifier began reading every field, Text::fold()'s entity gate ran on URLs and surface cells -- and '&amp;' in an href is the ordinary output of an HTML scrape, so one link turned the whole listing into UNKNOWN/DIGEST. It also SOFTENED determinate rejections: a description naming PLAI went from REJECT to DIGEST because an unrelated field was encoded, which the class doctrine forbids outright. Incidental surfaces now use Text::foldTolerant(), which substitutes a space for an entity rather than refusing -- the one repair that can neither invent a match nor hide one, since every literal is matched with '\\\\s*' between its words. Detection survives: see regress-046.",
+   "detail_read": true
   },
   {
    "id": "regress-046-an-entity-splitting-a-social-label-is-still-caught",
@@ -1573,7 +1585,8 @@
     "outcome": "MATCH",
     "min_confidence": 40
    },
-   "why": "THE OVER-REJECTION DIRECTION of the tolerant fold, and the fixture that stops the repair being written the easy way. An incidental surface is DECODED, not space-substituted: '&shy;' decodes to U+00AD, which Text::INVISIBLE strips, so 'plai&shy;sir' becomes 'plaisir' and correctly matches nothing. The first implementation substituted a space, which produced 'plai sir' and invented a token inside *plaisir* -- the silent drop Text::hasToken() exists to prevent, reintroduced through the repair. It also matters WHERE the split happens: splitting an identifier on non-alphanumerics before invisibles are stripped puts the boundary back, so the split runs on the invisible-stripped form. See regress-047 for the same fold in the §1 direction."
+   "why": "THE OVER-REJECTION DIRECTION of the tolerant fold, and the fixture that stops the repair being written the easy way. An incidental surface is DECODED, not space-substituted: '&shy;' decodes to U+00AD, which Text::INVISIBLE strips, so 'plai&shy;sir' becomes 'plaisir' and correctly matches nothing. The first implementation substituted a space, which produced 'plai sir' and invented a token inside *plaisir* -- the silent drop Text::hasToken() exists to prevent, reintroduced through the repair. It also matters WHERE the split happens: splitting an identifier on non-alphanumerics before invisibles are stripped puts the boundary back, so the split runs on the invisible-stripped form. See regress-047 for the same fold in the §1 direction.",
+   "detail_read": true
   },
   {
    "id": "regress-047-entity-inside-an-excluded-token",
@@ -1687,7 +1700,8 @@
     "outcome": "MATCH",
     "min_confidence": 85
    },
-   "why": "A COUNTERWEIGHT, added the day the doubts above were. `loyer plafonne` was briefly added as a doubt with them and immediately digested lli-004, lli-011 and regress-030 — because LLI is BY DEFINITION a capped rent under an income ceiling, so that phrase is the primary target describing itself. This fixture pins the reason it was removed, so a future session cannot re-add it and see a green suite."
+   "why": "A COUNTERWEIGHT, added the day the doubts above were. `loyer plafonne` was briefly added as a doubt with them and immediately digested lli-004, lli-011 and regress-030 — because LLI is BY DEFINITION a capped rent under an income ceiling, so that phrase is the primary target describing itself. This fixture pins the reason it was removed, so a future session cannot re-add it and see a green suite.",
+   "detail_read": true
   },
   {
    "id": "cdc-001-captured-intermediate-badge-with-plus-adverb",
@@ -1803,7 +1817,22 @@
     "tenure": "LLI",
     "outcome": "MATCH"
    },
-   "why": "THE FURNITURE CLASS ON A FOURTH SOURCE, and the first time it arrives on a source that is NOT mixed-tenure. Captured from In'li's /location-appartement-les-ulis-91940/PRV-054595 on 2026-08-23, the day In'li gained a detail_map: its cards carry four facts and no title, so `exclude_title_patterns` was structurally dead on the source producing two thirds of the matches.\n\nThe trap is `plusieurs stations`. `plus` is one of the commonest words in French and it is also the excluded financing acronym PLUS, and reading the second where the first was written has now cost this repo four instances: CDC's `au plus près` (which vetoed 14 of 16 correctly-badged listings into the digest), Cityloger's `bailleur social`, Logirep's `Ce·lli·er` inside a filter facet, and this.\n\nWHAT MAKES THIS ONE DIFFERENT, and why it is worth a case of its own: In'li is `mixed_tenure: false`, so a listing with no tenure signal is notified on the source default. Every earlier instance of this class cost a listing its MATCH by pushing it to the digest — fail-closed, wasteful, safe. Here a false PLUS would be an outright REJECT of a listing on a pure-LLI landlord's own site, and the yield would simply drop with nothing to see. Adding a description to a source that previously had almost none is exactly the change that could introduce it, which is why this case was captured on the same day that change landed.\n\nThe expectation is the verdict the BARE CARD already gets: LLI on the source default. The description must not alter it in either direction — a veto would reject good stock, and a promotion would mean prose was doing work the source default is already doing at a deliberately sub-threshold confidence."
+   "why": "THE FURNITURE CLASS ON A FOURTH SOURCE, and the first time it arrives on a source that is NOT mixed-tenure. Captured from In'li's /location-appartement-les-ulis-91940/PRV-054595 on 2026-08-23, the day In'li gained a detail_map: its cards carry four facts and no title, so `exclude_title_patterns` was structurally dead on the source producing two thirds of the matches.\n\nThe trap is `plusieurs stations`. `plus` is one of the commonest words in French and it is also the excluded financing acronym PLUS, and reading the second where the first was written has now cost this repo four instances: CDC's `au plus près` (which vetoed 14 of 16 correctly-badged listings into the digest), Cityloger's `bailleur social`, Logirep's `Ce·lli·er` inside a filter facet, and this.\n\nWHAT MAKES THIS ONE DIFFERENT, and why it is worth a case of its own: In'li is `mixed_tenure: false`, so a listing with no tenure signal is notified on the source default. Every earlier instance of this class cost a listing its MATCH by pushing it to the digest — fail-closed, wasteful, safe. Here a false PLUS would be an outright REJECT of a listing on a pure-LLI landlord's own site, and the yield would simply drop with nothing to see. Adding a description to a source that previously had almost none is exactly the change that could introduce it, which is why this case was captured on the same day that change landed.\n\nThe expectation is the verdict the BARE CARD already gets: LLI on the source default. The description must not alter it in either direction — a veto would reject good stock, and a promotion would mean prose was doing work the source default is already doing at a deliberately sub-threshold confidence.",
+   "detail_read": true
+  },
+  {
+   "id": "lli-008-pure-source-matches-below-the-floor",
+   "source": "example_pure_lli",
+   "provenance": "synthetic",
+   "title": "Appartement 3 pièces",
+   "description": "1 005 € cc 3 pièces · 55.32 m² Longjumeau",
+   "fields": {},
+   "expect": {
+    "tenure": "LLI",
+    "outcome": "MATCH",
+    "max_confidence": 59
+   },
+   "why": "THE PURE-LLI SOURCE SHAPE, which In'li used to provide and no longer does. No signal in the listing, and the detail page has NOT been read -- yet the outcome is still MATCH, because a source with no social stock has nothing to confuse a thin signal with. On a mixed source the identical listing digests until its page is read; that contrast is the whole meaning of the flag, so both halves need a case."
   }
  ]
 }

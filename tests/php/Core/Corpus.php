@@ -60,6 +60,12 @@ final class Corpus
                 title: $case['title'],
                 description: $case['description'],
                 fields: $case['fields'],
+                // `detail_read` — has this listing's own detail page been examined? Defaults to
+                // FALSE, which is the fail-closed direction: a case that says nothing about it is
+                // treated as the weaker evidence, so a new case cannot acquire the stronger reading
+                // by omission. Cases that DO set it are asserting the hydrated path, which is the
+                // one In'li's listings take in production.
+                detailRead: (bool) ($case['detail_read'] ?? false),
             );
 
             yield $case['id'] => [$listing, $profile, $case['expect'], $case['why'], $case['id']];

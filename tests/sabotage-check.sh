@@ -365,7 +365,23 @@ run_sabotage "UNKNOWN routed to the notification channel" \
 
 run_sabotage "fail-closed downgrade removed (mixed source keeps an eligible tenure)" \
   src/php/Core/TenureClassifier.php \
-  's/if ($tenure->isEligible() \&\& $confidenceBp < self::FLOOR_BP \&\& $source->mixedTenure) {/if (false) {/'
+  's/if ($tenure->isEligible()$/if (false \&\& $tenure->isEligible()/'
+
+# The gate's THIRD term, added 2026-08-23 when In'li turned out to publish PLS. Dropping it makes a
+# weakly-labelled listing on a mixed source match before its detail page has ever been read — which
+# is the disarmed state In'li shipped in, now reachable by deleting four words instead of by
+# believing a source's own description of itself.
+run_sabotage "the fail-closed rule stops requiring the detail page to have been read" \
+  src/php/Core/TenureClassifier.php \
+  's/\&\& !$detailRead) {/) {/' \
+  's/$source->mixedTenure \&\& !$detailRead ? Outcome::DIGEST/$source->mixedTenure \&\& false ? Outcome::DIGEST/'
+
+# And its mirror: hydration must not become a licence. If `detailRead` were allowed to short-circuit
+# the EXCLUSION rules rather than only the source-default floor, reading a page would turn an
+# explicit PLS into a match — the exact inversion §1 exists to prevent.
+run_sabotage "reading the detail page licenses an excluded listing" \
+  src/php/Core/TenureClassifier.php \
+  's/if ($tenure->isExcluded()) {/if ($tenure->isExcluded() \&\& !$detailRead) {/'
 
 # BOTH encoding guards at once, deliberately — and the reason is worth recording.
 # The malformed-UTF-8 refusal is defence in depth: the `mb_check_encoding` gate at the top of

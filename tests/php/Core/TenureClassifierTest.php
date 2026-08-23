@@ -590,6 +590,85 @@ final class TenureClassifierTest extends TestCase
     }
 
     /**
+     * A source-default match needs the detail page to have been READ, not merely to exist.
+     *
+     * In'li shipped as `mixed_tenure: false` — "pure LLI" — so its listings matched on the source
+     * default alone at 50bp, below the 0.60 floor, with the fail-closed rule disarmed. Hydration
+     * then proved the source publishes PLS (two live listings, `plafond de ressources PLS`, stated
+     * only on the detail page). The premise the flag encoded was false.
+     *
+     * Arming the flag outright is not the answer either: 166 of In'li's 168 listings sit at 50bp,
+     * so every one of them — two thirds of the whole tree's yield — would go to the digest.
+     *
+     * The fail-closed rule exists because the EVIDENCE is weak, and hydration is the step that
+     * gathers it. So a mixed source's weakly-labelled listing digests while its page is unread, and
+     * matches once the page has been read and found to say nothing excluding. A source with no
+     * detail map never hydrates, so nothing about it changes.
+     */
+    public function testAWeaklyLabelledListingOnAMixedSourceDigestsUntilItsDetailPageIsRead(): void
+    {
+        $source = new SourceProfile(name: 'inli', defaultTenure: Tenure::LLI, mixedTenure: true);
+        $classifier = new TenureClassifier();
+
+        $card = new RawListing(
+            sourceName: 'inli',
+            externalId: 'PRV-1',
+            title: '',
+            description: '1 005 € cc 3 pièces · 55.32 m² Longjumeau',
+            fields: [],
+            url: 'https://www.inli.fr/x',
+        );
+
+        $unread = $classifier->classify($card, $source);
+        self::assertSame(
+            Outcome::DIGEST,
+            $unread->outcome,
+            'weak evidence and an unread page is exactly what the fail-closed rule is for',
+        );
+
+        $hydrated = $classifier->classify($card->mergedWith(new RawListing(
+            sourceName: 'inli',
+            externalId: 'PRV-1',
+            title: 'Appartement de 55 m² à LONGJUMEAU',
+            description: "Le bien est situé au 3e étage avec ascenseur. Chauffage collectif.",
+            fields: [],
+            url: null,
+        )), $source);
+
+        self::assertSame(
+            Outcome::MATCH,
+            $hydrated->outcome,
+            'the page was read and said nothing excluding — that is evidence, not silence',
+        );
+    }
+
+    /**
+     * The counterweight: reading the page does NOT license an excluded listing.
+     *
+     * If the gate above ever becomes "hydrated means eligible", this goes red. The two live In'li
+     * PLS listings are caught by the explicit-label rule at 90bp, which does not depend on the flag
+     * or on hydration — but they are only VISIBLE once the page is read, which is the whole point.
+     */
+    public function testReadingTheDetailPageNeverLicensesAnExcludedListing(): void
+    {
+        $source = new SourceProfile(name: 'inli', defaultTenure: Tenure::LLI, mixedTenure: true);
+
+        $card = new RawListing(
+            sourceName: 'inli', externalId: 'PRV-317130', title: '',
+            description: '1 190 € cc 3 pièces', fields: [], url: 'https://www.inli.fr/y',
+        );
+
+        $verdict = (new TenureClassifier())->classify($card->mergedWith(new RawListing(
+            sourceName: 'inli', externalId: 'PRV-317130', title: 'Appartement de 62 m²',
+            description: 'Le logement est soumis au plafond de ressources PLS.',
+            fields: [], url: null,
+        )), $source);
+
+        self::assertNotSame(Tenure::LLI, $verdict->tenure);
+        self::assertNotSame(Outcome::MATCH, $verdict->outcome, 'an explicit PLS is never a match');
+    }
+
+    /**
      * `description` and `title` are PROSE, wherever the adapter also leaves a copy of them.
      *
      * `ListingMapper` passes the WHOLE structured surface as `fields`, so an HTML source's mapped

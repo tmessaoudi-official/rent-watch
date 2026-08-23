@@ -1048,7 +1048,13 @@ final class ConfigTest extends TestCase
         $sources = ConfigLoader::loadSources(self::ROOT . '/config/sources.json');
 
         self::assertArrayHasKey('inli', $sources);
-        self::assertFalse($sources['inli']->mixedTenure, "In'li is Action Logement's pure-LLI arm");
+        // NOT a weakened assertion: the old label was measurably wrong. In'li shipped as pure LLI,
+        // and hydrating its detail pages on 2026-08-23 found two live listings stating `plafond de
+        // ressources PLS` that their CARDS never mentioned. Tenure is a property of the listing,
+        // never of the source. What makes the flip affordable is the third term on the fail-closed
+        // rule — see testAWeaklyLabelledListingOnAMixedSourceDigestsUntilItsDetailPageIsRead —
+        // without which all 166 of In'li's 50bp listings would digest for ever.
+        self::assertTrue($sources['inli']->mixedTenure, "In'li publishes PLS stock; its cards hide it");
         self::assertTrue($sources['cdc_habitat']->mixedTenure);
         self::assertTrue($sources['cityloger']->mixedTenure, 'the group publishes social and intermediate alike');
     }
