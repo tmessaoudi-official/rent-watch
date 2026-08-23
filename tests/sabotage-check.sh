@@ -2051,6 +2051,44 @@ run_sabotage "the judged outcome is never recorded" \
   src/php/Cli/Pipeline.php \
   's%$this->store->recordOutcome($sighting->dedupKey, $verdict->outcome->value);%%'
 
+# ── `scout digest` on demand, Q34's other half (2026-08-23) ───────────────────────────────────────
+# This command's whole reason to exist is a listing the pipeline's retry cannot reach: an entry
+# judged doubtful, undelivered, and then delisted, so no later pass ever re-offers it. Every failure
+# below leaves that listing exactly where it was — unannounced, with nothing anywhere saying so.
+
+# THE ONE THAT MATTERS. Every row in the standing backlog predates schema v7, so `evidence_json` is
+# NULL for all of them by design. A digest that skips evidence-less rows therefore skips precisely
+# the backlog it was ruled to rescue — and reports "aucune annonce en attente" while doing it, which
+# is the silent failure this whole command is the fix for.
+run_sabotage "the on-demand digest skips the very rows it exists to rescue" \
+  src/php/Cli/Scout.php \
+  's%\$listing ??= new RawListing(%if (\$listing === null) { continue; }\n            \$listing ??= new RawListing(%'
+
+# Marking before the channel confirms consumes the batch permanently on a failed send. A digest
+# entry, unlike a match, has no second chance from anywhere: nothing else will ever surface it.
+run_sabotage "the on-demand digest marks its entries before the channel confirms" \
+  src/php/Cli/Scout.php \
+  's%if (!\$notifier->delivered(\$failures)) {%if (false) {%'
+
+# The count is what tells the reader a backlog was announced WITHOUT its full detail. Removed, a set
+# of degraded entries is indistinguishable from a set of sources that publish nothing but titles.
+run_sabotage "the degraded-row count stops being reported" \
+  src/php/Cli/Scout.php \
+  's%if (\$withoutSnapshot > 0) {%if (false) {%'
+
+# Hard rule 3, in this command's own shape. A corrupt snapshot swallowed silently means a database
+# losing data reads as a quiet one — and the entry would still be announced, so nothing looks wrong.
+run_sabotage "an unreadable snapshot is swallowed instead of counted" \
+  src/php/Cli/Scout.php \
+  's%++\$unreadable;%%'
+
+# A placeholder outranking a stated fact. `commune inconnue` is a label for the ABSENCE of
+# information; printed while a real title sits unused it turns every rescued pre-v7 row into an
+# entry nobody can identify — the display twin of the miss the command was built to fix.
+run_sabotage "an unlocated listing loses its title to the placeholder" \
+  src/php/Core/Notify/Formatter.php \
+  "s%\$where = \$where === '' ? trim(\$listing->title) : \$where;%%"
+
 if [[ -n "$_filter" ]]; then
   # Loud, because a filtered run that looked like a full one would be the ledger lying about its own
   # coverage — the same class of defect as the baseline gate that reddened itself for six days.

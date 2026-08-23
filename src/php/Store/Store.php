@@ -1404,17 +1404,25 @@ final readonly class Store
      * the whole digest, which is the opposite of skipping it and saying so. Decoding belongs to the
      * caller so that its failure is per-row and countable.
      *
-     * @return list<array{dedup_key: string, title: string, evidence_json: ?string, signals_json: ?string}>
+     * **`source`, `external_id`, `url` and `rent_cc` travel with the snapshot, and they are what
+     * makes the pre-v7 backlog announceable at all.** Every row this command was ruled to rescue
+     * was stored before the snapshot column existed, so `evidence_json` is NULL for all of them —
+     * not backfilled, deliberately. Returning only the snapshot would leave the caller with a
+     * choice between skipping those rows and inventing their contents; these four columns are
+     * stored facts, so it has to do neither.
+     *
+     * @return list<array{dedup_key: string, source: string, external_id: string, url: ?string, title: string, rent_cc: ?int, evidence_json: ?string, signals_json: ?string}>
      */
     public function pendingDigest(): array
     {
         $statement = $this->pdo->query(
-            "SELECT dedup_key, title, evidence_json, signals_json FROM listings
+            "SELECT dedup_key, source, external_id, url, title, rent_cc, evidence_json, signals_json
+               FROM listings
               WHERE outcome = 'DIGEST' AND notified_at IS NULL
               ORDER BY seen_epoch ASC, dedup_key ASC",
         );
 
-        /** @var list<array{dedup_key: string, title: string, evidence_json: ?string, signals_json: ?string}> $rows */
+        /** @var list<array{dedup_key: string, source: string, external_id: string, url: ?string, title: string, rent_cc: ?int, evidence_json: ?string, signals_json: ?string}> $rows */
         $rows = $statement === false ? [] : $statement->fetchAll(\PDO::FETCH_ASSOC);
 
         return $rows;

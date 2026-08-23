@@ -145,6 +145,35 @@ final class NotifyTest extends TestCase
         }
     }
 
+    public function testAnUnlocatedListingIsNamedByItsTitleRatherThanByThePlaceholder(): void
+    {
+        // `commune inconnue` is a label for the ABSENCE of information, and printing it while a real
+        // title sits unused throws away the only human-readable fact the notification had. This is
+        // the standing shape of every pre-schema-v7 row `scout digest` rescues: its `listings` row
+        // holds a title and no commune, so before this rule those entries announced themselves as
+        // `commune inconnue · 1005 € CC` — a rescue nobody can act on.
+        $n = (new Formatter())->match(
+            $this->listing(['commune' => null, 'postcode' => null, 'title' => 'T3 à Longjumeau']),
+            Verdict::matched(50, [], true),
+        );
+
+        self::assertStringContainsString('T3 à Longjumeau', $n->title);
+        self::assertStringNotContainsString('commune inconnue', $n->title);
+    }
+
+    public function testThePlaceholderIsStillUsedWhenThereIsNoTitleEither(): void
+    {
+        // The counterweight. In'li ships no title at all, so the placeholder must survive as the
+        // honest answer when there genuinely is nothing — a blank leading segment would read as a
+        // formatting bug rather than as missing data.
+        $n = (new Formatter())->match(
+            $this->listing(['commune' => null, 'postcode' => null, 'title' => '   ']),
+            Verdict::matched(50, [], true),
+        );
+
+        self::assertStringContainsString('commune inconnue', $n->title);
+    }
+
     public function testAnHorsChargesRentIsFLAGGEDRatherThanShownAsIfComparable(): void
     {
         // A 1750 € HC flat is roughly 1900 € CC. Showing it as "1750 €" next to an 1800 € budget

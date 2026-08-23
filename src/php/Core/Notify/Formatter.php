@@ -192,6 +192,14 @@ final readonly class Formatter
             $where = $where === '' ? $postcode : $where . ' ' . $postcode;
         }
 
+        // A PLACEHOLDER MUST NOT OUTRANK A STATED FACT. When nothing locates the listing, the title
+        // is used before `commune inconnue` — which is a label for the absence of information, and
+        // printing it while a real title sits unused throws away the only human-readable thing the
+        // notification had. That is not hypothetical: it is the standing shape of every pre-v7 row
+        // `scout digest` exists to rescue, whose `listings` row holds a title and no commune, and
+        // those entries announced themselves as `commune inconnue · 1005 € CC` — a rescue nobody
+        // can act on is the display twin of the miss the command was built to fix.
+        $where = $where === '' ? trim($listing->title) : $where;
         $parts = [$where === '' ? 'commune inconnue' : $where];
 
         $size = $this->sizeLine($listing);

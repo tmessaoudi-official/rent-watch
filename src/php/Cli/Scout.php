@@ -23,6 +23,7 @@ use RentWatch\Config\ConfigLoader;
 use RentWatch\Config\Criteria;
 use RentWatch\Config\SourceDefinition;
 use RentWatch\Core\Heartbeat;
+use RentWatch\Core\ListingSnapshot;
 use RentWatch\Core\Notify\Channel;
 use RentWatch\Core\Notify\ConsoleChannel;
 use RentWatch\Core\Notify\EmailChannel;
@@ -39,6 +40,7 @@ use RentWatch\Core\RawListing;
 use RentWatch\Core\Redact;
 use RentWatch\Core\SourceStatus;
 use RentWatch\Core\TenureClassifier;
+use RentWatch\Core\Verdict;
 use RentWatch\Store\Store;
 
 /**
@@ -124,7 +126,7 @@ final readonly class Scout
                 'doctor' => $this->doctor($flags),
                 'dump' => $this->dump($flags),
                 'run' => $this->runCommand($flags),
-                'digest' => $this->digest(),
+                'digest' => $this->digest($flags),
                 'reclassify' => $this->reclassify($flags),
                 'test-notify' => $this->testNotify(),
                 'replay' => $this->dump($flags),
@@ -563,15 +565,189 @@ final readonly class Scout
 
     // ── digest / reclassify / test-notify ─────────────────────────────────────────────────────────
 
-    private function digest(): int
+    /**
+     * Emit the "à vérifier" digest on demand (Q34's other half).
+     *
+     * **It reads the STORE, not the last pass, and that is the whole reason it exists.** The
+     * pipeline already emits every new digest entry at the end of any pass that produces one, marks
+     * them only after the channel confirms, and re-offers an undelivered batch next run. What that
+     * retry cannot reach is a listing that stops being published in between: it is no longer in any
+     * pass's results, so nothing re-offers it, and a digest entry — unlike a match — has no second
+     * chance from anywhere else. Selecting on `outcome = 'DIGEST' AND notified_at IS NULL` asks the
+     * question the pipeline cannot: what has been judged doubtful and never told to anyone.
+     *
+     * **A row with no snapshot is announced, never skipped.** Every row in the standing backlog
+     * predates schema v7, so its `evidence_json` is NULL by design; skipping those would skip
+     * exactly what this command was ruled to rescue, and would do it silently. It announces them
+     * from `listings`' own columns instead — stored facts, not invented ones — and says how many
+     * were degraded that way.
+     *
+     * That is deliberately NOT the rule {@see reclassify()} follows. Reclassify FORMS a verdict, so
+     * running it on less evidence than the original saw is the §1 breach schema v7 exists to
+     * prevent. This command only ANNOUNCES a verdict already formed and already stored; announcing
+     * a stored `DIGEST` from a stored title cannot promote anything into a match.
+     *
+     * @param list<string> $flags
+     */
+    private function digest(array $flags): int
     {
-        $this->line('`scout digest` émet à la demande le récapitulatif « à vérifier ».');
-        $this->line('Il est déjà émis automatiquement à la fin de toute passe qui produit de');
-        $this->line('nouvelles entrées (Q34) ; la version à la demande relit la base et attend');
-        $this->line('la persistance des verdicts, qui existe depuis le schéma v3 mais dont la');
-        $this->line('sélection « depuis la dernière émission » n\'est pas encore écrite.');
+        $dryRun = in_array('--dry-run', $flags, true);
+        foreach ($flags as $flag) {
+            if ($flag !== '--dry-run') {
+                return $this->fail('option inconnue : ' . $flag . ' (connue : --dry-run)');
+            }
+        }
+
+        $store = $this->store();
+        $rows = $store->pendingDigest();
+
+        if ($rows === []) {
+            $this->line('Aucune annonce en attente dans le récapitulatif « à vérifier ».');
+
+            return 0;
+        }
+
+        $entries = [];
+        $withoutSnapshot = 0;
+        $unreadable = 0;
+
+        foreach ($rows as $row) {
+            $listing = null;
+            $json = $row['evidence_json'];
+
+            if (is_string($json) && $json !== '') {
+                try {
+                    $listing = ListingSnapshot::decode($json);
+                } catch (\JsonException | \InvalidArgumentException $e) {
+                    // Per-row, which is why the store hands these back RAW. Decoding the batch in
+                    // one query would let the first damaged row take every readable entry with it —
+                    // one bad row costing the whole digest, the opposite of degrading it and saying
+                    // so. Redacted: a snapshot quotes the listing payload back, and an adapter
+                    // error message is a secrets channel.
+                    ++$unreadable;
+                    $this->warn(sprintf(
+                        'instantané illisible pour %s — annonce dégradée : %s',
+                        $row['dedup_key'],
+                        Redact::text($e->getMessage()),
+                    ));
+                }
+            } else {
+                ++$withoutSnapshot;
+            }
+
+            $listing ??= new RawListing(
+                sourceName: $row['source'],
+                externalId: $row['external_id'],
+                title: $row['title'],
+                url: $row['url'],
+                rentCc: $row['rent_cc'],
+            );
+
+            /** @var list<string> $reasons */
+            $reasons = $this->decodeSignals($row['signals_json']);
+
+            $entries[] = [
+                'listing' => $listing,
+                'verdict' => Verdict::digest($reasons),
+                'key' => $row['dedup_key'],
+                'keys' => [$row['dedup_key']],
+            ];
+        }
+
+        $notification = (new Formatter())->digest($entries);
+
+        $this->line($notification->title);
+        foreach ($notification->reasons as $reason) {
+            $this->line($reason);
+        }
+
+        if ($withoutSnapshot > 0) {
+            // Counted out loud. A backlog announced without its full detail otherwise reads as a
+            // set of sources that publish nothing but titles.
+            $this->line(sprintf(
+                '%d annonce(s) sans instantané (antérieures au schéma v7) — annoncées depuis les colonnes conservées.',
+                $withoutSnapshot,
+            ));
+        }
+        if ($unreadable > 0) {
+            $this->line($unreadable . ' instantané(s) illisible(s) — voir les avertissements ci-dessus.');
+        }
+
+        if ($dryRun) {
+            $this->line('--dry-run : rien n\'a été envoyé, rien n\'a été marqué comme émis.');
+
+            return 0;
+        }
+
+        $notifier = $this->notifier($this->criteria());
+
+        $fatal = $notifier->fatalProblem();
+        if ($fatal !== null) {
+            return $this->fail($fatal);
+        }
+
+        foreach ($notifier->disabledReport() as $name => $problem) {
+            $this->warn('canal ' . $name . ' désactivé : ' . $problem);
+        }
+
+        $failures = $notifier->send($notification);
+        foreach ($failures as $failure) {
+            $this->warn($failure->getMessage());
+        }
+
+        if (!$notifier->delivered($failures)) {
+            // Nothing marked. Marking first would consume the batch permanently on a failed send,
+            // and these entries have no other route to the developer — the same asymmetry the
+            // pipeline's digest branch is built on.
+            $this->warn('récapitulatif non délivré — rien n\'a été marqué comme émis, il sera réessayé.');
+
+            return 1;
+        }
+
+        $now = $this->nowIso ?? date('c');
+        foreach ($entries as $entry) {
+            $store->markNotified($entry['key'], $now);
+        }
+
+        $this->line(count($entries) . ' annonce(s) émise(s).');
 
         return 0;
+    }
+
+    /**
+     * The stored `reasons[]`, or an empty list when the column holds something that is not one.
+     *
+     * Tolerant on purpose, and it is the one place in this command that is: these are explanatory
+     * strings shown next to an entry, so a damaged `signals_json` costs a sentence. The LISTING is
+     * what must always survive intact, and it is decoded separately and counted.
+     *
+     * @return list<string>
+     */
+    private function decodeSignals(?string $json): array
+    {
+        if (!is_string($json) || $json === '') {
+            return [];
+        }
+
+        try {
+            /** @var mixed $decoded */
+            $decoded = json_decode($json, true, 512, JSON_THROW_ON_ERROR);
+        } catch (\JsonException) {
+            return [];
+        }
+
+        if (!is_array($decoded)) {
+            return [];
+        }
+
+        $reasons = [];
+        foreach ($decoded as $reason) {
+            if (is_string($reason)) {
+                $reasons[] = $reason;
+            }
+        }
+
+        return $reasons;
     }
 
     /** @param list<string> $flags */
@@ -1176,7 +1352,7 @@ final readonly class Scout
             '  scout run --seed              amorce le seen-set sans notifier',
             '  scout run --watch [-v]        boucle : 15 min ± 5 de jitter (Q37)',
             '  … --source=<nom>              limite `doctor` / `run` à une source (répétable)',
-            '  scout digest                  récapitulatif « à vérifier »',
+            '  scout digest [--dry-run]      émet le récapitulatif « à vérifier » en attente',
             '  scout reclassify              annonces au verdict indéterminé',
             '  scout test-notify             vérifie les canaux de notification',
             '',
