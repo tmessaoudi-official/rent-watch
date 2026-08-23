@@ -2089,6 +2089,63 @@ run_sabotage "an unlocated listing loses its title to the placeholder" \
   src/php/Core/Notify/Formatter.php \
   "s%\$where = \$where === '' ? trim(\$listing->title) : \$where;%%"
 
+# ── `scout reclassify`, Q35 — the §1 surface of the two (2026-08-23) ──────────────────────────────
+# Every case here ends in a social listing being announced as a match, which is the one outcome this
+# project exists to prevent. None of them is visible at the moment of damage: the command reports a
+# promotion, the promotion looks like the recovered miss Q35 promised, and only an application to a
+# flat the user is not eligible for reveals it.
+
+# THE CROWN JEWEL. `reclassify runs on evidence ⊇ original, never ⊂`. A card whose structured field
+# says PLS while its title says `logement intermédiaire` classifies UNKNOWN today BY CONFLICT; judged
+# on the title alone it becomes a MATCH. A row with no snapshot has exactly that shape — the field is
+# gone, the title is not — so degrading instead of skipping manufactures the breach, preferentially
+# on the listings most likely to be social, because those are the ones whose evidence conflicts.
+run_sabotage "an evidence-less row is judged on its title instead of being skipped" \
+  src/php/Cli/Scout.php \
+  's%if (\$evidence === null) {%if (false) {%'
+
+# The same hole reached from the other side: the skip stops being reported. The rows are still not
+# judged, so nothing is unsafe — but a backlog silently unexamined is a backlog nobody knows to fix,
+# and `reclassify` reporting "0 promotions" over a thousand skipped rows reads as a classifier with
+# nothing left to find.
+run_sabotage "the evidence-less skip count stops being reported" \
+  src/php/Cli/Scout.php \
+  's%if (\$skipped > 0) {%if (false) {%'
+
+# Notifying on any transition, not just DIGEST -> MATCH. Under §1 the interesting direction is the
+# one that ANNOUNCES: a row demoted to REJECT pushed as a match is a rejected listing arriving in the
+# match channel wearing a match's formatting.
+run_sabotage "reclassify announces transitions that are not promotions" \
+  src/php/Cli/Scout.php \
+  "s%if (\$before === 'DIGEST' \&\& \$after === 'MATCH') {%if (\$after !== \$before) {%"
+
+# Marking before the channel confirms. A promotion is the ONE announcement this listing will ever
+# get — it was already carried in a digest, so nothing else will surface it again.
+run_sabotage "a promotion is marked notified before the channel confirms" \
+  src/php/Cli/Scout.php \
+  's%^            if (\$notifier->delivered(\$failures)) {$%            if (true) {%'
+
+# A row the criteria engine never judged is a dedup MEMBER, and `NULL` outcome is what distinguishes
+# "never judged" from "judged and rejected". Manufacturing an outcome for it destroys that
+# distinction permanently, and the next reclassify then treats a member as a survivor.
+run_sabotage "an unjudged dedup member is given a manufactured outcome" \
+  src/php/Cli/Scout.php \
+  's%if (\$before === null) {%if (false) {%'
+
+# The fail-closed profile for a source that has since been removed from sources.json. Flipped to
+# non-mixed with no default, a vanished landlord's stock resolves as eligible by omission — the
+# forgotten-config failure `SourceProfile`'s own default exists to prevent, rebuilt one layer up.
+run_sabotage "a vanished source's listings are judged as if it never mixed tenures" \
+  src/php/Cli/Scout.php \
+  's%^                true,$%                false,%'
+
+# One damaged row voiding the whole run. Loud is right; global is not — this is the blast-radius
+# mistake detail hydration already made once, where a single unreadable page stopped every other
+# listing being processed.
+run_sabotage "one unreadable snapshot voids the entire reclassify run" \
+  src/php/Cli/Scout.php \
+  's%^            } catch (.*InvalidArgumentException \$e) {$%            } catch (\\RuntimeException \$e) {%'
+
 if [[ -n "$_filter" ]]; then
   # Loud, because a filtered run that looked like a full one would be the ledger lying about its own
   # coverage — the same class of defect as the baseline gate that reddened itself for six days.

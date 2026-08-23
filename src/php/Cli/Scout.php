@@ -22,6 +22,7 @@ use RentWatch\Config\ConfigError;
 use RentWatch\Config\ConfigLoader;
 use RentWatch\Config\Criteria;
 use RentWatch\Config\SourceDefinition;
+use RentWatch\Core\CriteriaEngine;
 use RentWatch\Core\Heartbeat;
 use RentWatch\Core\ListingSnapshot;
 use RentWatch\Core\Notify\Channel;
@@ -751,30 +752,255 @@ final readonly class Scout
     }
 
     /** @param list<string> $flags */
+    /**
+     * Re-run the classifier and the criteria engine over stored verdicts (Q35).
+     *
+     * The problem is a PERMANENT silent miss. The seen-set guarantees a listing is new exactly
+     * once, so a listing digested as `UNKNOWN` under a classifier that is later improved is never
+     * surfaced again by anything at all — and Q18 (PLI) and Q21 (a shouted `PLUS`) both route there
+     * deliberately, so the bin is not small.
+     *
+     * **`reclassify runs on evidence ⊇ original, never ⊂`**, and that is a §1 rule rather than a
+     * quality preference. A card whose structured field says `PLS` while its title says *logement
+     * intermédiaire* classifies `UNKNOWN` today BY CONFLICT; re-run on the title alone it becomes a
+     * MATCH. So re-judging a row whose evidence has shrunk does not make a smaller improvement — it
+     * manufactures the one outcome §1 forbids, preferentially on the listings most likely to be
+     * social, because those are the ones whose evidence conflicts. A row with no stored snapshot is
+     * therefore SKIPPED and counted out loud, never degraded to whatever text is lying around.
+     *
+     * **It runs on the schema-v7 snapshot ALONE, and does not merge the detail cache on top.** That
+     * refines the mechanic sketched when v7 was planned, and the reason is in the pipeline: every
+     * pass rewrites the snapshot with the member exactly as the classifier consumed it, AFTER any
+     * detail merge. So a detail page fetched in pass N is already inside the snapshot written in
+     * pass N, and re-mapping `listing_detail.fields_json` here would buy no evidence while making a
+     * stored verdict depend on `ListingMapper` code and a `detail_map` that have since changed —
+     * precisely the drift the snapshot column exists to escape.
+     *
+     * It re-JUDGES rather than merely re-classifying, because Q35's promotion test is on `Outcome`
+     * and only the criteria engine produces one. That means TODAY's criteria: a row whose tenure now
+     * resolves cleanly can still fail a ceiling lowered since it was stored, and records `REJECT`.
+     *
+     * @param list<string> $flags
+     */
     private function reclassify(array $flags): int
     {
+        $dryRun = false;
+
+        foreach ($flags as $flag) {
+            if ($flag === '--dry-run') {
+                $dryRun = true;
+                continue;
+            }
+
+            if ($flag === '--since' || str_starts_with($flag, '--since=')) {
+                // REFUSED, not answered with something else. Q35's staleness mechanism is a stored
+                // classifier version, and there is no such column — answering `--since` against
+                // `last_seen_at` would substitute a different mechanism for the ruled one while
+                // looking like it. Re-running the whole bin costs seconds, so nothing is lost.
+                return $this->fail(
+                    '--since n\'est pas implémenté : il suppose une version de classifieur stockée '
+                    . 'avec le verdict, colonne qui n\'existe pas. Relancer sans option revoit tout le lot.',
+                );
+            }
+
+            return $this->fail('option inconnue : ' . $flag . ' (connues : --dry-run)');
+        }
+
         $store = $this->store();
-        $stale = $store->staleVerdicts();
+        $criteria = $this->criteria();
+        $rows = $store->staleVerdicts();
 
-        $this->line(count($stale) . ' annonce(s) au verdict indéterminé ou antérieur au schéma v3.');
-        foreach (array_slice($stale, 0, 20) as $row) {
-            $this->line(sprintf('  %-24s %-10s %s', $row['dedup_key'], $row['tenure'] ?? '(aucun)', $row['title']));
+        if ($rows === []) {
+            $this->line('Aucun verdict indéterminé à revoir.');
+
+            return 0;
         }
 
-        if (count($stale) > 20) {
-            // Named rather than silently truncated: a cap the reader cannot see reads as
-            // "that is all there is".
-            $this->line('  … et ' . (count($stale) - 20) . ' autres (affichage tronqué à 20).');
+        $this->line(count($rows) . ' annonce(s) au verdict indéterminé ou antérieur au schéma v3.');
+
+        $profiles = [];
+        foreach (ConfigLoader::loadSources($this->rootDir . '/config/sources.json') as $definition) {
+            $profiles[$definition->name] = $definition->profile();
         }
 
-        $this->line('');
-        $this->line('La re-classification effective attend le stockage des champs bruts : le');
-        $this->line('classifieur a besoin du texte de l\'annonce, que `listings` ne conserve pas.');
-        $this->line('C\'est un schéma v4, pas un oubli — voir docs/OPEN-QUESTIONS.md Q35.');
+        $classifier = new TenureClassifier();
+        $engine = new CriteriaEngine($criteria);
 
-        unset($flags);
+        $skipped = 0;
+        $unreadable = 0;
+        $rejudged = 0;
+        $changed = 0;
+        /** @var list<array{listing: RawListing, verdict: Verdict, key: string}> $promotions */
+        $promotions = [];
+
+        foreach ($rows as $row) {
+            $key = $row['dedup_key'];
+
+            try {
+                $evidence = $store->evidence($key);
+            } catch (\JsonException | \InvalidArgumentException $e) {
+                // Per row. `Store::evidence()` throws on a damaged snapshot by design — degrading it
+                // to `null` would make data loss indistinguishable from a row that never had one —
+                // but letting that throw escape would void the whole run, which is the blast-radius
+                // mistake detail hydration already made once. Loud AND scoped. Redacted, because a
+                // snapshot quotes the listing payload back.
+                ++$unreadable;
+                $this->warn('instantané illisible pour ' . $key . ' — verdict inchangé : ' . Redact::text($e->getMessage()));
+                continue;
+            }
+
+            if ($evidence === null) {
+                // THE §1 RULE. Not backfilled, so there is nothing honest to judge on.
+                ++$skipped;
+                continue;
+            }
+
+            $profile = $profiles[$evidence->sourceName] ?? new \RentWatch\Core\SourceProfile(
+                // A source removed from `sources.json` leaves its listings behind. Fail CLOSED:
+                // `mixedTenure: true` with no default digests a listing with no signal instead of
+                // matching it, which is the direction §1 requires when we do not know what we are
+                // looking at.
+                $evidence->sourceName,
+                'institutional',
+                null,
+                true,
+            );
+
+            $classification = $classifier->classify($evidence, $profile);
+
+            if (!$dryRun) {
+                $store->recordVerdict(
+                    $key,
+                    $classification->tenure->value,
+                    $classification->confidenceBp,
+                    $classification->reasons(),
+                    // The SAME evidence it was just judged on, rewritten with the verdict in one
+                    // statement so the two cannot drift.
+                    $evidence,
+                );
+            }
+
+            $before = $store->outcome($key);
+            if ($before === null) {
+                // Every dedup MEMBER is classified; only the SURVIVOR is judged. `NULL` is exactly
+                // what distinguishes "never judged" from "judged and rejected", and manufacturing an
+                // outcome here would destroy that distinction for a row the engine never saw.
+                continue;
+            }
+
+            $verdict = $engine->judge($evidence, $classification, $this->ageSeconds($store, $key));
+            $after = $verdict->outcome->value;
+            ++$rejudged;
+
+            if (!$dryRun) {
+                $store->recordOutcome($key, $after);
+            }
+
+            if ($after !== $before) {
+                ++$changed;
+            }
+
+            if ($before === 'DIGEST' && $after === 'MATCH') {
+                // The one transition Q35 notifies. A demotion is recorded silently — nobody needs a
+                // push saying a doubtful flat is now rejected.
+                $promotions[] = ['listing' => $evidence, 'verdict' => $verdict, 'key' => $key];
+            }
+        }
+
+        $this->line(sprintf(
+            '%d annonce(s) re-jugée(s), %d verdict(s) modifié(s), %d promotion(s) vers MATCH.',
+            $rejudged,
+            $changed,
+            count($promotions),
+        ));
+
+        if ($skipped > 0) {
+            $this->line(sprintf(
+                '%d annonce(s) sans instantané (antérieures au schéma v7) — ignorées : les re-juger '
+                . 'sur moins de preuves que l\'originale est exactement la brèche que le §1 interdit.',
+                $skipped,
+            ));
+        }
+        if ($unreadable > 0) {
+            $this->line($unreadable . ' instantané(s) illisible(s) — voir les avertissements ci-dessus.');
+        }
+
+        if ($dryRun) {
+            $this->line('--dry-run : aucun verdict réécrit, aucune notification envoyée.');
+
+            return 0;
+        }
+
+        return $promotions === [] ? 0 : $this->announcePromotions($criteria, $promotions);
+    }
+
+    /**
+     * Push every DIGEST -> MATCH promotion as a new match.
+     *
+     * Being told a flat is DOUBTFUL is not being told it is a MATCH, so a row already carried in a
+     * delivered digest is notified again here — that is the miss Q35 exists to recover, not a
+     * duplicate.
+     *
+     * @param list<array{listing: RawListing, verdict: Verdict, key: string}> $promotions
+     */
+    private function announcePromotions(Criteria $criteria, array $promotions): int
+    {
+        $notifier = $this->notifier($criteria);
+
+        $fatal = $notifier->fatalProblem();
+        if ($fatal !== null) {
+            return $this->fail($fatal);
+        }
+
+        foreach ($notifier->disabledReport() as $name => $problem) {
+            $this->warn('canal ' . $name . ' désactivé : ' . $problem);
+        }
+
+        $formatter = new Formatter();
+        $store = $this->store();
+        $now = $this->nowIso ?? date('c');
+        $undelivered = 0;
+
+        foreach ($promotions as $promotion) {
+            $failures = $notifier->send($formatter->match($promotion['listing'], $promotion['verdict']));
+            foreach ($failures as $failure) {
+                $this->warn($failure->getMessage());
+            }
+
+            if ($notifier->delivered($failures)) {
+                // Only after the channel confirmed, same asymmetry as everywhere else: marking
+                // first would consume the one announcement this listing will ever get.
+                $store->markNotified($promotion['key'], $now);
+            } else {
+                ++$undelivered;
+            }
+        }
+
+        if ($undelivered > 0) {
+            $this->warn($undelivered . ' promotion(s) non délivrée(s) — non marquées, elles seront réessayées.');
+
+            return 1;
+        }
 
         return 0;
+    }
+
+    /** How long ago this listing was first seen, for the criteria engine's freshness component. */
+    private function ageSeconds(Store $store, string $dedupKey): ?int
+    {
+        $snapshot = $store->snapshot($dedupKey);
+        if ($snapshot === null) {
+            return null;
+        }
+
+        try {
+            $first = new \DateTimeImmutable($snapshot->firstSeenAt);
+            $now = new \DateTimeImmutable($this->nowIso ?? 'now');
+        } catch (\Exception) {
+            return null;
+        }
+
+        return max(0, $now->getTimestamp() - $first->getTimestamp());
     }
 
     private function testNotify(): int
@@ -1353,7 +1579,7 @@ final readonly class Scout
             '  scout run --watch [-v]        boucle : 15 min ± 5 de jitter (Q37)',
             '  … --source=<nom>              limite `doctor` / `run` à une source (répétable)',
             '  scout digest [--dry-run]      émet le récapitulatif « à vérifier » en attente',
-            '  scout reclassify              annonces au verdict indéterminé',
+            '  scout reclassify [--dry-run]  re-juge les verdicts indéterminés stockés',
             '  scout test-notify             vérifie les canaux de notification',
             '',
             '  --i-accept-legal-risk         requis pour toute source `legal_risk` (règle 4)',

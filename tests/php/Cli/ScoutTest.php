@@ -812,15 +812,21 @@ final class ScoutTest extends TestCase
         self::assertStringContainsString('test de notification', $r['out']);
     }
 
-    public function testReclassifyListsRowsWithNoRecordedVerdict(): void
+    public function testReclassifyRejudgesRowsWithAnUndeterminedVerdict(): void
     {
+        // This test used to assert the STUB's own disclaimer — that the classifier needed the ad's
+        // text and `listings` did not keep it. Schema v7 keeps it, the verb is real, and the
+        // disclaimer would now be the lie. What replaces it is the behaviour it disclaimed.
         $this->scout(['run', '--seed']);
         $r = $this->scout(['reclassify']);
 
         self::assertSame(0, $r['code'], $r['err']);
         self::assertStringContainsString('verdict indéterminé', $r['out']);
-        // Honest about what is not built: the classifier needs the ad's TEXT, which `listings` does
-        // not keep. Saying so beats a verb that appears to work and silently does nothing.
-        self::assertStringContainsString('schéma v4', $r['out']);
+        self::assertStringContainsString('re-jugée(s)', $r['out']);
+        self::assertStringNotContainsString(
+            'attend le stockage',
+            $r['out'],
+            'the stub said it was waiting on storage that now exists',
+        );
     }
 }
