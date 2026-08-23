@@ -135,3 +135,39 @@ Counter reset to zero. All fixed and pushed in five commits (`feb416d`, `299b817
   makes a verdict about itself.** `catch (MalformedText)` narrowed to `catch (\RuntimeException)`
   applied cleanly, parsed, changed the file, and was a no-op — `MalformedText extends
   RuntimeException`. The ledger reported `undetected` when nothing was.
+
+**Round 2 (2026-08-24, frozen at `f51b6d5`): FINDINGS — 17 across three lenses, 1 P0.** Counter reset
+again. Round 2's job was to refute ROUND 1's fixes, and it did, twice in the same shape:
+
+- [2026-08-24] **The malformed-text fix covered two surfaces of three.** `Criteria::communeKey()` was
+  left unguarded and is reached twice per pass — `rankOf()` inside `score()`, and
+  `Dedup::duplicateReason()` inside `cluster()` — neither inside the per-source try/catch. One
+  `&#039;` or one cp1252 byte in a COMMUNE still aborted the pass, `ok = 1`, health green, nothing
+  notified; the Dedup one before anything was stored. Accented commune names are ubiquitous here.
+- [2026-08-24] **And that fix's own first draft repeated the class**: both folds in one `try`
+  disabled `exclude_title_patterns` on a READABLE title whenever the description was unfoldable, and
+  `Text` refuses any undecoded HTML entity — commoner in a scraped payload than cp1252.
+- [2026-08-24] **`Core\Offline` claimed to refuse "every outbound request" while guarding two of
+  FOUR.** SMTP, IMAP and sendmail all escaped; IMAP is the PRIMARY ingestion path under hard rule 4.
+  The ntfy refusal also leaked the topic whenever `rawurlencode` touched it, or when it was under
+  four characters — `Redact` cannot mask either. It names the SERVER now: not putting a secret in
+  the string beats masking it afterwards.
+- [2026-08-24] **The heartbeat was inside the pass's try/catch** while a comment two lines up said it
+  was "outside by construction" — so a throwing pass silenced the one signal that says the watcher
+  is alive, next to a defect that made exactly that reachable.
+- [2026-08-24] **Three operator-facing causes were wrong**, all the same error the round-1 commit
+  message had just named: `digest` blamed the migration for the one cause impossible there,
+  `reclassify` named only the migration where both causes are reachable, and `unencodable` said
+  *texte illisible* when the encoder refuses three things — one of which yields a NOTIFIED MATCH
+  with perfectly clean prose.
+- [2026-08-24] **The test for the guard that failed silently for a month was executed by nothing** —
+  no CI step, no `CLAUDE.md` entry, so `test-ci-workflow.sh` could never pin it. That loop was
+  self-sealing.
+- [2026-08-24] **All 57 cases added since the harness broke were re-run through the corrected gate.**
+  55 detected; 2 were real gaps a month of unconditional `ok` had hidden — `Prose::floor`'s `\b`
+  (`en 4 étages` is a triplex, not the 4th floor) and the hydration cache test, which asserted a
+  description was `!== ''`, something the CARD already satisfies.
+
+**Standing conclusion for the next session, and it is the session's main finding:** across both
+rounds, every P0 was *a correct rule with a reason nobody re-checked* — the invented cause, the
+unclaimed surface, the overclaimed guarantee. A green suite never says a word about any of them.
