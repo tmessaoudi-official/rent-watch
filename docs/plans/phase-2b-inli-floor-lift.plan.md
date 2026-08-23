@@ -173,3 +173,35 @@ from structured fields and are untouched.
 since these changes; only the five new cases plus the full unit suite have. CI runs it nightly.
 
 - [2026-08-23 12:05] DONE: Phase 2b built, live-accepted 20/20 against hand labels.
+
+## The §1 finding, and what it cost (2026-08-23)
+
+Hydration proved In'li publishes **PLS** — two live listings state `plafond de ressources PLS`,
+declared nowhere but the detail page. The source shipped `mixed_tenure: false`, so the fail-closed
+rule was DISARMED on a source with proven social stock.
+
+Arming it alone was not available: 166 of 168 listings sit at 50bp, so all of them — about two
+thirds of the tree's yield — would digest for ever.
+
+**Ruled (developer, at the direction gate): gate the source-default match on hydration.** The
+fail-closed rule now reads the EVIDENCE rather than the source — weak label + mixed source + page
+not yet read digests; a page read and found to say nothing excluding lets the default stand.
+
+Measured live:
+
+| state | matches | à vérifier |
+|---|---|---|
+| cold, 0 hydrated | 0 | 54 |
+| drained, 167/168 read | 53 | 1 (the page that 404s) |
+
+PLS rejected in both. Cost is a cold start only: matches are withheld until the backlog drains
+(~9 passes at the 20/pass budget). Steady state is unchanged.
+
+**Corpus:** 8 In'li cases are marked `detail_read: true` rather than flipped to DIGEST — flipping
+would have KILLED the traps, since the fail-closed rule rewrites tenure to UNKNOWN and
+`trap-001-plus-de-chambres` would then expect the same value whether or not the trap fired. The
+default is `false`, the fail-closed direction. The spec's "pure-LLI source" shape is now a synthetic
+source; no live source has it.
+
+- [2026-08-23 13:40] AGREED: source-default matches are gated on hydration; In'li is `mixed_tenure: true`.
+- [2026-08-23 13:40] DONE: verified live, cold 0/54 -> drained 53/1, PLS rejected throughout.
