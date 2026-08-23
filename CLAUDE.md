@@ -134,7 +134,9 @@ of rejecting a listing for not stating a floor), and an UNMENTIONED lift is not 
 
 ### Detail hydration — the cache is the gate (2026-08-23)
 
-**Phase 2 is BUILT.** In'li has a `detail_map` (`h1` for the title, `.advert-body-description p` for
+**Phase 2 is BUILT, and Phase 2b (2026-08-23) added the two facts the description was carrying all
+along** — see the floor/lift block above, plus the schema-v6 map fingerprint that stops a widened
+`detail_map` from serving rows captured under the old one for ever. In'li has a `detail_map` (`h1` for the title, `.advert-body-description p` for
 the description), which matters because an In'li card's ENTIRE text is `1 005 € cc 3 pièces ·
 55.32 m² Longjumeau` — four facts, no title, so `exclude_title_patterns` was **structurally dead on
 the source producing two thirds of the matches**, and nothing had slipped through only because In'li
@@ -142,7 +144,7 @@ lists flats. Luck, not a filter.
 
 Three mechanisms replaced the single gate, and each closes a hole the others open:
 
-- **NOVELTY IS THE GATE, and it lives in the schema-v5 `listing_detail` cache** — keyed on
+- **NOVELTY IS THE GATE, and it lives in the schema-v6 `listing_detail` cache** — keyed on
   `(source, external_id)`, never on `dedup_key`, because normalisation evolves and a row keyed on a
   conclusion silently orphans the whole cache the day it changes. A page already on record costs no
   request ever again, so steady state is ZERO extra requests. **Hydration without persistence would
@@ -180,14 +182,39 @@ nothing rather than saying no, which is the safe direction (hard rule 9).
 > error class as the retired *"live yield is 0"* claim two entries down. The fields stay `null`
 > because nothing MAPS them, not because the source withholds them.
 >
-> Recovering them is real yield — In'li is about two thirds of all matches — and it is not a field
-> map. **`Payload::bool()` cannot do it**: it matches the whole trimmed string, so prose returns
-> `null` (safe today), and a substring reader would read *"Aucun ascenseur dans la résidence"* as
-> `true`. **5 of the 18 lift mentions are negations** (`sans`, `Aucun`, `Pas d'`, `ne dispose pas
-> d'` — with a curly apostrophe in one), and **at least 4 of the 19 floor mentions state the
-> BUILDING's height, not the flat's** (*"Il s'élève sur trois étages"*, *"de 18 étages"*). A naive
-> reader would award a lift bonus to flats with no lift and read a tower's height as a tenant's
-> floor. Both are hard rule 9 inverted: manufacturing a fact from its own negation.
+> **Recovered on 2026-08-23 by `Core\Prose`**, an opt-in reader wired through the reserved capture
+> prefix `=> prose:floor` / `=> prose:elevator`. Two rules carry it, both hard rule 9 inverted —
+> a fact manufactured from its own negation:
+>
+> - **A floor is a POSITION (`au 3e étage`), never a COUNT (`de 18 étages`).** `Payload::floor()`
+>   returned **4 for a flat on the 3rd floor**: In'li's own copy carries the typo `au 3? étage`, the
+>   ordinal failed, and `d'un immeuble de 4 étages` answered instead. Fixed there by requiring the
+>   singular `etage\b` — deliberately NOT by anchoring on `au|en`, which would regress CDC's
+>   preposition-free card. The anchored reader is `Prose`, and it is opt-in per map.
+> - **A lift reads its NEGATION first.** 5 of the 18 mentions are negations (`sans`, `Aucun`,
+>   `Pas d'`, `ne dispose pas d'`, one with a curly apostrophe). A wrong `true` awards a bonus for a
+>   lift that does not exist; a wrong `false` only lowers the score. `Payload::bool()` cannot do this
+>   and must not be extended to — it matches the whole trimmed string, so prose returns `null`
+>   (safe), while a substring reader would read *"Aucun ascenseur"* as `true`.
+>
+> Ground truth is `tests/fixtures/inli/descriptions.json` — 20 live captures, each hand-labelled, which
+> **live extraction now matches 20/20**. The bare ordinal (`situé au deuxième`) and the site typo are
+> deliberately NOT parsed: under-extraction is the safe direction.
+
+> **HYDRATING IN'LI PROVED IT IS NOT PURE LLI, and that is the single most valuable thing Phase 2
+> produced.** Two live listings state *"Le logement est soumis au plafond de ressources **PLS**"* —
+> which their CARDS never said. Under §1 that is a reject, and only the detail page carries it. Every
+> document here calls In'li pure LLI; it is not, and a source's tenure claim is a property of its
+> LISTINGS, never of the source.
+
+> **The same hydration also demoted 4 of 40 live matches to the digest, on the word `plus`.**
+> `ListingMapper` passes the WHOLE structured surface as `fields`, so a mapped description arrives
+> twice — as the property, read with the prose rules, and as a bare `description` key, read with the
+> identifier discipline that turns the adverb into the acronym. In'li states no explicit label, so
+> that tier-1 doubt was the only tier-1 signal present and it decided the verdict. `title` and
+> `description` now re-route to the prose scan, guarded on CONTAINMENT rather than on the name so it
+> cannot become a named hole. Third instance of the `au plus près` class, and the first that was
+> silently costing real matches.
 
 **Location is REGION MODE as of 2026-08-22 — and by the end of that day it covered ALL of
 Île-de-France, at `min_rooms: 3`, `min_surface_m2: 50` and `max_rent_cc: 1200`.** `communes: []`

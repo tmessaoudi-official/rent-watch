@@ -147,3 +147,29 @@ from structured fields and are untouched.
 - [2026-08-23 08:05] AGREED: schema v6 adds a per-row detail-map fingerprint; a changed map makes cached rows refetch through the existing budget/priority path rather than being served stale forever.
 - [2026-08-23 08:05] AGREED: the bare ordinal (`situé au deuxième`) and the `3?` site typo are deliberately NOT extracted — under-extraction is the safe direction.
 - [2026-08-23 08:05] VERIFIED: all 168 In'li dedup keys are `id`-based, so hydration adding a title cannot re-key a listing; the pending push carries no mass-renotification risk.
+
+## Outcome (2026-08-23)
+
+**Built and accepted against the live site.**
+
+- `Payload::floor()` defect fixed: singular `etage\b`. The wrong `4` is now a safe `null`.
+- `Core\Prose` — position-only floor, negation-first lift. 20 captures, each hand-labelled.
+- Wiring: reserved `=> prose:` capture prefix; unknown reader refuses at load.
+- Schema **v6** map fingerprint; re-runnable ALTER (SQLite has no `ADD COLUMN IF NOT EXISTS`).
+- **Live acceptance**: `scout doctor --source=inli` → 168 annonces, `ok`, schema v6. The widened map
+  invalidated all 40 cached rows; 20 refetched this pass (the budget), and **live extraction agrees
+  with the hand labels 20/20**.
+- Suite **1728 green**, drift-scan P0=0 P1=0, five new sabotage cases all verified applied and
+  detected (ledger now 350).
+
+**Two defects found that were not in scope, both live:**
+
+1. The adverb `plus` was demoting 4 of 40 hydrated matches to the digest — `title`/`description` now
+   re-route to the prose scan. Third instance of the `au plus près` class.
+2. In'li is **not pure LLI**. Two live listings state `plafond de ressources PLS`, which their cards
+   never mentioned. Under §1 that is a reject, and only the detail page carries it.
+
+**Still UNCERTIFIED-BY-EXECUTION:** the full 350-case sabotage ledger has not been re-run end to end
+since these changes; only the five new cases plus the full unit suite have. CI runs it nightly.
+
+- [2026-08-23 12:05] DONE: Phase 2b built, live-accepted 20/20 against hand labels.
