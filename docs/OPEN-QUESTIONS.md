@@ -718,7 +718,26 @@ awkward to parse; ANIL and service-public.fr republish them in readable tables. 
 five-minute job, and the classifier already clears the floor on tiers 1–3 for every corpus case, so
 this is a genuine enhancement rather than a gap.
 
-### Ⓐ Q20 — ANSWERED 2026-08-07: ICF stays `mixed_tenure: true`
+### Ⓐ Q20 — ANSWERED 2026-08-07: ICF stays `mixed_tenure: true` · SUBJECT RETIRED 2026-08-23
+
+> **The source this question is about no longer exists in `config/sources.json`** (retired
+> 2026-08-23, with `seqens`). Nothing below is withdrawn — the ruling was right and the drift guard
+> it demanded is still live — but the block it applied to is gone, so there is no `mixed_tenure`
+> flag left to flip.
+>
+> **It ended as option 3, and NOT for option 3's reason, which is the part worth carrying forward.**
+> Option 3 below is *"drop ICF until someone confirms an endpoint"* — a caution, taken while nobody
+> had looked. What actually happened is that somebody looked: A2 was measured three levels deep on
+> 2026-08-20 and publishes a directory of *résidences* with zero rents, zero surfaces and zero
+> occurrences of `disponib` (`docs/SOURCES.md`, A2). So the block was not removed pending evidence,
+> it was removed BY evidence, and the difference decides whether a future session should try again.
+> Reaching the same disposition from a guess and from a measurement are not the same outcome, and a
+> file that records only the disposition cannot tell them apart.
+>
+> `tests/fixtures/tenure/corpus.json` keeps its own `icf_novedis` and `seqens` entries — corpus
+> labels are corpus-local — so `ConfigTest::testEveryCorpusSourceAgreesWithConfig()` simply has two
+> fewer sources to compare, and `testTheMeasuredDeadEndsAreNotShippedAsPlaceholders()` now stops
+> either name reappearing as a `REMPLACER` placeholder.
 
 **ANSWERED 2026-08-07 — the default applies (option 1).** `icf_novedis` keeps `mixed_tenure: true`
 until a real Novedis payload can be inspected. The binding check this section asked for is now

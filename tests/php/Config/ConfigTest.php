@@ -1050,7 +1050,31 @@ final class ConfigTest extends TestCase
         self::assertArrayHasKey('inli', $sources);
         self::assertFalse($sources['inli']->mixedTenure, "In'li is Action Logement's pure-LLI arm");
         self::assertTrue($sources['cdc_habitat']->mixedTenure);
-        self::assertTrue($sources['icf_novedis']->mixedTenure, 'Q20: stays true until a Novedis payload can be inspected');
+        self::assertTrue($sources['cityloger']->mixedTenure, 'the group publishes social and intermediate alike');
+    }
+
+    /**
+     * A MEASURED DEAD END MUST NOT LOOK LIKE AN UNVERIFIED PLACEHOLDER.
+     *
+     * `icf_novedis` (A2) and `seqens` (A5) sat here as `enabled: false` blocks whose url read
+     * `REMPLACER` — the shape this file uses for "an endpoint nobody has captured yet". Both were
+     * then MEASURED (docs/SOURCES.md A2, A5) and publish no pollable vacancies at all: Novedis
+     * lists residences with zero rents and zero surfaces, and Seqens dead-ends at al-in.fr because
+     * Action Logement's ESH allocate by commission. Waiting on a capture and having no feed to
+     * capture are different facts, and a config that renders them identically keeps inviting the
+     * work that cannot pay.
+     *
+     * They are retired from the CONFIG only. docs/SOURCES.md keeps their rows, because the
+     * measurement is the record of why nobody should try again, and tests/fixtures/tenure/
+     * corpus.json keeps its own `seqens` / `icf_novedis` source entries, which are corpus-local
+     * labels and never read this file.
+     */
+    public function testTheMeasuredDeadEndsAreNotShippedAsPlaceholders(): void
+    {
+        $sources = ConfigLoader::loadSources(self::ROOT . '/config/sources.json');
+
+        self::assertArrayNotHasKey('icf_novedis', $sources, 'A2 measured non-pollable 2026-08-20');
+        self::assertArrayNotHasKey('seqens', $sources, 'A5 measured non-pollable 2026-08-20');
     }
 
     /**

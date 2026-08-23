@@ -1,5 +1,5 @@
 {
-  "_comment": "Source definitions. JSON, not YAML — ruled 2026-08-07 (Q22). Keyed by source name, so a duplicate name is unwritable rather than merely discouraged. Underscore-prefixed keys are comments; every other unknown key is a hard validation error. Use the /add-source skill to onboard a new one.\n\nHARD RULE 1 — EVERY source below is `enabled: false` and every url is the REMPLACER placeholder, because no endpoint in this file has been verified against the live site. CLAUDE.md hard rule 1 forbids writing an endpoint from memory, and the loader REFUSES an enabled source whose url still contains REMPLACER — so this file cannot be half-enabled by accident. Unblocking a source needs a DevTools cURL capture from the developer; docs/SOURCES.md records which sites answer a plain client and which 403 it.",
+  "_comment": "Source definitions. JSON, not YAML \u2014 ruled 2026-08-07 (Q22). Keyed by source name, so a duplicate name is unwritable rather than merely discouraged. Underscore-prefixed keys are comments; every other unknown key is a hard validation error. Use the /add-source skill to onboard a new one.\n\nHARD RULE 1 \u2014 an endpoint is never written from memory. Four landlord sources are `enabled: true` (inli, cdc_habitat, cityloger, logirep); each was fetched live with `robots.txt` read FIRST, its payload frozen under tests/fixtures/<name>/ and its block carries the `_verified_at` date that proves it. Every OTHER block is `enabled: false`, carrying the `REMPLACER` placeholder wherever an endpoint or a field map was never captured \u2014 today that is `map.ref` on seloger and leboncoin, and no `url` key at all on any of the four. TWO refusals stop this file being half-enabled, and they are in different places on purpose: the LOADER refuses `enabled: true` next to a REMPLACER url (SourceDefinition rule 3), and `Scout::buildSource()` refuses it AGAIN at build time \u2014 which is the one that still holds when `--source=<name>` force-runs a block that is disabled, a path the loader's enabled-check cannot see. Unblocking one needs a DevTools cURL capture from the developer; docs/SOURCES.md records which sites answer a plain client, which 403 it, and which were measured to publish nothing at all.\n\nA REMPLACER block means NOBODY HAS LOOKED YET. It does not mean `measured and dead` \u2014 those are retired from this file outright rather than left looking like pending work (icf_novedis/A2 and seqens/A5, removed 2026-08-23; their measurements stay in docs/SOURCES.md and the absence is asserted by ConfigTest).",
   "_why": "The single flag that disarms the fail-closed rule of CLAUDE.md §1. It is REQUIRED on every block — the loader refuses a source that omits it, and SourceProfile independently defaults it to true. `false` is a claim that this landlord publishes NO social stock whatsoever, and it is only defensible for In'li (Action Logement's intermediate arm) and the private-market portals. Every value here is bound to tests/fixtures/tenure/corpus.json by ConfigTest, so the two cannot drift apart silently.",
   "sources": {
     "inli": {
@@ -33,20 +33,6 @@
         "surface": ".featured-details span => ([\\d.,]+)\\s*m²",
         "rooms": ".featured-details span => (\\d+)\\s*pièce",
         "_charges_included": "The card prints `cc` in a sibling span beside the figure — charges comprises, confirmed on all 19 cards of the frozen capture.",
-        "charges_included": true
-      }
-    },
-    "icf_novedis": {
-      "_comment": "A2. ICF Habitat's non-social arm — 10 000 units aimed at households above the social ceilings. SNCF group, so stock clusters on rail corridors, which fits the boucle de Seine. mixed_tenure stays TRUE (Q20, ruled 2026-08-07): `false` would be right for a Novedis-only endpoint and wrong for the group portal, and nothing here yet says which the adapter will hit. Costs a few digest entries; cannot cost an application.",
-      "enabled": false,
-      "family": "institutional",
-      "type": "json",
-      "default_tenure": "LLI",
-      "mixed_tenure": true,
-      "url": "REMPLACER",
-      "items_path": "REMPLACER",
-      "map": {
-        "ref": "REMPLACER",
         "charges_included": true
       }
     },
@@ -122,20 +108,6 @@
         "tenure_field": "div.tab-content => Financement\\s*([A-Z0-9]{3,10})",
         "surface": "div.tab-content => ([\\d.,]+)\\s*m2",
         "elevator": "div.tab-content => Ascenseurs\\s*(Oui|Non)"
-      }
-    },
-    "seqens": {
-      "_comment": "A5. Action Logement group, strong 78/95 footprint. robots.txt clean (/wp-admin/ only). Publishes social AND intermediate stock on the same pages — see CLAUDE.md, 'The Action Logement wrinkle'.",
-      "enabled": false,
-      "family": "institutional",
-      "type": "json",
-      "default_tenure": null,
-      "mixed_tenure": true,
-      "url": "REMPLACER",
-      "items_path": "REMPLACER",
-      "map": {
-        "ref": "REMPLACER",
-        "charges_included": true
       }
     },
     "seloger": {

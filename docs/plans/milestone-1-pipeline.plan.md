@@ -86,16 +86,46 @@ publishes nothing in Île-de-France. The bottleneck is now **delivery**: a pipel
 and scores correctly, with nowhere to send the result and nothing currently matching. Adding a
 fifth institutional source of the same kind does not move it.
 
+> **RE-MEASURED 2026-08-23 — the third axis row above and two of the items below are now false, and
+> the way they went false is the point of re-measuring rather than editing.** Row 3 read
+> *"Product delivering value to the developer — still ~0%"* and gave TWO reasons: nothing reaches a
+> phone, and the live yield is 0. Both stopped being true within about twenty-four hours of being
+> written, and neither was fixed by the work the table pointed at.
+>
+> - **Delivery is live and PROVEN in production.** `config/criteria.local.json` (gitignored,
+>   mounted read-only into the container) sets `channels: ["console", "ntfy", "email"]`, and the
+>   deployed watcher's own startup heartbeat and *à vérifier* digest were retrieved back off the
+>   ntfy topic at `2026-08-22T20:15:08Z` and `20:16:17Z` [Verified 2026-08-23: `curl -s
+>   "$NTFY_SERVER/$NTFY_TOPIC/json?poll=1&since=24h"`]. That is the whole chain — container →
+>   channel → device — and it is the first evidence of it that is not a `test-notify` invocation.
+> - **The yield is 83, not 0** [Verified 2026-08-23: the running container reports `478 annonce(s)
+>   analysées · 83 correspondance(s), 11 à vérifier, 380 écartée(s), 4 doublon(s)` every pass].
+>   That came from the Q1/Q2/Q3 criteria widening, not from a new source. The row's own remedy —
+>   *"either widen the commune list or land the email route"* — was taken, and the table was never
+>   updated to say so.
+>
+> **So the bottleneck moved a second time, and it is no longer an engineering item at all.** The
+> pipeline classifies, scores, dedups, paces itself and pushes to a phone; 478 listings are seeded
+> as seen, so what is now missing is a genuinely NEW listing to arrive. Nothing on this page makes
+> that happen faster. What remains is quality of the notification (the phase-2 hydration item) and
+> data the project does not yet hold (`plafonds`, an alert mailbox, an IDFM key).
+>
+> One measured oddity, not a defect: consecutive passes over an unchanged payload alternate between
+> `11 à vérifier / 380 écartées` and `9 / 382` on a constant total, i.e. exactly two listings flip
+> verdict. It fails closed both ways — neither state is a match — so it is logged here rather than
+> chased. Diagnose with `scout run --once -v --source=cityloger` on a throwaway `RENT_WATCH_DB` if
+> it outlives the current stock.
+
 ### Remaining items
 
 | Item | Effort | Blocked on | Milestone |
 |---|---|---|---|
-| **A push channel actually configured** (ntfy or SMTP) | **S** — both channels are built, tested and wired; this is one `.env` and one config line | the developer picking one and supplying the credential. **Highest leverage item on the page** | 6 |
+| ~~**A push channel actually configured** (ntfy or SMTP)~~ **DONE 2026-08-22** | was **S** | — ntfy is configured in the gitignored `criteria.local.json` and the deployed container's own heartbeat was read back off the topic on 2026-08-23. It was indeed the highest-leverage item on the page | 6 |
 | First real `email_alert` portal | **M** — the adapter exists; a parser has to be shaped to a real message | IMAP credentials + one real alert email | 6 |
-| A source whose stock overlaps the criteria | **?** — not a coding task. Either widen the commune list or land the email route | see above | 5/7 |
+| ~~A source whose stock overlaps the criteria~~ **DONE 2026-08-22** | was **?** | — resolved by the first of the two remedies it named: Q1/Q2/Q3 widened the criteria to all of Île-de-France at `min_rooms: 3` / `≥50 m²` / `≤1200 € CC`, and the live yield went 0 → **83 of 478** | 5/7 |
 | `PlafondBands` tier-4 figures | **S** — ~150 lines of data + tests. A11 Toit et Joie's `/Plafonds-de-ressources` carries the PLAI/PLUS/PLS half for IdF but states **no year**, so it is a pointer, not a figure | the `plafonds` tables per zone/household | 2 |
 | `Enrich/transit` + `Enrich/geo` | **M** — not started | IDFM/PRIM API key | 8 |
-| Retire `icf_novedis` + `seqens` from `config/sources.json` | **S** | **nothing.** Both still carry `REMPLACER`, which reads *"to be verified"* — but A2 and A5 were MEASURED and publish no pollable vacancies at all. A placeholder and a dead end should not look alike | — |
+| ~~Retire `icf_novedis` + `seqens` from `config/sources.json`~~ **DONE 2026-08-23** | was **S** | — both blocks removed; `docs/SOURCES.md` keeps the A2/A5 measurements and the corpus keeps its own labels. `ConfigTest::testTheMeasuredDeadEndsAreNotShippedAsPlaceholders()` stops either name returning as a `REMPLACER` placeholder, and Q20 in `docs/OPEN-QUESTIONS.md` records that this ended as its own option 3 for a reason option 3 never gave | — |
 | Real corpus texts replacing the 114 synthetic | **M** — 6 captured so far; append, never renumber | more live sources | 2 |
 | Classifier performance (~155 ms/listing) | **S** | nothing — deferred only while the ledger held `src/` frozen. That freeze is lifted | — |
 | `src/phorj/` port of the pure core | **L** | three phorj builds; **on indefinite hold** | — |
