@@ -229,13 +229,26 @@ final readonly class Scout
                 ++$problems;
             }
 
+            // Hard rule 2, for the one failure nothing else in this table can show. A detail page
+            // that stops parsing does not change the source's COUNT and does not fail its run, so
+            // `ok / 168 annonces` stays true and correct while every listing quietly loses its
+            // title — the broken-selector-forever shape, one layer down. It is reported as a count
+            // rather than as a status because one dead page is noise: what means something is the
+            // proportion, and the operator is the one who can see it against the item count.
+            $detailFailures = $store->detailFailureCount($source->name(), HtmlSource::DETAIL_ATTEMPT_CAP);
+            $note = $error ?? ($health->detail ?? '');
+
+            if ($detailFailures > 0) {
+                $note = rtrim($note . ' · ' . $detailFailures . ' page(s) de détail illisible(s), abandonnée(s)', ' ·');
+            }
+
             $this->line(sprintf(
                 '  %-16s %-16s %8d %6d ms  %s',
                 $source->name(),
                 $health->status->value,
                 $count,
                 $durationMs,
-                $error ?? ($health->detail ?? ''),
+                $note,
             ));
         }
 

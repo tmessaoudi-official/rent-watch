@@ -211,6 +211,28 @@ final class ScoutTest extends TestCase
         self::assertMatchesRegularExpression('~journal (wal|delete|memory|truncate|persist|off)~', $r['out']);
     }
 
+    /**
+     * Hard rule 2 reaches the one failure no other column can show.
+     *
+     * A detail page that stops parsing does not change a source's COUNT and does not fail its run,
+     * so `ok / 168 annonces` stays true while every listing quietly loses its title. That is the
+     * broken-selector-forever shape one layer down, and `detailFailureCount` is what sees it — but
+     * a count nobody reads is not a signal, and this is the assertion that it is read.
+     */
+    public function testDoctorReportsDetailPagesItHasGivenUpOn(): void
+    {
+        $store = \RentWatch\Store\Store::open((string) $this->dbPath);
+
+        for ($attempt = 0; $attempt < \RentWatch\Adapters\HtmlSource::DETAIL_ATTEMPT_CAP; ++$attempt) {
+            $store->recordDetailFailure('fixture_demo', 'ANN-1', 'HTTP 404', '2026-08-23T10:0' . $attempt . ':00+02:00');
+        }
+
+        unset($store);
+        $r = $this->scout(['doctor', '--source=fixture_demo']);
+
+        self::assertStringContainsString('illisible', $r['out']);
+    }
+
     public function testDoctorPrintsTheSchemaVersionAndTheDigestTimezone(): void
     {
         $r = $this->scout(['doctor']);

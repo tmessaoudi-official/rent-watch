@@ -1135,6 +1135,7 @@ final class ConfigTest extends TestCase
 
         $enabled = [];
         $withDetail = [];
+        $detailBudgets = [];
 
         foreach (ConfigLoader::loadSources(self::ROOT . '/config/sources.json') as $name => $s) {
             if (!$s->enabled || $s->type === 'fixture') {
@@ -1159,13 +1160,30 @@ final class ConfigTest extends TestCase
 
             if ($s->detailMap !== null) {
                 $withDetail[] = $name;
+                $detailBudgets[$name] = $s->detailBudgetPerPass;
             }
         }
 
-        // A detail map costs one request PER GATED LISTING on top of the page walk, so a source
-        // acquiring one is a request-volume decision and not a mapping tweak. Named for the same
-        // reason the enabled set is.
-        self::assertSame(['cityloger'], $withDetail, 'the set of sources that fetch detail pages changed');
+        // A detail map costs one request PER LISTING on top of the page walk, so a source acquiring
+        // one is a request-volume decision and not a mapping tweak. Named for the same reason the
+        // enabled set is.
+        //
+        // In'li joined on 2026-08-23. The volume question it raises is real and is answered
+        // elsewhere rather than here: ~174 listings, all novel on the first pass, would be a
+        // three-hour pass at Q37 pacing. It is bounded by `detail_budget_per_pass` (20 by default,
+        // draining the backlog over several passes) and by the schema-v5 cache, which makes steady
+        // state zero extra requests — a page is read once and read back for ever after.
+        self::assertSame(['inli', 'cityloger'], $withDetail, 'the set of sources that fetch detail pages changed');
+
+        // The bound itself, asserted where the decision is recorded. A detail map shipping with an
+        // unbounded budget is the request-volume regression this whole guard is watching for.
+        foreach ($detailBudgets as $name => $budget) {
+            self::assertLessThanOrEqual(
+                25,
+                $budget,
+                "source '{$name}' fetches detail pages with a per-pass budget large enough to be a crawl",
+            );
+        }
 
         // Named rather than counted: the day a second source is enabled, this line is the one that
         // makes someone confirm it was a decision.
