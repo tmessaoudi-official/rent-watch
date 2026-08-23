@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# test-drift-scan.sh — the drift gate's own self-test, scoped to S8 (`.env.example` sync).
+# test-drift-scan.sh — the drift gate's own self-test: S8 (`.env.example` sync) and S7's corpus
+# breakdown claim, the one S7 shape that had never been seen red.
 #
 # WHY THIS FILE EXISTS. `drift-scan.sh` runs in CI and fails the build on P0/P1, which makes it a
 # gate; and its own preamble records the failure every gate here is prone to — an earlier version
@@ -96,7 +97,7 @@ silent_about() {
   ! grep -qE -- "$2" <<<"$found"
 }
 
-printf '\n== drift-scan self-test (S8: .env.example sync) ==\n\n'
+printf '\n== drift-scan self-test (S8: .env.example sync · S7: corpus breakdown) ==\n\n'
 
 # ── the gate must be QUIET on a correct tree ─────────────────────────────────────────────────────
 # First, because every case below asserts a message appears; if the scan reported something on a
@@ -169,6 +170,67 @@ chmod 644 "$crash/.env.example"
 # ── the scan announces the section at all ────────────────────────────────────────────────────────
 check "S8 announces itself in a non-quiet run (so a silent removal is visible)" \
   bash -c 'CLAUDE_PROJECT_DIR="'"$clean"'" bash "'"$scan"'" 2>&1 | grep -q "S8 .env.example"'
+
+# ── S7: the corpus BREAKDOWN claim ───────────────────────────────────────────────────────────────
+# Added 2026-08-23, and the reason is the whole point of this file. CI run 36 went red on a stale
+# `120 cases` in CLAUDE.md — S7 working exactly as designed. The commit that fixed it left a SECOND
+# stale count untouched three words away, in a sentence that previously read
+# "120 total, 115 synthetic + 7 real" — where 115 + 7 is 122. Every S7 pattern until now checked
+# ONE number, so a claim that states a total AND its addends had two of its three numbers
+# unguarded. A drifted total whose own addends disprove it survived the fix for the very drift it
+# is an instance of.
+#
+# That citation is on ONE line and inside double quotes on purpose. `code_spans()` exempts a quoted
+# span, and its regex is `"[^"\n]{0,120}"` — newline-excluding — so wrapping the quote across two
+# lines makes the scan report this write-up as live drift on every run, for ever. It did exactly
+# that on the first run after this section was written, which is the trap drift-scan's own preamble
+# describes: documenting a bug becomes a permanent finding, and a gate that cries wolf gets
+# overridden within a week. `previously` on the same line is the belt to that braces.
+#
+# S7 is a different shape of subject from S8 above: it reads the corpus and every tracked .md/.sh
+# rather than three named files, so the scratch project needs a corpus and a doc to make a claim in.
+# `scan_s8`'s message filter does not apply; these cases match S7's own text.
+scratch_corpus() {
+  local dir="$1"
+  scratch_project "$dir"
+  mkdir -p "$dir/tests/fixtures/tenure"
+  cp "$repo/tests/fixtures/tenure/corpus.json" "$dir/tests/fixtures/tenure/corpus.json"
+}
+
+# The claim under test is written into a doc the scan discovers by rglob. `CLAUDE.md` is the file
+# both live instances of this phrasing sit in, so it is what the fixture uses.
+claims() {
+  printf 'The corpus is %s.\n' "$1" >"$2/CLAUDE.md"
+}
+
+s7_says() {
+  local out
+  out="$(CLAUDE_PROJECT_DIR="$1" bash "$scan" --quiet 2>&1)" || true
+  grep -E '^P1 .*(N total, N synthetic|N synthetic \+ N captured)' <<<"$out"
+}
+
+# Real numbers, so a fixture that drifts from the corpus fails as loudly as the prose would.
+s7_cases=$(python3 -c "import json;d=json.load(open('$repo/tests/fixtures/tenure/corpus.json'));print(len(d['cases']))")
+s7_synth=$(python3 -c "import json;d=json.load(open('$repo/tests/fixtures/tenure/corpus.json'));print(sum(1 for c in d['cases'] if c.get('provenance')=='synthetic'))")
+s7_capt=$(python3 -c "import json;d=json.load(open('$repo/tests/fixtures/tenure/corpus.json'));print(sum(1 for c in d['cases'] if c.get('provenance')=='captured'))")
+
+s7ok="$work/case-s7-clean"
+scratch_corpus "$s7ok"
+claims "$s7_cases total, $s7_synth synthetic + $s7_capt captured" "$s7ok"
+check "S7 is silent on a breakdown claim that adds up (so the two below mean something)" \
+  test -z "$(s7_says "$s7ok")"
+
+s7bad="$work/case-s7-total"
+scratch_corpus "$s7bad"
+claims "$((s7_cases + 7)) total, $s7_synth synthetic + $s7_capt captured" "$s7bad"
+check "a stale TOTAL in a breakdown claim is reported (the live CLAUDE.md defect)" \
+  bash -c 'o="$(CLAUDE_PROJECT_DIR="'"$s7bad"'" bash "'"$scan"'" --quiet 2>&1)" || true; grep -qE "^P1 .*N total, N synthetic" <<<"$o"'
+
+s7part="$work/case-s7-captured"
+scratch_corpus "$s7part"
+claims "$s7_cases total, $s7_synth synthetic + $((s7_capt + 5)) captured" "$s7part"
+check "a stale CAPTURED half is reported (the number that moves as sources come online)" \
+  bash -c 'o="$(CLAUDE_PROJECT_DIR="'"$s7part"'" bash "'"$scan"'" --quiet 2>&1)" || true; grep -qE "^P1 .*N synthetic \+ N captured" <<<"$o"'
 
 printf '\n  %d passed, %d failed\n' "$pass" "$fail"
 

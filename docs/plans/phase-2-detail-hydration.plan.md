@@ -1,7 +1,14 @@
 # Phase 2 — persistent detail hydration
 
-> **Status: PLANNED, not started.** Written 2026-08-23. Chosen by the developer over monitor-only,
-> the unblocked small leftovers, and chasing the verdict flip.
+> **Status: BUILT, DEPLOYED 2026-08-23** (schema v4→v6 in production; see
+> `phase-2b-inli-floor-lift.plan.md` § Deployed). Written 2026-08-23, chosen by the developer over
+> monitor-only, the unblocked small leftovers, and chasing the verdict flip.
+>
+> This header read *"PLANNED, not started"* for the whole of the day the work was built, shipped and
+> deployed, which made it the one stale artefact across the five plan files — and a plan whose own
+> status line is wrong is worse than one nobody wrote, because the next reader takes it as state.
+> The unmarked steps below are LEFT unmarked deliberately: they record what was planned, and the
+> §§ "What actually got built" and "Residual" sections plus phase-2b are what record what happened.
 
 ## What this is for
 

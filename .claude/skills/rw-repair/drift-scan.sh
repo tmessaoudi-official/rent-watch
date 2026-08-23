@@ -358,7 +358,7 @@ if unknown:
 # the corpus is 100% synthetic, `synthetic == cases`. The day the first real payload is frozen in,
 # an honest "all 86 are synthetic" would be reported as drift and a stale "all 87" would pass — the
 # check would be actively wrong in both directions, on the exact commit it exists to police.
-EXPECT = {'cases': cases, 'synthetic': synthetic}
+EXPECT = {'cases': cases, 'synthetic': synthetic, 'captured': captured}
 CLAIMS = [
     # `,?` was not enough: CLAUDE.md's File-layout block separates with an EM DASH, which is the
     # phrasing the un-exempted fenced block actually uses, so the hole the exemption fix was written
@@ -374,6 +374,23 @@ CLAIMS = [
     # the bold markers and a capital A.
     (r'(?i)\*{0,2}all\s+(\d+)\s+(?:are|of them are)\s+synthetic', 'all N are synthetic', ('synthetic',)),
     (r'(\d+)-case (?:language-neutral|synthetic)', 'N-case corpus', ('cases',)),
+    # The BREAKDOWN phrasing, added 2026-08-23 after CI run 36 went red on a stale `120 cases` and
+    # a SECOND stale count in the same file survived that fix. CLAUDE.md previously read
+    # "120 total, 115 synthetic + 7 real", where 115 + 7 is 122. Every pattern above checks ONE
+    # number, so a sentence that states the total and its parts had two of its three numbers
+    # unguarded — and the one that drifted was a total whose own addends, three words later,
+    # disproved it. That quote stays on ONE line inside double quotes: `code_spans()` exempts a
+    # quoted span and its regex excludes newlines, so a reflow would make this comment a permanent
+    # P1 against itself.
+    # `\s+` spans the newline on purpose: the match is run against the whole file, and this claim
+    # was wrapped across two lines, which is precisely why re-reading the paragraph did not catch it.
+    (r'(\d+)\s+total,\s+(\d+)\s+synthetic', 'N total, N synthetic', ('cases', 'synthetic')),
+    # And the parts on their own, for the phrasing that states no total (README's table cell).
+    # `real` as well as `captured`: the corpus field is `captured`, but prose reaches for "real"
+    # because that is the word spec §4 uses, and a checker that only knows the field name would
+    # have skipped both live instances of this sentence.
+    (r'(?i)(\d+)\s+synthetic\s*\+\s*(\d+)\s+(?:real|captured)', 'N synthetic + N captured',
+     ('synthetic', 'captured')),
 ]
 
 
