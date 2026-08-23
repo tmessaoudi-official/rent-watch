@@ -148,18 +148,44 @@ final class ListingSnapshot
         return is_bool($value) ? $value : null;
     }
 
-    /** @return array<string, string> */
+    /**
+     * The structured fields, PRESERVED rather than filtered.
+     *
+     * **This method used to keep a key only `if (is_scalar($item))`, and that one condition made
+     * the class's whole invariant false.** `encode()` writes `fields` verbatim, so an array-, `null`-
+     * or object-valued field was written and then silently dropped on the way back — and those are
+     * exactly the values {@see TenureClassifier} raises its tier-1 DOUBT on, the doubt being the
+     * only thing withholding a match. A review panel proved it end to end on 2026-08-24: a listing
+     * with `fields: ['gamme' => ['PLAI','PLUS']]` and an intermediate-sounding title classified
+     * `UNKNOWN`/`DIGEST`, and after one snapshot round trip `scout reclassify` promoted it to
+     * `LLI`/`MATCH` and pushed it. That is the literal scenario `listings.evidence_json` exists to
+     * prevent, and the loss was irreversible — reclassify writes the decoded listing back.
+     *
+     * So: **every key survives, and every value survives as faithfully as JSON allows.** A scalar
+     * becomes its string form (which is what an adapter would have produced); `null` stays `null`;
+     * an array stays an array. All three then reach the classifier, which already knows what to do
+     * with a value it cannot read — it doubts, and a doubt digests.
+     *
+     * The field NAME is evidence in its own right, which is the second reason nothing may be
+     * dropped: `numeroUnique` and `demandeLogementSocial` are literal `PROCEDURAL` entries, so a
+     * key whose value is `null` still carries the strongest social discriminator the domain offers.
+     *
+     * A `fields` that is not an array at all is CORRUPTION, not sparseness, and throws — the caller
+     * must be able to skip the row rather than judge it on a silently emptied map.
+     *
+     * @return array<string, mixed>
+     *
+     * @throws \InvalidArgumentException
+     */
     private static function fields(mixed $value): array
     {
         if (!is_array($value)) {
-            return [];
+            throw new \InvalidArgumentException('listing snapshot has a non-object `fields`');
         }
 
         $fields = [];
         foreach ($value as $key => $item) {
-            if (is_scalar($item)) {
-                $fields[(string) $key] = (string) $item;
-            }
+            $fields[(string) $key] = is_scalar($item) ? (string) $item : $item;
         }
 
         return $fields;

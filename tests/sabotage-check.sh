@@ -64,7 +64,20 @@ run_sabotage() {
   # every one of them ERRORS in the scratch copy — and an errored suite is a red suite, which this
   # harness cannot tell apart from a caught sabotage. Every sabotage would have reported `ok` while
   # proving nothing at all, which is precisely the failure the whole script exists to detect.
-  if ! cp -a "$repo/src" "$repo/tests" "$repo/config" "$repo/phpunit.xml" "$repo/composer.json" "$work/repo/" \
+  # `.env.example` JOINED THIS LIST on 2026-08-24, and its absence had made this ENTIRE SCRIPT
+  # vacuous since 2026-08-22. `DotEnvTest::testTheShippedTemplateParsesCleanly` reads the template
+  # through a repo-root constant, so without it that ONE test failed in every scratch run — and the
+  # detection assertion below is `Failures: [1-9]`, which that single failure satisfies on its own.
+  # Every case therefore reported `ok` whether or not the suite noticed the sabotage, `fail` could
+  # never increment, the script always exited 0, and the nightly stayed permanently green. Worse,
+  # per CLAUDE.md a green nightly CLOSES every open ledger issue, so the broken gate actively
+  # retracted real alarms. Found by a review panel on 2026-08-24, which re-ran the in-range cases
+  # against a corrected copy and found three of them genuinely undetected.
+  #
+  # The lesson generalises past this one file: ANY repo-root file a test reads must be in this list,
+  # and the baseline check below runs in `$repo` rather than the scratch copy, so it cannot see the
+  # difference. That gap is what `assert_scratch_baseline_green` now closes.
+  if ! cp -a "$repo/src" "$repo/tests" "$repo/config" "$repo/phpunit.xml" "$repo/composer.json" "$repo/.env.example" "$work/repo/" \
     || ! cp -a "$repo/vendor" "$work/repo/vendor" \
     || ! ln -s "$repo/tools" "$work/repo/tools"; then
     printf '  \033[31mFAIL\033[0m %-58s (could not build the scratch copy)\n' "$label"
@@ -167,6 +180,39 @@ if ! (cd "$repo" && php tools/phpunit.phar --no-output >/dev/null 2>&1); then
   exit 1
 fi
 printf '  baseline: suite is green — sabotage results are meaningful\n'
+
+# AND THE SAME BASELINE IN THE SCRATCH COPY, which is the check that was missing for a month.
+#
+# The baseline above runs in `$repo`, so it proves the REPO is green and says nothing about the
+# throwaway tree every sabotage is actually judged in. Those two trees are not the same tree: the
+# scratch copy is assembled from an explicit `cp -a` list, and any repo-root file a test reads but
+# that list omits makes the scratch suite fail for a reason no sabotage caused. `.env.example` was
+# omitted from 2026-08-22, so ONE test failed in every scratch run, the `Failures: [1-9]` detection
+# assertion was satisfied unconditionally, and all ~375 cases reported `ok` while proving nothing —
+# for a month, with the nightly green throughout and closing real ledger issues as it went.
+#
+# This builds one unsabotaged scratch copy and requires it GREEN. It is the difference between a
+# gate that certifies §1 and a gate that certifies its own copy list, and it costs one suite run.
+rm -rf "$work/baseline"
+mkdir -p "$work/baseline"
+if ! cp -a "$repo/src" "$repo/tests" "$repo/config" "$repo/phpunit.xml" "$repo/composer.json" "$repo/.env.example" "$work/baseline/" \
+  || ! cp -a "$repo/vendor" "$work/baseline/vendor" \
+  || ! ln -s "$repo/tools" "$work/baseline/tools"; then
+  printf '  \033[31mABORT\033[0m could not build the unsabotaged scratch copy.\n\n'
+  exit 1
+fi
+if ! (cd "$work/baseline" && php tools/phpunit.phar --no-output >/dev/null 2>&1); then
+  printf '  \033[31mABORT\033[0m the suite is red in an UNSABOTAGED scratch copy, so every case below\n'
+  printf '        would report `ok` whether or not it was detected. Something the tests read is\n'
+  printf '        missing from the cp list in run_sabotage() — that is the bug, not the tests.\n'
+  # The runner is named through a `%s` rather than written out, and that is not decoration:
+  # tests/test-ci-workflow.sh extracts every literal runner invocation in this file and RUNS it, to
+  # prove no invocation's flags redden a green suite. This line is a MESSAGE, not an invocation, and
+  # writing the command out in full made the checker try to execute a printf fragment.
+  printf '        Reproduce: cd %s && php %s\n\n' "$work/baseline" "tools/phpunit.phar"
+  exit 1
+fi
+printf '  scratch baseline: green too — the copy list is complete\n'
 
 # BEFORE the work, not after it. A dirty tree is not fatal — checking uncommitted changes is a
 # legitimate use — but every sabotage copies src/ and tests/ wholesale, so an edit landing mid-run
@@ -1975,8 +2021,6 @@ run_sabotage "a letterless literal enters the vocabulary, making the skip unsoun
   src/php/Core/TenureClassifier.php \
   "s|    private const array PROCEDURAL = \\[|    private const array PROCEDURAL = ['2026' => Tenure::SOCIAL,|"
 
-printf '\n  %d sabotage(s) detected, %d undetected\n' "$pass" "$fail"
-
 # ── Schema v7: the evidence a verdict was formed from, and the outcome it was judged to ──────────
 # Every case here is silent by construction, and they share one shape: the damage is not visible
 # when it is done, only when `scout reclassify` runs months later on evidence that quietly shrank.
@@ -2117,13 +2161,26 @@ run_sabotage "the evidence-less skip count stops being reported" \
 # match channel wearing a match's formatting.
 run_sabotage "reclassify announces transitions that are not promotions" \
   src/php/Cli/Scout.php \
-  "s%if (\$before === 'DIGEST' \&\& \$after === 'MATCH') {%if (\$after !== \$before) {%"
+  "s%if (\$after === 'MATCH' \&\& \$before !== 'MATCH') {%if (\$after !== \$before) {%"
 
 # Marking before the channel confirms. A promotion is the ONE announcement this listing will ever
 # get — it was already carried in a digest, so nothing else will surface it again.
-run_sabotage "a promotion is marked notified before the channel confirms" \
+# RETARGETED 2026-08-24. This used to flip `if ($notifier->delivered($failures))` to `if (true)`,
+# and a review panel showed it was UNDETECTED — the guarantee it names had no test at all. The line
+# it targeted no longer exists either: the write itself now happens after delivery, not just the
+# mark, because writing the verdict first removed the row from `staleVerdicts()` AND from
+# `pendingDigest()` at once, leaving a MATCH nobody was told about that no command could reach.
+# Short-circuiting the failure branch makes every promotion write regardless of the channel.
+run_sabotage "a promotion is written to the store before the channel confirms" \
   src/php/Cli/Scout.php \
-  's%^            if (\$notifier->delivered(\$failures)) {$%            if (true) {%'
+  's%^            if (!\$notifier->delivered(\$failures)) {$%            if (false) {%'
+
+# And the ordering that makes the refusal cheap. Building the notifier AFTER the loop means a deploy
+# whose NTFY_TOPIC is not yet set re-judges everything, then refuses — consuming the whole promotable
+# backlog in one run while printing a message about an environment variable.
+run_sabotage "the notifier is not checked until after every row has been re-judged" \
+  src/php/Cli/Scout.php \
+  's%^            \$fatal = \$notifier->fatalProblem();$%            \$fatal = null;%'
 
 # A row the criteria engine never judged is a dedup MEMBER, and `NULL` outcome is what distinguishes
 # "never judged" from "judged and rejected". Manufacturing an outcome for it destroys that
@@ -2132,12 +2189,26 @@ run_sabotage "an unjudged dedup member is given a manufactured outcome" \
   src/php/Cli/Scout.php \
   's%if (\$before === null) {%if (false) {%'
 
-# The fail-closed profile for a source that has since been removed from sources.json. Flipped to
-# non-mixed with no default, a vanished landlord's stock resolves as eligible by omission — the
+# The fail-closed profile for a source that has since been removed from sources.json — the
 # forgotten-config failure `SourceProfile`'s own default exists to prevent, rebuilt one layer up.
-run_sabotage "a vanished source's listings are judged as if it never mixed tenures" \
+#
+# RETARGETED 2026-08-24, from the `mixedTenure` half to the `defaultTenure` half. A review panel
+# found the original UNDETECTED and the reason is worth keeping: with `defaultTenure: null`,
+# `mixedTenure` is INERT. It is read in exactly two places, both requiring an ELIGIBLE tenure below
+# the 60bp floor; tier 5 is the only sub-floor tier and it needs a non-null default, and every other
+# route to eligible-below-floor is forced to UNKNOWN by the conflict rule. So flipping it changes no
+# verdict today. The default is the half that bites: a vanished landlord's stock would resolve as
+# eligible by omission, at tier 5, on the strength of nothing.
+#
+# BOTH FIELDS IN ONE EXPRESSION, and that is the finding rather than a convenience. Each half is
+# masked by the other: with `mixedTenure: true` a tier-5 default is dragged back to UNKNOWN by the
+# fail-closed rule, and with `defaultTenure: null` tier 5 never fires at all, so flipping either
+# line ALONE changes no verdict and no single-line sabotage can express the guarantee. That is
+# defence in depth working, and it is exactly why the pair has to be sabotaged together — a careless
+# "simplify the fallback" edit rewrites the whole constructor call, not one argument of it.
+run_sabotage "a vanished source's listings inherit an eligible tenure from nothing" \
   src/php/Cli/Scout.php \
-  's%^                true,$%                false,%'
+  's%^                null,$%                \\RentWatch\\Core\\Tenure::LLI,%; s%^                true,$%                false,%'
 
 # One damaged row voiding the whole run. Loud is right; global is not — this is the blast-radius
 # mistake detail hydration already made once, where a single unreadable page stopped every other
@@ -2145,6 +2216,46 @@ run_sabotage "a vanished source's listings are judged as if it never mixed tenur
 run_sabotage "one unreadable snapshot voids the entire reclassify run" \
   src/php/Cli/Scout.php \
   's%^            } catch (.*InvalidArgumentException \$e) {$%            } catch (\\RuntimeException \$e) {%'
+
+# ── The snapshot's own losslessness, found by a review panel 2026-08-24 ───────────────────────────
+# The invariant `evidence ⊇ original` was FALSE for as long as schema v7 existed, and every test
+# passed. `decode()` kept a field only `if (is_scalar($item))`, so an array-, null- or object-valued
+# field was written by the encoder and dropped by the decoder — and those are exactly the values the
+# classifier raises its tier-1 DOUBT on, the doubt being the only thing withholding a match. Driven
+# through the real CLI it went UNKNOWN/DIGEST -> LLI/MATCH -> pushed, on a listing whose own field
+# named two excluded regimes. The reflection guard could not see it: it checks that every
+# CONSTRUCTOR PARAMETER is encoded, and `fields` was — it was the VALUE TYPE inside that nothing
+# exercised.
+run_sabotage "a non-scalar field value is dropped on the way out of the snapshot" \
+  src/php/Core/ListingSnapshot.php \
+  's%\$fields\[(string) \$key\] = is_scalar(\$item) ? (string) \$item : \$item;%if (is_scalar($item)) { $fields[(string) $key] = (string) $item; }%'
+
+# The key alone is evidence: `numeroUnique` and `demandeLogementSocial` are literal PROCEDURAL
+# entries, so dropping a key because its VALUE is empty throws away the strongest social
+# discriminator the domain offers while looking like tidying.
+run_sabotage "a field whose value is null loses its key, and the key was the signal" \
+  src/php/Core/ListingSnapshot.php \
+  's%\$fields\[(string) \$key\] = is_scalar(\$item) ? (string) \$item : \$item;%if ($item !== null) { $fields[(string) $key] = is_scalar($item) ? (string) $item : $item; }%'
+
+# The counterweight to both: a decoder that stopped normalising scalars would satisfy the two cases
+# above while changing what every real adapter's listing looks like to the classifier.
+run_sabotage "an ordinary scalar field stops being normalised to a string" \
+  src/php/Core/ListingSnapshot.php \
+  's%\$fields\[(string) \$key\] = is_scalar(\$item) ? (string) \$item : \$item;%$fields[(string) $key] = $item;%'
+
+# Corruption degraded to sparseness. A `fields` that is not a map at all, silently emptied, hands the
+# classifier a listing with no structured evidence and no way to tell that from one that had none.
+run_sabotage "a non-object fields map is emptied instead of refused" \
+  src/php/Core/ListingSnapshot.php \
+  "s%throw new \\\\InvalidArgumentException('listing snapshot has a non-object \`fields\`');%return [];%"
+
+# THE TALLY LIVES HERE, BELOW EVERY CASE, and that position is load-bearing rather than tidy.
+# It sat mid-file twice: once on 2026-08-20 (295 printed for 303 cases) and again from 2026-08-23,
+# when 21 schema-v7 / digest / reclassify cases were appended past it and the headline read 354 for
+# 375. A tally that excludes the newest cases is worse than no tally — those are exactly the ones
+# nobody has confidence in yet, and CLAUDE.md and the plan files quote this number as authoritative.
+# `tests/test-ci-workflow.sh` pins the position, so appending below it is now a red build.
+printf '\n  %d sabotage(s) detected, %d undetected\n' "$pass" "$fail"
 
 if [[ -n "$_filter" ]]; then
   # Loud, because a filtered run that looked like a full one would be the ledger lying about its own

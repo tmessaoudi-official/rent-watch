@@ -167,4 +167,84 @@ final class ListingSnapshotTest extends TestCase
 
         ListingSnapshot::decode('"a string is valid JSON and is not a listing"');
     }
+
+    /**
+     * A NON-SCALAR FIELD VALUE SURVIVES THE ROUND TRIP, and this is the §1 case of the whole class.
+     *
+     * `decode()` used to keep a key only `if (is_scalar($item))`, so an array-valued field was
+     * written by `encode()` and silently dropped on the way back. That is precisely the value
+     * {@see \RentWatch\Core\TenureClassifier} raises its tier-1 DOUBT on, and the doubt is the only
+     * thing withholding a match — so the round trip quietly disarmed the guard. A review panel
+     * demonstrated the consequence end to end on 2026-08-24: `UNKNOWN`/`DIGEST` before,
+     * `LLI`/`MATCH` and pushed after, on a listing whose own field named two excluded regimes.
+     *
+     * @see \RentWatch\Tests\Core\TenureSnapshotEvidenceTest for the classifier-level assertion
+     */
+    public function testANonScalarFieldValueSurvivesTheRoundTrip(): void
+    {
+        $listing = new RawListing(
+            sourceName: 'demo',
+            externalId: 'x-1',
+            fields: ['gamme' => ['PLAI', 'PLUS']],
+        );
+
+        $back = ListingSnapshot::decode(ListingSnapshot::encode($listing));
+
+        self::assertArrayHasKey('gamme', $back->fields, 'the key must survive — a field NAME is evidence in its own right');
+        self::assertSame(['PLAI', 'PLUS'], $back->fields['gamme']);
+    }
+
+    /**
+     * A `null`-valued field keeps its KEY, which is the half that is easy to miss.
+     *
+     * `numeroUniqueEnregistrement` and `demandeLogementSocial` are literal `PROCEDURAL` entries, so
+     * the name alone is the strongest social discriminator the domain offers — dropping the key
+     * because its value is empty throws away the signal while looking like tidying.
+     */
+    public function testANullValuedFieldKeepsItsKey(): void
+    {
+        $listing = new RawListing(
+            sourceName: 'demo',
+            externalId: 'x-2',
+            fields: ['numeroUniqueEnregistrement' => null],
+        );
+
+        $back = ListingSnapshot::decode(ListingSnapshot::encode($listing));
+
+        self::assertArrayHasKey('numeroUniqueEnregistrement', $back->fields);
+        self::assertNull($back->fields['numeroUniqueEnregistrement']);
+    }
+
+    /**
+     * The counterweight: an ordinary string field is still a string afterwards. Without this, a
+     * "preserve everything" fix that stopped stringifying scalars would pass the two cases above
+     * while changing what every real adapter's listing looks like to the classifier.
+     */
+    public function testAnOrdinaryScalarFieldIsStillAString(): void
+    {
+        $listing = new RawListing(
+            sourceName: 'demo',
+            externalId: 'x-3',
+            fields: ['financement' => 'LLI', 'etage' => 3],
+        );
+
+        $back = ListingSnapshot::decode(ListingSnapshot::encode($listing));
+
+        self::assertSame('LLI', $back->fields['financement']);
+        self::assertSame('3', $back->fields['etage'], 'a scalar is normalised to its string form, as an adapter would have produced');
+    }
+
+    /**
+     * `fields` that is not an object at all is CORRUPTION, not sparseness, and must be refused.
+     *
+     * Degrading it to `[]` would hand the classifier a listing with no structured evidence and no
+     * way to tell that apart from a listing that genuinely had none — hard rule 3, in the one place
+     * where the difference decides whether a social listing can be notified.
+     */
+    public function testANonObjectFieldsMapIsRefusedRatherThanEmptied(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+
+        ListingSnapshot::decode('{"sourceName":"demo","externalId":"x-4","fields":"not a map"}');
+    }
 }

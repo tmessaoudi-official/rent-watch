@@ -213,6 +213,131 @@ final class ScoutReclassifyTest extends TestCase
         $store = Store::open($root . '/state/rent-watch.sqlite3');
         self::assertSame('DIGEST', $store->outcome($key), 'no signal and no profile digests, it never matches');
         self::assertFalse($store->wasNotified($key));
+        // THE TENURE, not just the outcome. `mixedTenure: true` is inert while `defaultTenure` is
+        // null — tier 5 is the only sub-floor tier and it needs a non-null default, and every other
+        // route to "eligible below the floor" is forced to UNKNOWN by the conflict rule — so the
+        // outcome assertion above cannot see the half of the fail-closed profile that actually
+        // bites. A default of LLI would make this row `LLI`, and `LLI` plus a non-mixed source is a
+        // MATCH. Asserting the stored tenure is what makes that flip visible.
+        self::assertSame('UNKNOWN', $this->tenureOf($root, $key));
+    }
+
+    public function testNothingIsWrittenWhenAPromotionCannotBeDelivered(): void
+    {
+        // The retry the warning promises has to be REAL. Writing the verdict before the send removes
+        // the row from `staleVerdicts()` (its tenure resolves) AND from `pendingDigest()` (its
+        // outcome is no longer DIGEST), and there is no third selector — so a failed send left a
+        // MATCH nobody was told about that no command could reach again. The population is exactly
+        // the one that cannot be rescued by the pipeline either: a still-published listing is
+        // re-judged next pass, but these commands exist for the listing that has since delisted.
+        $root = $this->tempRoot(['notify' => ['channels' => ['ntfy']]]);
+        putenv('NTFY_TOPIC=rent-watch-test');
+        putenv('NTFY_SERVER=http://127.0.0.1:1');
+
+        $key = $this->seed($root, $this->intermediateListing('H-8'), tenure: 'UNKNOWN', outcome: 'DIGEST');
+
+        $result = $this->scout($root, ['reclassify']);
+
+        self::assertSame(1, $result['code'], 'an undelivered promotion must exit non-zero');
+
+        $store = Store::open($root . '/state/rent-watch.sqlite3');
+        self::assertSame('DIGEST', $store->outcome($key), 'the outcome must not move before the channel confirms');
+        self::assertSame('UNKNOWN', $this->tenureOf($root, $key), 'nor the tenure — that is what keeps it in staleVerdicts()');
+        self::assertFalse($store->wasNotified($key));
+
+        // The actual retry, exercised rather than asserted about: a second run with a working
+        // channel must find and announce it.
+        putenv('NTFY_TOPIC');
+        putenv('NTFY_SERVER');
+        $second = $this->scout($this->reconfigure($root, ['notify' => ['channels' => ['console']]]), ['reclassify']);
+
+        self::assertSame(0, $second['code'], $second['err']);
+        self::assertStringContainsString('1 promotion', mb_strtolower($second['out']));
+        self::assertSame('MATCH', $store->outcome($key));
+        self::assertTrue($store->wasNotified($key));
+    }
+
+    public function testAnUnusableChannelRefusesBeforeAnyRowIsTouched(): void
+    {
+        // The refusal has to come FIRST. Built after the loop — as it was until 2026-08-24 — a
+        // deploy whose NTFY_TOPIC is not yet filled in re-judged everything, rewrote every verdict,
+        // and only then discovered it had nowhere to send: one run consumed the entire promotable
+        // backlog while printing a message about an environment variable. `run`, `digest` and
+        // `test-notify` all refuse before doing the work; this was the one verb that did not.
+        $root = $this->tempRoot(['notify' => ['channels' => ['ntfy']]]);
+        putenv('NTFY_TOPIC');
+        putenv('NTFY_SERVER');
+
+        $key = $this->seed($root, $this->intermediateListing('K-1'), tenure: 'UNKNOWN', outcome: 'DIGEST');
+
+        $result = $this->scout($root, ['reclassify']);
+
+        self::assertSame(2, $result['code'], 'no usable channel is a startup refusal');
+        self::assertStringNotContainsString(
+            're-jugée(s)',
+            $result['out'],
+            'the refusal must precede the work, not report it',
+        );
+
+        $store = Store::open($root . '/state/rent-watch.sqlite3');
+        self::assertSame('DIGEST', $store->outcome($key));
+        self::assertSame('UNKNOWN', $this->tenureOf($root, $key));
+    }
+
+    public function testDryRunNeedsNoChannelAtAll(): void
+    {
+        // The counterweight to the refusal above. `--dry-run` sends nothing, so demanding a working
+        // channel would refuse the one command whose whole purpose is to look before touching
+        // anything — and would do it on the machine least likely to have a channel configured yet.
+        $root = $this->tempRoot(['notify' => ['channels' => ['ntfy']]]);
+        putenv('NTFY_TOPIC');
+        putenv('NTFY_SERVER');
+
+        $this->seed($root, $this->intermediateListing('K-2'), tenure: 'UNKNOWN', outcome: 'DIGEST');
+
+        $result = $this->scout($root, ['reclassify', '--dry-run']);
+
+        self::assertSame(0, $result['code'], $result['err']);
+        self::assertStringContainsString('re-jugée(s)', $result['out']);
+    }
+
+    public function testAListingThatWasRejectedAndNowQualifiesIsAnnounced(): void
+    {
+        // REJECT -> MATCH is not a demotion, and it is reachable the moment the criteria widen —
+        // Q1-Q3 widened three filters in one day. `docs/OPEN-QUESTIONS.md` already rules that a
+        // listing which was disqualified and now qualifies IS a new match; recording it silently
+        // stranded it exactly like an undelivered promotion.
+        $root = $this->tempRoot();
+        $key = $this->seed($root, $this->intermediateListing('I-9'), tenure: 'UNKNOWN', outcome: 'REJECT');
+
+        $result = $this->scout($root, ['reclassify']);
+
+        self::assertSame(0, $result['code'], $result['err']);
+        self::assertStringContainsString('1 promotion', mb_strtolower($result['out']));
+
+        $store = Store::open($root . '/state/rent-watch.sqlite3');
+        self::assertSame('MATCH', $store->outcome($key));
+        self::assertTrue($store->wasNotified($key));
+    }
+
+    public function testTheUnreadableCountIsReportedNotJustThePerRowWarning(): void
+    {
+        // The per-row warning says WHICH row; the count says HOW MANY, and only the count survives
+        // a run with hundreds of rows scrolling past. A database quietly losing snapshots is
+        // otherwise indistinguishable from one with nothing to re-judge.
+        $root = $this->tempRoot();
+        foreach (['J-1', 'J-2'] as $id) {
+            $this->corruptSnapshot($root, $this->seed(
+                $root,
+                new RawListing(sourceName: 'demo', externalId: $id, title: 'T4'),
+                tenure: 'UNKNOWN',
+                outcome: 'DIGEST',
+            ));
+        }
+
+        $result = $this->scout($root, ['reclassify']);
+
+        self::assertStringContainsString('2 instantané(s) illisible(s)', $result['out']);
     }
 
     public function testDryRunChangesNothing(): void
@@ -253,6 +378,46 @@ final class ScoutReclassifyTest extends TestCase
     }
 
     // ── harness ───────────────────────────────────────────────────────────────────────────────────
+
+    /** The listing every promotion test starts from: eligible, and eligible for a stated reason. */
+    private function intermediateListing(string $id): RawListing
+    {
+        return new RawListing(
+            sourceName: 'demo',
+            externalId: $id,
+            title: 'T4 lumineux',
+            description: 'Logement intermédiaire (LLI), attribution directe par le bailleur.',
+            commune: 'Sartrouville',
+            postcode: '78500',
+            rentCc: 1450,
+            surfaceM2: 88.0,
+            rooms: 4,
+        );
+    }
+
+    private function tenureOf(string $root, string $key): ?string
+    {
+        $statement = $this->pdo($root)->prepare('SELECT tenure FROM listings WHERE dedup_key = :key');
+        $statement->execute(['key' => $key]);
+        /** @var string|false|null $tenure */
+        $tenure = $statement->fetchColumn();
+
+        return is_string($tenure) ? $tenure : null;
+    }
+
+    /** @param array<string,mixed> $criteria */
+    private function reconfigure(string $root, array $criteria): string
+    {
+        file_put_contents($root . '/config/criteria.json', json_encode($criteria + [
+            'communes' => ['Sartrouville'],
+            'postcode_prefixes' => ['78'],
+            'min_rooms' => 3,
+            'min_surface_m2' => 50,
+            'max_rent_cc' => 1800,
+        ], JSON_THROW_ON_ERROR));
+
+        return $root;
+    }
 
     private function seed(string $root, RawListing $listing, string $tenure, ?string $outcome): string
     {

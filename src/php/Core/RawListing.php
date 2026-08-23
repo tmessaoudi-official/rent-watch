@@ -26,10 +26,22 @@ final readonly class RawListing
     /**
      * @param string                $sourceName   key in `config/sources.json`
      * @param string                $externalId   the source's own id — the basis of within-source dedup
-     * @param array<string, string> $fields       structured fields exactly as the adapter found them.
+     * @param array<string, mixed>  $fields       structured fields exactly as the adapter found them.
      *                                            Field names are NOT normalised here on purpose: the
      *                                            raw name is evidence, and normalising is the
      *                                            classifier's job ({@see Text::fieldKey()}).
+     *
+     *                                            **`mixed`, not `string`, and the annotation used to
+     *                                            lie.** Every production adapter normalises through
+     *                                            `Payload::flatten()`, but an annotation is not a
+     *                                            runtime guarantee — a JSON feed with
+     *                                            `"gamme": ["PLUS","PLAI"]` forwarded verbatim by a
+     *                                            bespoke adapter arrives here as a list, and
+     *                                            {@see TenureClassifier} has a deliberate tier-1
+     *                                            doubt for exactly that. Writing `string` invited
+     *                                            every layer downstream to assume one; the snapshot
+     *                                            layer did, and silently dropped the value that the
+     *                                            doubt was watching for.
      * @param int|null              $rentCc       monthly rent charges comprises, in euros
      * @param int|null              $rentHc       monthly rent hors charges, in euros
      * @param int|null              $charges      monthly charges, in euros

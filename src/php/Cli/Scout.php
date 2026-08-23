@@ -826,11 +826,31 @@ final readonly class Scout
         $classifier = new TenureClassifier();
         $engine = new CriteriaEngine($criteria);
 
+        // THE NOTIFIER IS BUILT BEFORE ANY ROW IS TOUCHED, and that ordering is the fix to a defect
+        // a review panel proved on 2026-08-24. It used to be constructed after the loop: a deploy
+        // whose `NTFY_TOPIC` was not yet filled in ran the whole re-judge, rewrote every verdict,
+        // and only then hit `fatalProblem()` — consuming the entire promotable backlog in one run
+        // while printing a message about an environment variable. Refuse before the work, as
+        // `run`, `digest` and `test-notify` all do.
+        $notifier = null;
+        if (!$dryRun) {
+            $notifier = $this->notifier($criteria);
+
+            $fatal = $notifier->fatalProblem();
+            if ($fatal !== null) {
+                return $this->fail($fatal);
+            }
+
+            foreach ($notifier->disabledReport() as $name => $problem) {
+                $this->warn('canal ' . $name . ' désactivé : ' . $problem);
+            }
+        }
+
         $skipped = 0;
         $unreadable = 0;
         $rejudged = 0;
         $changed = 0;
-        /** @var list<array{listing: RawListing, verdict: Verdict, key: string}> $promotions */
+        /** @var list<array{listing: RawListing, verdict: Verdict, key: string, classification: \RentWatch\Core\Classification}> $promotions */
         $promotions = [];
 
         foreach ($rows as $row) {
@@ -867,24 +887,16 @@ final readonly class Scout
             );
 
             $classification = $classifier->classify($evidence, $profile);
-
-            if (!$dryRun) {
-                $store->recordVerdict(
-                    $key,
-                    $classification->tenure->value,
-                    $classification->confidenceBp,
-                    $classification->reasons(),
-                    // The SAME evidence it was just judged on, rewritten with the verdict in one
-                    // statement so the two cannot drift.
-                    $evidence,
-                );
-            }
-
             $before = $store->outcome($key);
+
             if ($before === null) {
                 // Every dedup MEMBER is classified; only the SURVIVOR is judged. `NULL` is exactly
                 // what distinguishes "never judged" from "judged and rejected", and manufacturing an
                 // outcome here would destroy that distinction for a row the engine never saw.
+                if (!$dryRun) {
+                    $this->writeVerdict($store, $key, $classification, $evidence);
+                }
+
                 continue;
             }
 
@@ -892,24 +904,49 @@ final readonly class Scout
             $after = $verdict->outcome->value;
             ++$rejudged;
 
+            if ($after === 'MATCH' && $before !== 'MATCH') {
+                // A PROMOTION, AND NOTHING IS WRITTEN YET. This row is left exactly as it was until
+                // the channel confirms, and that deferral is the whole point rather than an
+                // optimisation: writing the verdict here removes the row from `staleVerdicts()`
+                // (its tenure resolves) AND from `pendingDigest()` (its outcome is no longer
+                // DIGEST), so a failed send left a MATCH nobody was told about that NO command
+                // could reach again — while the warning below promised a retry. There is no third
+                // selector: `grep "notified_at IS NULL"` finds those two and nothing else.
+                //
+                // The population is exactly the one that cannot be rescued by the pipeline either:
+                // a still-published listing is re-judged next pass, but these commands exist for
+                // the listing that has since been delisted.
+                //
+                // Widened from `DIGEST -> MATCH` for the same reason. REJECT -> MATCH is not a
+                // demotion, it is reachable the moment the criteria widen — Q1-Q3 widened three
+                // filters in one day — and `docs/OPEN-QUESTIONS.md` already rules that a listing
+                // which was disqualified and now qualifies IS a new match. Recording it silently
+                // stranded it in the same unreachable state.
+                $promotions[] = [
+                    'listing' => $evidence,
+                    'verdict' => $verdict,
+                    'key' => $key,
+                    'classification' => $classification,
+                ];
+
+                continue;
+            }
+
             if (!$dryRun) {
+                $this->writeVerdict($store, $key, $classification, $evidence);
                 $store->recordOutcome($key, $after);
             }
 
             if ($after !== $before) {
                 ++$changed;
             }
-
-            if ($before === 'DIGEST' && $after === 'MATCH') {
-                // The one transition Q35 notifies. A demotion is recorded silently — nobody needs a
-                // push saying a doubtful flat is now rejected.
-                $promotions[] = ['listing' => $evidence, 'verdict' => $verdict, 'key' => $key];
-            }
         }
 
         $this->line(sprintf(
             '%d annonce(s) re-jugée(s), %d verdict(s) modifié(s), %d promotion(s) vers MATCH.',
             $rejudged,
+            // Promotions are NOT counted here: nothing has been written for them yet, and a
+            // "modifié" that a failed send then rolls back would be a number the store contradicts.
             $changed,
             count($promotions),
         ));
@@ -931,7 +968,34 @@ final readonly class Scout
             return 0;
         }
 
-        return $promotions === [] ? 0 : $this->announcePromotions($criteria, $promotions);
+        if ($promotions === []) {
+            return 0;
+        }
+
+        // `$notifier` is non-null here: it is built above whenever `$dryRun` is false, and the
+        // dry-run path returned already.
+        return $this->announcePromotions($store, $notifier ?? $this->notifier($criteria), $promotions);
+    }
+
+    /**
+     * Write a verdict and the evidence it was formed from, in the one statement the store provides.
+     *
+     * Extracted so the two call sites cannot drift: a verdict written from a different snapshot
+     * than the one just judged is the divergence `evidence_json` exists to make impossible.
+     */
+    private function writeVerdict(
+        Store $store,
+        string $key,
+        \RentWatch\Core\Classification $classification,
+        RawListing $evidence,
+    ): void {
+        $store->recordVerdict(
+            $key,
+            $classification->tenure->value,
+            $classification->confidenceBp,
+            $classification->reasons(),
+            $evidence,
+        );
     }
 
     /**
@@ -941,23 +1005,11 @@ final readonly class Scout
      * delivered digest is notified again here — that is the miss Q35 exists to recover, not a
      * duplicate.
      *
-     * @param list<array{listing: RawListing, verdict: Verdict, key: string}> $promotions
+     * @param list<array{listing: RawListing, verdict: Verdict, key: string, classification: \RentWatch\Core\Classification}> $promotions
      */
-    private function announcePromotions(Criteria $criteria, array $promotions): int
+    private function announcePromotions(Store $store, Notifier $notifier, array $promotions): int
     {
-        $notifier = $this->notifier($criteria);
-
-        $fatal = $notifier->fatalProblem();
-        if ($fatal !== null) {
-            return $this->fail($fatal);
-        }
-
-        foreach ($notifier->disabledReport() as $name => $problem) {
-            $this->warn('canal ' . $name . ' désactivé : ' . $problem);
-        }
-
         $formatter = new Formatter();
-        $store = $this->store();
         $now = $this->nowIso ?? date('c');
         $undelivered = 0;
 
@@ -967,17 +1019,24 @@ final readonly class Scout
                 $this->warn($failure->getMessage());
             }
 
-            if ($notifier->delivered($failures)) {
-                // Only after the channel confirmed, same asymmetry as everywhere else: marking
-                // first would consume the one announcement this listing will ever get.
-                $store->markNotified($promotion['key'], $now);
-            } else {
+            if (!$notifier->delivered($failures)) {
+                // NOTHING IS WRITTEN. The row keeps its old tenure and its old outcome, so it is
+                // still selected by `staleVerdicts()` next run and the retry the warning promises
+                // is real. Writing first — which this did until 2026-08-24 — removed it from every
+                // selector at once and left a MATCH nobody was told about and nothing could reach.
                 ++$undelivered;
+                continue;
             }
+
+            // ONLY NOW, and in this order: the verdict and its evidence, then the outcome, then the
+            // delivery mark. Each is a fact that is true because the one before it is.
+            $this->writeVerdict($store, $promotion['key'], $promotion['classification'], $promotion['listing']);
+            $store->recordOutcome($promotion['key'], $promotion['verdict']->outcome->value);
+            $store->markNotified($promotion['key'], $now);
         }
 
         if ($undelivered > 0) {
-            $this->warn($undelivered . ' promotion(s) non délivrée(s) — non marquées, elles seront réessayées.');
+            $this->warn($undelivered . ' promotion(s) non délivrée(s) — rien n\'a été écrit, elles seront réessayées.');
 
             return 1;
         }
