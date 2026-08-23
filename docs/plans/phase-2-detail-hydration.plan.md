@@ -135,3 +135,63 @@ and the region is all of Île-de-France as of 2026-08-22.
   `matchesCommune()` then FIFO, because 174 novel listings at 60 s per host is a ~3-hour first pass.
 - [2026-08-23 02:4x] AGREED: Cityloger's commune gate converts to the same mechanism rather than
   living alongside it.
+
+## Revisions from the step-1 capture and the design round (2026-08-23)
+
+### Step 1 verdict: THREE of the four fields, and the phase is still worth building
+
+One In'li detail page fetched (`/location-appartement-les-ulis-91940/PRV-054595`, HTTP 200, 81.5 KB),
+`robots.txt` re-read first and still `Disallow: /espace-membre/` only.
+
+| field | there? | how |
+|---|---|---|
+| **title** | YES | `h1` → `Appartement de 63 m² à LES ULIS`. This is the one that matters — it resurrects `exclude_title_patterns` |
+| **description** | YES | `.advert-body-description p`, 334 chars of listing-specific prose |
+| **floor** | YES, as prose | `Payload::floor()` reads `3` from *"Le bien est situé au 3e étage"* and is NOT fooled by *"3 pièces"* or *"63.0 m²"* — verified against four cases including a 7e-étage/3-pièces disagreement and a no-floor description returning `null` |
+| **lift** | **NO** | `ascenseur` appears nowhere on the page. Stays `null`, which correctly says nothing (hard rule 9). The high-floor penalty still cannot fire on In'li |
+
+The description contains ***plus*ieurs stations** — the furniture failure class that has cost this
+repo three fixes. Classified both ways: `LLI 50bp` via source-default with *"aucun signal dans
+l'annonce"* either way, so the prose route holds on real In'li text and `plusieurs` did not read as
+`PLUS`. That is now worth a corpus capture.
+
+### The `DetailCache` interface is DROPPED
+
+`HtmlSource` already takes a `Store` (for `health()`), and `HtmlSourceTest` already builds a real
+`Store::open()` on a temp file. So the interface would hide half a coupling that already exists, and
+its in-memory fake would skip precisely the SQL/JSON boundary where this design's sabotage cases
+live — `floor: 0` surviving as 0, `elevator: false` surviving as `false`. One implementation behind
+an interface, and a test double that tests less than the real thing.
+
+### The budget re-created the bug this phase exists to fix
+
+`matchesCommune()`-then-FIFO ordering lets BACKLOG consume the per-pass budget while a genuinely
+**new** listing is notified unhydrated — no title check, no floor — and by the time its slot comes
+up it is already `notified_at`, so hydrating it then is pointless. That is the pass-2 bypass in a
+new costume.
+
+**Priority is therefore: not-yet-in-the-seen-set FIRST, then `matchesCommune()`, then FIFO.** The
+closure is built in `Scout`, which holds the store; the predicate is
+`snapshot(dedupKey($listing)) === null`.
+
+This also makes the production cold start harmless rather than merely bounded: all 478 current
+listings are seeded as seen, so they are pure backlog and drain at N per pass with no notification
+consequence at all. Only a genuine arrival jumps the queue.
+
+**Residual, stated rather than hidden:** more than N genuinely-new listings in one pass still
+notifies some of them unhydrated. Bounded, and the catastrophic version — a lost seen-set making
+everything look new — is already covered by the Q36 flood guard.
+
+## Decisions Log (continued)
+
+- [2026-08-23 03:2x] AGREED: `DetailCache` as an interface is dropped; the cache lives on `Store`
+  behind schema v5 and `HtmlSource` uses the `Store` it already holds. Reverses the entry above,
+  which was reasoned from a false premise — that the adapter was Store-ignorant.
+- [2026-08-23 03:2x] AGREED: hydration priority is not-yet-seen FIRST, then `matchesCommune()`, then
+  FIFO. A budget ordered any other way lets backlog starve the one listing about to be notified.
+- [2026-08-23 03:2x] AGREED: the *"a `detail_map` with no gate REFUSES"* invariant is REPLACED, not
+  deleted — a missing budget defaults (a slow cold start is benign), but an explicit
+  `detail_budget_per_pass: 0` refuses loudly, because hydrate-nothing-forever while health stays
+  green is the silent shape. Same reasoning as `HEARTBEAT_HOURS=0`.
+- [2026-08-23 03:2x] AGREED: the backoff predicate takes an injected `$atIso`, never SQL `now()`,
+  per the store's clock convention — it is what makes the backoff testable.
