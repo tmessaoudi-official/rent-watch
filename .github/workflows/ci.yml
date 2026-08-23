@@ -104,6 +104,12 @@ jobs:
       # disabled reports clean — which is exactly how an earlier version of it printed a P0 and
       # still exited 0. Running the self-test first means a gutted check fails the build instead of
       # waving the build through.
+      - name: Sabotage expressions still apply (no case matching nothing)
+        # In the FAST job on purpose: a sed that matches nothing reports coverage it does not have,
+        # and the nightly ledger is the only other thing that surfaces it — 4.8 hours after the
+        # commit that broke it. This takes a second and needs no PHP.
+        run: bash tests/test-sabotage-applies.sh
+
       - name: Drift-scan self-test (proves the gate can still go red)
         run: bash tests/test-drift-scan.sh
 

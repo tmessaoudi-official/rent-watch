@@ -1507,7 +1507,7 @@ run_sabotage "a selector matching nothing returns an empty list instead of throw
 # downstream can tell it apart from a very small studio.
 run_sabotage "the field map's regex capture is ignored (surface reads the room count)" \
   src/php/Adapters/Html/Selector.php \
-  's%return \$this->capture === null ? \$raw : self::captureFrom(\$raw, \$this->capture);%return $raw;%'
+  's%if ($this->capture === null) {%if (true) {%'
 
 # Walking pages until one comes back empty is a TERMINATION rule, not a correctness proof: a page=N
 # that quietly 404s or redirects to page one ends the walk exactly like a genuine last page. Without
