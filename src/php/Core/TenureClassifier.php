@@ -977,7 +977,13 @@ final readonly class TenureClassifier
 
             // `null` is UNREADABLE, not empty — `structuredFieldSignals()` raises the doubt for it,
             // so skipping here loses no evidence. `''` is genuinely empty and equally skippable.
-            if ($folded !== null && $folded !== '') {
+            //
+            // And a surface with NO LETTER carries no procedural literal either — same invariant as
+            // the fast path in `excludedVocabularyIn()`, same reflection test guarding it, and the
+            // same rule about placement: `$folded` is post-decode, so an entity-encoded
+            // `numéro unique` still arrives here as letters. Rents, surfaces, dates and references
+            // are what this actually drops, and on a `json` source they are a third of the record.
+            if ($folded !== null && $folded !== '' && $this->matches('/\p{L}/u', $folded)) {
                 $surfaces[] = $folded;
             }
         }
@@ -1181,6 +1187,36 @@ final readonly class TenureClassifier
         }
 
         if ($folded === '') {
+            return null;
+        }
+
+        // NO LETTER, NO LITERAL — the one provably-safe cut in this method's cost.
+        //
+        // Every literal in `LABELS`, `AMBIGUOUS_LABELS` and `PROCEDURAL` contains a letter, so a
+        // value with none cannot match any of them, in any of the four passes below. Asserted by
+        // reflection over the three tables themselves in
+        // `TenureClassifierTest::testEveryVocabularyLiteralContainsALetter` — if that ever goes red
+        // the fix is to DELETE this branch, not to relax the assertion.
+        //
+        // Worth doing because this method is called for every field NAME and every unrecognised
+        // field VALUE, and a `json` source maps its whole raw record into `fields`: Logirep's
+        // records carry 31 keys, of which 11 are rents, surfaces, dates and references. Classifying
+        // one of its listings measured ~155 ms and its 113-row payload ~17 s, and the sabotage
+        // ledger runs the whole suite some three hundred times.
+        //
+        // IT MUST STAY BELOW THE DECODE, and that is not a style preference. `&#80;&#76;&#65;&#73;`
+        // contains no letter and decodes to `PLAI`; tested against the raw string this branch would
+        // silently skip the one value §1 exists to catch, on nothing worse than a source that
+        // numeric-entity-encodes its own payload. The two placements are indistinguishable in
+        // review and every other test in the file feeds plain text, so
+        // `testALetterlessValueThatDecodesToAnExcludedLabelIsStillCaught` is the only thing that
+        // tells them apart. Do not move it up.
+        //
+        // NOT a narrowing of what is scanned, which is the move this class has been bitten by
+        // repeatedly: nothing is excluded from the scan by name, kind or origin — only values in
+        // which no possible match exists are skipped, and the reflection test is what keeps
+        // "possible" honest.
+        if (!$this->matches('/\p{L}/u', $folded)) {
             return null;
         }
 

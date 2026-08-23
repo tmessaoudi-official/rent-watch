@@ -800,4 +800,111 @@ final class TenureClassifierTest extends TestCase
         ];
     }
 
+    // ------------------------------------------- the letterless skip, and the invariant it rests on
+
+    /**
+     * EVERY vocabulary literal contains at least one letter.
+     *
+     * This is not decoration — it is the precondition that makes the letterless fast path in
+     * {@see TenureClassifier} sound. That path returns early for a value with no letter in it, on
+     * the argument that no literal could match; the argument is only true while this holds, and it
+     * holds for a reason nobody has to remember: the vocabulary is French housing terminology and
+     * financing acronyms, and neither has a digits-only member.
+     *
+     * Read by reflection from the three tables themselves rather than from a copied list, so a
+     * literal added tomorrow is covered without anyone thinking about it. If this ever goes red the
+     * fix is to DELETE the fast path, not to relax the assertion: a letterless literal would make
+     * the skip silently stop scanning a surface it is supposed to scan, which is the
+     * breakage-as-absence shape hard rule 3 forbids.
+     */
+    public function testEveryVocabularyLiteralContainsALetter(): void
+    {
+        $reflected = new \ReflectionClass(TenureClassifier::class);
+        $checked = 0;
+
+        foreach (['LABELS', 'AMBIGUOUS_LABELS', 'PROCEDURAL'] as $table) {
+            /** @var array<string,Tenure> $literals */
+            $literals = $reflected->getConstant($table);
+
+            self::assertNotSame([], $literals, $table . ' is empty — the reflection target moved');
+
+            foreach (array_keys($literals) as $literal) {
+                self::assertMatchesRegularExpression(
+                    '/\p{L}/u',
+                    (string) $literal,
+                    sprintf('%s literal "%s" has no letter — the letterless fast path is UNSOUND', $table, $literal),
+                );
+                ++$checked;
+            }
+        }
+
+        // The tables are read, not assumed: a typo in a table name above would silently check zero.
+        self::assertGreaterThan(20, $checked, 'far fewer literals than expected — did a table move?');
+    }
+
+    /**
+     * THE SKIP HAPPENS AFTER DECODING, AND THAT IS THE WHOLE TRAP.
+     *
+     * `&#80;&#76;&#65;&#73;` contains no letter at all — it is ampersands, hashes, digits and
+     * semicolons — and it decodes to `PLAI`. So a letterless test applied to the RAW string would
+     * skip the one value §1 exists to catch, and it would do it silently, on a source that had
+     * simply numeric-entity-encoded its own payload.
+     *
+     * Placing the check after `Text::foldTolerant()` is what makes it safe, and this test is the
+     * only thing standing between the two placements: both look identical in review, and every
+     * other test in this file feeds plain text, which cannot tell them apart.
+     */
+    public function testALetterlessValueThatDecodesToAnExcludedLabelIsStillCaught(): void
+    {
+        $classifier = new TenureClassifier();
+
+        $encoded = '&#80;&#76;&#65;&#73;';
+        self::assertDoesNotMatchRegularExpression('/\p{L}/u', $encoded, 'the fixture stopped being letterless');
+
+        $result = $classifier->classify(
+            $this->listing(fields: ['gamme' => $encoded]),
+            $this->source(),
+        );
+
+        // ASSERTED ON THE REASON, not on the outcome. The source is mixed with no default, so an
+        // unlabelled listing digests anyway — `assertNotSame(MATCH)` passes whether or not the PLAI
+        // was ever seen, and it did pass against a deliberately mis-placed guard. What distinguishes
+        // "caught" from "found nothing and fell back to fail-closed" is the listing being able to
+        // SAY what it saw, which is also what the digest entry has to carry for a human to settle.
+        $said = implode(' | ', $result->reasons());
+
+        self::assertStringContainsString('plai', $said, 'the encoded PLAI was never seen: ' . $said);
+        self::assertStringContainsString('gamme', $said, 'the doubt does not name the field it came from');
+        self::assertNotSame(Outcome::MATCH, $result->outcome, 'an encoded PLAI reached a match');
+        self::assertNotSame(Tenure::LLI, $result->tenure);
+    }
+
+    /**
+     * A genuinely letterless value contributes nothing — which is what lets it be skipped.
+     *
+     * Stated as an EQUIVALENCE against the same listing without the field, rather than as a timing
+     * assertion. A milliseconds threshold flakes on CI and on the sabotage ledger, where the suite
+     * runs some three hundred times; the property that actually matters is that adding rents, room
+     * counts and dates to `fields` cannot move a verdict, and that survives any machine.
+     */
+    public function testALetterlessValueCannotMoveAVerdict(): void
+    {
+        $classifier = new TenureClassifier();
+
+        $bare = $classifier->classify($this->listing(title: 'T3 Cergy'), $this->source());
+        $noisy = $classifier->classify(
+            $this->listing(title: 'T3 Cergy', fields: [
+                'loyer' => '1005',
+                'surface' => '55.32',
+                'publie' => '2026-08-23',
+                'reference' => '42-77-1900',
+            ]),
+            $this->source(),
+        );
+
+        self::assertSame($bare->tenure, $noisy->tenure);
+        self::assertSame($bare->confidenceBp, $noisy->confidenceBp);
+        self::assertSame($bare->outcome, $noisy->outcome);
+    }
+
 }

@@ -127,7 +127,7 @@ fifth institutional source of the same kind does not move it.
 | `Enrich/transit` + `Enrich/geo` | **M** — not started | IDFM/PRIM API key | 8 |
 | ~~Retire `icf_novedis` + `seqens` from `config/sources.json`~~ **DONE 2026-08-23** | was **S** | — both blocks removed; `docs/SOURCES.md` keeps the A2/A5 measurements and the corpus keeps its own labels. `ConfigTest::testTheMeasuredDeadEndsAreNotShippedAsPlaceholders()` stops either name returning as a `REMPLACER` placeholder, and Q20 in `docs/OPEN-QUESTIONS.md` records that this ended as its own option 3 for a reason option 3 never gave | — |
 | Real corpus texts replacing the 114 synthetic | **M** — 6 captured so far; append, never renumber | more live sources | 2 |
-| Classifier performance (~155 ms/listing) | **S** | nothing — deferred only while the ledger held `src/` frozen. That freeze is lifted | — |
+| Classifier performance | **S** | ~~nothing~~ **DONE 2026-08-23** — letterless fast path, ~36 → ~25 ms/listing on the real Logirep payload. The `~155 ms` this row used to quote did not reproduce; see the Decisions Log | — |
 | `src/phorj/` port of the pure core | **L** | three phorj builds; **on indefinite hold** | — |
 | Final MAXIMAL certification round | **M** — 3 lenses, two consecutive clean rounds, frozen commit | the above landing | — |
 
@@ -194,6 +194,47 @@ inputs take to arrive, not by the hours. Supplying the first cURL capture moves 
 usable" row from 0% to something real in a single afternoon; nothing else on this list does that.
 
 ## Decisions Log
+
+- [2026-08-23 23:05] DONE, and three of the numbers it was planned from did not survive contact.
+  The **letterless fast path is implemented** in `TenureClassifier::excludedVocabularyIn()` and in
+  `proceduralSurfaces()`: a value with no letter cannot match any vocabulary literal, so it is
+  skipped. Measured A/B/A on the **real frozen Logirep payload** through the real adapter
+  (`tests/fixtures/logirep/search.html`, 113 listings, 31 fields on row 0, 11 of them letterless —
+  exactly the structure the 02:05 entry predicted):
+
+  | | ms/listing |
+  |---|---|
+  | guard on | 24.8 / 27.4 / 22.9 |
+  | guard off | 36.2 |
+
+  **~30%, and the three corrections are worth more than the number.**
+
+  1. **The ~155 ms/listing figure does not reproduce.** The same payload, the same machine, the same
+     class measures **~36 ms/listing** unoptimised today. The 02:05 measurement was taken with a
+     synthetic field count rather than the real record, and it overstated the problem by 4×.
+  2. **The predicted "~35% win" was right by accident.** A synthetic bench built to favour the
+     change — 11 deliberately letterless string fields — measured **11%**, and the corpus suite
+     measured **slightly NEGATIVE**, because corpus cases are prose with almost no fields and the
+     guard costs one regex each. Only the real payload gives ~30%. Two benches, two wrong answers,
+     in opposite directions.
+  3. **The fixture-suite wall clock cannot see it at all** (7.8 / 7.5 / 7.3 s, with the *off* run
+     beating an *on* run). Those suites are dominated by DOM parsing. A change measured through the
+     wrong harness reads as noise, and would have been abandoned as worthless.
+
+  **What makes it safe is one invariant and one placement**, and both are now sabotage cases rather
+  than review comments. Every literal in `LABELS`, `AMBIGUOUS_LABELS` and `PROCEDURAL` contains a
+  letter — asserted by reflection over the tables themselves, so a literal added tomorrow is
+  covered. And the test runs **after** decoding: `&#80;&#76;&#65;&#73;` is letterless and decodes to
+  `PLAI`, so the raw-string placement silently skips the one value §1 exists to catch. The two
+  placements are indistinguishable in review, and the first version of the test that was supposed to
+  tell them apart **passed against the mis-placed guard** — it asserted the outcome was not `MATCH`,
+  which on a mixed source with no default is true whether or not anything was seen. Asserting on the
+  REASON is what caught it; the mis-placed guard produces an empty reason list.
+
+  **What was NOT done, deliberately:** narrowing what goes into `fields`. Nothing is excluded from
+  the scan by name, kind or origin — only values in which no match is possible, which is why the
+  reflection test is the thing keeping "possible" honest.
+
 
 - [2026-08-22 02:05] MEASURED, not fixed: **`TenureClassifier::classify()` costs ~15 ms of fixed
   overhead plus ~6 ms per mapped FIELD**, so a Logirep listing with 31 fields takes ~155 ms and the

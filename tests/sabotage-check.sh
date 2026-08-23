@@ -1959,6 +1959,22 @@ run_sabotage "hydration priority is inverted, so the worst candidate takes the s
   src/php/Adapters/HtmlSource.php \
   's%return $owed;%return array_reverse($owed, true);%'
 
+# ── the letterless fast path, and the one thing that makes it safe ────────────────────────────────
+#
+# The skip rests on "no vocabulary literal is letterless", and it is applied AFTER decoding. Both
+# halves are sabotaged here because both are silent when wrong: a letterless literal makes the skip
+# stop scanning a surface it is supposed to scan, and testing the RAW string instead of the decoded
+# one skips `&#80;&#76;&#65;&#73;` — which is `PLAI` — on nothing worse than a source that
+# numeric-entity-encodes its own payload. The two placements are indistinguishable in review.
+
+run_sabotage "the letterless skip reads the RAW value, so an entity-encoded PLAI is never scanned" \
+  src/php/Core/TenureClassifier.php \
+  "s|if (!\\\$this->matches('/\\\\p{L}/u', \\\$folded)) {|if (!\\\$this->matches('/\\\\p{L}/u', (string) \\\$value)) {|"
+
+run_sabotage "a letterless literal enters the vocabulary, making the skip unsound" \
+  src/php/Core/TenureClassifier.php \
+  "s|    private const array PROCEDURAL = \\[|    private const array PROCEDURAL = ['2026' => Tenure::SOCIAL,|"
+
 printf '\n  %d sabotage(s) detected, %d undetected\n' "$pass" "$fail"
 
 if [[ -n "$_filter" ]]; then
