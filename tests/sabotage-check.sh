@@ -1653,9 +1653,14 @@ run_sabotage "a page_path with no {page} placeholder is accepted, so the walk ne
 # intermédiaire as UNKNOWN and digests it forever; and a merge that lets an absent field win erases
 # what the card already knew.
 
-run_sabotage "the detail gate stops narrowing (every listing costs a request)" \
+# This case used to read `the detail gate stops narrowing`, targeting `$this->detailGate`. That
+# symbol was renamed to `$detailPriority` on 2026-08-23 when novelty replaced the predicate, so the
+# expression matched NOTHING and the ledger scored it `unapplied` — a case that reports as a covered
+# guarantee while testing nothing at all, which is worse than one that fails. What bounds requests
+# now is the budget, not the ordering, so the sabotage targets the budget.
+run_sabotage "the per-pass detail budget stops bounding (every novel listing costs a request)" \
   src/php/Adapters/HtmlSource.php \
-  's%if (!($this->detailGate)($listing)) {%if (false) {%'
+  's%if ($spent >= $budget) {%if (false) {%'
 
 # The successor to "a detail_map with no gate refuses", which retired on 2026-08-23 when novelty
 # became the gate. What that invariant protected is unchanged: a detail map that can never run
