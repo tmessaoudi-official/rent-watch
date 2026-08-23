@@ -1203,6 +1203,58 @@ final class ConfigTest extends TestCase
         ]]]);
     }
 
+    /**
+     * A budget of ZERO is refused, because it is a disabled feature dressed as a configured one.
+     *
+     * This replaces the older "a detail_map with no gate REFUSES" invariant, which retired when the
+     * gate became novelty — supplied by the run rather than configured, so there is no longer a
+     * gate to be missing. What that invariant protected is still real: a detail_map that quietly
+     * never runs leaves a mixed-tenure source resolving UNKNOWN for ever while its health stays
+     * green and its count looks right, which is the silent shape this project refuses.
+     *
+     * Omitting the key is NOT refused and must not be: it defaults, and the cost of the default is
+     * a slow cold start, which is benign and self-correcting. The asymmetry is the point, and it is
+     * the same one an unusable HEARTBEAT_HOURS gets.
+     */
+    public function testADetailMapWithAZeroBudgetIsRefused(): void
+    {
+        $this->expectException(ConfigError::class);
+        $this->expectExceptionMessageMatches('/can never run/');
+
+        ConfigLoader::sourcesFromArray(['sources' => ['x' => self::htmlSourceWithDetailMap(['detail_budget_per_pass' => 0])]]);
+    }
+
+    public function testAnOmittedBudgetDefaultsRatherThanRefusing(): void
+    {
+        $sources = ConfigLoader::sourcesFromArray(['sources' => ['x' => self::htmlSourceWithDetailMap()]]);
+
+        self::assertSame(20, $sources['x']->detailBudgetPerPass);
+    }
+
+    public function testABudgetIsCarriedThrough(): void
+    {
+        $sources = ConfigLoader::sourcesFromArray(['sources' => ['x' => self::htmlSourceWithDetailMap(['detail_budget_per_pass' => 5])]]);
+
+        self::assertSame(5, $sources['x']->detailBudgetPerPass);
+    }
+
+    /** @param array<string,mixed> $extra */
+    private static function htmlSourceWithDetailMap(array $extra = []): array
+    {
+        return $extra + [
+            '_verified_at' => '2026-08-23',
+            '_source' => 'a test',
+            'enabled' => true,
+            'family' => 'institutional',
+            'type' => 'html',
+            'mixed_tenure' => true,
+            'url' => 'https://example.test/search',
+            'item_selector' => 'a.card',
+            'map' => ['ref' => '@href', 'url' => '@href'],
+            'detail_map' => ['description' => '.description'],
+        ];
+    }
+
     /** A detail map on a source whose adapter would never read it is refused, not ignored. */
     public function testADetailMapOnANonHtmlSourceIsRefused(): void
     {

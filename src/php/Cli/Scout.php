@@ -897,9 +897,9 @@ final readonly class Scout
     }
 
     /**
-     * @param ?Criteria $criteria the run's own filters, from which the detail gate is built. A
-     *        source with a `detail_map` REFUSES without one rather than guessing — see
-     *        {@see HtmlSource::hydrate()}.
+     * @param ?Criteria $criteria the run's own filters, from which the hydration RANKING is built.
+     *        No longer a gate — novelty is the gate and it lives in the store's detail cache; this
+     *        only decides who goes first when a pass's budget cannot cover every candidate.
      */
     private function buildSource(
         SourceDefinition $definition,
@@ -907,14 +907,31 @@ final readonly class Scout
         ?Criteria $criteria = null,
         array &$robotsByOrigin = [],
     ): ?Source {
-        // WHY the geographic filter and not the whole criteria set: a detail fetch is one request
-        // per listing, so something must narrow it — and `matchesCommune()` is the only filter whose
-        // inputs a CARD already carries in full. Gating on rent or surface would reject on a field
-        // the detail page might have been the one to supply, which is hard rule 8's silent
-        // over-rejection: invisible, because nothing arrives.
-        $gate = $criteria === null
+        // THE RANKING, and rank 0 is the one that matters.
+        //
+        // A listing NOT YET IN THE SEEN-SET is about to be notified on this very pass, and it is
+        // the only candidate for which hydration can still change the outcome. Ranked any lower, it
+        // loses its slot to backlog — and by the time backlog's slot comes round it has already
+        // been notified unhydrated, with no title checked and no floor, so hydrating it then buys
+        // nothing at all. That is the pass-2 bypass this whole design exists to close, rebuilt out
+        // of a budget instead of a missing cache.
+        //
+        // Rank 1 is the geographic filter, and WHY that one and not the whole criteria set:
+        // `matchesCommune()` is the only filter whose inputs a CARD already carries in full.
+        // Ranking on rent or surface would deprioritise on a field the detail page might have been
+        // the one to supply — and while ordering can only delay a listing rather than reject it,
+        // delaying on unknown-because-unfetched is the same reasoning error hard rule 8 names.
+        //
+        // Rank 2 is everything else: hydrated eventually, in source order, out of the backlog.
+        $priority = $criteria === null
             ? null
-            : static fn (RawListing $listing): bool => $criteria->matchesCommune($listing->commune, $listing->postcode);
+            : static function (RawListing $listing) use ($criteria, $store): int {
+                if ($store->snapshot($store->dedupKey($listing)) === null) {
+                    return 0;
+                }
+
+                return $criteria->matchesCommune($listing->commune, $listing->postcode) ? 1 : 2;
+            };
 
         // Hard rule 1, enforced at the single funnel every verb passes through. The LOADER refuses
         // an `enabled: true` source carrying the placeholder, and that was the whole guard for as
@@ -942,7 +959,14 @@ final readonly class Scout
             // HTML5 by the language's own `Dom\HTMLDocument` and the field map is read as CSS
             // selectors. In'li is the first real source to use it — its search page is
             // server-rendered, so there is no JSON endpoint to prefer.
-            'html' => new HtmlSource($definition, $store, $this->http, $this->robotsFor($definition, $robotsByOrigin), $gate),
+            'html' => new HtmlSource(
+                $definition,
+                $store,
+                $this->http,
+                $this->robotsFor($definition, $robotsByOrigin),
+                $priority,
+                $this->now(),
+            ),
             'email_alert' => $this->buildEmailSource($definition, $store),
             default => null,
         };

@@ -48,20 +48,75 @@ final class HtmlSourceDetailTest extends TestCase
         }
     }
 
-    public function testOnlyTheListingsThatPassTheGateCostASecondRequest(): void
+    /**
+     * THE CACHE IS THE GATE. A page already on record costs no request, ever again.
+     *
+     * This replaces the older assertion that only listings passing a geographic gate were hydrated.
+     * That gate was cheap when the criteria named ten communes and Cityloger hydrated 3 of 51; it
+     * is nearly vacuous now the region is all of Île-de-France, and it was never the right shape
+     * anyway — hydrating on a per-pass predicate means a listing's verdict depends on which pass is
+     * looking at it, and a listing the title filter rejected while hydrated comes back as a bare
+     * card and notifies. Novelty plus persistence is the gate; geography only decides who goes
+     * first when the budget is short.
+     */
+    public function testAHydratedListingCostsNoRequestOnALaterPass(): void
+    {
+        $store = $this->store();
+        $client = new DetailHttpClient();
+
+        $this->source($client, $this->definition(), null, store: $store)->fetch();
+        self::assertCount(3, $client->detailUrls, 'first pass hydrates all three');
+
+        $second = new DetailHttpClient();
+        $rows = $this->source($second, $this->definition(), null, store: $store)->fetch();
+
+        self::assertSame([], $second->detailUrls, 'a second pass spends NO detail requests');
+        self::assertCount(3, $rows);
+        self::assertNotSame('', $rows[1]->description, 'and the hydration is still merged in');
+    }
+
+    /**
+     * The budget bounds the cold start, which is the only expensive moment there is.
+     *
+     * In'li has ~174 listings and every one of them is novel on the first pass; at Q37's sixty
+     * seconds per host that is a three-hour pass, which is a crawl under hard rule 5. The backlog
+     * drains at N per pass instead.
+     */
+    public function testTheBudgetCapsDetailRequestsPerPassAndTheBacklogDrains(): void
+    {
+        $store = $this->store();
+        $client = new DetailHttpClient();
+
+        $this->source($client, $this->definition(budget: 1), null, store: $store)->fetch();
+        self::assertCount(1, $client->detailUrls, 'one slot, one request');
+
+        $second = new DetailHttpClient();
+        $this->source($second, $this->definition(budget: 1), null, store: $store)->fetch();
+
+        self::assertCount(1, $second->detailUrls, 'the next pass takes the next one');
+        self::assertNotSame($client->detailUrls, $second->detailUrls, 'and not the same one again');
+    }
+
+    /**
+     * Priority decides WHO gets a short budget, and the rank that matters most is "not yet seen".
+     *
+     * Ordered any other way, backlog eats the budget while a genuinely new listing is notified
+     * unhydrated — and by the time its slot comes round it is already `notified_at`, so hydrating
+     * it then buys nothing at all. This is the pass-2 bypass in a new costume, and the ordering is
+     * what closes it.
+     */
+    public function testTheHighestPriorityCandidateGetsTheOnlySlot(): void
     {
         $client = new DetailHttpClient();
-        $source = $this->source($client, $this->definition(), static fn (RawListing $l): bool => $l->commune === 'HOUILLES');
-
-        $rows = $source->fetch();
-
-        self::assertCount(3, $rows, 'every card is returned whether or not it was hydrated');
-        self::assertSame(
-            ['https://example.test/detail-2'],
-            $client->detailUrls,
-            'exactly one detail request, for the one listing in a watched commune — a source that '
-                . 'hydrated all three would be 51 requests per pass against the real site',
+        $source = $this->source(
+            $client,
+            $this->definition(budget: 1),
+            static fn (RawListing $l): int => $l->externalId === '3' ? 0 : 9,
         );
+
+        $source->fetch();
+
+        self::assertSame(['https://example.test/detail-3'], $client->detailUrls);
     }
 
     public function testTheDetailPageSuppliesTheTenureThatTheCardNeverCarries(): void
@@ -120,15 +175,71 @@ final class HtmlSourceDetailTest extends TestCase
     }
 
     /** Hard rule 3: a failed detail request must not quietly yield an unhydrated listing. */
-    public function testAFailedDetailRequestIsLoudRatherThanASilentlyUnhydratedListing(): void
+    /**
+     * A DEAD PAGE IS RECORDED AND COUNTED. IT DOES NOT VOID THE PASS.
+     *
+     * This replaces a test that asserted the fetch THREW. Throwing was right about silence and
+     * wrong about blast radius: it voided the whole pass, so a single permanently-404ing detail
+     * page meant the source returned nothing, marked nothing seen, and never notified a genuinely
+     * new listing again — while health reported SOURCE_BROKEN on a diagnosis that was untrue.
+     *
+     * Recording is not the silent alternative. All four halves of the contract are asserted here,
+     * because dropping any one of them turns this back into the swallow it must never be.
+     */
+    public function testAFailedDetailFetchIsRecordedCountedAndDoesNotVoidThePass(): void
     {
+        $store = $this->store();
         $client = new DetailHttpClient(failDetail: true);
-        $source = $this->source($client, $this->definition(), static fn (RawListing $l): bool => $l->commune === 'HOUILLES');
 
-        $this->expectException(SourceError::class);
-        $this->expectExceptionMessageMatches('/detail/i');
+        $rows = $this->source($client, $this->definition(), null, store: $store, nowIso: '2026-08-23T10:00:00+02:00')->fetch();
 
-        $source->fetch();
+        // 1. the pass survives, with every card still in it
+        self::assertCount(3, $rows);
+
+        // 2. the failed listing arrives UNHYDRATED rather than not at all — it still carries the
+        //    card's own text, which is exactly the status quo for a listing whose page cannot be
+        //    read, and nothing the detail page would have supplied
+        self::assertStringNotContainsString('Logement intermédiaire', $rows[1]->description);
+        self::assertStringContainsString('HOUILLES', $rows[1]->description, 'the card survives');
+
+        // 3. the failure is on record, with its attempt count and its message
+        $detail = $store->detail('cityloger', '2');
+        self::assertNotNull($detail, 'a failure that leaves no row is exactly the swallow');
+        self::assertNull($detail->fields, 'tried-and-failed is not read-and-bare');
+        self::assertSame(1, $detail->attempts);
+        self::assertNotNull($detail->lastError);
+
+        // 4. and health can see it, which is what makes it loud
+        self::assertGreaterThanOrEqual(1, $store->detailFailureCount('cityloger'));
+    }
+
+    /**
+     * A failed page is retried, but not on every pass — and never past the cap.
+     *
+     * Re-fetching a 404 every fifteen minutes for ever is a slow crawl aimed at a page that is
+     * gone. Never retrying at all makes one bad afternoon permanent.
+     */
+    public function testAFailedDetailPageBacksOffAndThenStopsBeingRetried(): void
+    {
+        $store = $this->store();
+        $def = $this->definition();
+        // The fake client fails EVERY detail request, so all three listings fail together and the
+        // counts below are per-pass totals rather than per-listing ones.
+        $attempt = function (string $at) use ($store, $def): int {
+            $client = new DetailHttpClient(failDetail: true);
+            $this->source($client, $def, null, store: $store, nowIso: $at)->fetch();
+
+            return \count($client->detailUrls);
+        };
+
+        self::assertSame(3, $attempt('2026-08-23T10:00:00+02:00'), 'first attempt');
+        self::assertSame(0, $attempt('2026-08-23T10:20:00+02:00'), 'no retry inside the backoff window');
+        self::assertSame(3, $attempt('2026-08-23T20:00:00+02:00'), 'retried once the backoff elapsed');
+        self::assertSame(3, $attempt('2026-08-24T20:00:00+02:00'), 'and once more');
+        self::assertSame(0, $attempt('2026-08-30T20:00:00+02:00'), 'three attempts is the cap');
+
+        self::assertSame(HtmlSource::DETAIL_ATTEMPT_CAP, $store->detail('cityloger', '2')?->attempts);
+        self::assertSame(3, $store->detailFailureCount('cityloger', minAttempts: HtmlSource::DETAIL_ATTEMPT_CAP));
     }
 
     /** Hard rule 5: the detail page is a different path, so it gets its own robots verdict. */
@@ -156,14 +267,29 @@ final class HtmlSourceDetailTest extends TestCase
      * source resolving UNKNOWN forever while looking perfectly healthy. Refusing is the only option
      * that cannot be mistaken for working.
      */
-    public function testADetailMapWithoutAGateRefusesInsteadOfPickingADefault(): void
+    /**
+     * A missing PRIORITY is not a missing gate, and must not refuse.
+     *
+     * The old invariant — a `detail_map` with no gate refuses rather than guessing between
+     * hydrating everything and hydrating nothing — retired when novelty became the gate: there is
+     * no longer a gate to be absent. The thing it protected is still real, so it has a successor
+     * one layer up, at config load: `detail_budget_per_pass: 0` is REFUSED
+     * ({@see \RentWatch\Tests\Config\ConfigTest::testADetailMapWithAZeroBudgetIsRefused}),
+     * because a detail map that can never run is a disabled feature wearing a configured one's
+     * clothes. An omitted priority merely means the budget is spent in source order.
+     */
+    public function testAMissingPriorityFallsBackToSourceOrderRatherThanRefusing(): void
     {
-        $source = $this->source(new DetailHttpClient(), $this->definition(), null);
+        $client = new DetailHttpClient();
 
-        $this->expectException(SourceError::class);
-        $this->expectExceptionMessageMatches('/gate/i');
+        $rows = $this->source($client, $this->definition(budget: 2), null)->fetch();
 
-        $source->fetch();
+        self::assertCount(3, $rows);
+        self::assertSame(
+            ['https://example.test/detail-1', 'https://example.test/detail-2'],
+            $client->detailUrls,
+            'source order, first two, because the budget was two',
+        );
     }
 
     /**
@@ -205,7 +331,7 @@ final class HtmlSourceDetailTest extends TestCase
 
     // ---------------------------------------------------------------- helpers
 
-    private function definition(): SourceDefinition
+    private function definition(int $budget = 20): SourceDefinition
     {
         return new SourceDefinition(
             name: 'cityloger',
@@ -227,6 +353,7 @@ final class HtmlSourceDetailTest extends TestCase
             // Zero, so the suite does not pay real seconds for a fake host. The pacing itself is
             // pinned by testDetailFetchesArePacedLikeEveryOtherRequest below, which sets its own.
             rateLimitMs: 0,
+            detailBudgetPerPass: $budget,
             detailMap: new FieldMap(
                 description: ['.description'],
                 tenureField: ['table.financement => Financement\s*([A-Z0-9]+)'],
@@ -237,12 +364,27 @@ final class HtmlSourceDetailTest extends TestCase
     private function source(
         HttpClient $client,
         SourceDefinition $definition,
-        ?\Closure $gate,
+        ?\Closure $priority,
         ?Robots $robots = null,
+        ?Store $store = null,
+        ?string $nowIso = null,
     ): HtmlSource {
-        $this->dbPath = sys_get_temp_dir() . '/rentwatch-detail-' . bin2hex(random_bytes(8)) . '.sqlite3';
+        return new HtmlSource(
+            $definition,
+            $store ?? $this->store(),
+            $client,
+            $robots ?? Robots::parse(''),
+            $priority,
+            $nowIso,
+        );
+    }
 
-        return new HtmlSource($definition, Store::open($this->dbPath), $client, $robots ?? Robots::parse(''), $gate);
+    /** One store per test file path, reused when a test needs two passes to share a cache. */
+    private function store(): Store
+    {
+        $this->dbPath ??= sys_get_temp_dir() . '/rentwatch-detail-' . bin2hex(random_bytes(8)) . '.sqlite3';
+
+        return Store::open($this->dbPath);
     }
 }
 

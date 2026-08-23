@@ -145,6 +145,26 @@ final readonly class SourceDefinition
          *   intermediate pages alike and conflicts the verdict away.
          */
         public ?FieldMap $detailMap = null,
+        /**
+         * How many detail pages one pass may fetch for this source.
+         *
+         * A cap exists because the cold start is the only expensive moment: every listing is novel
+         * at once, and In'li's 174 at Q37's sixty seconds per host is a three-hour pass — a crawl
+         * under hard rule 5. Steady state is near zero, because a hydration is stored and read back
+         * rather than re-fetched.
+         *
+         * The DEFAULT is deliberate and the ZERO is deliberately different from it. Omitting the
+         * key gives a slow cold start, which is benign and self-correcting. Writing `0` means
+         * hydrate nothing, ever, while the source's health stays green and its digest stays
+         * plausible — the silent shape — so the loader REFUSES it, exactly as an unusable
+         * `HEARTBEAT_HOURS` is a loud startup refusal rather than a quiet fallback.
+         *
+         * This REPLACES the older invariant that a `detail_map` without a gate refuses. Novelty is
+         * the gate now, supplied by the run rather than configured, so there is no longer a gate to
+         * be missing — but the thing that invariant protected, a detail map that quietly does
+         * nothing, still needs a refusal and this is it.
+         */
+        public int $detailBudgetPerPass = 20,
         public bool $legalRisk = false,
         public ?string $fixture = null,
         public int $rateLimitMs = 2000,

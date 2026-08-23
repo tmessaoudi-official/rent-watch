@@ -14,10 +14,12 @@ use RentWatch\Adapters\Http\Robots;
 use RentWatch\Config\FieldMap;
 use RentWatch\Config\SourceDefinition;
 use RentWatch\Core\RawListing;
+use RentWatch\Core\Redact;
 use RentWatch\Core\SourceHealth;
 use RentWatch\Core\SourceProfile;
 use RentWatch\Core\Tenure;
 use RentWatch\Store\Store;
+use RentWatch\Store\StoredDetail;
 
 /**
  * Polls a server-rendered search page and maps its listing cards with the source's field map.
@@ -63,10 +65,17 @@ use RentWatch\Store\Store;
 final readonly class HtmlSource implements Source
 {
     /**
-     * @param ?\Closure(RawListing): bool $detailGate which listings earn a second
-     *        request. Supplied by the caller rather than configured, because it IS the run's own
-     *        geographic criteria — the one filter whose inputs a card already carries in full, so
-     *        gating on it cannot reject on a field the detail page would have filled (hard rule 8).
+     * @param ?\Closure(RawListing): int $detailPriority which listings go FIRST when the per-pass
+     *        budget cannot cover them all. Lower ranks first; ties keep source order. Supplied by
+     *        the caller rather than configured, because the ranking is the run's own state — see
+     *        {@see \RentWatch\Cli\Scout} for the ranks and why *not yet seen* outranks everything.
+     *
+     *        It is an ORDERING, no longer a gate. Novelty is the gate, and it lives in the cache: a
+     *        listing whose detail page is already on record costs no request at all. Ordering on
+     *        card-complete fields decides only WHEN a page is fetched, never whether a listing is
+     *        judged on it, so hard rule 8 is untouched.
+     *
+     *        `null` means every candidate ranks equally and the budget is spent in source order.
      */
     public function __construct(
         private SourceDefinition $definition,
@@ -81,8 +90,27 @@ final readonly class HtmlSource implements Source
          * `Robots::parse('')` to say in as many words that this call site is not about robots.
          */
         private Robots $robots,
-        private ?\Closure $detailGate = null,
+        private ?\Closure $detailPriority = null,
+        /**
+         * A FIXED clock for tests, per the convention {@see \RentWatch\Cli\Scout} already uses.
+         * The hydration cache records when each attempt happened, and the retry backoff reads it
+         * back — a backoff measured by SQL `now()` cannot be tested, and an untested backoff is how
+         * a dead page gets re-fetched every fifteen minutes for ever.
+         */
+        private ?string $nowIso = null,
     ) {}
+
+    /**
+     * How many times a detail page may fail before it is left alone.
+     *
+     * Three, not one: a 503 during a deploy is not a dead page. Not unlimited, because the failure
+     * that matters is the permanent one — a listing whose page has been removed while the card
+     * lingers — and retrying that every pass for ever is a slow crawl aimed at a 404.
+     */
+    public const int DETAIL_ATTEMPT_CAP = 3;
+
+    /** Hours between retries of a failed detail page. Long enough that a bad afternoon passes. */
+    public const int DETAIL_RETRY_BACKOFF_HOURS = 6;
 
     public function name(): string
     {
@@ -335,38 +363,160 @@ final readonly class HtmlSource implements Source
             return $listings;
         }
 
-        if ($this->detailGate === null) {
-            // REFUSING, rather than defaulting either way, because both defaults are wrong and one
-            // of them is silent. Hydrating everything turns a config-only source into a per-listing
-            // crawl of somebody else's site; hydrating nothing leaves a mixed-tenure source
-            // resolving UNKNOWN forever while its health stays green and its digest stays plausible.
-            throw new SourceError(
-                $this->name(),
-                'a detail_map is configured but no gate was supplied — refusing to guess between '
-                    . 'fetching every listing\'s page and fetching none of them',
-            );
-        }
-
+        $now = $this->now();
+        $owed = [];
         $out = [];
-        foreach ($listings as $listing) {
-            if (!($this->detailGate)($listing)) {
-                $out[] = $listing;
+
+        // Pass one spends NO requests. It answers, per listing, "is the page already on record?" —
+        // and a hit is merged here, which is the whole point of the cache: steady state is zero
+        // extra requests, and only a genuinely new listing costs one.
+        foreach ($listings as $index => $listing) {
+            $cached = $this->store->detail($this->name(), $listing->externalId);
+
+            if ($cached !== null && $cached->fields !== null) {
+                $out[$index] = $this->mergeDetail($listing, $detailMap, $cached->fields);
 
                 continue;
             }
 
-            $out[] = $this->withDetail($listing, $detailMap);
+            $out[$index] = $listing;
+
+            if ($this->mayAttempt($cached, $now)) {
+                $owed[$index] = $listing;
+            }
+        }
+
+        // Pass two spends the budget, and ORDER is load-bearing. Ranked by the caller, whose first
+        // rank is "not yet in the seen-set": a listing about to be notified must never lose its
+        // slot to backlog, because by the time backlog's slot comes round the new one has already
+        // been notified unhydrated and hydrating it then buys nothing.
+        $budget = $this->definition->detailBudgetPerPass;
+        $spent = 0;
+
+        foreach ($this->rankedForHydration($owed) as $index => $listing) {
+            if ($spent >= $budget) {
+                break;
+            }
+
+            // Counted BEFORE the attempt, so a failure spends a slot too. Counting successes
+            // instead lets a pass full of dead pages issue requests without limit, hunting — which
+            // is the crawl this budget exists to prevent, wearing a retry for a costume.
+            ++$spent;
+            $out[$index] = $this->withDetail($listing, $detailMap, $now);
+        }
+
+        ksort($out);
+
+        return array_values($out);
+    }
+
+    /**
+     * Is this listing owed a request at all?
+     *
+     * Three states, and they are not the same: never attempted (fetch), attempted and failed within
+     * the cap and past the backoff (retry), attempted and failed too often or too recently (leave
+     * it). A hydrated row never reaches here — it was merged without a request.
+     */
+    private function mayAttempt(?StoredDetail $cached, string $nowIso): bool
+    {
+        if ($cached === null) {
+            return true;
+        }
+
+        if ($cached->attempts >= self::DETAIL_ATTEMPT_CAP) {
+            return false;
+        }
+
+        $last = $cached->lastAttemptAt;
+
+        if ($last === null) {
+            return true;
+        }
+
+        try {
+            $since = new \DateTimeImmutable($last);
+            $now = new \DateTimeImmutable($nowIso);
+        } catch (\Exception) {
+            // An undateable stamp is treated as due rather than as permanently blocked. The bias is
+            // one redundant request, never a listing silently frozen out of hydration by a row
+            // nobody can read — same choice `Store::upgradeFrom()` makes for an undateable sighting.
+            return true;
+        }
+
+        return $now->getTimestamp() - $since->getTimestamp() >= self::DETAIL_RETRY_BACKOFF_HOURS * 3600;
+    }
+
+    /**
+     * The candidates, best first.
+     *
+     * A stable sort, deliberately: within a rank the source's own order is the fairest thing there
+     * is, and an unstable sort would make which listing gets hydrated depend on PHP's internals.
+     *
+     * @param array<int,RawListing> $owed
+     *
+     * @return array<int,RawListing>
+     */
+    private function rankedForHydration(array $owed): array
+    {
+        if ($this->detailPriority === null || $owed === []) {
+            return $owed;
+        }
+
+        $ranked = [];
+
+        foreach ($owed as $index => $listing) {
+            $ranked[] = [($this->detailPriority)($listing), $index, $listing];
+        }
+
+        usort($ranked, static fn (array $a, array $b): int => [$a[0], $a[1]] <=> [$b[0], $b[1]]);
+
+        $out = [];
+
+        foreach ($ranked as [, $index, $listing]) {
+            $out[$index] = $listing;
         }
 
         return $out;
     }
 
+    /** The convention {@see \RentWatch\Cli\Scout::nowIso()} uses: injected for tests, real otherwise. */
+    private function now(): string
+    {
+        return $this->nowIso ?? (new \DateTimeImmutable())->format('Y-m-d\TH:i:sP');
+    }
+
     /**
      * One listing, one extra request, merged under hard rule 9.
      *
-     * @throws SourceError
+     * **WHAT THROWS AND WHAT IS RECORDED — the taxonomy, because this is hard rule 3 territory and
+     * the wrong split is a defect either way.**
+     *
+     * A CONFIG-SHAPED failure throws: robots refusing the detail path, or a card with no url. Those
+     * are STATES, not events — every hydration on the source would fail for the same reason, for
+     * ever — so recording them per listing would be pretending to try. They mean the `detail_map`
+     * is unusable and someone must be told.
+     *
+     * A PER-LISTING RUNTIME failure is recorded and the pass continues: an HTTP failure, an
+     * unparseable page. This USED to throw, on the argument that returning the listing unhydrated
+     * converts a broken fetch into a listing that merely looks tenure-less. That argument was right
+     * about silence and wrong about blast radius: a throw here voids the ENTIRE pass, so one
+     * permanently-404ing detail page meant the source returned nothing, recorded nothing as seen,
+     * and never notified a genuinely new listing again — while its health reported SOURCE_BROKEN
+     * with a diagnosis that was simply untrue, since the source was fine and one page was gone.
+     * Over-rejection at source scale plus a misleading alert, which is two of this project's three
+     * named failure modes at once.
+     *
+     * Recording is not silence, and that distinction is the whole justification: the failure is
+     * persisted with its attempt count and its (redacted) message, {@see Store::detailFailureCount}
+     * counts it, and health surfaces the pattern that matters — not one dead page, but fifty, which
+     * is a landlord who changed their detail markup.
+     *
+     * Stated cost: a listing whose detail page cannot be read is judged on its card alone, exactly
+     * as every listing on this source is judged today. `exclude_title_patterns` cannot fire on it.
+     *
+     * @throws SourceError on a config-shaped failure only
      */
-    private function withDetail(RawListing $listing, FieldMap $detailMap): RawListing
+    private function withDetail(RawListing $listing, FieldMap $detailMap, string $atIso): RawListing
     {
         $url = $listing->url;
 
@@ -395,23 +545,45 @@ final readonly class HtmlSource implements Source
 
         try {
             $body = $this->get($url, []);
+            $flat = $this->detailFields($body, $detailMap);
         } catch (SourceError $e) {
-            // Hard rule 3. The tempting alternative — return the listing unhydrated — converts a
-            // broken detail fetch into a listing that merely looks tenure-less, which on a mixed
-            // source is indistinguishable from a listing whose page genuinely says nothing.
-            throw new SourceError(
+            // Redacted here rather than in the store, because a detail-fetch failure carries the
+            // url it failed on and this is the last place that url is a live string.
+            $this->store->recordDetailFailure(
                 $this->name(),
-                'the detail page for listing ' . $listing->externalId . ' could not be fetched: '
-                    . $e->getMessage(),
-                $e,
+                $listing->externalId,
+                Redact::text($e->getMessage()),
+                $atIso,
             );
+
+            return $listing;
         }
 
-        // Through the MAPPER, not assigned raw: a detail page's rent, floor and surface are the same
-        // prose the card's are, and hard rule 9 lives in `ListingMapper`/`Payload`. A second,
-        // hand-rolled conversion here would be a second place for `RDC` to stop meaning zero.
+        // The RAW extracted strings go to the store, and the MAPPER runs on the way out — on this
+        // path and on the cache-hit path alike, from one place. Storing mapped values instead would
+        // freeze today's ListingMapper into every row, and a later fix to how `RDC` is read would
+        // never reach a listing captured before it.
+        $this->store->recordDetail($this->name(), $listing->externalId, $url, $flat, $atIso);
+
+        return $this->mergeDetail($listing, $detailMap, $flat);
+    }
+
+    /**
+     * Raw extracted strings + the card = the hydrated listing.
+     *
+     * The single funnel, used by the fetch path and the cache-hit path, so a merge cannot behave
+     * one way on the pass that fetched a page and another on every pass after it — which is the
+     * shape of bug the cache exists to prevent, reintroduced inside the cache.
+     *
+     * Through the MAPPER, not assigned raw: a detail page's rent, floor and surface are the same
+     * prose the card's are, and hard rule 9 lives in `ListingMapper`/`Payload`. A second,
+     * hand-rolled conversion here would be a second place for `RDC` to stop meaning zero.
+     *
+     * @param array<string,string> $flat
+     */
+    private function mergeDetail(RawListing $listing, FieldMap $detailMap, array $flat): RawListing
+    {
         $mapper = new ListingMapper($this->flatMapped($detailMap, detailMode: true));
-        $flat = $this->detailFields($body, $detailMap);
         $flat['ref'] = $listing->externalId;
 
         return $listing->mergedWith($mapper->map($flat));

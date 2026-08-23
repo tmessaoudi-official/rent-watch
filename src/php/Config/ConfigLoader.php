@@ -401,6 +401,7 @@ final class ConfigLoader
 
         $detailMapReader = $r->optObject('detail_map');
         $detailMap = $detailMapReader === null ? null : FieldMap::detailFromReader($detailMapReader);
+        $detailBudget = $r->optInt('detail_budget_per_pass', 20, min: 0);
 
         $r->done();
 
@@ -490,6 +491,20 @@ final class ConfigLoader
                     );
                 }
 
+                // Zero is not a small budget, it is a disabled feature wearing a configured
+                // feature's clothes: a detail_map that never runs leaves a mixed-tenure source
+                // resolving UNKNOWN for ever while its health stays green and its count looks
+                // right. Omitting the key is fine and defaults; writing 0 is refused. Same
+                // reasoning as an unusable HEARTBEAT_HOURS being a loud startup refusal.
+                if ($detailMap !== null && $detailBudget === 0) {
+                    throw ConfigError::at(
+                        $where . '.detail_budget_per_pass',
+                        '0 means this detail_map can never run, which is indistinguishable from a '
+                            . 'source that simply publishes nothing extra — remove the detail_map to '
+                            . 'say that on purpose, or raise the budget',
+                    );
+                }
+
                 // The card's `url` is what a detail fetch requests. Without it every gated listing
                 // fails at fetch time, one exception per listing, on a source that loaded cleanly.
                 if ($detailMap !== null && $map->url === []) {
@@ -521,6 +536,7 @@ final class ConfigLoader
             pagePath: $pagePath,
             embeddedJsonSelector: $embeddedJsonSelector,
             detailMap: $detailMap,
+            detailBudgetPerPass: $detailBudget,
             totalSelector: $totalSelector,
             maxPages: $maxPages,
             map: $map,
