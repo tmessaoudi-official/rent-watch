@@ -1657,9 +1657,13 @@ run_sabotage "the detail gate stops narrowing (every listing costs a request)" \
   src/php/Adapters/HtmlSource.php \
   's%if (!($this->detailGate)($listing)) {%if (false) {%'
 
-run_sabotage "a detail_map with no gate silently hydrates nothing instead of refusing" \
-  src/php/Adapters/HtmlSource.php \
-  's%if ($this->detailGate === null) {%if (false) {%'
+# The successor to "a detail_map with no gate refuses", which retired on 2026-08-23 when novelty
+# became the gate. What that invariant protected is unchanged: a detail map that can never run
+# leaves its source resolving UNKNOWN for ever while health stays green. The refusal moved up a
+# layer, to config load, so the sabotage moved with it rather than being deleted.
+run_sabotage "a detail_map with a zero budget is accepted, so it can never run" \
+  src/php/Config/ConfigLoader.php \
+  's%if ($detailMap !== null \&\& $detailBudget === 0) {%if (false) {%'
 
 run_sabotage "a failed detail fetch becomes an unhydrated listing (rule 3)" \
   src/php/Adapters/HtmlSource.php \
@@ -1875,6 +1879,37 @@ run_sabotage "a lift nobody mentioned is reported as absent (a fact the tool inv
 run_sabotage "the postcode is dropped from the headline (ambiguous commune, no title)" \
   src/php/Core/Notify/Formatter.php \
   "s%\$where = \$where === '' ? \$postcode : \$where . ' ' . \$postcode;%%"
+
+# ── Detail hydration, schema v5 (2026-08-23) ─────────────────────────────────────────────────────
+#
+# Every failure here is silent by construction. A cache that stops being read is a crawl of somebody
+# else's site, visible only in their access log. A budget that stops being enforced is the same
+# thing wearing a retry for a costume. A failure that stops being recorded is the swallow hard rule
+# 3 names, and it presents as a listing that merely has no title.
+
+run_sabotage "a hydrated page is re-fetched every pass anyway (the crawl)" \
+  src/php/Adapters/HtmlSource.php \
+  "s%if (\$cached !== null \&\& \$cached->fields !== null) {%if (false) {%"
+
+run_sabotage "the per-pass hydration budget stops being enforced" \
+  src/php/Adapters/HtmlSource.php \
+  "s%if (\$spent >= \$budget) {%if (false) {%"
+
+run_sabotage "a failed detail fetch is swallowed and never recorded" \
+  src/php/Adapters/HtmlSource.php \
+  "s%\$this->store->recordDetailFailure(%\$this->nothing(%"
+
+run_sabotage "the detail cache key loses its source, so two landlords share a row" \
+  src/php/Store/Store.php \
+  "s%FROM listing_detail WHERE source = :source AND external_id = :id%FROM listing_detail WHERE external_id = :id OR :source IS NULL%"
+
+run_sabotage "a failed detail page is retried on every pass, for ever" \
+  src/php/Adapters/HtmlSource.php \
+  "s%if (\$cached->attempts >= self::DETAIL_ATTEMPT_CAP) {%if (false) {%"
+
+run_sabotage "hydration priority is inverted, so the worst candidate takes the slot" \
+  src/php/Adapters/HtmlSource.php \
+  's%return $owed;%return array_reverse($owed, true);%'
 
 printf '\n  %d sabotage(s) detected, %d undetected\n' "$pass" "$fail"
 
