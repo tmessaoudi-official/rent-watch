@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace RentWatch\Tests\Cli;
 
 use PHPUnit\Framework\TestCase;
+use RentWatch\Adapters\HtmlSource;
 use RentWatch\Store\Store;
 use RentWatch\Cli\Scout;
 
@@ -219,6 +220,46 @@ final class ScoutTest extends TestCase
      * broken-selector-forever shape one layer down, and `detailFailureCount` is what sees it — but
      * a count nobody reads is not a signal, and this is the assertion that it is read.
      */
+    /**
+     * A WATCHER'S CLOCK MUST NOT BE FROZEN AT PROCESS START.
+     *
+     * `$sources` is built ONCE, before the watch loop — deliberately, and the loop's docblock says
+     * which three things are re-done per pass and why. An `HtmlSource` handed a resolved timestamp
+     * at construction therefore carries the moment the PROCESS started for its entire lifetime,
+     * which for a service running for weeks means:
+     *
+     * - the detail-page backoff computes `now - since` as zero for ever, so a failed page is never
+     *   retried until somebody restarts the container, and
+     * - every `fetched_at` written to `listing_detail` records process start rather than the fetch.
+     *
+     * Neither is visible in a `--once` run, which is the only mode the rest of the suite exercises.
+     * It is the same class as the heartbeat's in-loop `TypeError`: the path only a long-running
+     * watcher takes is the path no test was taking.
+     *
+     * So the CLOCK is propagated, not a reading of it: `null` in production, which makes the source
+     * read real time on each pass, and the fixed value when a test injects one.
+     */
+    public function testASourceBuiltForAWatchRunCarriesNoFrozenClock(): void
+    {
+        $clock = new \ReflectionProperty(HtmlSource::class, 'nowIso');
+
+        foreach ([['2026-08-23T10:00:00+02:00', '2026-08-23T10:00:00+02:00'], [null, null]] as [$injected, $expected]) {
+            $scout = new Scout(self::ROOT, fopen('php://memory', 'w+'), fopen('php://memory', 'w+'), $injected);
+            $build = new \ReflectionMethod($scout, 'sources');
+            $sources = $build->invoke($scout, Store::open((string) $this->dbPath), ['inli'], null);
+
+            self::assertCount(1, $sources, "inli must build, or this asserts nothing");
+            self::assertInstanceOf(HtmlSource::class, $sources[0]);
+            self::assertSame(
+                $expected,
+                $clock->getValue($sources[0]),
+                'a resolved timestamp baked in at construction freezes the detail backoff for the '
+                    . 'entire lifetime of a --watch process, and stamps every fetched_at with the '
+                    . 'moment the process started',
+            );
+        }
+    }
+
     public function testDoctorReportsDetailPagesItHasGivenUpOn(): void
     {
         $store = \RentWatch\Store\Store::open((string) $this->dbPath);

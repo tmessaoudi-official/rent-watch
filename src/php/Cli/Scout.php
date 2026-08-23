@@ -978,7 +978,13 @@ final readonly class Scout
                 $this->http,
                 $this->robotsFor($definition, $robotsByOrigin),
                 $priority,
-                $this->now(),
+                // The CLOCK, not a reading of it. `$sources` is built ONCE, before the watch loop,
+                // so `now()` here would hand every source the moment the PROCESS started and keep
+                // it for weeks: the detail backoff would compute `now - since` as zero for ever and
+                // never retry a failed page, and every `fetched_at` in `listing_detail` would
+                // record process start rather than the fetch. `null` in production means the source
+                // reads real time on each pass; an injected value still propagates for tests.
+                $this->nowIso,
             ),
             'email_alert' => $this->buildEmailSource($definition, $store),
             default => null,

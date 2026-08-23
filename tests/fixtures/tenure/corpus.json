@@ -23,7 +23,7 @@
  "version": 1,
  "declared_counts": {
   "synthetic": 114,
-  "captured": 6
+  "captured": 7
  },
  "sources": {
   "inli": {
@@ -1790,6 +1790,20 @@
     "outcome": "DIGEST"
    },
    "why": "THE HARD ONE, and the FIFTH outing of this project's most expensive failure class: excluded vocabulary appearing as ordinary French, or as UI furniture, on a page that is not about tenure. This text is verbatim from Logirep's own search-filter strip and it contains THREE of them -- PLAI inside 'Plain-pied', LLI inside 'Cellier', PLUS inside 'plusieurs'. None is a tenure signal, and a classifier that read any of them would reject or mislabel every listing on the source while SourceHealth stayed green and the item count stayed plausible, which is hard rule 2's silent failure arriving through the classifier rather than the parser. It is captured as a DESCRIPTION on purpose: the previous four instances (CDC's 'au plus pres', Cityloger's 'bailleur social', Erilia's 'Ai-je droit a un logement social ?') all turned on WHICH SURFACE the text reached, and a selector widened to a page-level container is exactly how this strip would get in. The guards already hold -- every string here was run through TenureClassifier on 2026-08-21 and returned UNKNOWN at 0.00 -- so this fixture exists to keep them holding, not to fix anything. Note the facet case differs from the four before it: those were prose written by a human about a flat; this is a FILTER LABEL, which no amount of care in writing listing copy would ever remove."
+  },
+  {
+   "id": "inli-001-captured-description-containing-plusieurs",
+   "provenance": "captured",
+   "captured_at": "2026-08-23",
+   "source": "inli",
+   "title": "Appartement de 63 m² à LES ULIS",
+   "description": "Exclusivité - appartement 3 pièces de 63.0 m² aux Ulis Sans frais d'agence. L'espace de vie comprend un salon et une cuisine. Présence d'un gardien. Le bien est situé au 3e étage. Chauffage collectif. Une place de parking incluse. Proximité de bus et de lignes de RER B et C avec plusieurs stations accessibles. Commerces à proximité.",
+   "fields": [],
+   "expect": {
+    "tenure": "LLI",
+    "outcome": "MATCH"
+   },
+   "why": "THE FURNITURE CLASS ON A FOURTH SOURCE, and the first time it arrives on a source that is NOT mixed-tenure. Captured from In'li's /location-appartement-les-ulis-91940/PRV-054595 on 2026-08-23, the day In'li gained a detail_map: its cards carry four facts and no title, so `exclude_title_patterns` was structurally dead on the source producing two thirds of the matches.\n\nThe trap is `plusieurs stations`. `plus` is one of the commonest words in French and it is also the excluded financing acronym PLUS, and reading the second where the first was written has now cost this repo four instances: CDC's `au plus près` (which vetoed 14 of 16 correctly-badged listings into the digest), Cityloger's `bailleur social`, Logirep's `Ce·lli·er` inside a filter facet, and this.\n\nWHAT MAKES THIS ONE DIFFERENT, and why it is worth a case of its own: In'li is `mixed_tenure: false`, so a listing with no tenure signal is notified on the source default. Every earlier instance of this class cost a listing its MATCH by pushing it to the digest — fail-closed, wasteful, safe. Here a false PLUS would be an outright REJECT of a listing on a pure-LLI landlord's own site, and the yield would simply drop with nothing to see. Adding a description to a source that previously had almost none is exactly the change that could introduce it, which is why this case was captured on the same day that change landed.\n\nThe expectation is the verdict the BARE CARD already gets: LLI on the source default. The description must not alter it in either direction — a veto would reject good stock, and a promotion would mean prose was doing work the source default is already doing at a deliberately sub-threshold confidence."
   }
  ]
 }
