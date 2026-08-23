@@ -169,10 +169,25 @@ never notified a new listing again — and reported `SOURCE_BROKEN` on a diagnos
 Retried past a 6 h backoff, three times, then left alone.
 
 **Stated cost:** a listing whose detail page cannot be read is judged on its card alone, exactly as
-every listing on that source is judged today — `exclude_title_patterns` cannot fire on it. And In'li
-publishes **no lift at all**: `ascenseur` appears nowhere on the page, so it stays `null`, which
-says nothing rather than saying no, and the high-floor penalty still cannot fire on that source.
-Both are asserted, so the day either changes a test fails rather than nobody noticing.
+every listing on that source is judged today — `exclude_title_patterns` cannot fire on it. In'li's
+floor and lift also stay `null`, so the high-floor penalty cannot fire on that source; `null` says
+nothing rather than saying no, which is the safe direction (hard rule 9).
+
+> **The reason given for that used to be *"In'li publishes no lift at all"*, and it was measured on
+> ONE page.** Live acceptance on 2026-08-23 hydrated 20 real detail pages: **18 of 20 mention
+> `ascenseur` and 19 of 20 state a floor.** The frozen fixture contains neither, so the assertion
+> pinning it is true of that capture and false of the source — a generalisation from n=1, the same
+> error class as the retired *"live yield is 0"* claim two entries down. The fields stay `null`
+> because nothing MAPS them, not because the source withholds them.
+>
+> Recovering them is real yield — In'li is about two thirds of all matches — and it is not a field
+> map. **`Payload::bool()` cannot do it**: it matches the whole trimmed string, so prose returns
+> `null` (safe today), and a substring reader would read *"Aucun ascenseur dans la résidence"* as
+> `true`. **5 of the 18 lift mentions are negations** (`sans`, `Aucun`, `Pas d'`, `ne dispose pas
+> d'` — with a curly apostrophe in one), and **at least 4 of the 19 floor mentions state the
+> BUILDING's height, not the flat's** (*"Il s'élève sur trois étages"*, *"de 18 étages"*). A naive
+> reader would award a lift bonus to flats with no lift and read a tower's height as a tenant's
+> floor. Both are hard rule 9 inverted: manufacturing a fact from its own negation.
 
 **Location is REGION MODE as of 2026-08-22 — and by the end of that day it covered ALL of
 Île-de-France, at `min_rooms: 3`, `min_surface_m2: 50` and `max_rent_cc: 1200`.** `communes: []`
