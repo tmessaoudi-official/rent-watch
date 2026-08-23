@@ -937,6 +937,25 @@ var/claude/                 Reports, review outputs — gitignored scratch (hand
 
 ## Gotchas & pitfalls
 
+- **A green tree says nothing about what the watcher is running — `src/` is baked into the image.**
+  `compose.yaml` mounts `./config` and `./state`; the code comes from `rent-watch:local`. So a fix
+  can be committed, pushed, CI-green and *still not protecting anyone*. Measured 2026-08-23: the
+  deployed watcher was seventeen hours old and predated **all of Phase 2 and 2b** — the §1
+  fail-closed hydration gate was built, certified and unarmed in production the whole time, and the
+  production database was still at schema v4 while the repo was at v6. Nothing in `git status`,
+  `git log` or a passing suite says so. The check is
+  `docker image inspect rent-watch:local --format '{{.Created}}'` against the commit date of the
+  last change under `src/`, and `SELECT value FROM schema_meta WHERE key='schema_version'` against
+  the repo's current version. Redeploy recipe: `README.md` § Deploying it.
+- **What saved that seventeen hours was an unrelated filter, which is not a defence.** Both live
+  In'li listings that Phase 2b proved were **PLS** carry 47.6 m² and 43.4 m², so `min_surface_m2: 50`
+  rejected them before tenure was ever the deciding question. The disarmed §1 gate cost nothing
+  *this time* because a size threshold happened to sit in front of it. Cross-checking all 54 notified
+  In'li rows against their hydrated verdicts found 53 genuinely `LLI` and one `UNKNOWN` — a listing
+  notified as a match that should have gone to the digest, its detail page being a 404. **Never read
+  "no harm occurred" as "the rule held"**: ask which mechanism actually did the rejecting, because a
+  filter that happens to be upstream today can be widened tomorrow, and Q1–Q3 widened three of them
+  in one day.
 - **`prototype/scout.py` has no tenure classifier at all.** It will happily surface PLAI and PLUS
   listings. It is reference material for the field-mapping and adapter shape only — treat its filtering
   logic as incomplete, not as a baseline to preserve.

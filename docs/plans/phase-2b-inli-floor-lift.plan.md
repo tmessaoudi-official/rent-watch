@@ -205,3 +205,48 @@ source; no live source has it.
 
 - [2026-08-23 13:40] AGREED: source-default matches are gated on hydration; In'li is `mixed_tenure: true`.
 - [2026-08-23 13:40] DONE: verified live, cold 0/54 -> drained 53/1, PLS rejected throughout.
+
+## Deployed (2026-08-23) — and what the seventeen-hour gap actually cost
+
+Phase 2b was committed, pushed and green while the **running watcher was still the 2026-08-22 20:08
+build**, which predates all of Phase 2. Production was at schema v4; the repo was at v6. The §1
+fail-closed hydration gate was certified and unarmed at the same time.
+
+**Audit of what the stale build let through** — cross-referencing the 54 notified In'li rows against
+`/tmp/rw-gate.sqlite3`, the fully-drained acceptance database (168/168 detail pages read):
+
+| prod verdict | hydrated verdict | n |
+|---|---|---|
+| `LLI` | `LLI` | 53 |
+| `LLI` | `UNKNOWN` | 1 |
+
+No social-housing listing reached the user — **and not because the classifier held.** Both proven
+PLS listings (`PRV-317130`, `PRV-317131`, Viroflay) are 47.6 m² and 43.4 m², so `min_surface_m2: 50`
+rejected them upstream of tenure; both show `notified_at` NULL in the production database. The one
+`LLI → UNKNOWN` row is a listing notified as a match whose detail page 404s; under the gate it is a
+digest entry.
+
+**Deploy, executed in the advisor-recommended order** — build before stop, so a failed build cannot
+leave production down, and rehearse the migration before it touches the real seen-set:
+
+- `rent-watch:pre-v6` tagged — rollback is a retag, not a rebuild.
+- Migration rehearsed on a `.backup` copy of the live database, opened offline with the new code:
+  **v4 → v6, `listings` 478, `notified` 94, `price_history` 365, `source_runs` 309 all preserved**,
+  journal still WAL.
+- Graceful stop, second `.backup` to `state/rent-watch.sqlite3.pre-v6.1787492935.bak`, `up -d`.
+
+**Verified live after the first pass:** `schema_version` = 6; `listing_detail` filling at 20/pass per
+source (20 In'li + 20 Cityloger, 0 errors); notified count **unchanged at 94, 0 new** — the migration
+caused no re-notification; the PLS pair now reads `UNKNOWN 0`, withheld by the gate.
+
+The pass line went from `83 correspondance(s), 9 à vérifier` to `29 correspondance(s), 63 à vérifier`
+over the identical 478 listings. That is the documented cold-start cost of gating a source-default
+match on hydration, not a regression — the backlog drains at `detail_budget_per_pass` per source.
+
+**UNCERTIFIED-BY-EXECUTION:** the 350-case sabotage ledger has not re-run end to end since Phase 2b;
+this deploy rests on the 1731-case unit suite plus the five targeted cases verified at build time.
+Nightly CI covers the ledger. Deploying on that evidence was the right trade — waiting left a §1 hole
+armed-in-repo and absent-in-production for hours — but it is stated rather than implied.
+
+- [2026-08-23 15:48] DONE: Phase 2/2b deployed; v4→v6 migrated in production, rehearsed first, backed up twice.
+- [2026-08-23 15:52] VERIFIED: 53/54 notified In'li rows correct, 1 over-confident, 0 social-housing false positives; the PLS pair was stopped by `min_surface_m2`, not by tenure.

@@ -105,6 +105,40 @@ Get it wrong and the refusal now says so by name (`base de données inutilisable
 est-il monté et accessible en écriture…`) instead of dying with a stack trace, which is what it did
 before this was measured against a real container.
 
+**Redeploying after a code change — `src/` is baked into the image, `config/` is not.** The compose
+file mounts `./config` read-only and `./state` read-write; everything else the watcher runs comes
+from the image. So a `git pull` on the host changes the criteria and the source definitions
+immediately, and changes **no code at all** until the image is rebuilt. Measured 2026-08-23: a
+watcher was still running the previous day's build seventeen hours after its replacement was
+committed and pushed, and the tree was clean and green throughout. Green, pushed and deployed are
+three different things.
+
+```bash
+docker tag rent-watch:local rent-watch:pre-<what-you-are-leaving>   # rollback, one retag away
+docker compose build                                                # BEFORE stopping: a failed
+                                                                    #   build must not leave you down
+sqlite3 state/rent-watch.sqlite3 ".backup /tmp/mig-rehearse.sqlite3"
+php -r 'require "vendor/autoload.php"; $s=RentWatch\Store\Store::open("/tmp/mig-rehearse.sqlite3");
+        echo $s->schemaVersion()," ",$s->journalMode(),PHP_EOL;'    # rehearse the migration
+docker compose stop                                                 # graceful; finishes the pass
+sqlite3 state/rent-watch.sqlite3 ".backup state/rent-watch.sqlite3.pre-<v>.$(date +%s).bak"
+docker compose up -d
+```
+
+The rehearsal step is there because the seen-set is the one file this project documents as
+unrecoverable, and a schema migration is the only routine operation that rewrites it. `.backup` is
+safe against a running writer and checkpoints the WAL, so the copy is a real one; opening it with
+the new code offline proves the migration chain runs against *this* data rather than against a test
+fixture. Compare row counts on both sides — a migration that silently drops the price history looks
+exactly like a successful one.
+
+**A redeploy that adds a hydration gate reads as a collapse in matches, and that is the gate
+working.** The same 478 listings went from `83 correspondance(s), 9 à vérifier` to
+`29 correspondance(s), 63 à vérifier` across the 2026-08-23 upgrade, because a source-default match
+is now withheld until the listing's own page has been read. The backlog drains at
+`detail_budget_per_pass` per source per pass; matches climb back over the following passes. Nothing
+already notified is re-notified — that is the seen-set's job and it survives the migration.
+
 **What is in the image, and what is not.** No test suite, no `tools/phpunit.phar`, no `.env` — an
 image layer is a distributable artifact and a baked-in credential survives any later layer that
 deletes it. The demo fixture *is* shipped, and it lets a fresh VPS prove the whole
