@@ -26,8 +26,20 @@ corpus at `tests/fixtures/tenure/corpus.json`, the seen-set / price-history / ru
 `FixtureSource` under `src/php/Adapters/`, the criteria engine (`CriteriaEngine` + `Verdict`), and a
 PHPUnit suite. `scout run --once` is demonstrable end to end today against a frozen payload.
 
-`scout doctor`, `scout dump`, `scout run --once/--seed` and `scout test-notify` all work end to end
-today. The network adapters exist too — `HttpJsonSource` + `Robots`, `EmailAlertSource` +
+`scout doctor`, `scout dump`, `scout run --once/--seed`, `scout test-notify`, `scout digest` and
+`scout reclassify` all work end to end today. The last two closed 2026-08-23 and both carry a rule
+worth knowing before touching either, because they look symmetrical and are not: **`digest`
+announces an evidence-less row, `reclassify` skips one.** `digest` reads the store rather than the
+pass — the pipeline re-offers an undelivered entry only while the ad is still published, so an entry
+delisted in between is lost — and every row in that backlog predates schema v7, so skipping
+snapshot-less rows would skip exactly what the command exists to rescue. `reclassify` FORMS a
+verdict instead of announcing one, and re-judging on less evidence than the original saw is a §1
+breach rather than a smaller improvement: a card whose field says `PLS` while its title says
+*logement intermédiaire* classifies `UNKNOWN` by CONFLICT, and on the title alone it becomes a
+MATCH. It also runs on the v7 snapshot ALONE — merging `listing_detail.fields_json` would buy no
+evidence (the pipeline already rewrites the snapshot post-merge every pass) while making a stored
+verdict depend on mapper code that has since changed. `--since` is refused, not implemented, because
+its ruled mechanism is a classifier-version column that does not exist. The network adapters exist too — `HttpJsonSource` + `Robots`, `EmailAlertSource` +
 `ImapMailbox`/`FileMailbox`, `SmtpTransport`/`FileTransport` — all tested offline against fakes,
 with `.env` swapping the real thing in. **What is missing is not code but two INPUTS**: a DevTools
 cURL capture to replace a `REMPLACER` URL in `config/sources.json` (hard rule 1 forbids writing one

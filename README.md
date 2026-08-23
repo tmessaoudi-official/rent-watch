@@ -288,8 +288,20 @@ scout dump <source>           # raw payload of the first item — for building f
 scout run --once [-v]         # single pass
 scout run --watch [-v]        # loop: every 15 min ± 5 of jitter, paced per host (Q37)
 scout test-notify             # verify the notification channel
+scout digest [--dry-run]      # emit the pending "à vérifier" rollup, on demand
+scout reclassify [--dry-run]  # re-judge stored UNKNOWN verdicts against today's classifier
 scout replay <fixture>        # re-run parsing against a saved fixture
 ```
+
+`scout digest` reads the STORE, not the last pass, and that is the difference that makes it worth
+having: the pipeline already re-offers an undelivered digest entry next run, but only while the ad
+is still published, so an entry whose listing is delisted in between is lost with nothing saying so.
+
+`scout reclassify` re-runs the classifier AND the criteria engine over stored `UNKNOWN` verdicts,
+using the schema-v7 snapshot of the listing the verdict was formed from. A row stored before v7 has
+no snapshot and is **skipped, not judged on whatever text remains** — re-judging on less evidence
+than the original saw is how a social listing becomes a match. `--since` is deliberately refused;
+see `docs/plans/finish-everything.plan.md` for why.
 
 `scout dump` is what makes onboarding a new source take five minutes instead of an hour, so it lands in
 milestone 1.
