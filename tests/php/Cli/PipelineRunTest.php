@@ -384,6 +384,65 @@ final class PipelineRunTest extends TestCase
         self::assertSame('UNKNOWN', $stale[0]['tenure']);
     }
 
+    /**
+     * Schema v7. The evidence stored is the listing the classifier actually consumed.
+     *
+     * Without this the pipeline could store a verdict with no snapshot beside it and nothing would
+     * notice until `scout reclassify` skipped every row it was written for.
+     */
+    public function testTheEvidenceTheClassifierConsumedIsPersisted(): void
+    {
+        $store = $this->store();
+        $this->pipeline($store)->runOnce([new FakeSource('fake', listings: [$this->listing()])], self::NOW);
+
+        $stored = $store->evidence($store->dedupKey($this->listing()));
+
+        self::assertNotNull($stored, 'no snapshot was written beside the verdict');
+        self::assertEquals($this->listing(), $stored);
+    }
+
+    /**
+     * Schema v7. The judged outcome is recorded for ALL THREE verdicts, not only the digested one.
+     *
+     * The placement is the guarantee: `recordOutcome()` runs BEFORE the REJECT and DIGEST branches,
+     * both of which `continue`. Written inside the digest branch instead, a listing promoted from
+     * DIGEST to MATCH on a later pass would keep its stale `DIGEST` for ever, and `scout digest`
+     * would go on announcing as doubtful something already notified as a match.
+     */
+    public function testEveryJudgedOutcomeIsRecordedWhicheverWayItWent(): void
+    {
+        $store = $this->store();
+
+        // A clean LLI match, an undetermined listing on a mixed source, and one the criteria reject
+        // outright — one of each, in a single pass.
+        $match = $this->listing('m1');
+        $doubtful = new RawListing(
+            sourceName: 'fake',
+            externalId: 'd1',
+            title: 'T4 Sartrouville',
+            description: '4 pieces de 88 m2.',
+            commune: 'Sartrouville',
+            postcode: '78500',
+            rentCc: 1450,
+            surfaceM2: 88.0,
+            rooms: 4,
+        );
+        $rejected = $this->listing('r1', ['description' => '4 pieces de 88 m2, PLAI, ascenseur.', 'fields' => ['financement' => 'PLAI']]);
+
+        $this->pipeline($store)->runOnce(
+            [new FakeSource('fake', listings: [$match, $doubtful, $rejected], mixedTenure: true)],
+            self::NOW,
+        );
+
+        self::assertSame('MATCH', $store->outcome($store->dedupKey($match)));
+        self::assertSame('DIGEST', $store->outcome($store->dedupKey($doubtful)));
+        self::assertSame(
+            'REJECT',
+            $store->outcome($store->dedupKey($rejected)),
+            'a rejected listing must record its outcome too — recordOutcome() runs before the branches',
+        );
+    }
+
     // ---------------------------------------------------------------- scoring inputs
 
     public function testFreshnessIsMeasuredFromFIRSTSeenNotFromEverySighting(): void
@@ -520,14 +579,14 @@ final class PipelineRunTest extends TestCase
 
     // ---------------------------------------------------------------- schema
 
-    public function testTheSchemaVersionIsSix(): void
+    public function testTheSchemaVersionIsSeven(): void
     {
         // A bare constant assertion, and it earns its place: lowering `SCHEMA_VERSION` makes
         // `migrate()` return early on an EXISTING database, so an older one opens cleanly and then
         // throws `no such column` on the first write. A fresh database hides it entirely, because
         // `CREATE TABLE IF NOT EXISTS` always writes the current DDL.
-        self::assertSame(6, Store::SCHEMA_VERSION);
-        self::assertSame(6, $this->store()->schemaVersion());
+        self::assertSame(7, Store::SCHEMA_VERSION);
+        self::assertSame(7, $this->store()->schemaVersion());
     }
 
     public function testAVersionOneDatabaseIsUpgradedThroughEveryLaterStep(): void
@@ -545,7 +604,7 @@ final class PipelineRunTest extends TestCase
         unset($pdo, $store);
 
         $reopened = Store::open((string) $this->dbPath);
-        self::assertSame(6, $reopened->schemaVersion());
+        self::assertSame(7, $reopened->schemaVersion());
 
         // v5's table and v6's column are created by their own migration steps, not by the
         // fresh-database DDL, and this is the only path that proves the difference: a v1 database
@@ -560,8 +619,8 @@ final class PipelineRunTest extends TestCase
             'name',
         );
 
-        foreach (['seen_epoch', 'tenure', 'confidence_bp', 'signals_json', 'group_key'] as $column) {
-            self::assertContains($column, $columns, "the v1 -> v4 upgrade did not add `{$column}`");
+        foreach (['seen_epoch', 'tenure', 'confidence_bp', 'signals_json', 'group_key', 'evidence_json', 'outcome'] as $column) {
+            self::assertContains($column, $columns, "the v1 -> v7 upgrade did not add `{$column}`");
         }
 
         // v6's ALTER runs against a table v5 has just created in the SAME migration, which is the
@@ -591,7 +650,7 @@ final class PipelineRunTest extends TestCase
         $pdo->exec("UPDATE schema_meta SET value = '5' WHERE key = 'schema_version'");
         unset($pdo);
 
-        self::assertSame(6, Store::open($path)->schemaVersion(), 'a re-run migration must not throw');
+        self::assertSame(7, Store::open($path)->schemaVersion(), 'a re-run migration must not throw');
     }
 
     // ---------------------------------------------------------------- helpers

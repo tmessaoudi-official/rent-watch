@@ -895,6 +895,13 @@ Required coverage, per spec §11 — non-negotiable once `src/` exists:
   **group** (schema v4: the key SURVIVES a survivorship flip, a delisted member keeps it, two groups
   that meet are merged, a listing that clusters alone has NO group, and a singleton reports its own
   history rather than the empty set SQL gives you for `group_key = NULL`);
+  **evidence** (schema v7: the snapshot a verdict was formed from round-trips with hard rule 9
+  intact — `floor = 0` is RDC and not an unknown floor, an explicit `hasElevator = false` is not an
+  unmentioned lift, and `detailRead` survives; the encoder covers every `RawListing` constructor
+  parameter BY REFLECTION so tomorrow's field cannot silently leave the snapshot; a pre-v7 row is
+  NOT backfilled; a corrupt snapshot is refused loudly rather than degraded to a bare listing; and
+  the judged `outcome` is recorded for all three verdicts, since `tenure = UNKNOWN` does not mean
+  *was digested* — the engine can REJECT before the tenure branch is ever reached);
   **persistence** (the seen-set and price history survive reopening; an older schema is upgraded and
   a newer one refused; a snapshot carries every field it claims); **concurrency** (WAL, and a second
   writer that WAITS rather than failing — demonstrated, because a deferred transaction silently

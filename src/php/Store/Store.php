@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace RentWatch\Store;
 
+use RentWatch\Core\ListingSnapshot;
 use RentWatch\Core\RawListing;
 use RentWatch\Core\Redact;
 use RentWatch\Core\SourceHealth;
@@ -45,7 +46,7 @@ final readonly class Store
      * without complaint and then threw a raw `no such column` at the first sighting. That is the
      * whole argument for this constant existing, demonstrated against itself.
      */
-    public const int SCHEMA_VERSION = 6;
+    public const int SCHEMA_VERSION = 7;
 
     /** Spec §8: the mean is rolling over seven days, not over a fixed number of runs. */
     public const int ROLLING_WINDOW_DAYS = 7;
@@ -248,7 +249,42 @@ final readonly class Store
                 -- NULL means "never clustered under a version that recorded it" and is NOT
                 -- backfilled, for the same reason `tenure` is not: a backfilled self-group would be
                 -- indistinguishable from a real one, and that is the distinction the queries need.
-                group_key       TEXT
+                group_key       TEXT,
+
+                -- Schema v7. THE EVIDENCE THE VERDICT WAS FORMED FROM, frozen so it can be
+                -- re-judged without re-fetching an ad the source may have removed.
+                --
+                -- This is a §1 surface, not an audit nicety. `scout reclassify` re-runs an
+                -- improved classifier over UNKNOWN rows, and running it on LESS evidence than the
+                -- original saw does not make a smaller improvement — it makes a BREACH: a card
+                -- whose field says PLS while its title says `logement intermédiaire` classifies
+                -- UNKNOWN today by conflict, and re-run on the title alone it becomes a MATCH.
+                -- The invariant is `evidence ⊇ original, never ⊂`, and this column is what makes
+                -- it checkable rather than hoped for.
+                --
+                -- Holds the MAPPED RawListing, after any detail merge — never the pre-map payload,
+                -- whose re-reading would make a stored verdict depend on ListingMapper code that
+                -- has since changed. Same drift `map_fingerprint` catches one layer down.
+                --
+                -- NOT backfilled, like `tenure` and `group_key` before it: an invented snapshot is
+                -- indistinguishable from a real capture, and telling those apart is the whole job.
+                evidence_json   TEXT,
+
+                -- Schema v7. What the criteria engine JUDGED this listing to be.
+                --
+                -- `scout digest` needs to find what was digested and never delivered by reading
+                -- the STORE, because the pipeline retries only while the listing stays published
+                -- — a digest entry whose ad is delisted between passes is otherwise lost with
+                -- nothing anywhere saying so.
+                --
+                -- It CANNOT be re-derived from `tenure`: the engine can REJECT on a hard
+                -- disqualifier before the tenure branch is ever reached, so UNKNOWN does not mean
+                -- `was digested`. Deriving it would surface listings the criteria threw out, into
+                -- the one channel §1 uses as its landing zone.
+                --
+                -- NULL means never judged, which is the honest state of an absorbed dedup member:
+                -- every member is recorded and classified, only the survivor is judged.
+                outcome         TEXT
             );
 
             -- `listings_group` is deliberately NOT here, and this is not an oversight. On an
@@ -485,6 +521,32 @@ final readonly class Store
                 if (!in_array('map_fingerprint', $names, true)) {
                     $this->pdo->exec('ALTER TABLE listing_detail ADD COLUMN map_fingerprint TEXT');
                 }
+            }
+
+            if ($recorded < 7) {
+                // Additive and re-runnable, like every step above. SQLite has no
+                // `ADD COLUMN IF NOT EXISTS`, so the column list is read first — a bare ALTER throws
+                // on the second run and turns a re-entrant migration into a fatal one.
+                //
+                // NOTHING IS BACKFILLED, and there is nothing that could be. A listing already in
+                // the seen-set was judged by a version that recorded neither column, and inventing
+                // an `evidence_json` for it would be indistinguishable from a real capture —
+                // which is the exact distinction `reclassify` has to make in order to SKIP a row
+                // rather than re-judge it on less than the original saw. NULL is the truth here,
+                // and it is what makes those rows identifiable. Same precedent as `tenure` (v3)
+                // and `group_key` (v4).
+                $existing = array_column($this->pdo->query('PRAGMA table_info(listings)')->fetchAll(), 'name');
+
+                foreach (['evidence_json' => 'TEXT', 'outcome' => 'TEXT'] as $column => $type) {
+                    if (!\in_array($column, $existing, true)) {
+                        $this->pdo->exec('ALTER TABLE listings ADD COLUMN ' . $column . ' ' . $type);
+                    }
+                }
+
+                // `pendingDigest()` selects on exactly this pair, and it runs on every `scout
+                // digest`. Without the index that is a full scan of the seen-set, which grows
+                // without bound — the one table nothing ever prunes.
+                $this->pdo->exec('CREATE INDEX IF NOT EXISTS listings_outcome ON listings (outcome, notified_at)');
             }
 
             $stamp = $this->pdo->prepare("UPDATE schema_meta SET value = :value WHERE key = 'schema_version'");
@@ -1242,18 +1304,120 @@ final readonly class Store
      * @param list<string> $signals the `reasons[]`, stored verbatim so the verdict can be explained
      *                              later without re-fetching an ad the source may have removed
      */
-    public function recordVerdict(string $dedupKey, string $tenure, int $confidenceBp, array $signals): void
-    {
+    public function recordVerdict(
+        string $dedupKey,
+        string $tenure,
+        int $confidenceBp,
+        array $signals,
+        RawListing $evidence,
+    ): void {
+        // ONE STATEMENT, and `$evidence` is REQUIRED rather than nullable, because the property
+        // that matters is "the stored evidence is what produced the stored verdict". A second write
+        // or an optional parameter re-opens the divergence: a verdict from pass N sitting beside
+        // evidence from pass N-1 would let `reclassify` compare against something the classifier
+        // never saw, which is the §1 hole this column exists to close.
         $statement = $this->pdo->prepare(
-            'UPDATE listings SET tenure = :tenure, confidence_bp = :bp, signals_json = :signals
+            'UPDATE listings SET tenure = :tenure, confidence_bp = :bp, signals_json = :signals,
+                    evidence_json = :evidence
              WHERE dedup_key = :key',
         );
         $statement->execute([
             'tenure' => $tenure,
             'bp' => $confidenceBp,
             'signals' => json_encode($signals, JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE),
+            'evidence' => ListingSnapshot::encode($evidence),
             'key' => $dedupKey,
         ]);
+    }
+
+    /**
+     * The listing exactly as the classifier saw it when the stored verdict was formed.
+     *
+     * `null` means no snapshot was ever captured — a row stored before schema v7, deliberately not
+     * backfilled. It does NOT mean the snapshot was empty, and the caller must not treat it as one:
+     * `scout reclassify` skips such a row and counts it out loud rather than re-judging it on
+     * whatever else is lying around.
+     *
+     * THROWS on a snapshot that exists and cannot be read. Hard rule 3 — degrading a corrupt row to
+     * a bare listing would classify as `UNKNOWN` and read as an honest doubt rather than as a row
+     * nobody can judge, and reclassify would then have run on strictly less evidence than the
+     * original. Loud is the only safe direction here.
+     *
+     * @throws \JsonException            the stored snapshot is not JSON
+     * @throws \InvalidArgumentException the stored snapshot is JSON but is not a listing
+     */
+    public function evidence(string $dedupKey): ?RawListing
+    {
+        $statement = $this->pdo->prepare('SELECT evidence_json FROM listings WHERE dedup_key = :key');
+        $statement->execute(['key' => $dedupKey]);
+
+        /** @var string|false|null $json */
+        $json = $statement->fetchColumn();
+
+        if (!is_string($json) || $json === '') {
+            return null;
+        }
+
+        return ListingSnapshot::decode($json);
+    }
+
+    /**
+     * Record what the criteria engine judged this listing to be.
+     *
+     * Written separately from the verdict, and that asymmetry is deliberate rather than an
+     * oversight: every dedup MEMBER is recorded and classified, but only the SURVIVOR is judged.
+     * Folding the outcome into {@see recordVerdict()} would force a value for members that never
+     * reached the criteria engine, and `NULL` is precisely what distinguishes "never judged" from
+     * "judged and rejected".
+     *
+     * Overwrites, so a listing re-judged on a later pass carries only its latest outcome — a flat
+     * promoted from DIGEST to MATCH must LEAVE the pending digest, or `scout digest` announces as
+     * doubtful something already notified as a match.
+     */
+    public function recordOutcome(string $dedupKey, string $outcome): void
+    {
+        $this->pdo->prepare('UPDATE listings SET outcome = :outcome WHERE dedup_key = :key')
+            ->execute(['outcome' => $outcome, 'key' => $dedupKey]);
+    }
+
+    /** What this listing was last judged to be, or `null` if it was never judged. */
+    public function outcome(string $dedupKey): ?string
+    {
+        $statement = $this->pdo->prepare('SELECT outcome FROM listings WHERE dedup_key = :key');
+        $statement->execute(['key' => $dedupKey]);
+
+        /** @var string|false|null $outcome */
+        $outcome = $statement->fetchColumn();
+
+        return is_string($outcome) && $outcome !== '' ? $outcome : null;
+    }
+
+    /**
+     * Everything digested and never delivered, oldest first, for `scout digest`.
+     *
+     * `notified_at IS NULL` is the delivery test, reusing the field rather than adding a parallel
+     * one: being carried in a DELIVERED digest IS being told about the listing, which is what that
+     * column means everywhere else.
+     *
+     * **The rows come back RAW, and that is the point.** A bulk query that decoded snapshots would
+     * throw on the first corrupt one and take every readable entry with it — one bad row costing
+     * the whole digest, which is the opposite of skipping it and saying so. Decoding belongs to the
+     * caller so that its failure is per-row and countable.
+     *
+     * @return list<array{dedup_key: string, title: string, evidence_json: ?string, signals_json: ?string}>
+     */
+    public function pendingDigest(): array
+    {
+        $statement = $this->pdo->query(
+            "SELECT dedup_key, title, evidence_json, signals_json FROM listings
+              WHERE outcome = 'DIGEST' AND notified_at IS NULL
+              ORDER BY seen_epoch ASC, dedup_key ASC",
+        );
+
+        /** @var list<array{dedup_key: string, title: string, evidence_json: ?string, signals_json: ?string}> $rows */
+        $rows = $statement === false ? [] : $statement->fetchAll(\PDO::FETCH_ASSOC);
+
+        return $rows;
     }
 
     /**

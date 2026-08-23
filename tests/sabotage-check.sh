@@ -1977,6 +1977,80 @@ run_sabotage "a letterless literal enters the vocabulary, making the skip unsoun
 
 printf '\n  %d sabotage(s) detected, %d undetected\n' "$pass" "$fail"
 
+# ── Schema v7: the evidence a verdict was formed from, and the outcome it was judged to ──────────
+# Every case here is silent by construction, and they share one shape: the damage is not visible
+# when it is done, only when `scout reclassify` runs months later on evidence that quietly shrank.
+#
+# The invariant under all of them is `reclassify runs on evidence ⊇ original, never ⊂`. A card whose
+# field says PLS while its title says `logement intermédiaire` classifies UNKNOWN today BY CONFLICT;
+# re-run on the title alone it becomes a MATCH. So a snapshot that loses a field does not make a
+# worse improvement — it manufactures the one outcome §1 forbids, and it does it to the listings
+# most likely to be social, because those are the ones whose evidence conflicts.
+
+# The three falsy-but-real values of hard rule 9, one case each. All three decode to something a
+# careless reader calls "empty", and all three mean something specific.
+run_sabotage "a rez-de-chaussee floor decodes as an unknown floor" \
+  src/php/Core/ListingSnapshot.php \
+  "s%floor: self::nullableInt(\$data\['floor'\] ?? null),%floor: self::nullableInt(\$data['floor'] ?? null) ?: null,%"
+
+# `false` is "there is no lift" and only the explicit false may drive the high-floor penalty.
+# Decoded as null it becomes "the listing did not mention one", and the penalty silently stops
+# firing — a scoring change nobody ordered, visible only as listings ranking slightly too high.
+run_sabotage "an explicit 'no lift' decodes as never mentioned" \
+  src/php/Core/ListingSnapshot.php \
+  's%return is_bool($value) ? $value : null;%return is_bool($value) \&\& $value ? $value : null;%'
+
+# `detailRead` is what the fail-closed rule reads to decide whether weak evidence on a mixed source
+# digests or matches. Lost, every hydrated listing re-judges as unread — which is the SAFE
+# direction, and still wrong: it silently re-digests listings whose pages were read and found clean.
+run_sabotage "a hydrated listing is snapshotted as though its page was never read" \
+  src/php/Core/ListingSnapshot.php \
+  "s%'detailRead' => \$listing->detailRead,%'detailRead' => false,%"
+
+# THE GUARD ON THE GUARD. A field added to RawListing and forgotten in the encoder is dropped from
+# every snapshot written afterwards, silently, because decode still succeeds and the gap reads as
+# "the source did not say". The reflection test is the only thing standing between that and a
+# reclassify running on less than the original — this proves it actually fires.
+run_sabotage "a field silently leaves the snapshot (the reflection guard must catch it)" \
+  src/php/Core/ListingSnapshot.php \
+  "s%'commune' => \$listing->commune,%%"
+
+# The verdict and its evidence are written in ONE statement precisely so they cannot diverge.
+# Storing the verdict alone leaves every row unreclassifiable, and nothing says so until months
+# later when reclassify skips the lot.
+run_sabotage "a verdict is stored with no evidence beside it" \
+  src/php/Store/Store.php \
+  "s%'evidence' => ListingSnapshot::encode(\$evidence),%'evidence' => null,%"
+
+# Hard rule 3, in the place it costs most. A corrupt snapshot degraded to `null` is indistinguishable
+# from a pre-v7 row that never had one — so reclassify would skip it as "never captured" instead of
+# reporting a database that is losing data.
+run_sabotage "a corrupt snapshot degrades to nothing instead of being refused" \
+  src/php/Store/Store.php \
+  's%return ListingSnapshot::decode($json);%try { return ListingSnapshot::decode($json); } catch (\\Throwable) { return null; }%'
+
+# `pendingDigest()` becoming "everything not yet notified" would surface listings the criteria
+# REJECTED — into the one channel §1 uses as its landing zone, which is the worst possible place for
+# a rejected listing to reappear looking merely doubtful.
+run_sabotage "the pending digest stops filtering on the outcome" \
+  src/php/Store/Store.php \
+  "s%WHERE outcome = 'DIGEST' AND notified_at IS NULL%WHERE notified_at IS NULL%"
+
+# And its mirror: forgetting delivery makes `scout digest` repeat its whole contents every time,
+# which is the alert fatigue Q34 exists to prevent. A digest the developer has learned to skip costs
+# the fail-closed rule its only landing zone just as surely as never sending one.
+run_sabotage "the pending digest forgets an entry was already delivered" \
+  src/php/Store/Store.php \
+  "s%WHERE outcome = 'DIGEST' AND notified_at IS NULL%WHERE outcome = 'DIGEST'%"
+
+# THE PLACEMENT, not the call. `recordOutcome()` runs before the REJECT and DIGEST branches, both of
+# which `continue` — moved inside the digest branch it would still look right in review, and a
+# listing promoted DIGEST -> MATCH would keep its stale DIGEST for ever while `scout digest` went on
+# announcing as doubtful something already notified as a match.
+run_sabotage "the judged outcome is never recorded" \
+  src/php/Cli/Pipeline.php \
+  's%$this->store->recordOutcome($sighting->dedupKey, $verdict->outcome->value);%%'
+
 if [[ -n "$_filter" ]]; then
   # Loud, because a filtered run that looked like a full one would be the ledger lying about its own
   # coverage — the same class of defect as the baseline gate that reddened itself for six days.

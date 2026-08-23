@@ -127,6 +127,12 @@ final readonly class Pipeline
                     $classification->tenure->value,
                     $classification->confidenceBp,
                     $classification->reasons(),
+                    // Schema v7: the member EXACTLY as the classifier just consumed it — after
+                    // mapping and after any detail merge, which is why `$member` is passed rather
+                    // than anything re-derived. `scout reclassify` re-runs on this and must never
+                    // run on less, so it is written in the same statement as the verdict it
+                    // produced and cannot drift from it.
+                    $member,
                 );
 
                 $observed[spl_object_id($member)] = ['sighting' => $sighting, 'classification' => $classification];
@@ -163,6 +169,16 @@ final readonly class Pipeline
             // every listing the freshness bonus forever, quietly flattening the one component that
             // is supposed to separate a flat published this hour from one that has sat for a week.
             $verdict = $engine->judge($listing, $classification, $this->ageSeconds($sighting->dedupKey, $nowIso));
+
+            // Schema v7. Recorded for ALL THREE outcomes and BEFORE the branches below, because
+            // both of them `continue` — writing it inside the digest branch alone would leave a
+            // listing promoted DIGEST -> MATCH still carrying `DIGEST`, and `scout digest` would go
+            // on announcing as doubtful something the pipeline had already notified as a match.
+            //
+            // Only the SURVIVOR reaches here. An absorbed member keeps `outcome` NULL, which is the
+            // truth — it was recorded and classified but never judged — and that NULL is what stops
+            // `pendingDigest()` from mistaking an unjudged member for a digested one.
+            $this->store->recordOutcome($sighting->dedupKey, $verdict->outcome->value);
 
             if ($verdict->outcome === Outcome::REJECT) {
                 ++$rejectedCount;
