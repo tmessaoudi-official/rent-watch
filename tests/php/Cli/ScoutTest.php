@@ -282,7 +282,14 @@ final class ScoutTest extends TestCase
         // PRINTS the version, and a literal makes every migration edit a CLI test to restate a
         // number three other tests already assert bare.
         self::assertStringContainsString('schéma v' . Store::SCHEMA_VERSION, $r['out']);
-        self::assertStringContainsString('digest à 8h', $r['out'], 'Q34: the digest hour must be visible with its timezone');
+
+        // The CADENCE THAT RUNS, and the configured hour named as configured-only. This asserted
+        // `digest à 8h` until 2026-08-24, pinning a promise nothing keeps: `digest_hour` is parsed,
+        // printed, and read by no scheduler, so on a day with nothing new no rollup is emitted. A
+        // test that pins the wrong claim makes it permanent, which is why this asserts both halves.
+        self::assertStringContainsString('sur demande', $r['out'], 'Q34: doctor must state the cadence that actually runs');
+        self::assertStringContainsString('8h', $r['out'], 'the configured hour is still shown, with its timezone');
+        self::assertStringContainsString('AUCUN planificateur', $r['out'], 'and it is named as configured-but-unread');
     }
 
     /**

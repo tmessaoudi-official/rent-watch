@@ -280,11 +280,17 @@ scout dump <source>           # raw payload of first item — for building field
 scout run --once [-v]         # single pass
 scout run --watch             # loop with jitter (15 min ± 5, paced per host — Q37)
 scout run --seed              # populate the seen-set without notifying (empty seen-set — Q36)
-scout digest                  # emit the "à vérifier" digest on demand — added 2026-08-07 (1c)
-scout reclassify [--since]    # re-run the classifier over stored listings — added 2026-08-07 (Q35)
+scout digest [--dry-run]      # emit the "à vérifier" digest on demand — added 2026-08-07 (1c)
+scout reclassify [--dry-run]  # re-judge stored undetermined verdicts — added 2026-08-07 (Q35)
 scout test-notify             # verify the notification channel
 scout replay <fixture>        # re-run parsing against a saved fixture
 ```
+
+**Amended 2026-08-24 on `--since`, which is REFUSED rather than built.** Q35 named it, and its
+staleness mechanism is a classifier version stored with the verdict — a column that does not exist.
+Answering it against `last_seen_at` would substitute a different mechanism for the ruled one while
+looking honoured; re-running the whole undetermined bin costs seconds. The flag exits 2 saying so.
+Reversing it means adding the version column first. See `docs/OPEN-QUESTIONS.md` Q35 § AMENDED.
 
 **Amended 2026-08-07.** `digest`, `reclassify` and `run --seed` were added by the rulings of that
 date and each closes a silent-miss hole: without `digest` the fail-closed rule's only landing zone is

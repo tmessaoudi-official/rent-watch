@@ -988,6 +988,22 @@ next run. The daily emission stays as a floor for days with nothing new, at the 
 UTC and *"08:00 local"* silently becomes 10:00 Paris in summer. `scout doctor` prints the resolved
 local time next to the digest schedule.
 
+**PARTIALLY BUILT, and the unbuilt half is named here rather than left to be discovered
+[2026-08-24].** Both emission paths exist and are tested: the automatic one at the end of any pass
+producing new entries, and `scout digest [--dry-run]` on demand, reading the STORE rather than the
+pass — which is the difference that matters, since the pipeline re-offers an undelivered entry only
+while the ad is still published. Entries are marked only after the channel confirms, and an unsent
+digest is retried.
+
+**The DAILY FLOOR is not built.** `digest_hour` is parsed into `NotifyPolicy`, printed by `doctor`,
+and read by nothing else: there is no scheduler and no comparison against a clock. On a day with
+nothing new, no rollup is emitted. `doctor` said *"digest à 8h"* until 2026-08-24, which promised a
+cadence that never ran — found by a review panel. It now states what actually runs and names the
+gap. **To close it:** `WatchLoop` already owns a clock and a marker-file pattern (`Core/Heartbeat`,
+`state/heartbeat.txt`) that solves exactly this shape — a due-check that is cold-start-safe and
+survives the container being replaced. The floor is worth having for the same reason the heartbeat
+is: silence should be distinguishable from a stopped process.
+
 ### Ⓐ Q35 — a stored verdict must be revisable, not merely auditable
 
 Q24 stated the problem — *"a listing stored under an old classifier cannot be re-evaluated"* — and
@@ -998,6 +1014,29 @@ miss**. Q18 (PLI) and Q21 (shouted `PLUS`) both deliberately route there, so the
 **RULED:** `scout reclassify [--since]` re-runs the classifier over stored listings using the
 persisted raw fields; any row whose `Outcome` improves from `DIGEST` to `MATCH` is notified as a new
 match. The classifier version is stored with the verdict so the command can select only stale rows.
+
+**AMENDED [2026-08-24], on three of those mechanisms. The ruling's INTENT stands and is BUILT.**
+
+*The persisted evidence is a SNAPSHOT, not the raw fields.* Schema v7 stores the `RawListing` the
+classifier actually consumed — after mapping and after any detail merge — rather than the pre-map
+payload, whose re-reading would make a stored verdict depend on `ListingMapper` code that has since
+changed. Pre-v7 rows are **not** backfilled, and reclassify **skips** them, loudly counted: the
+invariant is `evidence ⊇ original, never ⊂`, because a card whose field says `PLS` while its title
+says *logement intermédiaire* is undetermined by CONFLICT, and on the title alone it becomes a
+match. Re-judging on shrunken evidence is not a smaller improvement, it is the breach §1 forbids.
+
+*`--since` is REFUSED, not implemented.* Its staleness mechanism is the classifier version stored
+with the verdict, and there is no such column. Answering `--since` against `last_seen_at` would
+substitute a different mechanism for the ruled one while looking like it had been honoured;
+re-running the whole undetermined bin costs seconds. The flag exits 2 with that reason and is absent
+from `scout help`. **To reverse:** add the version column (a schema bump, written in
+`recordVerdict`) and implement the flag against it.
+
+*The notified transition is wider than `DIGEST → MATCH`.* Any transition INTO `MATCH` from a
+different outcome is announced, `REJECT → MATCH` included — it is not a demotion, it is reachable
+the moment the criteria widen (Q1–Q3 widened three filters in one day), and Q33 already rules that a
+listing which was disqualified and now qualifies is a new match. Recording it silently stranded it:
+the row leaves `staleVerdicts()` and `pendingDigest()` at once, and there is no third selector.
 
 ### Ⓐ Q36 — a missing volume must not look like a fresh install
 

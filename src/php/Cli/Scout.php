@@ -200,7 +200,14 @@ final readonly class Scout
         foreach ($notifier->disabledReport() as $name => $problem) {
             $this->line('  ⚠ canal ' . $name . ' désactivé : ' . $problem);
         }
-        $this->line('  fuseau  : ' . date_default_timezone_get() . ' · digest à ' . $criteria->notify->digestHour . 'h');
+        // The digest cadence is stated as what RUNS, not as what is configured. This line used to
+        // read `digest à 8h`, which promised a daily emission nothing schedules: `digest_hour` is
+        // parsed, printed here, and read by no other code. Telling an operator a rollup fires every
+        // morning when none does is the "computed and never sent" shape hard rule 2 names, arriving
+        // through the diagnostic that exists to prevent it.
+        $this->line('  fuseau  : ' . date_default_timezone_get()
+            . ' · digest : à la fin de toute passe produisant du nouveau, et sur demande (`scout digest`)');
+        $this->line('  note    : `digest_hour` (' . $criteria->notify->digestHour . 'h) est configuré mais AUCUN planificateur ne le lit — voir Q34');
         $this->line('');
 
         if ($sources === []) {
@@ -584,11 +591,31 @@ final readonly class Scout
      * chance from anywhere else. Selecting on `outcome = 'DIGEST' AND notified_at IS NULL` asks the
      * question the pipeline cannot: what has been judged doubtful and never told to anyone.
      *
-     * **A row with no snapshot is announced, never skipped.** Every row in the standing backlog
-     * predates schema v7, so its `evidence_json` is NULL by design; skipping those would skip
-     * exactly what this command was ruled to rescue, and would do it silently. It announces them
-     * from `listings`' own columns instead — stored facts, not invented ones — and says how many
-     * were degraded that way.
+     * **A row with no snapshot is announced, never skipped.** It announces such a row from
+     * `listings`' own columns — stored facts, not invented ones — and says how many were degraded
+     * that way.
+     *
+     * THE REASON FIRST GIVEN FOR THAT RULE WAS WRONG, and the correction is worth more than the
+     * rule. It said: every row in the standing backlog predates schema v7, so skipping
+     * evidence-less rows would skip exactly what this command was ruled to rescue. A review panel
+     * ran a real v4 and a real v6 database through the migration and showed the premise is false in
+     * the other direction — `outcome` is a v7 column too, and is not backfilled either, so a pre-v7
+     * row has `outcome = NULL` and this query never returns it at all. The pre-v7 backlog is not
+     * skipped for lack of a snapshot; it is never selected. A true rule with an invented cause is
+     * worse than a wrong one, because nobody re-checks it.
+     *
+     * That backlog is deliberately NOT reachable, and widening the query is the wrong fix: a pre-v7
+     * row with `tenure = 'UNKNOWN'` might have been digested, or might have been REJECTED by a hard
+     * disqualifier before the tenure branch was ever reached, and nothing stored tells them apart.
+     * Selecting on tenure would put rejected listings — wrong commune, wrong size — into the one
+     * channel §1 uses as its landing zone, wearing the clothes of a doubtful match. A pre-v7 row
+     * that is still PUBLISHED gets its outcome from the next ordinary pass; one already delisted
+     * stays unreachable, and that is a stated cost rather than a hidden one.
+     *
+     * The evidence-less path is still live, and since 2026-08-24 it is reachable in production for
+     * a reason that has nothing to do with v7: a listing whose own text is not valid UTF-8 cannot
+     * be snapshotted, so `Store::recordVerdict()` stores its verdict without one. That listing is
+     * judged, digested, and carries a title — exactly the row this branch announces.
      *
      * That is deliberately NOT the rule {@see reclassify()} follows. Reclassify FORMS a verdict, so
      * running it on less evidence than the original saw is the §1 breach schema v7 exists to

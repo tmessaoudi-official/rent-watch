@@ -177,8 +177,10 @@ final readonly class Formatter
      * The line a phone shows before anything is expanded.
      *
      * Commune, size and rent, in that order, because those are what decide whether the developer
-     * opens it. The source's own title is NOT used: it is written to sell, so it leads with
-     * adjectives and buries the facts.
+     * opens it. The source's own title is not used WHILE ANYTHING ELSE LOCATES THE LISTING — it is
+     * written to sell, so it leads with adjectives and buries the facts — but it IS used when
+     * neither commune nor postcode is known, in preference to the `commune inconnue` placeholder.
+     * A label for the absence of information must not outrank a stated fact.
      */
     private function headline(RawListing $listing, ?int $score): string
     {

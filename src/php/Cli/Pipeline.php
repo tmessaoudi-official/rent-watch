@@ -207,8 +207,10 @@ final readonly class Pipeline
                 //
                 // `notified_at` is reused rather than given a parallel column: being carried in a
                 // DELIVERED digest is being told about the listing, which is what the field means.
-                // `scout reclassify` clears it for a row whose verdict improves (Q35), so a listing
-                // promoted from DIGEST to MATCH is still announced.
+                // `scout reclassify` announces such a listing DIRECTLY when its verdict improves
+                // (Q35) — it never consults `wasNotified()` and never clears this column, which an
+                // earlier version of this comment claimed it did. Being told a flat is doubtful is
+                // not being told it is a match, so the second announcement is the point.
                 if (!$this->store->wasNotified($sighting->dedupKey)) {
                     $digestEntries[] = [
                         'listing' => $listing,

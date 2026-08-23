@@ -19,11 +19,22 @@ use RentWatch\Store\Store;
  * passes is lost with nothing anywhere saying so. Reading the STORE rather than the pass is the
  * whole difference.
  *
- * **The load-bearing test in this file is {@see testARowWithoutASnapshotIsAnnouncedNeverSkipped}.**
- * Every row this command was ruled to rescue predates schema v7, so its `evidence_json` is `NULL`
- * by design — not backfilled, because an invented snapshot is indistinguishable from a real
- * capture. A digest that skipped evidence-less rows would therefore skip precisely the backlog it
- * exists for, and would do it silently.
+ * **The load-bearing test in this file is {@see testARowWithoutASnapshotIsAnnouncedNeverSkipped}**
+ * — a row with a verdict, an outcome and no snapshot is ANNOUNCED, from the columns `listings`
+ * does hold, never skipped.
+ *
+ * The reason first written here for that rule was wrong, and the correction is worth keeping. It
+ * said every row this command rescues predates schema v7, so skipping evidence-less rows would
+ * skip precisely the backlog it exists for. A review panel migrated a real v4 and a real v6
+ * database and showed the premise fails the other way: `outcome` is a v7 column too and is not
+ * backfilled either, so a pre-v7 row has `outcome = NULL` and `pendingDigest()` never returns it.
+ * That backlog is not skipped for lack of a snapshot — it is never selected, and widening the query
+ * to reach it would pull REJECTED listings into §1's landing zone, because nothing stored tells a
+ * pre-v7 digest apart from a pre-v7 rejection.
+ *
+ * The shape is reachable in production all the same, for an unrelated reason: since 2026-08-24 a
+ * listing whose own text is not valid UTF-8 has its verdict stored without a snapshot, because
+ * nothing can JSON-encode it. That listing is judged, digested, and has a title.
  *
  * That is NOT the rule `scout reclassify` follows, and the asymmetry is deliberate rather than an
  * inconsistency: reclassify FORMS a verdict, so running it on less evidence than the original saw
@@ -203,7 +214,18 @@ final class ScoutDigestTest extends TestCase
         return $sighting->dedupKey;
     }
 
-    /** Turns a row into the pre-v7 shape: a verdict with no snapshot, exactly as production holds. */
+    /**
+     * Turns a row into the shape that has a verdict, an outcome and NO snapshot.
+     *
+     * This comment used to read *"the pre-v7 shape, exactly as production holds"* and that was
+     * wrong twice over, caught by a review panel: a genuine pre-v7 row has `outcome` NULL as well
+     * — `outcome` is a v7 column and is not backfilled either — so `pendingDigest()` never returns
+     * one, and the seed below calls `recordOutcome()`, which no pre-v7 code ever did.
+     *
+     * The shape is real all the same, and since 2026-08-24 it is the one production reaches: a
+     * listing whose own text is not valid UTF-8 cannot be snapshotted, so its verdict is stored
+     * without one while its outcome is recorded normally.
+     */
     private function stripSnapshot(string $root, string $key): void
     {
         $this->pdo($root)
