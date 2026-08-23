@@ -232,11 +232,21 @@ whose card does not carry what the classifier needs. Cityloger's cards carry no 
 without it every listing resolved `UNKNOWN` and went to the *à vérifier* digest forever — correct
 under §1, and useless. Three rules, none of them stylistic:
 
-- **It costs a request per listing, so it runs behind a gate** — the run's own
-  `Criteria::matchesCommune()`, injected by the CLI. That is the only filter whose inputs the CARD
-  already carries in full, so gating on it cannot reject on a field the detail page would have
-  filled (hard rule 8). A `detail_map` with no gate **refuses**: hydrating everything is a crawl,
-  hydrating nothing is a source that looks healthy and can never match.
+- **It costs a request per listing, so THREE things bound it** (2026-08-23 — this replaces the
+  single `matchesCommune()` gate, which made a listing's verdict depend on which pass looked at it).
+  **The cache is the gate**: a detail page is read once, stored in `listing_detail`, and read back
+  for ever after, so steady state is zero extra requests. **`detail_budget_per_pass`** (default 20)
+  bounds the cold start when every listing is novel at once; writing `0` is **refused**, because a
+  detail map that can never run is a disabled feature dressed as a configured one — omit the key
+  instead if you want the default. **Priority** decides who gets a short budget: not-yet-seen first,
+  then `Criteria::matchesCommune()`, then source order. `matchesCommune()` keeps its old role for
+  its old reason — it is the only filter whose inputs the CARD carries in full, so ordering on it
+  cannot act on a field the detail page would have filled (hard rule 8).
+- **A detail page that will not load does NOT fail the pass.** It is recorded with its attempt
+  count, retried past a 6 h backoff up to three times, then left alone — and `scout doctor` reports
+  how many pages a source has given up on. Do not "fix" this by throwing: a throw voids the whole
+  pass, so one dead page stops the source notifying anything at all. A robots refusal or a card with
+  no `url` DOES throw, because those are states rather than events.
 - **Its selectors address the LISTING, never the page.** Measured on Cityloger's frozen payload: the
   scoped `.description` classifies LLI 0.90; the same listing fed its whole detail page classifies
   UNKNOWN 0.00, because *"Commission d'attribution"* and *"demande de logement social"* are furniture

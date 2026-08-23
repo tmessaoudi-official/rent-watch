@@ -72,12 +72,14 @@ two runs. Four things about it change how a source is added here:
   mixed source that meant every listing resolved `UNKNOWN` and went to the *à vérifier* digest:
   correct under §1, and useless. So `type: html` gained **`detail_map`** — a second field map,
   resolved against a listing's own detail page.
-- **A detail fetch is one request PER LISTING, so it runs behind a gate**, and the gate is the run's
-  own `Criteria::matchesCommune()`, injected by the CLI. It is the only filter whose inputs the CARD
-  already carries in full, so gating on it cannot reject on a field the detail page would have
-  filled (hard rule 8). 51 national listings cost at most 3 detail fetches. **A `detail_map` with no
-  gate REFUSES** rather than defaulting: hydrating everything is a crawl, hydrating nothing is a
-  mixed source resolving `UNKNOWN` forever while its health stays green.
+- **A detail fetch is one request PER LISTING, so it runs behind a gate — and as of 2026-08-23 the
+  gate is the CACHE, not a predicate.** It was `Criteria::matchesCommune()`, injected by the CLI,
+  and that shape was wrong for a reason worth keeping: a per-pass predicate makes a listing's
+  verdict depend on which pass is looking at it, so a listing the title filter REJECTED while
+  hydrated returns as a bare card on the next pass and notifies. What replaced it is in
+  § "Detail hydration" below. `matchesCommune()` survives as rank 1 of the ORDERING, for the
+  original reason — it is the only filter whose inputs the CARD carries in full, so using it cannot
+  act on a field the detail page would have filled (hard rule 8).
 - **A detail map's selectors must address the LISTING, never the page.** Measured on the frozen
   Antony payload: its own `.description` classifies **LLI 0.90**, and the same listing fed its whole
   detail page classifies **UNKNOWN 0.00** — because *"Commission d'attribution"* and *"demande de
@@ -130,18 +132,47 @@ its own sabotage case: `floor === 0` is RDC and REAL (read as falsy it vanishes 
 of rejecting a listing for not stating a floor), and an UNMENTIONED lift is not an absent one, so
 `null` says nothing while `false` says *sans ascenseur*.
 
-> **Phase 2 — floor, lift, description and title on the sources that ship none of it — is blocked on
-> a request-volume problem the region change created, and it is worth knowing before proposing a
-> `detail_map` anywhere.** An In'li card's ENTIRE text is `1 005 € cc 3 pièces · 55.32 m²
-> Longjumeau`: four facts, no title, so `exclude_title_patterns` is **structurally dead on the
-> source that produces two thirds of the matches** (nothing has slipped through because In'li lists
-> only flats — luck, not a filter). The obvious fix is a `detail_map`, and hydration is gated on
-> `Criteria::matchesCommune()` because that is the only filter whose inputs the CARD carries in full
-> (hard rule 8). That gate was cheap at ten communes — Cityloger hydrates 3 of 51 — and is nearly
-> VACUOUS now that the region is all of Île-de-France: In'li would hydrate ~170 of 174 listings
-> every 15 minutes, which is a crawl and forbidden by hard rule 5. **Gate on NOVELTY instead** —
-> hydrate a listing the first time it is ever seen, store the result — which changes *when* a page
-> is fetched, not *which* listings are judged on what, so hard rule 8 is untouched.
+### Detail hydration — the cache is the gate (2026-08-23)
+
+**Phase 2 is BUILT.** In'li has a `detail_map` (`h1` for the title, `.advert-body-description p` for
+the description), which matters because an In'li card's ENTIRE text is `1 005 € cc 3 pièces ·
+55.32 m² Longjumeau` — four facts, no title, so `exclude_title_patterns` was **structurally dead on
+the source producing two thirds of the matches**, and nothing had slipped through only because In'li
+lists flats. Luck, not a filter.
+
+Three mechanisms replaced the single gate, and each closes a hole the others open:
+
+- **NOVELTY IS THE GATE, and it lives in the schema-v5 `listing_detail` cache** — keyed on
+  `(source, external_id)`, never on `dedup_key`, because normalisation evolves and a row keyed on a
+  conclusion silently orphans the whole cache the day it changes. A page already on record costs no
+  request ever again, so steady state is ZERO extra requests. **Hydration without persistence would
+  be worse than none**: the listing's verdict would depend on which pass looked at it.
+- **A per-pass BUDGET** (`detail_budget_per_pass`, default 20) bounds the cold start, which is the
+  only expensive moment — In'li's ~174 listings are all novel at once, and at Q37 pacing that is a
+  three-hour pass. The backlog drains over several passes. **An explicit `0` is REFUSED at load**,
+  because a `detail_map` that can never run is a disabled feature dressed as a configured one; an
+  OMITTED budget defaults, because a slow cold start is benign. Same asymmetry as `HEARTBEAT_HOURS`.
+  This refusal is the successor to *"a `detail_map` with no gate REFUSES"*, which retired with the
+  gate — replaced, not deleted.
+- **PRIORITY decides who gets a short budget, and rank 0 is *not yet in the seen-set*.** Ranked any
+  lower, backlog eats the budget while a genuinely new listing is notified unhydrated — and by then
+  it is already `notified_at`, so hydrating it later buys nothing. That is the same bypass rebuilt
+  out of a budget. Rank 1 is `matchesCommune()`, rank 2 the backlog.
+
+**A per-listing fetch failure no longer voids the pass, and the taxonomy is the rule**: config-shaped
+failures still THROW (robots refusing the detail path, a card with no `url` — those are states, not
+events, and every hydration would fail for the same reason), while a runtime failure is RECORDED
+with its attempt count and redacted message, counted by `Store::detailFailureCount()`, and reported
+by `scout doctor`. Throwing was right about silence and wrong about blast radius: it voided the
+entire pass, so one permanently-404ing page meant the source returned nothing, marked nothing seen,
+never notified a new listing again — and reported `SOURCE_BROKEN` on a diagnosis that was untrue.
+Retried past a 6 h backoff, three times, then left alone.
+
+**Stated cost:** a listing whose detail page cannot be read is judged on its card alone, exactly as
+every listing on that source is judged today — `exclude_title_patterns` cannot fire on it. And In'li
+publishes **no lift at all**: `ascenseur` appears nowhere on the page, so it stays `null`, which
+says nothing rather than saying no, and the high-floor penalty still cannot fire on that source.
+Both are asserted, so the day either changes a test fails rather than nobody noticing.
 
 **Location is REGION MODE as of 2026-08-22 — and by the end of that day it covered ALL of
 Île-de-France, at `min_rooms: 3`, `min_surface_m2: 50` and `max_rent_cc: 1200`.** `communes: []`
