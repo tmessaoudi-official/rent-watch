@@ -255,3 +255,24 @@ armed-in-repo and absent-in-production for hours — but it is stated rather tha
 - [2026-08-23 15:52] VERIFIED: 53/54 notified In'li rows correct, 1 over-confident, 0 social-housing false positives; the PLS pair was stopped by `min_surface_m2`, not by tenure.
 
 - [2026-08-23 16:20] VERIFIED: the PLS pair is rejected on `tenure: PLS` under the deployed build — measured with a warm detail cache, `écartée inli:PRV-317130 — tenure: PLS`. The tenure rule is now the mechanism doing the work, not a size threshold standing in front of it.
+
+### The drain converges — measured, because "matches flat at 29" looked like the nightmare
+
+Passes 1 and 2 after the redeploy both reported `29 correspondance(s)` while `listing_detail` grew
+20 → 40 per source. A growing cache proves **fetching**, not **consuming**, and a gate that fetches
+pages and then ignores them would mean a steady state of 29 instead of ~83 — two thirds of the yield
+gone silently, which is this project's named failure shape. So it was measured rather than assumed.
+
+- The hydrated rows are being read: of the 40 In'li pages on record, `LLI` 50bp × 38 and **`PLS`
+  90bp × 2** — the classifier is reaching a tier-2 verdict that only the detail page carries.
+- A full In'li pass against a copy of the production database, at 100/168 hydrated:
+  **30 correspondance(s), 24 à vérifier**. 30 + 24 = 54, which is exactly the criteria-passing pool;
+  the split is hydrated-versus-not, and it moves as the backlog drains. Fully drained the plan
+  measured 53.
+
+So the flat 29 is an ordering artefact — a pass classifies against the cache as it stood when the
+pass began — and not a gate failing to consume. Rejections across the 168: **67 rent, 45 rooms,
+2 tenure**. The two tenure rejections are the PLS pair, now rejected *on tenure* rather than on a
+size threshold that happened to sit upstream.
+
+- [2026-08-23 16:45] VERIFIED: the hydration gate consumes what it fetches — In'li-only pass at 100/168 hydrated gives 30 matches + 24 digest = the full 54-listing criteria-passing pool.
