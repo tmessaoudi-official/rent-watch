@@ -86,3 +86,52 @@ because it fails silently in the direction of a wrong verdict.
 - [2026-08-23 23:40] DEVIATION, recorded rather than left silent: **`--since` is REFUSED, not implemented.** Q35 names it, and its staleness mechanism is a classifier version stored with the verdict — a column that does not exist. Answering `--since` against `last_seen_at` would substitute a different mechanism for the ruled one while looking like it had been honoured. Re-running the whole `UNKNOWN` bin costs seconds post-A1, so nothing is lost; the refusal says why, and the flag is out of `help`. Reversing this means adding the version column (a schema bump) and then implementing the flag against it.
 - [2026-08-23 23:40] BUILT: **A3 `scout reclassify`**. Re-JUDGES rather than merely re-classifying, because Q35's promotion test is on `Outcome` and only the criteria engine produces one — so it runs against TODAY's criteria, and a row whose tenure now resolves cleanly can still record `REJECT` against a ceiling lowered since it was stored. Notifies DIGEST → MATCH only; a demotion is recorded silently. An unjudged dedup member gets a verdict and NO outcome, preserving the distinction between *never judged* and *judged and rejected*. A vanished source falls back to `mixedTenure: true` with no default. A damaged snapshot is loud AND scoped — one bad row must not void the run, which is the blast-radius mistake detail hydration already made once.
 - [2026-08-23 23:55] AGREED (developer, asked at the milestone boundary as § Sequence step 3 prescribes): **A4 runs at MAXIMAL** — all three lenses, two consecutive fully-clean rounds, any finding resets the counter, cap 5 → then ask. Frozen at `77a7567`. The recommendation given was MAXIMAL because `reclassify` is a §1 surface: it can promote a stored verdict into a notification, and no passing test proves that safe by itself.
+
+## A4 — the MAXIMAL round
+
+**Round 1 (2026-08-24, frozen at `e41240c`): FINDINGS — 15 across three lenses, 3 of them P0.**
+Counter reset to zero. All fixed and pushed in five commits (`feb416d`, `299b817`, `a7984a1`,
+`47b5295`, plus this entry). What the round bought, in the order it matters:
+
+- [2026-08-24] **THE GATE ITSELF WAS BROKEN, AND HAD BEEN FOR A MONTH.** The sabotage ledger's
+  scratch copy omitted `.env.example`, so `DotEnvTest` failed in every scratch run; the detection
+  assertion is `Failures: [1-9]` and one failure satisfies it. Every case reported `ok` whether or
+  not the suite noticed anything, `fail` could never increment, the nightly stayed green — and per
+  CLAUDE.md a green nightly CLOSES open ledger issues, so it was retracting real alarms too. **Every
+  "verified red individually" claim made between 2026-08-22 and now, including tonight's twelve, was
+  worthless.** The ledger now runs a SECOND baseline over an unsabotaged scratch copy;
+  `tests/test-sabotage-baseline.sh` is the sabotage test for that guard and pins the two copy lists
+  together. With the harness honest, 3 in-range cases were genuinely undetected.
+- [2026-08-24] **`evidence ⊇ original` was FALSE for as long as schema v7 existed.**
+  `ListingSnapshot::decode()` kept a field only `if (is_scalar())`, dropping exactly the values the
+  classifier raises its tier-1 doubt on. Driven through the real CLI: `UNKNOWN`/`DIGEST` →
+  `LLI`/`MATCH` → pushed. The reflection guard could not catch it — it checks that every constructor
+  PARAMETER is encoded, and `fields` was; it was the value TYPE nothing exercised.
+  `TenureSnapshotEvidenceTest` now states the invariant as a test: classify twice, once through the
+  round trip, require the same verdict.
+- [2026-08-24] **`reclassify` wrote before it sent.** A promoted row leaves `staleVerdicts()` AND
+  `pendingDigest()` at once and there is no third selector, so a failed send left a MATCH nobody was
+  told about and nothing could reach — while the warning promised a retry. Every write now happens
+  after the channel confirms; the notifier is built before the loop so a deploy with no channel
+  refuses instead of consuming the backlog. `REJECT → MATCH` is announced too.
+- [2026-08-24] **One unreadable listing took the whole pass with it**, twice over (the snapshot
+  encoder, and `Criteria::excludedBy()` one loop later). Both are now scoped; the verdict is stored
+  without a snapshot and the pass says so.
+- [2026-08-24] **CORRECTED: a true rule with an invented cause.** *"Every row in the standing
+  backlog predates v7, so skipping evidence-less rows would skip the backlog"* — the premise fails
+  the other way. `outcome` is a v7 column too and is not backfilled, so a pre-v7 row has
+  `outcome = NULL` and `pendingDigest()` never returns it. Widening the query is REFUSED: nothing
+  stored tells a pre-v7 digest apart from a pre-v7 rejection, and selecting on tenure would put
+  rejected listings into §1's landing zone. The rule is live for an unrelated reason — an
+  unencodable listing now produces exactly that row shape.
+- [2026-08-24] **Q34 is PARTIALLY BUILT and now says so.** `digest_hour` is parsed, printed by
+  `doctor`, and read by no scheduler, so on a day with nothing new no rollup is emitted. `doctor`
+  claimed `digest à 8h`; it now states the cadence that runs and names the gap. Route to closing it
+  recorded in Q35's neighbour.
+- [2026-08-24] **The offline tripwire missed `NtfyChannel`**, which drives libcurl directly. Moved
+  to `Core\Offline` so one implementation serves both paths. Loopback stays allowed, with its own
+  test and sabotage case.
+- [2026-08-24] NOTED, and worth more than the fix it came with: **a mutation that does not mutate
+  makes a verdict about itself.** `catch (MalformedText)` narrowed to `catch (\RuntimeException)`
+  applied cleanly, parsed, changed the file, and was a no-op — `MalformedText extends
+  RuntimeException`. The ledger reported `undetected` when nothing was.
