@@ -87,7 +87,18 @@ final readonly class NtfyChannel implements Channel
         // Loopback stays allowed — `ScoutDigestTest` points it at a closed port on 127.0.0.1 to
         // exercise a delivery failure without leaving the machine, which is exactly the use the
         // exemption exists for.
-        $refusal = \RentWatch\Core\Offline::refusal($url);
+        // THE REFUSAL NAMES THE SERVER, NEVER THE URL — because the url ends in the topic, and the
+        // topic is the secret. The first version of this passed the whole url and relied on
+        // `Redact` masking the topic literal, which fails twice over: `Redact` masks by
+        // `str_replace`, so `rawurlencode` touching any character breaks the match
+        // (`rw secret topic` leaked verbatim), and it deliberately ignores literals under four
+        // characters, since masking those would eat ordinary words — so a short topic leaked too.
+        // Both measured by a review panel on 2026-08-24.
+        //
+        // Not putting the secret in the string is the fix; masking it afterwards is a race against
+        // every transformation the string may undergo. The server is what the operator needs to
+        // see, and it is not a credential. The topic is still passed as a literal, as a backstop.
+        $refusal = \RentWatch\Core\Offline::refusalForHost($this->server, 'the ntfy server');
         if ($refusal !== null) {
             throw new ChannelError($this->name(), $refusal, null, [$this->topic]);
         }

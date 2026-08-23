@@ -67,7 +67,36 @@ final readonly class Criteria
      */
     public static function communeKey(string $raw): string
     {
-        $folded = Text::fold($raw);
+        // A NAME THAT CANNOT BE FOLDED IS NO COMMUNE, and `''` is already exactly that — the
+        // docblock above defines it, `matchesCommune()` honours it, `rankOf()` finds no rank for it
+        // and `Dedup` refuses to cluster on it. Nothing new is invented here; the failure is routed
+        // into a state the callers already handle.
+        //
+        // IT WAS UNGUARDED, and that was a pass-killer on two paths at once — found by a review
+        // panel on 2026-08-24, AFTER a commit whose subject was "one listing nobody can decode must
+        // not take the whole pass with it" and which hardened only `excludedBy()`. `Text::fold()`
+        // refuses non-UTF-8 and undecoded HTML entities, and `ListingMapper` takes `commune`
+        // straight from `Payload::string()`, which validates neither. So a single `&#039;` or one
+        // cp1252 byte in a commune name — accented commune names being ubiquitous in Île-de-France
+        // — threw out of `CriteriaEngine::score()` via `rankOf()`, and out of `Dedup::cluster()`
+        // via `duplicateReason()`, neither of which is inside the per-source try/catch.
+        //
+        // Both leave hard rule 2's silent shape: `source_runs.ok = 1` with a full item count, health
+        // green, and nothing notified — the Dedup one before anything is even stored. Under
+        // `--watch` the loop swallows it (`MalformedText extends \RuntimeException`) and every pass
+        // dies at the same row for as long as that listing is published: a permanently mute watcher
+        // reporting perfect health.
+        //
+        // The direction is the safe one on both paths. Unranked costs a preference, not a match
+        // (region mode ranks rather than filters). Refusing to cluster under-merges, which notifies
+        // twice — visible and self-correcting — where over-merge hides a flat silently, and that
+        // trade is already this repo's documented choice.
+        try {
+            $folded = Text::fold($raw);
+        } catch (MalformedText) {
+            return '';
+        }
+
         $spaced = preg_replace('~[^a-z0-9]+~', ' ', $folded);
 
         return trim($spaced ?? '');
@@ -188,17 +217,33 @@ final readonly class Criteria
         // for a malformed title AND for a malformed description — so `judge()` reaches its tenure
         // branch and digests. The listing goes to *à vérifier* with its encoding named, which is
         // exactly where a listing nobody can read belongs.
+        // TWO SURFACES, TWO `try`s, and the first draft of this fix used one — which silently
+        // disabled `exclude_title_patterns` on a perfectly READABLE title whenever the description
+        // was unfoldable. A review panel measured it on 2026-08-24: title `Parking en sous-sol`,
+        // description `Belle vue,&nbsp;calme.` — the parking ad stopped being rejected and landed
+        // in the *à vérifier* channel instead. And the trigger is not exotic: `Text` refuses any
+        // undecoded HTML entity, which is commoner in a scraped payload than cp1252.
+        //
+        // That is the failure class `CLAUDE.md` names — a correct rule applied to a subset of the
+        // surfaces it belongs on — arriving through the fix for the same class one method up.
         try {
             $foldedTitle = Text::fold($title);
+        } catch (MalformedText) {
+            $foldedTitle = null;
+        }
+
+        if ($foldedTitle !== null) {
+            foreach ($this->excludeTitlePatterns as $pattern) {
+                if (preg_match('~' . $pattern . '~i', $foldedTitle) === 1) {
+                    return $pattern;
+                }
+            }
+        }
+
+        try {
             $foldedAll = Text::fold($title . "\n" . $description);
         } catch (MalformedText) {
             return null;
-        }
-
-        foreach ($this->excludeTitlePatterns as $pattern) {
-            if (preg_match('~' . $pattern . '~i', $foldedTitle) === 1) {
-                return $pattern;
-            }
         }
 
         foreach ($this->excludePatterns as $pattern) {

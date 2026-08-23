@@ -76,6 +76,12 @@ check "runs the .env CLI test (bin/scout's loader is outside the PHP suite)" \
   has "tests/test-dotenv-cli.sh"
 check "runs the config/doc drift scan"       has "drift-scan.sh"
 check "runs the sabotage apply-sweep"       has "tests/test-sabotage-applies.sh"
+# The gate that certified nothing for a month. Without this step, the ledger can go vacuous again —
+# every case reporting `ok` while proving nothing — and the only thing that would notice is a test
+# CI does not run. That loop was self-sealing: this file pins ci.yml against what CLAUDE.md claims,
+# and CLAUDE.md claimed nothing about that file, so the pin could never fire.
+check "runs the ledger's scratch-baseline self-test" \
+  has "tests/test-sabotage-baseline.sh"
 check "runs the drift-scan self-test"        has "tests/test-drift-scan.sh"
 check "runs the sabotage ledger"             has "tests/sabotage-check.sh"
 

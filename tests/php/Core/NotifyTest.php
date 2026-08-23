@@ -16,6 +16,8 @@ use RentWatch\Core\Notify\NotificationKind;
 use RentWatch\Core\Notify\Notifier;
 use RentWatch\Core\Notify\NtfyChannel;
 use RentWatch\Core\Notify\Priority;
+use RentWatch\Core\Notify\SendmailTransport;
+use RentWatch\Core\Notify\SmtpTransport;
 use RentWatch\Core\RawListing;
 use RentWatch\Core\Redact;
 use RentWatch\Core\SourceHealth;
@@ -453,18 +455,30 @@ final class NotifyTest extends TestCase
         // it never passed CurlHttpClient's funnel — and its default server is a third party while
         // its topic is a documented secret. A review panel set the flag and watched it resolve and
         // dial a non-loopback host on 2026-08-24.
-        $channel = new NtfyChannel('a-secret-topic', 'https://rw-offline-probe.example.invalid');
+        // THREE TOPIC SHAPES, and the last two are the ones that matter. `Redact` masks literals by
+        // `str_replace`, so a topic containing a character `rawurlencode` touches never matches the
+        // encoded form in the message — and it deliberately ignores literals under four characters,
+        // since masking those would eat ordinary words. A review panel leaked both on 2026-08-24.
+        // The fix is not to put the secret in the string: the refusal names the SERVER.
+        foreach (['a-secret-topic', 'rw secret topic', 'ab1'] as $topic) {
+            $channel = new NtfyChannel($topic, 'https://rw-offline-probe.example.invalid');
 
-        try {
-            $channel->send(new Notification(
-                kind: NotificationKind::HEARTBEAT,
-                priority: Priority::LOW,
-                title: 'probe',
-            ));
-            self::fail('the offline tripwire did not fire — this channel can reach the network from a test');
-        } catch (ChannelError $e) {
-            self::assertStringContainsString('RENT_WATCH_OFFLINE', $e->getMessage());
-            self::assertStringNotContainsString('a-secret-topic', $e->getMessage(), 'and the topic is still masked');
+            try {
+                $channel->send(new Notification(
+                    kind: NotificationKind::HEARTBEAT,
+                    priority: Priority::LOW,
+                    title: 'probe',
+                ));
+                self::fail('the offline tripwire did not fire — this channel can reach the network from a test');
+            } catch (ChannelError $e) {
+                self::assertStringContainsString('RENT_WATCH_OFFLINE', $e->getMessage());
+                self::assertStringNotContainsString($topic, $e->getMessage(), 'the topic must not appear');
+                self::assertStringNotContainsString(
+                    rawurlencode($topic),
+                    $e->getMessage(),
+                    'nor its url-encoded form, which is what the message used to carry',
+                );
+            }
         }
     }
 
@@ -487,6 +501,47 @@ final class NotifyTest extends TestCase
             self::fail('expected a connection failure');
         } catch (ChannelError $e) {
             self::assertStringNotContainsString('RENT_WATCH_OFFLINE', $e->getMessage());
+        }
+    }
+
+    public function testTheMailTransportsAreBehindTheOfflineTripwireToo(): void
+    {
+        // FOUR EGRESS POINTS, NOT ONE. `Core\Offline` was introduced saying it refused "every
+        // outbound request" while guarding two: `CurlHttpClient` and `NtfyChannel`. SMTP and IMAP
+        // open RAW SOCKETS, so neither passed the funnel, and a review panel watched both dial a
+        // non-loopback host with the flag set. SMTP sends `AUTH LOGIN` with `SMTP_PASSWORD`; IMAP is
+        // worse still, being the PRIMARY ingestion path under hard rule 4 and sending a cleartext
+        // password to a host read from `.env`.
+        //
+        // TEST-NET-1 (RFC 5737) is used deliberately: nothing there is routable, so a failure that
+        // is NOT the tripwire's sentence would prove the guard never ran.
+        $transport = new SmtpTransport(
+            host: '192.0.2.1',
+            port: 587,
+            user: 'someone@example.test',
+            password: 'not-a-real-password',
+            from: 'rent-watch@example.test',
+        );
+
+        try {
+            $transport->send('to@example.test', 'subject', 'body', []);
+            self::fail('SMTP reached the network from a test');
+        } catch (ChannelError $e) {
+            self::assertStringContainsString('RENT_WATCH_OFFLINE', $e->getMessage());
+            self::assertStringNotContainsString('not-a-real-password', $e->getMessage());
+        }
+    }
+
+    public function testSendmailIsRefusedOfflineBecauseALocalMtaMayRelay(): void
+    {
+        // The fourth. `mail()` has no host to inspect, so there is no loopback exemption to grant —
+        // the local MTA may relay anywhere, and a test that reaches here has already lost control of
+        // where the message goes.
+        try {
+            (new SendmailTransport())->send('to@example.test', 'subject', 'body', []);
+            self::fail('sendmail handed a message to the local MTA from a test');
+        } catch (ChannelError $e) {
+            self::assertStringContainsString('RENT_WATCH_OFFLINE', $e->getMessage());
         }
     }
 

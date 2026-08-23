@@ -380,6 +380,41 @@ final class ScoutHeartbeatTest extends TestCase
         self::assertFileDoesNotExist($root . '/state/last-refusal.txt');
     }
 
+    public function testTheBeatIsEmittedFromAFinallySoAThrowingPassCannotSkipIt(): void
+    {
+        // THE CLAIM THIS PINS was in a comment and was false: the beat was said to be "outside its
+        // try/catch by construction", and it sat in the same closure as the pass, which `WatchLoop`
+        // wraps in its own `try`. Any throw from `onePass` skipped `++$passes` AND the beat. A
+        // review panel found it on 2026-08-24 beside a defect that made it reachable — one
+        // badly-encoded listing was aborting whole passes — so a watcher losing every pass would
+        // ALSO have gone silent, which is the exact state the beat exists to distinguish from a
+        // quiet market. The comment was right about the common case (all sources failing is caught
+        // per source inside `Pipeline` and never reaches the loop), which is why nobody re-checked
+        // the mechanism.
+        //
+        // **This asserts the SOURCE, not the behaviour, and that is a stated compromise rather than
+        // a preference.** A behavioural test needs a pass that throws, and every path that could
+        // throw out of `onePass` was closed in the same session that found this: malformed text in
+        // the snapshot encoder, in `excludedBy()`, in `communeKey()` (via both `rankOf()` and
+        // `Dedup`). A read-only database — the one remaining real scenario — fails at
+        // `Store::open()`, before the loop exists, and is already covered by its own test. So the
+        // guarantee is real, reachable only through a future regression, and untestable by
+        // execution today. Asserting the structure keeps it from being silently undone; the
+        // sabotage ledger carries the matching case.
+        $source = file_get_contents(dirname(__DIR__, 3) . '/src/php/Cli/Scout.php');
+        self::assertIsString($source);
+
+        $watchLoop = strstr($source, 'new WatchLoop(');
+        self::assertIsString($watchLoop, 'the watch loop construction moved — this check must follow it');
+        $closure = substr($watchLoop, 0, strpos($watchLoop, 'pacer: $pacer,') ?: strlen($watchLoop));
+
+        self::assertMatchesRegularExpression(
+            '~\}\s*finally\s*\{(?:[^}]|\}(?!\s*\}))*?isDue\(~s',
+            $closure,
+            'the heartbeat must be emitted from a `finally`, or a throwing pass silences the one signal that says the watcher is alive',
+        );
+    }
+
     /** @return array{code: int, out: string, err: string} */
     private function watch(): array
     {

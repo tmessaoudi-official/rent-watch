@@ -29,13 +29,20 @@ final readonly class RunResult
         public int $rentDrops = 0,
         public int $undelivered = 0,
         /**
-         * Listings whose own text is not valid UTF-8, so no evidence snapshot could be captured.
+         * Listings whose PAYLOAD could not be encoded, so no evidence snapshot was captured.
          *
-         * Their verdict IS stored — the classifier reads such a listing as `UNKNOWN` and digests it
-         * — but `scout reclassify` will skip them for ever, because nothing can re-judge text
-         * nothing can read. Counted so a pass says that happened rather than leaving it to be
-         * discovered months later from a skip counter. This used to be an exception that took the
-         * entire pass with it.
+         * **Not "whose text is unreadable", which is what this said until a review panel checked
+         * it.** `ListingSnapshot::encode()` refuses three distinct things: malformed UTF-8 anywhere
+         * in the listing, a nesting depth over 512, and `Inf`/`NaN`. Only the first is unreadable
+         * prose, and even that need not be prose — a structured FIELD carrying one bad byte while
+         * the title and description are clean produces a listing that classifies normally and can
+         * be a NOTIFIED MATCH which silently lost its evidence. The earlier wording told the
+         * operator such a listing was *illisible* and *digested*, and both were wrong.
+         *
+         * Their verdict IS stored, so they are not mistaken for pre-v3 rows — but `scout reclassify`
+         * skips them for ever, because re-judging on evidence that was never captured is the breach
+         * §1 forbids. Counted so a pass says it happened rather than leaving it to be discovered
+         * months later from a skip counter. This used to be an exception that took the whole pass.
          */
         public int $unencodable = 0,
         public array $errors = [],

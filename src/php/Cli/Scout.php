@@ -479,14 +479,32 @@ final readonly class Scout
 
         $loop = new WatchLoop(
             pass: function () use ($criteria, $store, $notifier, $sources, $verbose, $pacer, $heartbeat, $watched, &$passes): void {
-                $this->onePass($criteria, $store, $notifier, PacedSource::wrapAll($sources, $pacer), false, $verbose);
-                ++$passes;
-
-                // AFTER the pass, and outside its try/catch by construction: a heartbeat is the one
-                // message that must still go out when passes are failing, since a watcher whose
-                // sources are all broken is exactly the state silence would hide.
-                if ($heartbeat->isDue($this->lastHeartbeat(), $this->now())) {
-                    $this->beat($notifier, $store, $passes, 0, null, $watched);
+                // `finally`, and it is the whole point rather than a style choice. This claimed to
+                // be "outside its try/catch by construction" and was not: the heartbeat sat in the
+                // same closure as the pass, and `WatchLoop` wraps that closure in its own `try` — so
+                // any throw from `onePass` skipped both `++$passes` AND the beat. A review panel
+                // found it on 2026-08-24, next to a pass-aborting defect that made it reachable: a
+                // watcher losing every pass to one bad listing would also have gone silent, which is
+                // precisely the state the beat exists to distinguish from a quiet market.
+                //
+                // The common case it was right about still holds — all sources 503ing is caught per
+                // source INSIDE `Pipeline` and never reaches here — which is exactly why nobody
+                // re-checked the mechanism.
+                try {
+                    $this->onePass($criteria, $store, $notifier, PacedSource::wrapAll($sources, $pacer), false, $verbose);
+                    ++$passes;
+                } finally {
+                    // A heartbeat is the one message that must still go out when passes are failing,
+                    // since a watcher whose sources are all broken is exactly the state silence
+                    // would hide. Its own failure must not mask the pass's: a liveness signal that
+                    // can replace the diagnosis is worse than one that is late.
+                    try {
+                        if ($heartbeat->isDue($this->lastHeartbeat(), $this->now())) {
+                            $this->beat($notifier, $store, $passes, 0, null, $watched);
+                        }
+                    } catch (\Throwable $beatFailure) {
+                        $this->warn('battement de cœur non émis : ' . Redact::text($beatFailure->getMessage()));
+                    }
                 }
             },
             pacer: $pacer,
@@ -568,7 +586,14 @@ final readonly class Scout
             // Named on the pass that causes it. These rows are judged and digested normally, but no
             // snapshot could be taken, so `scout reclassify` will skip them for ever — a fact worth
             // one line now rather than a mystery in a skip counter later.
-            $this->warn($result->unencodable . ' annonce(s) au texte illisible (encodage) — verdict enregistré sans instantané, non re-jugeable');
+            // "charge utile", not "texte illisible". `ListingSnapshot::encode()` refuses three
+            // distinct things — malformed UTF-8 anywhere in the listing (including a STRUCTURED
+            // FIELD whose title and description are perfectly clean), a nesting depth over 512, and
+            // Inf/NaN — and only the first is unreadable prose. A review panel produced a NOTIFIED
+            // MATCH that silently lost its snapshot while the operator was told the listing was
+            // illisible. Substituting U+FFFD instead of refusing is not the answer and was checked:
+            // it would delete an excluded label out of the middle of `conventionné`.
+            $this->warn($result->unencodable . ' annonce(s) à la charge utile non encodable — verdict enregistré sans instantané, non re-jugeable');
         }
 
         if ($result->undelivered > 0) {
@@ -699,8 +724,14 @@ final readonly class Scout
         if ($withoutSnapshot > 0) {
             // Counted out loud. A backlog announced without its full detail otherwise reads as a
             // set of sources that publish nothing but titles.
+            // THE CAUSE IT NAMES MUST BE ONE THAT CAN HAPPEN. This said "antérieures au schéma v7"
+            // and a review panel showed a row created seconds ago at v7 being reported that way —
+            // `pendingDigest()` filters on `outcome`, itself a v7 column, so a pre-v7 row is never
+            // returned here at all. The only reachable cause is a listing whose own payload could
+            // not be JSON-encoded. Pointing an operator at a migration hides an encoding fault in a
+            // live source, which is the one thing this line could have surfaced.
             $this->line(sprintf(
-                '%d annonce(s) sans instantané (antérieures au schéma v7) — annoncées depuis les colonnes conservées.',
+                '%d annonce(s) sans instantané (charge utile non encodable) — annoncées depuis les colonnes conservées.',
                 $withoutSnapshot,
             ));
         }
@@ -986,9 +1017,14 @@ final readonly class Scout
         ));
 
         if ($skipped > 0) {
+            // Both causes are reachable HERE, unlike in `digest()`: `staleVerdicts()` selects
+            // `tenure IS NULL`, which a genuine pre-v7 row has, AND `tenure = 'UNKNOWN'`, which a
+            // listing whose payload could not be encoded has. Naming only the migration would be
+            // the same invented cause the digest line carried.
             $this->line(sprintf(
-                '%d annonce(s) sans instantané (antérieures au schéma v7) — ignorées : les re-juger '
-                . 'sur moins de preuves que l\'originale est exactement la brèche que le §1 interdit.',
+                '%d annonce(s) sans instantané (antérieures au schéma v7, ou charge utile non encodable) '
+                . '— ignorées : les re-juger sur moins de preuves que l\'originale est exactement la '
+                . 'brèche que le §1 interdit.',
                 $skipped,
             ));
         }

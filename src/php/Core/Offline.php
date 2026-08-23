@@ -39,14 +39,59 @@ final class Offline
      * instruction for what to do instead, which is the part that turns a mysterious failure into a
      * one-line fix.
      */
-    public static function refusal(string $url): ?string
+    public static function refusal(string $target): ?string
     {
-        if (getenv('RENT_WATCH_OFFLINE') !== '1' || self::isLoopback($url)) {
+        if (getenv('RENT_WATCH_OFFLINE') !== '1' || self::isLoopback($target)) {
             return null;
         }
 
-        return 'RENT_WATCH_OFFLINE=1 — refusing to request ' . $url
+        return 'RENT_WATCH_OFFLINE=1 — refusing to reach ' . $target
             . '. Tests and dry runs must not reach the network; use a fake client or a frozen fixture';
+    }
+
+    /**
+     * The same refusal for a target that has no url — a bare `host:port`, or a local MTA handoff.
+     *
+     * **There are FOUR egress points in this tree, not one**, and the first version of this class
+     * guarded two: `CurlHttpClient` and `NtfyChannel`. `SmtpTransport` and `ImapMailbox` open raw
+     * sockets with `stream_socket_client()` and `SendmailTransport` hands to `mail()`, so all three
+     * escaped — while this docblock claimed *every* outbound request was refused. A review panel
+     * demonstrated SMTP and IMAP dialling a non-loopback host with the flag set, on 2026-08-24.
+     *
+     * IMAP is the one that matters most: hard rule 4 makes email-alert ingestion the PRIMARY path
+     * for private portals, and it sends a cleartext password to a host read from `.env`.
+     *
+     * `$describe` is what the operator sees, so it must name the component rather than the
+     * credential — never interpolate a user or a password into it.
+     */
+    public static function refusalForHost(string $host, string $describe): ?string
+    {
+        // The bare host may carry a port (`mail.example.test:993`) and `parse_url` will not read it
+        // as a host without a scheme, so one is supplied. Anything unparseable falls through to the
+        // literal comparison, which fails closed.
+        if (self::refusal(str_contains($host, '://') ? $host : '//' . $host) === null) {
+            return null;
+        }
+
+        return 'RENT_WATCH_OFFLINE=1 — refusing to reach ' . $describe . ' at ' . $host
+            . '. Tests and dry runs must not reach the network; use a fake transport or a frozen fixture';
+    }
+
+    /**
+     * Refuse a handoff that has no host at all — `mail()`, which gives the message to a local MTA
+     * that may relay it anywhere.
+     *
+     * No loopback exemption is possible here, and none is wanted: there is nothing to inspect, and
+     * a test that reaches this has already lost control of where the message goes.
+     */
+    public static function refusalForLocalDelivery(string $describe): ?string
+    {
+        if (getenv('RENT_WATCH_OFFLINE') !== '1') {
+            return null;
+        }
+
+        return 'RENT_WATCH_OFFLINE=1 — refusing to hand ' . $describe . ' to the local MTA, which may relay it. '
+            . 'Tests and dry runs must not reach the network; use SMTP_TRANSPORT=file';
     }
 
     /**

@@ -671,6 +671,35 @@ final class NetworkAdaptersTest extends TestCase
         (new EmailAlertSource($definition, $this->store(), new FileMailbox('/nonexistent')))->fetch();
     }
 
+    public function testTheImapMailboxIsBehindTheOfflineTripwire(): void
+    {
+        // THE EGRESS POINT THAT MATTERS MOST, and it was not covered. `Core\Offline` was introduced
+        // claiming to refuse "every outbound request" while guarding `CurlHttpClient` and
+        // `NtfyChannel` only; this opens a RAW SOCKET, so it never passed that funnel. Hard rule 4
+        // makes email-alert ingestion the PRIMARY path for private portals, and this sends a
+        // cleartext password to a host read from `.env`. A review panel watched it dial with the
+        // flag set, on 2026-08-24.
+        //
+        // TEST-NET-1 (RFC 5737) is deliberate: nothing there is routable, so a failure that is NOT
+        // the tripwire's sentence would prove the guard never ran — a connection timeout is exactly
+        // what the panel saw before the fix.
+        self::assertSame('1', getenv('RENT_WATCH_OFFLINE'), 'the bootstrap must set this for every test');
+
+        $mailbox = new ImapMailbox(
+            host: '192.0.2.1',
+            user: 'someone@example.test',
+            password: 'not-a-real-password',
+        );
+
+        try {
+            $mailbox->fetchRecent(10);
+            self::fail('IMAP reached the network from a test');
+        } catch (MailboxError $e) {
+            self::assertStringContainsString('RENT_WATCH_OFFLINE', $e->getMessage());
+            self::assertStringNotContainsString('not-a-real-password', $e->getMessage());
+        }
+    }
+
     public function testAnImapArgumentWithAnEmbeddedCrlfIsRefused(): void
     {
         // An IMAP quoted-string cannot contain CR or LF (RFC 3501), so one in a `.env` user,

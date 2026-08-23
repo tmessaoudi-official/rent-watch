@@ -33,6 +33,14 @@ final readonly class SendmailTransport implements MailTransport
             $lines[] = $name . ': ' . $value;
         }
 
+        // `mail()` hands the message to the local MTA, which may relay it anywhere — so there is no
+        // host to inspect and no loopback exemption to grant. A test that reaches here has already
+        // lost control of where the message goes, which is why this refuses unconditionally.
+        $refusal = \RentWatch\Core\Offline::refusalForLocalDelivery('an email');
+        if ($refusal !== null) {
+            throw new ChannelError('email', $refusal);
+        }
+
         if (@mail($to, $subject, $body, implode("\r\n", $lines)) === false) {
             throw new ChannelError(
                 'email',

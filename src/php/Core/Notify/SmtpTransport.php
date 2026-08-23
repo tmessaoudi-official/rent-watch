@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace RentWatch\Core\Notify;
 
+use RentWatch\Core\Offline;
+
 /**
  * SMTP over TLS or STARTTLS, on stream sockets. Credentials come from `.env`.
  *
@@ -151,6 +153,15 @@ final readonly class SmtpTransport implements MailTransport
             'verify_peer_name' => true,
             'allow_self_signed' => false,
         ]]);
+
+        // The offline tripwire, on the second of four egress points. This one opens a raw socket, so
+        // it never passed `CurlHttpClient`'s funnel — and it sends `AUTH LOGIN` with `SMTP_PASSWORD`
+        // to a host read from `.env`. See `Core\Offline`, which claimed to cover "every outbound
+        // request" while covering two of the four.
+        $refusal = Offline::refusalForHost($this->host . ':' . $this->port, 'the SMTP server');
+        if ($refusal !== null) {
+            throw new ChannelError('email', $refusal);
+        }
 
         $socket = @stream_socket_client(
             $scheme . $this->host . ':' . $this->port,

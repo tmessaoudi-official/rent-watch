@@ -110,6 +110,17 @@ jobs:
         # commit that broke it. This takes a second and needs no PHP.
         run: bash tests/test-sabotage-applies.sh
 
+      - name: Sabotage ledger is judged in a GREEN scratch tree (proves the gate is not vacuous)
+        # THE GATE THAT CERTIFIED NOTHING FOR A MONTH. The ledger copies an explicit file list into a
+        # scratch tree and judges every case there; `.env.example` was missing from that list from
+        # 2026-08-22, so one test failed in every scratch run, the `Failures: [1-9]` detection
+        # assertion was satisfied unconditionally, and all ~375 cases reported ok while proving
+        # nothing — with the nightly green throughout, closing real ledger issues as it went.
+        #
+        # In the FAST job, not the nightly, for the same reason as the check above: the nightly is
+        # the thing this protects, so learning from the nightly is learning 4.8 hours too late.
+        run: bash tests/test-sabotage-baseline.sh
+
       - name: Drift-scan self-test (proves the gate can still go red)
         run: bash tests/test-drift-scan.sh
 

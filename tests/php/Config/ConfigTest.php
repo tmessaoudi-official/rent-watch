@@ -790,6 +790,28 @@ final class ConfigTest extends TestCase
             : self::assertNull($fired, $why . ($fired === null ? '' : " — fired on: {$fired}"));
     }
 
+    public function testAnUnfoldableDescriptionStillLeavesTheTitleCHECKED(): void
+    {
+        // TWO SURFACES, TWO try BLOCKS. The first version of the malformed-text fix wrapped both
+        // folds in one `try`, so an unfoldable DESCRIPTION skipped the TITLE patterns as well — and
+        // the trigger is not exotic: `Text` refuses any undecoded HTML entity, commoner in a scraped
+        // payload than cp1252. A review panel measured the consequence on 2026-08-24: this exact
+        // parking ad stopped being rejected and landed in the *à vérifier* channel, which is §1's
+        // landing zone, silently and per listing.
+        $fired = $this->shipped()->excludedBy('Parking en sous-sol', 'Belle vue,&nbsp;calme.');
+
+        self::assertNotNull($fired, 'a readable title must still be checked when the description cannot be folded');
+    }
+
+    public function testAnUnfoldableTITLEIsInconclusiveRatherThanFatal(): void
+    {
+        // The other half, and the direction is deliberate: inconclusive, never a rejection. It
+        // cannot turn an unreadable listing into a match, because the classifier refuses the same
+        // text and yields UNKNOWN, so `judge()` reaches its digest branch. Throwing here aborted the
+        // judging loop for every listing after the bad one.
+        self::assertNull($this->shipped()->excludedBy("Parking&#039;", 'Belle vue, calme.'));
+    }
+
     /** @return iterable<string, array{string, string, bool, string}> */
     public static function exclusionCases(): iterable
     {

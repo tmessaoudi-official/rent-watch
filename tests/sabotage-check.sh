@@ -2286,14 +2286,63 @@ run_sabotage "a verdict stored without its snapshot is not reported by the pass"
 # watched the channel resolve and dial a non-loopback host.
 run_sabotage "the ntfy channel escapes the offline tripwire again" \
   src/php/Core/Notify/NtfyChannel.php \
-  's%\$refusal = .*Offline::refusal(\$url);%$refusal = null;%'
+  's%\$refusal = .*refusalForHost.*;%$refusal = null;%'
 
 # The counterweight, and it protects real evidence: a scripted server on 127.0.0.1 is how this
 # project proves what only a socket can. Refusing loopback would delete those tests to enforce a
 # rule they do not break.
 run_sabotage "the offline tripwire starts refusing loopback too" \
   src/php/Core/Offline.php \
-  "s%if (getenv('RENT_WATCH_OFFLINE') !== '1' || self::isLoopback(\$url)) {%if (getenv('RENT_WATCH_OFFLINE') !== '1') {%"
+  's%|| self::isLoopback(\$target)) {%) {%'
+
+# ── the surfaces the FIRST malformed-text fix missed (round 2, 2026-08-24) ────────────────────────
+# A commit titled "one listing nobody can decode must not take the whole pass with it" hardened
+# `excludedBy()` and left `communeKey()` unguarded — reached twice per pass, from `rankOf()` inside
+# `score()` and from `Dedup::duplicateReason()` inside `cluster()`, neither inside the per-source
+# try/catch. `ListingMapper` takes `commune` straight from `Payload::string()`, which validates
+# neither UTF-8 nor HTML entities, and accented commune names are ubiquitous in Île-de-France. Both
+# leave `source_runs.ok = 1` with a full item count and nothing notified; the Dedup one before
+# anything is stored at all. That is a correct rule applied to a subset of its surfaces — the
+# failure class CLAUDE.md names — arriving through the fix for that same class.
+run_sabotage "an unfoldable commune aborts the pass from rankOf and from Dedup" \
+  src/php/Config/Criteria.php \
+  's%^        } catch (MalformedText) {$%        } catch (\\LogicException) {%'
+
+# The two-surface split in `excludedBy()`. Folding both in ONE try silently disabled
+# `exclude_title_patterns` on a perfectly READABLE title whenever the description was unfoldable —
+# and `Text` refuses any undecoded HTML entity, commoner in a scraped payload than cp1252. Measured:
+# title `Parking en sous-sol`, description `Belle vue,&nbsp;calme.` stopped being rejected and landed
+# in the *à vérifier* channel, which is §1's landing zone.
+run_sabotage "a readable title stops being checked when the description will not fold" \
+  src/php/Config/Criteria.php \
+  's%        if (\$foldedTitle !== null) {%        if (false) {%'
+
+# ── the other two egress points (round 2, 2026-08-24) ─────────────────────────────────────────────
+# `Core\Offline` claimed to refuse "every outbound request" while covering two of FOUR. SMTP and
+# IMAP open raw sockets, so neither passed the funnel — and IMAP is the PRIMARY ingestion path under
+# hard rule 4, sending a cleartext password to a host read from `.env`.
+run_sabotage "the IMAP mailbox escapes the offline tripwire" \
+  src/php/Adapters/Mail/ImapMailbox.php \
+  's%\$refusal = .*refusalForHost.*;%$refusal = null;%'
+
+run_sabotage "the SMTP transport escapes the offline tripwire" \
+  src/php/Core/Notify/SmtpTransport.php \
+  's%\$refusal = .*refusalForHost.*;%$refusal = null;%'
+
+# The ntfy refusal names the SERVER because the url ends in the TOPIC, which is the secret. Masking
+# it afterwards is a race against every transformation the string undergoes: `Redact` matches
+# literals, so `rawurlencode` touching one character defeated it, and it ignores literals under four
+# characters, so a short topic leaked too. Both measured.
+run_sabotage "the ntfy refusal puts the topic back in the message" \
+  src/php/Core/Notify/NtfyChannel.php \
+  "s%Offline::refusalForHost(\$this->server, 'the ntfy server')%Offline::refusal(\$url)%"
+
+# The heartbeat must survive a throwing pass. It sat in the same closure as the pass, which
+# `WatchLoop` wraps in its own try, so any throw skipped the one signal that says the watcher is
+# alive — while a comment two lines up claimed it was "outside its try/catch by construction".
+run_sabotage "the heartbeat stops being emitted from a finally" \
+  src/php/Cli/Scout.php \
+  's%                } finally {%                } catch (\\Throwable) {%'
 
 # THE TALLY LIVES HERE, BELOW EVERY CASE, and that position is load-bearing rather than tidy.
 # It sat mid-file twice: once on 2026-08-20 (295 printed for 303 cases) and again from 2026-08-23,

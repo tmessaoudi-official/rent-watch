@@ -112,6 +112,14 @@ final class ImapMailbox implements Mailbox, MutableByDesign
             'allow_self_signed' => false,
         ]]);
 
+        // The offline tripwire, on the egress point that matters most: hard rule 4 makes email-alert
+        // ingestion the PRIMARY path for private portals, and this sends a cleartext password to a
+        // host read from `.env`. A raw socket, so `CurlHttpClient`'s guard never saw it.
+        $refusal = \RentWatch\Core\Offline::refusalForHost($this->host . ':' . $this->port, 'the IMAP server');
+        if ($refusal !== null) {
+            throw new MailboxError($refusal);
+        }
+
         $socket = @stream_socket_client(
             'tls://' . $this->host . ':' . $this->port,
             $errno,

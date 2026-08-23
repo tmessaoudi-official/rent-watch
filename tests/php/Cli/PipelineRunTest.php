@@ -173,6 +173,48 @@ final class PipelineRunTest extends TestCase
         );
     }
 
+    public function testAMalformedCOMMUNEDoesNotAbortThePassEither(): void
+    {
+        // THE SURFACE THE FIRST FIX MISSED. `Criteria::excludedBy()` was hardened and
+        // `Criteria::communeKey()` was not — and the latter is reached twice per pass, from
+        // `rankOf()` inside `score()` and from `Dedup::duplicateReason()` inside `cluster()`,
+        // neither of which sits in the per-source try/catch. `ListingMapper` takes `commune`
+        // straight from `Payload::string()`, which validates neither UTF-8 nor HTML entities, and
+        // accented commune names are ubiquitous in Île-de-France.
+        //
+        // Both tests below put the bad bytes in `commune` for that reason: the two that existed
+        // put them in `description`, which is why a fix that covered one surface looked complete.
+        $store = $this->store();
+        $result = $this->pipeline($store)->runOnce([new FakeSource('fake', listings: [
+            $this->listing('b1', ['commune' => "Cr\xE9teil", 'source' => 'fake']),
+            $this->listing('g1', ['source' => 'fake']),
+        ])], self::NOW);
+
+        self::assertSame(0, $result->sourcesFailed);
+        // BOTH, and that is the correct answer rather than a lax one. The fixture criteria are
+        // region mode, so the POSTCODE carries the filter and the commune only ranks — an
+        // unfoldable commune therefore costs a score preference, not a match. The safe direction on
+        // this path is "unranked", and the assertion that matters is that the pass finished at all.
+        self::assertSame(2, $result->matches, 'the listing after the unfoldable commune was still judged and notified');
+    }
+
+    public function testACommuneCarryingAnUndecodedEntityDoesNotAbortThePass(): void
+    {
+        // The commoner trigger, and the one no cp1252 test would have caught: `Text` refuses any
+        // undecoded HTML entity, which a scraped payload produces far more often than a bad byte.
+        // `Dedup::cluster()` folds the commune BEFORE anything is stored, so this shape aborted the
+        // pass with zero rows written and both sources still reported healthy.
+        $store = $this->store();
+        $result = $this->pipeline($store)->runOnce([new FakeSource('fake', listings: [
+            $this->listing('b1', ['commune' => "L&#039;Hay-les-Roses", 'source' => 'fake']),
+            $this->listing('g1', ['source' => 'fake']),
+        ])], self::NOW);
+
+        self::assertSame(0, $result->sourcesFailed);
+        self::assertSame(2, $result->matches);
+        self::assertCount(2, $store->staleVerdicts(['UNKNOWN', 'LLI']), 'and both listings reached the store');
+    }
+
     public function testItemCountRecordsWhatWasPARSEDNotWhatMatched(): void
     {
         // Q30. Counting matches would make source health a measure of the Île-de-France rental
