@@ -1256,6 +1256,34 @@ final class ConfigTest extends TestCase
         self::assertSame(5, $sources['x']->detailBudgetPerPass);
     }
 
+    /**
+     * `prose:` is a RESERVED capture prefix, and an unknown reader after it refuses at load.
+     *
+     * The alternative was to let it fall through and be compiled as an ordinary regex, which is
+     * what makes the prefix necessary in the first place: `prose:flor` is a perfectly valid
+     * pattern that matches nothing, so the field would read `null` for ever while the config
+     * looked deliberate. Same asymmetry as the zero-budget refusal — a directive that can never
+     * do anything is a disabled feature wearing a configured one's clothes.
+     */
+    public function testAnUnknownProseReaderIsRefused(): void
+    {
+        $this->expectException(ConfigError::class);
+        $this->expectExceptionMessageMatches('/prose:/');
+
+        ConfigLoader::sourcesFromArray(['sources' => ['x' => self::htmlSourceWithDetailMap([
+            'detail_map' => ['floor' => '.d => prose:flor'],
+        ])]]);
+    }
+
+    public function testTheKnownProseReadersAreAccepted(): void
+    {
+        $sources = ConfigLoader::sourcesFromArray(['sources' => ['x' => self::htmlSourceWithDetailMap([
+            'detail_map' => ['floor' => '.d => prose:floor', 'elevator' => '.d => prose:elevator'],
+        ])]]);
+
+        self::assertNotNull($sources['x']->detailMap);
+    }
+
     /** @param array<string,mixed> $extra */
     private static function htmlSourceWithDetailMap(array $extra = []): array
     {

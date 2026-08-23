@@ -1,0 +1,125 @@
+{
+  "_comment": "Captured 2026-08-23 from 20 live In'li detail pages during Phase 2b acceptance. Hand-labelled. `floor` is the FLAT's floor (null = the page states only the building's height, or states the floor in a shape deliberately not parsed); `elevator` null = the page says nothing.",
+  "cases": [
+    {
+      "id": "441-20013-2003",
+      "description": "EXCLUSIVITESANS FRAIS DE DOSSIERA louer, 2 pièces de 41 m², situé au 2ème étage avec ascenseur. Ce logement très cosy vous offre une entrée avec placard, un espace de vie principal de plus de 20 m² (cuisine ouverte et séjour), puis une chambre accueillante avec placard, et une salle de douche avec WC ; Le tout orienté Sud Ouest ! Le chauffage est collectif et inclus dans les charges. Un parking complète cette offre. F2 avec cuisine équipée (four, plaques, hotte, frigo) ! NB : photos non contractuelles, à titre d'illustration des prestations types.",
+      "floor": 2,
+      "elevator": true
+    },
+    {
+      "id": "441-4251-3678",
+      "description": "Exclusivité - appartement 2 pièces de 48.0 m² à Paris Ce logement dispose d'un séjour, d'une cuisine et d'une chambre. La présence d'un gardien et d'un ascenseur assure un confort supplémentaire. Le bien est situé au 11e étage. Chauffage individuel. Une place de parking est incluse. Quartier dynamique. Transports variés avec les lignes 2 et 9 du métro à proximité ainsi que le tramway T3b. Commerces à proximité.",
+      "floor": 11,
+      "elevator": true
+    },
+    {
+      "id": "PRV-055131",
+      "description": "EXCLUSIVITE À quelques minutes de la station de RER Pierrefitte-Stains (ligne D), à louer PIERREFITTE SUR SEINE (93380), appartement de 2 pièces de 51 m² situé au 6e étage avec ascenseur. Ce logement est composé d'une pièce à vivre, une chambre et une cuisine. Chauffage individuel au gaz. Loué avec une place de parking. Transports, station de RER Pierrefitte-Stains (ligne D), la gare Pierrefitte-Stains ainsi que deux lignes de tramway (T11 et T5). Résidence avec gardien.",
+      "floor": 6,
+      "elevator": true
+    },
+    {
+      "id": "PRV-060708",
+      "description": "EXCLUSIVITÉ En location : au pied de la gare de Rosa Parks, venez découvrir à PARIS (75019) cet appartement de 2 pièces de 43 m². Il compte une pièce à vivre, une chambre et une cuisine. Le chauffage est collectif. Cet appartement se situe au 12e étage d'un immeuble des années 60 de 18 étages avec ascenseur. Un gardien s'occupe du bâtiment. Niveau transports, il y a dans les alentours la station de RER Rosa Parks (ligne E), la gare Rosa Parks, trois stations de métro (Crimée - ligne 7, Corentin Cariou - ligne 7 - et Porte de la Chapelle - ligne 12) ainsi que la ligne de tramway T3b (Rosa Parks). On trouve des commerces, des supermarchés, des boulangeries, des supérettes et des épiceries à quelques minutes. Enfin, le marché 42, rue Riquet anime les environs.",
+      "floor": 12,
+      "elevator": true
+    },
+    {
+      "id": "PRV-061398",
+      "description": "Exclusivité - appartement 2 pièces de 58 m² à Aulnay sous Bois L'appartement comprend notamment un séjour, une cuisine et une chambre. Un gardien est présent dans l'immeuble, sécurisé par un ascenseur. Le bien se situe au 9e étage. Chauffage collectif. Transports en commun desservis par plusieurs lignes de RER dont la ligne B avec les stations Sevran-Beaudottes, Villepinte, Aulnay-Sous-Bois et Parc des Expositions à proximité. Commerces autour.",
+      "floor": 9,
+      "elevator": true
+    },
+    {
+      "id": "PRV-064429",
+      "description": "EXCLUSIVITÉ Sans frais d'agence. À louer : à quelques minutes de la station La Courneuve-Aubervilliers du RER B (5 min de Paris), nous sommes ravis de vous proposer cet appartement de 2 pièces de 47 m² à AUBERVILLIERS (93300). Son intérieur offre une pièce à vivre, une chambre et une cuisine. Le chauffage est collectif. Cet appartement se situe au 5e étage d'un immeuble des années 60 de 17 étages avec ascenseur. Le bâtiment a un gardien. Des écoles (de la maternelle au lycée) sont implantées à moins de 10 minutes à pied, tout comme six crèches. Niveau transports en commun, on trouve la station de RER La Courneuve-Aubervilliers (ligne B) ainsi que la gare La Courneuve-Aubervilliers à proximité. Il y a un tennis, des commerces, des boulangeries, des supermarchés, des épiceries et une supérette dans les environs.",
+      "floor": 5,
+      "elevator": true
+    },
+    {
+      "id": "PRV-210916",
+      "description": "Exclusivité à Épinay-sur-Seine, appartement T2 de 51 m². Sans frais d'agence. L'appartement comprend un séjour, une chambre et une cuisine, pour un total de deux pièces à vivre. Le bâtiment possède un ascenseur et un(e) régisseur(se). Commerces à proximité immédiate. Tramway T8 avec plusieurs arrêts proches, dont Lacépède à 154 mètres. RER C accessible à 679 mètres. Grands axes routiers à proximité.",
+      "floor": null,
+      "elevator": true
+    },
+    {
+      "id": "PRV-215998",
+      "description": "Exclusivité à Joinville-le-Pont, appartement T2. Sans frais d'agence. L'appartement comprend une chambre et un salon avec une cuisine indépendante. Situé au troisième étage d’un immeuble de trois étages, sans ascenseur ni régisseur. Chauffage individuel. Une place de parking incluse. Quartier desservi par le RER A, station Joinville-Le-Pont à 642 mètres. Commerces à proximité. Grandes voies de circulation accessibles.",
+      "floor": 3,
+      "elevator": false
+    },
+    {
+      "id": "PRV-218087",
+      "description": "Sans frais d'agence. A louer : à ALFORTVILLE (94140), 2 pièces de 57 m² en rez-de-chaussée. Ce 2/3 pièces est composé d'un séjour double, une cuisine fermée, une chambre, salle d'eau / WC. Le chauffage collectif est compris dans les charges. Un gardien est présent dans la Résidence. L'appartement est loué avec une place de stationnement. Niveau transports en commun, le RER D Maisons-Alfort - Alfortville est à 8 mn à pied. Accéder à la visite vidéo",
+      "floor": 0,
+      "elevator": null
+    },
+    {
+      "id": "PRV-218100",
+      "description": "Exclusivité - appartement 2 pièces de 57 m² à Alfortville Sans frais d'agence. L'appartement comprend notamment un séjour spacieux, une cuisine indépendante, et une chambre. Le bâtiment bénéficie de la présence d'un gardien et d'un ascenseur. Le bien se situe au 3e étage. Chauffage collectif. Une place de parking incluse. Quartier dynamique desservi par le RER D à la station Maisons-Alfort-Alfortville et la ligne 8 du métro à la station Maisons-Alfort - Stade. Commerces autour du bien.",
+      "floor": 3,
+      "elevator": true
+    },
+    {
+      "id": "PRV-251653",
+      "description": "EXCLUSIVITÉ Sans frais d'agence, direct bailleur In'li. Ayez le coup de cœur pour en location à PARIS (75020), cet appartement de 2 pièces de 47 m². Il offre une pièce à vivre, une chambre et une cuisine. L'appartement est équipé d'un chauffage individuel électrique. Cet appartement est situé au 3e étage d'un immeuble des années 80 de cinq étages. Pour votre véhicule, il est loué avec une place de parking",
+      "floor": 3,
+      "elevator": null
+    },
+    {
+      "id": "PRV-253610",
+      "description": "Exclusivité appartement T2 à La Garenne Colombes, au 3? étage d'un immeuble de 4 étages. Sans frais d'agence. Ce T2 comprend une chambre, un salon, et une cuisine, répartis sur une surface de 51 m². L'immeuble compte 4 étages et un(e) régisseur(se) est présent(e). Aucun ascenseur dans la résidence. Chauffage individuel. Un emplacement de parking est compris. Commerces à proximité. Axes routiers accessibles. Transports en commun : ligne A du RER à environ 2 km (station La Défense-Grande Arche), ligne C à 3,9 km (station Porte Maillot), et autres lignes RER desservant le secteur.",
+      "floor": null,
+      "elevator": false
+    },
+    {
+      "id": "PRV-253900",
+      "description": "Exclusivité à Saint Denis, appartement T2 de 47,46 m². Cet appartement comprend une chambre, un salon, une cuisine indépendante et une salle de bains avec un WC. Le bâtiment de trois étages ne dispose pas d'ascenseur mais bénéficie de la présence d'un(e) régisseur(se). Local à vélos et local à poussettes disponibles. Chauffage individuel électrique. Une place de parking. À proximité, arrêt de tramway Baudelaire (ligne T5) à 93 mètres. Plusieurs autres lignes de tramway (T1, T5, T8) avec arrêts accessibles à moins de 700 mètres. Grands axes routiers à proximité. Commerces dans le secteur. Une visite s'impose ! Venez découvrir ce bien aux prestations de qualités.Contactez -nous dès à présent pour ne pas manquer cette opportunité rare.",
+      "floor": null,
+      "elevator": false
+    },
+    {
+      "id": "PRV-253901",
+      "description": "Exclusivité appartement T2 à Saint Denis, 51,54 m². Cet appartement comprend un salon, une chambre et une cuisine. La surface totale du bien est de 51,54 m². L’immeuble possède un/e régisseur/se. Il s’élève sur trois étages et ne dispose pas d’ascenseur. Chauffage individuel. Un emplacement de parking est attribué au bien. Arrêt de tramway Baudelaire à 93 mètres desservi par la ligne T5. Tramway avec plusieurs lignes (T1, T5, T8) à moins de 700 mètres. Station de métro Basilique de Saint-Denis à 709 mètres, desservie par la ligne 13. Grands axes routiers à proximité. Commerces autour du bien.",
+      "floor": null,
+      "elevator": false
+    },
+    {
+      "id": "PRV-254008",
+      "description": "Exclusivité, appartement T2 à Versailles. Sans frais d'agence. Cet appartement comprend deux pièces principales, dont une chambre et un salon. Une cuisine complète cet espace pour un total de 51 m². L'immeuble dispose d'un ascenseur et d'un(e) régisseur(se). Il compte trois étages, et cet appartement est situé au deuxième. Chanté par un réseau de transports comprenant notamment la ligne C du RER avec des stations Versailles Chateau à 15 minutes, Versailles-Chantiers à 22 minutes, et plusieurs autres stations accessibles en moins de 45 minutes. Grands axes routiers à proximité. Commerces implantés dans les environs.",
+      "floor": null,
+      "elevator": true
+    },
+    {
+      "id": "PRV-274695",
+      "description": "EXCLUSIVITÉ Sans frais d'agence. À louer : à proximité du tramway T1 (Asnières-Quatre Routes), à ASNIERES SUR SEINE (92600), nous vous proposons cet appartement de 2 pièces de 49 m². Il est situé au 9e et dernier étage d'un immeuble avec ascenseur et gardien. Il dispose d'une pièce à vivre avec balcon, d'une chambre et d'une cuisine. Le chauffage est collectif. Il possède un local vélos et un local poussettes. Situé à proximité des commerces et des commodités.",
+      "floor": 9,
+      "elevator": true
+    },
+    {
+      "id": "PRV-274700",
+      "description": "Exclusivité - appartement 2 pièces de 49 m² à Asnières-sur-Seine Le logement propose un salon et une chambre, ainsi qu'une cuisine séparée. La présence d'un gardien et d'un ascenseur sécurisent ce logement situé au 5e étage. Chauffage collectif. Une place de parking. Une station de métro ligne 13 (Asnières - Gennevilliers Les Courtilles) à proximité. Commerces autour du bien.",
+      "floor": 5,
+      "elevator": true
+    },
+    {
+      "id": "PRV-274703",
+      "description": "Exclusivité à Asnières-sur-Seine, appartement T1 de 49 m² au 8e étage. Sans frais d'agence. L'appartement comprend une pièce à vivre ainsi qu'une cuisine. Présence d'un(e) régisseur(se). Chauffage collectif. Pas d'ascenseur. Commerces à proximité. Station de métro ligne 13 (Asnières - Gennevilliers Les Courtilles) à environ 9 minutes à pied. Grands axes routiers proches.",
+      "floor": 8,
+      "elevator": false
+    },
+    {
+      "id": "PRV-306310",
+      "description": "EXCLUSIVITÉ Sans frais d'agence, direct bailleur In'li. Proche du tramway T6 (L'Onde (Maison des Arts)), nous sommes heureux de vous présenter cet appartement de 2 pièces de 54,62 m² à louer à VELIZY VILLACOUBLAY (78140). Son intérieur propose une pièce à vivre, une chambre et une cuisine. Le chauffage de la résidence est collectif alimenté au gaz. Cet appartement est situé au rez-de-chaussée d'un immeuble semi-récent construit en 2011 de six étages. Ce dernier est équipé d'un ascenseur. Il est mis en location avec une place de parking. Un gardien est présent. Niveau transports, on trouve la ligne de tramway T6 (L'Onde (Maison des Arts)) dans un rayon de 1 km.",
+      "floor": 0,
+      "elevator": true
+    },
+    {
+      "id": "PRV-309418",
+      "description": "EXCLUSIVITÉ SANS FRAIS DE DOSSIER En location : à PANTIN (93500), venez découvrir cet appartement de 2 pièces de 54,1 m². Il bénéficie d'une exposition sud. Il est situé au 2e étage d'un immeuble des années 90 de cinq étages avec ascenseur. Un gardien est présent. Cet appartement comporte une pièce à vivre, une chambre, une cuisine indépendante, une salle de bains et des toilettes. L'appartement possède un chauffage individuel alimenté au gaz. Jouissez d'encore plus d'espace grâce à un balcon. Il est loué avec une place de parking. Il est à louer pour 1 171 €, charges comprises (262 € provision sur charges). Le dépôt de garantie demandé est de 909 €. Des écoles de tous niveaux (de la maternelle au lycée) se trouvent à moins de 10 minutes à pied. Côté transports en commun, il y a la ligne de métro 5 (Église de Pantin) juste à côté. On trouve des commerces, deux supermarchés, des boulangeries, des épiceries et trois supérettes à proximité. Enfin, 3 marchés animent les environs.",
+      "floor": 2,
+      "elevator": true
+    }
+  ]
+}

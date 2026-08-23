@@ -520,14 +520,14 @@ final class PipelineRunTest extends TestCase
 
     // ---------------------------------------------------------------- schema
 
-    public function testTheSchemaVersionIsFive(): void
+    public function testTheSchemaVersionIsSix(): void
     {
         // A bare constant assertion, and it earns its place: lowering `SCHEMA_VERSION` makes
         // `migrate()` return early on an EXISTING database, so an older one opens cleanly and then
         // throws `no such column` on the first write. A fresh database hides it entirely, because
         // `CREATE TABLE IF NOT EXISTS` always writes the current DDL.
-        self::assertSame(5, Store::SCHEMA_VERSION);
-        self::assertSame(5, $this->store()->schemaVersion());
+        self::assertSame(6, Store::SCHEMA_VERSION);
+        self::assertSame(6, $this->store()->schemaVersion());
     }
 
     public function testAVersionOneDatabaseIsUpgradedThroughEveryLaterStep(): void
@@ -545,10 +545,11 @@ final class PipelineRunTest extends TestCase
         unset($pdo, $store);
 
         $reopened = Store::open((string) $this->dbPath);
-        self::assertSame(5, $reopened->schemaVersion());
+        self::assertSame(6, $reopened->schemaVersion());
 
-        // v5's table is created by its own migration step, not by the fresh-database DDL, and this
-        // is the only path that proves the difference: a v1 database never ran that DDL.
+        // v5's table and v6's column are created by their own migration steps, not by the
+        // fresh-database DDL, and this is the only path that proves the difference: a v1 database
+        // never ran that DDL.
         $tables = (new \PDO('sqlite:' . (string) $this->dbPath))
             ->query("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'listing_detail'")
             ->fetchAll(\PDO::FETCH_COLUMN);
@@ -562,6 +563,35 @@ final class PipelineRunTest extends TestCase
         foreach (['seen_epoch', 'tenure', 'confidence_bp', 'signals_json', 'group_key'] as $column) {
             self::assertContains($column, $columns, "the v1 -> v4 upgrade did not add `{$column}`");
         }
+
+        // v6's ALTER runs against a table v5 has just created in the SAME migration, which is the
+        // only ordering that can go wrong here and the only place it shows.
+        $detailColumns = array_column(
+            (new \PDO('sqlite:' . (string) $this->dbPath))->query('PRAGMA table_info(listing_detail)')->fetchAll(\PDO::FETCH_ASSOC),
+            'name',
+        );
+        self::assertContains('map_fingerprint', $detailColumns, 'the v6 step did not run on an upgrade');
+    }
+
+    /**
+     * Opening the same database twice must not fail on v6's ALTER.
+     *
+     * SQLite has no `ADD COLUMN IF NOT EXISTS`, so a bare ALTER throws `duplicate column name` the
+     * second time — turning a re-entrant migration into a fatal one. Every other step here is
+     * `CREATE TABLE IF NOT EXISTS` and re-runs harmlessly; this is the first that had to be guarded
+     * by reading the column list, so it is the first that can regress.
+     */
+    public function testTheMigrationIsReRunnable(): void
+    {
+        $store = $this->store();
+        $path = (string) $this->dbPath;
+        unset($store);
+
+        $pdo = new \PDO('sqlite:' . $path);
+        $pdo->exec("UPDATE schema_meta SET value = '5' WHERE key = 'schema_version'");
+        unset($pdo);
+
+        self::assertSame(6, Store::open($path)->schemaVersion(), 'a re-run migration must not throw');
     }
 
     // ---------------------------------------------------------------- helpers

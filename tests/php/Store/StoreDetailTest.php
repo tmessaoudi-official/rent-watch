@@ -34,10 +34,17 @@ final class StoreDetailTest extends TestCase
 
     // ── persistence ───────────────────────────────────────────────────────────────────────────────
 
-    public function testSchemaIsVersionFive(): void
+    /**
+     * A freshly-opened store reports the version the code declares.
+     *
+     * Deliberately symbolic on the constant rather than repeating the literal: the assertion worth
+     * having is that the file on disk agrees with the code, not that someone remembered to edit a
+     * number in two places. The literal is pinned once, below, so a bump is still a visible choice.
+     */
+    public function testAFreshStoreIsAtTheCurrentSchemaVersion(): void
     {
-        self::assertSame(5, Store::SCHEMA_VERSION);
-        self::assertSame(5, $this->store->schemaVersion());
+        self::assertSame(6, Store::SCHEMA_VERSION, 'v6 added listing_detail.map_fingerprint');
+        self::assertSame(Store::SCHEMA_VERSION, $this->store->schemaVersion());
     }
 
     public function testNeverAttemptedIsNullAndNotAnEmptyRow(): void
@@ -192,5 +199,57 @@ final class StoreDetailTest extends TestCase
         self::assertSame(1, $this->store->detailFailureCount('inli', minAttempts: 2), 'only B has two');
         self::assertSame(1, $this->store->detailFailureCount('logirep'));
         self::assertSame(0, $this->store->detailFailureCount('cityloger'));
+    }
+
+    // ------------------------------------------------------------------ persistence: map drift
+
+    /**
+     * A row captured under one detail map must not be served after the map changes.
+     *
+     * This is the hole Phase 2 left and Phase 2b walked into. Rows are keyed `(source,
+     * external_id)` and a page on record costs no request ever again — so adding `floor` and
+     * `elevator` to In'li's map would leave every already-hydrated row serving title+description
+     * FOR EVER. No refetch, no error, no signal: the config would say the fields are collected and
+     * the listings would never carry them.
+     *
+     * A fingerprint mismatch reads as ABSENT, so the row is refetched through the ordinary budget
+     * and priority path — no new mechanism, and the per-pass cost stays bounded.
+     */
+    public function testARowCapturedUnderADifferentMapIsNotServed(): void
+    {
+        $store = $this->store;
+
+        $store->recordDetail('inli', 'PRV-1', 'https://x.test/1', ['title' => 'T'], '2026-08-23T10:00:00Z', 'FP-OLD');
+
+        self::assertNotNull(
+            $store->detail('inli', 'PRV-1', 'FP-OLD'),
+            'the row is served while the map is unchanged',
+        );
+        self::assertNull(
+            $store->detail('inli', 'PRV-1', 'FP-NEW'),
+            'a changed map makes the cached row absent, so it is refetched rather than served stale',
+        );
+    }
+
+    /**
+     * A refetch under the new map REPLACES the row rather than accumulating one per map version.
+     *
+     * The key is still `(source, external_id)`, so this is really an assertion that the fingerprint
+     * did not quietly become part of the identity — which would orphan the whole cache on every map
+     * edit instead of refreshing it, and grow the table without bound.
+     */
+    public function testARefetchUnderTheNewMapReplacesTheRow(): void
+    {
+        $store = $this->store;
+
+        $store->recordDetail('inli', 'PRV-1', 'https://x.test/1', ['title' => 'T'], '2026-08-23T10:00:00Z', 'FP-OLD');
+        $store->recordDetail('inli', 'PRV-1', 'https://x.test/1', ['title' => 'T', 'floor' => '3'], '2026-08-23T11:00:00Z', 'FP-NEW');
+
+        $row = $store->detail('inli', 'PRV-1', 'FP-NEW');
+
+        self::assertNotNull($row);
+        self::assertSame(['title' => 'T', 'floor' => '3'], $row->fields);
+        self::assertSame(2, $row->attempts, 'it is the same row, on its second attempt');
+        self::assertNull($store->detail('inli', 'PRV-1', 'FP-OLD'), 'the old fingerprint is gone, not kept beside it');
     }
 }

@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace RentWatch\Config;
 
+use RentWatch\Core\Prose;
+
 /**
  * Where each listing field lives inside one source's raw item.
  *
@@ -60,6 +62,30 @@ final readonly class FieldMap
     ) {}
 
     /** Every mapped path, flattened — used to check a field map against a committed fixture. */
+    /**
+     * A stable identity for THIS map's content, used to spot that a detail map has changed.
+     *
+     * Field-AWARE on purpose: `allPaths()` flattens every list into one, so moving a selector from
+     * `floor` to `elevator` leaves it identical while changing what the map extracts. A fingerprint
+     * that misses that is worse than none, because it certifies staleness as freshness.
+     *
+     * Content-addressed, so reformatting `sources.json`, reordering its keys or editing a `_comment`
+     * changes nothing — only the selectors do.
+     */
+    public function fingerprint(): string
+    {
+        $shape = [
+            'ref' => $this->ref, 'title' => $this->title, 'url' => $this->url,
+            'commune' => $this->commune, 'postcode' => $this->postcode,
+            'rent' => $this->rent, 'rent_hc' => $this->rentHc, 'charges' => $this->charges,
+            'surface' => $this->surface, 'rooms' => $this->rooms, 'bedrooms' => $this->bedrooms,
+            'floor' => $this->floor, 'elevator' => $this->elevator,
+            'description' => $this->description, 'tenure_field' => $this->tenureField,
+        ];
+
+        return substr(hash('sha256', json_encode($shape, JSON_THROW_ON_ERROR)), 0, 16);
+    }
+
     public function allPaths(): array
     {
         return array_merge(
@@ -122,6 +148,30 @@ final readonly class FieldMap
                         'expected a non-empty dotted path string',
                     );
                 }
+
+                // `prose:` in a capture names a READER, and an unknown name refuses here rather
+                // than falling through to be compiled as a regex. `prose:flor` is a perfectly valid
+                // pattern that matches nothing, so without this the field would read `null` for
+                // ever while the config looked deliberate — the same shape as a `detail_map` that
+                // can never run, and refused for the same reason.
+                $capture = strpos($path, '=>');
+                if ($capture !== false) {
+                    $reader = Prose::readerIn(substr($path, $capture + 2));
+
+                    if ($reader !== null && !in_array($reader, Prose::readerNames(), true)) {
+                        throw ConfigError::at(
+                            $r->pointer() . '.' . $key . '[' . $i . ']',
+                            sprintf(
+                                'unknown reader « %s%s » — known readers are %s%s',
+                                Prose::READER_PREFIX,
+                                $reader,
+                                Prose::READER_PREFIX,
+                                implode(', ' . Prose::READER_PREFIX, Prose::readerNames()),
+                            ),
+                        );
+                    }
+                }
+
                 $out[] = $path;
             }
 

@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace RentWatch\Tests\Adapters;
 
 use PHPUnit\Framework\TestCase;
+use RentWatch\Adapters\Html\Selector;
 use RentWatch\Adapters\Payload;
+use RentWatch\Core\Prose;
 use RentWatch\Config\ConfigLoader;
 use RentWatch\Core\RawListing;
 use RentWatch\Core\SourceProfile;
@@ -71,16 +73,56 @@ final class InliDetailFixtureTest extends TestCase
     }
 
     /**
-     * NO LIFT IS ON THIS PAGE, and that is a fact worth pinning rather than a gap worth hiding.
+     * NO LIFT IS ON *THIS* PAGE — and this page turned out to be ATYPICAL.
      *
-     * `ascenseur` appears nowhere, so the lift stays `null` — which says nothing, and is a different
-     * fact from `false`, which would say *sans ascenseur* and let the high-floor penalty fire
-     * (hard rule 9). If In'li ever starts publishing it, this assertion fails and someone maps it.
+     * An earlier version of this docblock read *"In'li publishes no lift at all"*, and CLAUDE.md
+     * repeated it. It was measured on this one capture. Live acceptance on 2026-08-23 hydrated 20
+     * real In'li detail pages: **18 mention `ascenseur` and 19 state a floor**. Generalising from
+     * n=1 — the same error class as the retired *"live yield is 0"* claim.
+     *
+     * So what this pins is narrow and true: on THIS page the word is absent, therefore the lift is
+     * `null`, which says nothing rather than saying no (hard rule 9). The source's actual vocabulary
+     * lives in `tests/fixtures/inli/descriptions.json` — 20 hand-labelled captures, five of them
+     * explicit negations — and is exercised by `Core\ProseTest`.
      */
-    public function testTheLiftIsAbsentFromThePageEntirely(): void
+    public function testTheLiftIsAbsentFromThisParticularPage(): void
     {
         self::assertStringNotContainsStringIgnoringCase('ascenseur', $this->page());
-        self::assertNull(Payload::bool(['d' => $this->selected('.advert-body-description p')], ['d']));
+        self::assertNull(
+            Prose::elevator($this->selected('.advert-body-description p')),
+            'unmentioned is not absent',
+        );
+    }
+
+    /**
+     * The committed map reads floor and lift through `prose:` readers, and they reach the listing.
+     *
+     * Asserted end to end through `Selector` rather than by calling `Prose` directly, because the
+     * bug this guards is in the WIRING: a `prose:` capture that fell through to `captureFrom()`
+     * would compile as an ordinary regex, match nothing, and leave both fields `null` for ever while
+     * the config looked deliberate.
+     *
+     * The frozen page states neither fact, so the input here is a synthetic description in In'li's
+     * own house style — the shapes are taken verbatim from the captured corpus.
+     */
+    public function testTheProseReadersAreWiredThroughTheCommittedMap(): void
+    {
+        $inli = ConfigLoader::loadSources(self::ROOT . '/config/sources.json')['inli'];
+        $detailMap = $inli->detailMap;
+
+        self::assertNotNull($detailMap);
+        self::assertSame(['.advert-body-description p => prose:floor'], $detailMap->floor);
+        self::assertSame(['.advert-body-description p => prose:elevator'], $detailMap->elevator);
+
+        $html = '<html><body><div class="advert-body-description"><p>'
+            . "Le bien est situé au 6e étage d'un immeuble de 18 étages avec ascenseur."
+            . '</p></div></body></html>';
+        $document = \Dom\HTMLDocument::createFromString($html, LIBXML_NOERROR);
+        $root = $document->documentElement;
+        self::assertNotNull($root);
+
+        self::assertSame('6', Selector::parse($detailMap->floor[0])->resolve($root), 'the position, not the count');
+        self::assertSame('oui', Selector::parse($detailMap->elevator[0])->resolve($root));
     }
 
     /**

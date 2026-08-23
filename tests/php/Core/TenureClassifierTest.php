@@ -590,6 +590,72 @@ final class TenureClassifierTest extends TestCase
     }
 
     /**
+     * `description` and `title` are PROSE, wherever the adapter also leaves a copy of them.
+     *
+     * `ListingMapper` passes the WHOLE structured surface as `fields`, so an HTML source's mapped
+     * `description` arrives BOTH as the property and as `fields['description']`. The property goes
+     * through `RawListing::text()` and its prose rules; the field copy went through the identifier
+     * discipline, which reads the French adverb `plus` as the acronym `PLUS`.
+     *
+     * Measured on live In'li data (2026-08-23), where Phase 2's detail map first gave that source a
+     * description: 4 of 40 hydrated listings flipped to UNKNOWN on `de plus de 20 m²` and `encore
+     * plus d'espace`. In'li carries no explicit label, so a tier-1 doubt is the ONLY tier-1 signal
+     * there is and it dominates — a correct LLI match silently demoted to the *à vérifier* digest.
+     * Same failure class as the CDC `au plus près` fix, one surface over: `plus` is one of the
+     * commonest words in French.
+     *
+     * This is a RE-ROUTE, not a narrowing — see the PLS half, which must keep failing closed.
+     */
+    public function testProseFieldsAreReadAsProseEvenWhenTheAdapterAlsoCopiesThemIntoFields(): void
+    {
+        $prose = 'un espace de vie principal de plus de 20 m² (cuisine ouverte et séjour)';
+
+        $listing = new RawListing(
+            sourceName: 'inli',
+            externalId: 'PRV-1',
+            title: 'Appartement de 41 m² à SCEAUX',
+            description: $prose,
+            // Exactly what ListingMapper produces for a `type: html` source with a detail map.
+            fields: ['title' => 'Appartement de 41 m² à SCEAUX', 'description' => $prose],
+            url: 'https://www.inli.fr/x',
+        );
+
+        $verdict = (new TenureClassifier())->classify(
+            $listing,
+            new SourceProfile(name: 'inli', defaultTenure: Tenure::LLI, mixedTenure: false),
+        );
+
+        self::assertSame(Tenure::LLI, $verdict->tenure, 'the adverb "plus" is not the acronym PLUS');
+    }
+
+    /**
+     * The counterweight to the re-route above: a REAL exclusion in the description still fails closed.
+     *
+     * Not hypothetical. In'li is documented as pure LLI, and hydrating its detail pages turned up
+     * `Le logement est soumis au plafond de ressources PLS.` on two live listings whose CARDS said
+     * nothing of the kind. Under §1 that is a reject, and it must stay one — if the fix above ever
+     * becomes "stop scanning the description", this test goes red.
+     */
+    public function testARealExclusionInTheDescriptionStillFailsClosed(): void
+    {
+        $listing = new RawListing(
+            sourceName: 'inli',
+            externalId: 'PRV-317130',
+            title: 'Appartement de 62 m²',
+            description: 'Le logement est soumis au plafond de ressources PLS.',
+            fields: ['description' => 'Le logement est soumis au plafond de ressources PLS.'],
+            url: 'https://www.inli.fr/y',
+        );
+
+        $verdict = (new TenureClassifier())->classify(
+            $listing,
+            new SourceProfile(name: 'inli', defaultTenure: Tenure::LLI, mixedTenure: false),
+        );
+
+        self::assertNotSame(Tenure::LLI, $verdict->tenure, 'an explicit PLS is never an eligible match');
+    }
+
+    /**
      * The counterweight, and the reason the fix above is a re-route rather than a skip.
      *
      * If `_text` simply stopped being scanned, excluded vocabulary living in card regions that no

@@ -283,6 +283,28 @@ final class PayloadTest extends TestCase
         yield 'unstated' => [null, null, 'unknown stays unknown'];
         yield 'empty' => ['', null, 'unknown stays unknown'];
         yield 'prose' => ['dernier étage', null, 'a floor that is not stated as a number is not guessed'];
+
+        // A BUILDING's height is not a tenant's floor, and French states the two differently: a
+        // position is `au N<ordinal> étage` (singular), a count is `de N étages` (plural). Measured
+        // on a live In'li page whose own copy carries a typo (`au 3? étage`): the ordinal failed to
+        // parse, the scan continued, and `d'un immeuble de 4 étages` answered instead — a flat on
+        // the 3rd floor reported as being on the 4th. Wrong beats unknown in exactly the direction
+        // hard rule 9 forbids, and it is a DISPLAYED fact, so nobody would catch it downstream.
+        yield 'building height is not a floor' => [
+            'immeuble de 6 étages',
+            null,
+            'a plural count is the building, never the tenant',
+        ];
+        yield 'building height after an unparseable floor' => [
+            "au 3? étage d'un immeuble de 4 étages",
+            null,
+            'when the flat own floor fails to parse, the building height must not answer for it',
+        ];
+        yield 'the flat floor wins over the building height' => [
+            'se situe au 12e étage d\'un immeuble des années 60 de 18 étages',
+            12,
+            'the singular position is the answer even with a plural count in the same sentence',
+        ];
     }
 
     /**

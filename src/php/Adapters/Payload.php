@@ -215,7 +215,18 @@ final class Payload
 
         // `1er etage`, `2eme etage`, `4e etage`. The ordinal suffix varies by source and by writer;
         // the digit in front of `etage` does not.
-        if (preg_match('/(\d+)\s*(?:er|ere|eme|e)?\s*etage/', $folded, $m) === 1) {
+        //
+        // `etage\b` — SINGULAR — is what keeps a building's height out of a tenant's floor. French
+        // states the two differently: a position is `au N<ordinal> étage`, a count is `de N étages`.
+        // Without the boundary this scan answers with whichever comes first, so a live In'li page
+        // whose own copy reads `au 3? étage d'un immeuble de 4 étages` — the ordinal mistyped by the
+        // site — reported a 3rd-floor flat as being on the 4th. A wrong floor is worse than an
+        // unknown one (hard rule 9) and it is DISPLAYED, so nothing downstream would catch it.
+        //
+        // Deliberately NOT anchored on `au|en`: CDC Habitat's card is `3 pièces - 4ème étage - 82m²`
+        // with no preposition at all, so a position anchor here would regress a live source. The
+        // anchored reader is `Core\Prose`, which is opt-in per field map.
+        if (preg_match('/(\d+)\s*(?:er|ere|eme|e)?\s*etage\b/', $folded, $m) === 1) {
             return (int) $m[1];
         }
 

@@ -6,6 +6,7 @@ namespace RentWatch\Adapters\Html;
 
 use Dom\Element;
 use Dom\HTMLElement;
+use RentWatch\Core\Prose;
 
 /**
  * The micro-syntax a `type: html` field map is written in, and the resolver that reads it.
@@ -107,7 +108,18 @@ final readonly class Selector
             return null;
         }
 
-        return $this->capture === null ? $raw : self::captureFrom($raw, $this->capture);
+        if ($this->capture === null) {
+            return $raw;
+        }
+
+        // A RESERVED capture is a named reader, not a pattern. `'0'` is a real floor, so this
+        // returns the reader's answer as-is rather than passing it through an emptiness check that
+        // would delete the rez-de-chaussée (hard rule 9).
+        $reader = Prose::readerIn($this->capture);
+
+        return $reader === null
+            ? self::captureFrom($raw, $this->capture)
+            : Prose::read($reader, $raw);
     }
 
     /**

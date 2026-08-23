@@ -331,6 +331,66 @@ final class HtmlSourceDetailTest extends TestCase
 
     // ---------------------------------------------------------------- helpers
 
+    /**
+     * Adding a field to a detail map REFETCHES the pages already on record.
+     *
+     * The hole Phase 2 left. Rows are keyed `(source, external_id)` and a page on record costs no
+     * request ever again — so widening the map would have left every hydrated row serving the OLD
+     * fields for ever: no refetch, no error, no signal, and a config claiming to collect a field it
+     * would never carry. Silent-forever staleness, which is this project's characteristic failure.
+     *
+     * Asserted behaviourally rather than by checking that a fingerprint argument is passed, because
+     * the argument being present is not the guarantee — the second request is.
+     */
+    public function testWideningTheDetailMapRefetchesWhatIsAlreadyCached(): void
+    {
+        $store = $this->store();
+        $client = new DetailHttpClient();
+
+        $this->source($client, $this->definition(), null, store: $store)->fetch();
+        $firstPass = count($client->detailUrls);
+        self::assertGreaterThan(0, $firstPass, 'the first pass hydrates');
+
+        // Same map, same pages: the cache answers and NOTHING is requested again.
+        $this->source($client, $this->definition(), null, store: $store)->fetch();
+        self::assertCount($firstPass, $client->detailUrls, 'an unchanged map costs no further request');
+
+        // One field added. Every cached row is now stale and must be read again.
+        $widened = $this->definitionWithDetailMap(new FieldMap(
+            description: ['.description'],
+            floor: ['.description => prose:floor'],
+            tenureField: ['table.financement => Financement\s*([A-Z0-9]+)'],
+        ));
+
+        $this->source($client, $widened, null, store: $store)->fetch();
+
+        self::assertGreaterThan(
+            $firstPass,
+            count($client->detailUrls),
+            'a widened map refetches rather than serving rows captured under the old one',
+        );
+    }
+
+    private function definitionWithDetailMap(FieldMap $detailMap): SourceDefinition
+    {
+        $base = $this->definition();
+
+        return new SourceDefinition(
+            name: $base->name,
+            enabled: $base->enabled,
+            family: $base->family,
+            type: $base->type,
+            mixedTenure: $base->mixedTenure,
+            url: $base->url,
+            baseUrl: $base->baseUrl,
+            itemSelector: $base->itemSelector,
+            map: $base->map,
+            rateLimitMs: 0,
+            detailBudgetPerPass: $base->detailBudgetPerPass,
+            detailMap: $detailMap,
+        );
+    }
+
     private function definition(int $budget = 20): SourceDefinition
     {
         return new SourceDefinition(

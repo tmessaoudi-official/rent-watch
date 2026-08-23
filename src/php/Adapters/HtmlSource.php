@@ -371,7 +371,7 @@ final readonly class HtmlSource implements Source
         // and a hit is merged here, which is the whole point of the cache: steady state is zero
         // extra requests, and only a genuinely new listing costs one.
         foreach ($listings as $index => $listing) {
-            $cached = $this->store->detail($this->name(), $listing->externalId);
+            $cached = $this->store->detail($this->name(), $listing->externalId, $detailMap->fingerprint());
 
             if ($cached !== null && $cached->fields !== null) {
                 $out[$index] = $this->mergeDetail($listing, $detailMap, $cached->fields);
@@ -563,7 +563,14 @@ final readonly class HtmlSource implements Source
         // path and on the cache-hit path alike, from one place. Storing mapped values instead would
         // freeze today's ListingMapper into every row, and a later fix to how `RDC` is read would
         // never reach a listing captured before it.
-        $this->store->recordDetail($this->name(), $listing->externalId, $url, $flat, $atIso);
+        $this->store->recordDetail(
+            $this->name(),
+            $listing->externalId,
+            $url,
+            $flat,
+            $atIso,
+            $detailMap->fingerprint(),
+        );
 
         return $this->mergeDetail($listing, $detailMap, $flat);
     }

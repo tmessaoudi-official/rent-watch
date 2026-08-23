@@ -1662,6 +1662,33 @@ run_sabotage "the per-pass detail budget stops bounding (every novel listing cos
   src/php/Adapters/HtmlSource.php \
   's%if ($spent >= $budget) {%if (false) {%'
 
+# ── Phase 2b: prose readers, and the two facts they manufacture if read carelessly ────────────────
+#
+# Every one of these is hard rule 9 inverted -- a fact invented out of its own negation. None is
+# caught by a green suite, because each produces a plausible-looking value rather than an error: a
+# floor that is really the building's height, a lift on a flat that has none, a field that stops
+# being collected the day its map changes, and a correct match demoted to the digest by an adverb.
+
+run_sabotage "Payload::floor reads a plural count, so a building height becomes the tenant's floor" \
+  src/php/Adapters/Payload.php \
+  's%etage[\]b/%etage/%'
+
+run_sabotage "Prose::floor reads a plural count (de 18 etages) as a position" \
+  src/php/Core/Prose.php \
+  's%etage[\]b/%etage/%'
+
+run_sabotage "Prose::elevator stops reading the negation first (Aucun ascenseur becomes a lift)" \
+  src/php/Core/Prose.php \
+  's%if ($negation !== null && ($assertion === null || $negation > $assertion)) {%if (false) {%'
+
+run_sabotage "the detail cache stops being keyed on the map, so a widened map serves stale rows" \
+  src/php/Adapters/HtmlSource.php \
+  's%$listing->externalId, $detailMap->fingerprint());%$listing->externalId);%'
+
+run_sabotage "prose fields are scanned as identifiers again, so the adverb plus reads as PLUS" \
+  src/php/Core/TenureClassifier.php \
+  "s%(\$name === 'title' || \$name === 'description')%(\$name === 'never-a-real-field')%"
+
 # The successor to "a detail_map with no gate refuses", which retired on 2026-08-23 when novelty
 # became the gate. What that invariant protected is unchanged: a detail map that can never run
 # leaves its source resolving UNKNOWN for ever while health stays green. The refusal moved up a

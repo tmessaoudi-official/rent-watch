@@ -505,6 +505,29 @@ final readonly class TenureClassifier
                 continue;
             }
 
+            // `title` and `description` ARE PROSE TOO, and an adapter may hand us a copy of them.
+            // `ListingMapper` passes the WHOLE structured surface as `fields`, so a `type: html`
+            // source's mapped description arrives twice: as the property, which `RawListing::text()`
+            // reads with the prose rules, and as a bare `description` key, which this loop was
+            // reading with the identifier discipline. The second reading is the one that turns the
+            // adverb `plus` into the acronym `PLUS` — measured on live In'li data, where 4 of 40
+            // hydrated listings were demoted to the digest by `de plus de 20 m²` and `encore plus
+            // d'espace`. In'li states no explicit label, so that doubt was the only tier-1 signal
+            // present and it decided the verdict.
+            //
+            // Guarded on CONTAINMENT, not on the name alone: the skip is only sound if the prose
+            // scanner really did see this text. A field called `description` whose value is NOT part
+            // of `text()` is some other adapter's field and keeps its scan, so this cannot become a
+            // named hole. Same re-route-not-narrowing shape as `_text` above, and the counterweight
+            // is testARealExclusionInTheDescriptionStillFailsClosed: an explicit PLS in a
+            // description is still a reject.
+            if (($name === 'title' || $name === 'description')
+                && \is_string($value)
+                && $value !== ''
+                && str_contains($listing->text(), $value)) {
+                continue;
+            }
+
             // ── Checks that apply to EVERY field, before the recognised/unrecognised split ──────
             //
             // Both of these used to sit inside the recognised branch, and both were empty cells in

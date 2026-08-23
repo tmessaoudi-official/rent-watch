@@ -45,7 +45,7 @@ final readonly class Store
      * without complaint and then threw a raw `no such column` at the first sighting. That is the
      * whole argument for this constant existing, demonstrated against itself.
      */
-    public const int SCHEMA_VERSION = 5;
+    public const int SCHEMA_VERSION = 6;
 
     /** Spec §8: the mean is rolling over seven days, not over a fixed number of runs. */
     public const int ROLLING_WINDOW_DAYS = 7;
@@ -326,6 +326,16 @@ final readonly class Store
                 -- Redact::text() applied before it is written: a detail-fetch failure naturally
                 -- carries the URL it failed on.
                 last_error      TEXT,
+                -- Which detail_map produced `fields_json`. A row whose fingerprint no longer
+                -- matches the live map reads as ABSENT, so it is refetched through the ordinary
+                -- budget and priority path. Without it, adding a field to a map leaves every
+                -- already-hydrated row serving the OLD fields for ever -- no refetch, no error, no
+                -- signal, and a config that claims to collect what it never will.
+                --
+                -- NOT part of the primary key, deliberately: keying on it would orphan the whole
+                -- cache on every map edit and grow the table one row per map version, where what is
+                -- wanted is to refresh the row that exists.
+                map_fingerprint TEXT,
                 PRIMARY KEY (source, external_id)
             );
             SQL
@@ -459,6 +469,22 @@ final readonly class Store
                     . ' last_attempt_at TEXT, last_error TEXT,'
                     . ' PRIMARY KEY (source, external_id))',
                 );
+            }
+
+            if ($recorded < 6) {
+                // Additive and re-runnable. SQLite has no `ADD COLUMN IF NOT EXISTS`, so the column
+                // list is read first -- a bare ALTER would throw on the second run and turn a
+                // re-entrant migration into a fatal one.
+                //
+                // Existing rows get NULL, which no live fingerprint can equal, so every row
+                // captured before this column existed is refetched exactly once. That is the
+                // correct default: those rows were captured under an unknown map.
+                $columns = $this->pdo->query('PRAGMA table_info(listing_detail)');
+                $names = $columns === false ? [] : array_column($columns->fetchAll(\PDO::FETCH_ASSOC), 'name');
+
+                if (!in_array('map_fingerprint', $names, true)) {
+                    $this->pdo->exec('ALTER TABLE listing_detail ADD COLUMN map_fingerprint TEXT');
+                }
             }
 
             $stamp = $this->pdo->prepare("UPDATE schema_meta SET value = :value WHERE key = 'schema_version'");
@@ -1061,17 +1087,30 @@ final readonly class Store
      * about a retry from `attempts` and `lastAttemptAt` rather than trying again on every pass for
      * ever.
      */
-    public function detail(string $sourceName, string $externalId): ?StoredDetail
+    public function detail(string $sourceName, string $externalId, ?string $mapFingerprint = null): ?StoredDetail
     {
         $statement = $this->pdo->prepare(
             'SELECT source, external_id, url_fetched, fields_json, fetched_at, attempts,
-                    last_attempt_at, last_error
+                    last_attempt_at, last_error, map_fingerprint
              FROM listing_detail WHERE source = :source AND external_id = :id',
         );
         $statement->execute(['source' => $sourceName, 'id' => $externalId]);
         $row = $statement->fetch();
 
         if ($row === false) {
+            return null;
+        }
+
+        // A HYDRATED row captured under a different detail_map reads as absent, so the caller
+        // refetches it through the ordinary budget and priority path.
+        //
+        // Scoped to hydrated rows on purpose. A FAILURE row's fingerprint says nothing — no map
+        // produced it — and hiding it would discard the attempt count and the backoff with it,
+        // turning one permanently-404ing page into a fresh request every single pass. That is the
+        // crawl the backoff exists to prevent, and it would arrive disguised as a cache miss.
+        if ($mapFingerprint !== null
+            && $row['fields_json'] !== null
+            && (string) ($row['map_fingerprint'] ?? '') !== $mapFingerprint) {
             return null;
         }
 
@@ -1113,18 +1152,20 @@ final readonly class Store
         ?string $urlFetched,
         array $fields,
         string $atIso,
+        ?string $mapFingerprint = null,
     ): void {
         $statement = $this->pdo->prepare(
             'INSERT INTO listing_detail
-                 (source, external_id, url_fetched, fields_json, fetched_at, attempts, last_attempt_at, last_error)
-             VALUES (:source, :id, :url, :fields, :at, 1, :at, NULL)
+                 (source, external_id, url_fetched, fields_json, fetched_at, attempts, last_attempt_at, last_error, map_fingerprint)
+             VALUES (:source, :id, :url, :fields, :at, 1, :at, NULL, :fp)
              ON CONFLICT (source, external_id) DO UPDATE SET
                  url_fetched     = excluded.url_fetched,
                  fields_json     = excluded.fields_json,
                  fetched_at      = excluded.fetched_at,
                  attempts        = listing_detail.attempts + 1,
                  last_attempt_at = excluded.last_attempt_at,
-                 last_error      = NULL',
+                 last_error      = NULL,
+                 map_fingerprint = excluded.map_fingerprint',
         );
         $statement->execute([
             'source' => $sourceName,
@@ -1132,6 +1173,7 @@ final readonly class Store
             'url' => $urlFetched,
             'fields' => json_encode($fields, JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE),
             'at' => $atIso,
+            'fp' => $mapFingerprint,
         ]);
     }
 
