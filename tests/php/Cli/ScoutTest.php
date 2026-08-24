@@ -34,6 +34,12 @@ final class ScoutTest extends TestCase
 
     protected function setUp(): void
     {
+        // A REMOTE channel that needs no network and no credential: `email` over the file
+        // transport writes `.eml` into <root>/var/outbox. Before round 7 these tests ran
+        // console-only, and console then satisfied `Notifier::delivered()` — so every assertion
+        // about a listing being marked notified passed for a reason that was itself the P0.
+        putenv('SMTP_TO=watcher@example.test');
+        putenv('SMTP_TRANSPORT=file');
         $this->dbPath = sys_get_temp_dir() . '/rentwatch-cli-' . bin2hex(random_bytes(8)) . '.sqlite3';
         putenv('RENT_WATCH_DB=' . $this->dbPath);
         // `--watch` never returns on its own. Every test here that reaches it expects to be stopped
@@ -45,6 +51,8 @@ final class ScoutTest extends TestCase
 
     protected function tearDown(): void
     {
+        putenv('SMTP_TRANSPORT');
+        putenv('SMTP_TO');
         putenv('RENT_WATCH_DB');
         putenv('RENT_WATCH_MAX_PASSES');
         putenv('NTFY_TOPIC');
@@ -148,6 +156,7 @@ final class ScoutTest extends TestCase
         $this->tempRoots[] = $root;
 
         file_put_contents($root . '/config/criteria.json', json_encode($criteria + [
+            'notify' => ['channels' => ['console', 'email']],
             'communes' => ['Sartrouville'],
             'postcode_prefixes' => ['78'],
             'min_rooms' => 4,
@@ -846,9 +855,84 @@ final class ScoutTest extends TestCase
         unset($root);
     }
 
-    public function testTestNotifyReportsSuccessThroughTheConsoleChannel(): void
+    /**
+     * `test-notify` is the documented proof that a DEPLOYED image can reach the user, so its exit
+     * code has to mean that and nothing weaker.
+     *
+     * This test used to run against the repo root and assert exit 0 with `console` as the only
+     * channel — which was the round-7 P0 stated as a guarantee: one print to a container log
+     * satisfying the one command whose entire job is proving the channel works. It is now two
+     * tests, and the root is a TEMP one: reading the repo's own config made the outcome depend on
+     * `config/criteria.local.json`, which is gitignored, so this passed here and would have gone
+     * red in CI.
+     */
+    /**
+     * The console-only run is not refused, so the warning is the ONLY thing standing between a
+     * misconfigured deployment and a watcher that announces to a log for ever while marking
+     * nothing notified. An unpinned operator line is what lens C found three of in round 7.
+     */
+    public function testAConsoleOnlyRunWarnsThatNothingWillBeMarkedNotified(): void
     {
-        $r = $this->scout(['test-notify']);
+        $root = $this->fixtureRootWithChannels(['console']);
+        $this->scoutIn($root, ['run', '--seed']);
+
+        $r = $this->scoutIn($root, ['run', '--once']);
+
+        self::assertStringContainsString('aucun canal distant', $r['err']);
+        self::assertStringContainsString('RIEN ne sera marqué notifié', $r['err']);
+    }
+
+    public function testARunWithARemoteChannelDoesNotWarnAboutIt(): void
+    {
+        // The counterweight: a warning that fires always is furniture, and an operator stops
+        // reading it. This is the direction that makes the assertion above mean something.
+        $root = $this->fixtureRootWithChannels(['console', 'email']);
+        $this->scoutIn($root, ['run', '--seed']);
+
+        $r = $this->scoutIn($root, ['run', '--once']);
+
+        self::assertStringNotContainsString('aucun canal distant', $r['err']);
+    }
+
+    /** @param list<string> $channels */
+    private function fixtureRootWithChannels(array $channels): string
+    {
+        $root = $this->fixtureRoot(enabled: true);
+        $criteria = json_decode(
+            (string) file_get_contents($root . '/config/criteria.json'),
+            true,
+            flags: JSON_THROW_ON_ERROR,
+        );
+        self::assertIsArray($criteria);
+        /** @var array<string,mixed> $notify */
+        $notify = $criteria['notify'] ?? [];
+        $notify['channels'] = $channels;
+        $criteria['notify'] = $notify;
+        file_put_contents(
+            $root . '/config/criteria.json',
+            json_encode($criteria, JSON_THROW_ON_ERROR),
+        );
+
+        return $root;
+    }
+
+    public function testTestNotifyFailsWhenConsoleIsTheOnlyChannel(): void
+    {
+        $root = $this->tempRoot(['notify' => ['channels' => ['console']]]);
+
+        $r = $this->scoutIn($root, ['test-notify']);
+
+        self::assertSame(1, $r['code'], 'a container log is not proof the channel works');
+        self::assertStringContainsString('test de notification', $r['out'], 'it still prints');
+    }
+
+    public function testTestNotifySucceedsThroughARemoteChannel(): void
+    {
+        // `email` over the file transport — remote in the sense that matters here (it is not
+        // `console`), and it needs no network and no credential. setUp() points it at the root.
+        $root = $this->tempRoot(['notify' => ['channels' => ['console', 'email']]]);
+
+        $r = $this->scoutIn($root, ['test-notify']);
 
         self::assertSame(0, $r['code'], $r['err']);
         self::assertStringContainsString('test de notification', $r['out']);

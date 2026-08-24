@@ -409,6 +409,17 @@ final readonly class Scout
             $this->warn('canal ' . $name . ' désactivé : ' . $problem);
         }
 
+        if (!$seed && !$notifier->hasRemoteChannel()) {
+            // `console` cannot deliver (see Notifier::delivered()), so this run will announce to a
+            // log and mark NOTHING notified. That is the safe direction and it is deliberately not
+            // fatal — `run --once` at a terminal is exactly this — but it must not be quiet: under
+            // Q8 the process is headless and the container log is nobody's notification channel.
+            $this->warn(
+                'aucun canal distant : les annonces iront dans le journal et RIEN ne sera marqué '
+                . 'notifié. Ajoutez `ntfy` ou `email` à notify.channels et renseignez .env.',
+            );
+        }
+
         $sources = $this->sources($store, $this->onlySources($flags), $criteria);
         if ($sources === []) {
             $this->line('aucune source activée — rien à faire.');

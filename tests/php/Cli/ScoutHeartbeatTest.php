@@ -34,6 +34,12 @@ final class ScoutHeartbeatTest extends TestCase
 
     protected function setUp(): void
     {
+        // A REMOTE channel that needs no network and no credential: `email` over the file
+        // transport writes `.eml` into <root>/var/outbox. Before round 7 these tests ran
+        // console-only, and console then satisfied `Notifier::delivered()` — so every assertion
+        // about a listing being marked notified passed for a reason that was itself the P0.
+        putenv('SMTP_TO=watcher@example.test');
+        putenv('SMTP_TRANSPORT=file');
         // `--watch`'s success case never returns, so the bound is not optional: without it a wrong
         // expectation does not fail, it hangs — and it hangs the suite and the sabotage ledger
         // behind it.
@@ -46,6 +52,8 @@ final class ScoutHeartbeatTest extends TestCase
 
     protected function tearDown(): void
     {
+        putenv('SMTP_TRANSPORT');
+        putenv('SMTP_TO');
         putenv('RENT_WATCH_MAX_PASSES');
         putenv('HEARTBEAT_HOURS');
         putenv('RENT_WATCH_DB');
@@ -634,6 +642,7 @@ final class ScoutHeartbeatTest extends TestCase
         );
 
         file_put_contents($root . '/config/criteria.json', json_encode($criteria + [
+            'notify' => ['channels' => ['console', 'email']],
             'communes' => ['Sartrouville'],
             'postcode_prefixes' => ['78'],
             'min_rooms' => 4,

@@ -335,9 +335,11 @@ final class NotifyTest extends TestCase
     {
         // The Q28 correction. An expired SMTP password must not take down the sources, the seen-set
         // and the price history to punish one channel.
+        // The survivor has to be a REMOTE channel. It used to be `console`, which made this test
+        // pass for a reason unrelated to what it names — see testConsoleAloneIsAStartupRefusal.
         $notifier = new Notifier([
             $this->brokenChannel('email', 'SMTP_TO is not set'),
-            new ConsoleChannel($this->tempStream()),
+            $this->workingChannel('ntfy'),
         ]);
 
         self::assertNull($notifier->fatalProblem());
@@ -350,8 +352,63 @@ final class NotifyTest extends TestCase
         // notification channel for anyone.
         $notifier = new Notifier([new ConsoleChannel($this->tempStream())]);
 
-        self::assertNull($notifier->fatalProblem());
         self::assertFalse($notifier->hasRemoteChannel());
+    }
+
+    // ------------------------------------------- console does not COUNT (round 7 P0)
+
+    /**
+     * The ruling both `Notifier` and `ConsoleChannel` already stated in prose, now enforced.
+     *
+     * Console-only still STARTS — `scout run --once` at a terminal is exactly that, and refusing
+     * would take a working local run away to punish a deployment mistake. What it cannot do is
+     * deliver, so nothing is ever marked notified and every announcement is reported undelivered.
+     */
+    public function testConsoleAloneCanStartButCanNeverDeliver(): void
+    {
+        $notifier = new Notifier([new ConsoleChannel($this->tempStream())]);
+
+        self::assertNull($notifier->fatalProblem(), 'a local run is still allowed');
+        self::assertFalse($notifier->delivered([]), 'but a container log is not a delivery');
+        self::assertFalse($notifier->hasRemoteChannel());
+    }
+
+    /**
+     * The P0 itself: one console print satisfied every "did it reach the user" gate in the tree.
+     *
+     * `delivered()` is what `markNotified()`, the 24 h alert cooldown, the heartbeat marker and
+     * `test-notify`'s exit code all ask. With console counting, a transient ntfy outage announced
+     * the flat to a log, wrote `notified_as = 'MATCH'`, and suppressed it for ever once the
+     * network came back.
+     */
+    public function testAConsolePrintDoesNotRescueAFailedRemoteSend(): void
+    {
+        $stream = $this->tempStream();
+        $notifier = new Notifier([$this->failingChannel('ntfy'), new ConsoleChannel($stream)]);
+
+        $failures = $notifier->send($this->anyNotification());
+
+        self::assertCount(1, $failures);
+        self::assertFalse(
+            $notifier->delivered($failures),
+            'a container log is not a delivery',
+        );
+    }
+
+    /**
+     * The other direction, and the reason console is not simply dropped from the send list: it is
+     * what makes `scout run --once` demonstrable. It still receives every notification; it just
+     * does not vote on whether one was delivered.
+     */
+    public function testConsoleIsStillWrittenToEvenThoughItDoesNotCount(): void
+    {
+        $stream = $this->tempStream();
+        $notifier = new Notifier([$this->failingChannel('ntfy'), new ConsoleChannel($stream)]);
+
+        $notifier->send($this->anyNotification());
+
+        rewind($stream);
+        self::assertStringContainsString('Sartrouville', (string) stream_get_contents($stream));
     }
 
     // ---------------------------------------------------------------- delivery
@@ -369,15 +426,13 @@ final class NotifyTest extends TestCase
 
     public function testOneChannelFailingDoesNotPreventTheOtherFromDelivering(): void
     {
-        $stream = $this->tempStream();
-        $notifier = new Notifier([$this->failingChannel('ntfy'), new ConsoleChannel($stream)]);
+        // Both survivors must be remote: a console print is not what makes this true.
+        $notifier = new Notifier([$this->failingChannel('ntfy'), $this->workingChannel('email')]);
 
         $failures = $notifier->send($this->anyNotification());
 
         self::assertCount(1, $failures, 'the working channel was still attempted');
         self::assertTrue($notifier->delivered($failures));
-        rewind($stream);
-        self::assertStringContainsString('Sartrouville', (string) stream_get_contents($stream));
     }
 
     public function testAChannelThrowingSomethingUnexpectedIsStillADeliveryFailure(): void
@@ -585,6 +640,26 @@ final class NotifyTest extends TestCase
             {
                 throw new ChannelError($this->n, 'must not be reached');
             }
+        };
+    }
+
+    /** A channel that is remote (i.e. not `console`) and always succeeds. */
+    private function workingChannel(string $name): Channel
+    {
+        return new class($name) implements Channel {
+            public function __construct(private readonly string $n) {}
+
+            public function name(): string
+            {
+                return $this->n;
+            }
+
+            public function check(): ?string
+            {
+                return null;
+            }
+
+            public function send(Notification $notification): void {}
         };
     }
 

@@ -16,7 +16,9 @@ namespace RentWatch\Core\Notify;
  *
  * So:
  *
- * - **No channel usable → refuse to start.** There is genuinely nowhere for a match to go.
+ * - **No channel usable → refuse to start.** There is genuinely nowhere for a match to go. Note
+ *   `console` counts as *usable* for this question and not for {@see delivered()} — the two sets
+ *   are `$usable` and `$counting`, and they differ by exactly that channel.
  * - **Some channel usable → start, disable the broken one, and say so THROUGH a working one.**
  * - **A send fails at runtime → the caller is told which channels failed**, so it can leave
  *   `notified_at` NULL and retry next run. Q9 covered only startup, which left the hole where a
@@ -24,11 +26,39 @@ namespace RentWatch\Core\Notify;
  *
  * `console` deliberately does not count toward "a channel is usable" — under Docker it is the
  * container log, which is not a notification channel for anyone.
+ *
+ * **That last sentence was prose for a long time and the constructor did not implement it.**
+ * `ConsoleChannel::check()` returns `null`, so console landed in `$usable`, and `delivered()`
+ * asked whether fewer channels failed than were usable — so ONE console print satisfied every
+ * "did it reach the user" gate in the tree: `markNotified()`, the 24 h alert cooldown, the
+ * heartbeat marker and `test-notify`'s exit code. A transient ntfy outage therefore announced a
+ * flat to a log, wrote `notified_as = 'MATCH'`, and suppressed it permanently once the network
+ * returned. Hence {@see $counting}: console is still SENT to, it just does not vote.
  */
 final readonly class Notifier
 {
+    /**
+     * The one channel name that does not count as a delivery.
+     *
+     * Named here rather than compared inline so the rule has a single spelling: it is asked by
+     * the constructor and by {@see hasRemoteChannel()}, and those two disagreeing is exactly the
+     * shape of defect this class already carries a scar from.
+     */
+    private const string CONSOLE = 'console';
+
     /** @var list<Channel> */
     private array $usable;
+
+    /**
+     * The usable channels that can actually reach a human who is not at a terminal.
+     *
+     * `$usable` is the send list; this is the QUORUM. They differ by exactly `console`, and
+     * keeping them as two sets rather than filtering at each call site is deliberate — the bug
+     * this fixes was one call site out of five asking the wrong question.
+     *
+     * @var list<Channel>
+     */
+    private array $counting;
 
     /** @var array<string, string> channel name → why it is unusable */
     private array $disabled;
@@ -56,6 +86,10 @@ final readonly class Notifier
         }
 
         $this->usable = $usable;
+        $this->counting = array_values(array_filter(
+            $usable,
+            static fn (Channel $c): bool => $c->name() !== self::CONSOLE,
+        ));
         $this->disabled = $disabled;
     }
 
@@ -64,6 +98,15 @@ final readonly class Notifier
      *
      * Returns a reason only when NOTHING can deliver. A partially-broken notifier still runs, and
      * {@see disabledReport()} is what makes the broken part visible rather than forgotten.
+     *
+     * **Console-only is deliberately NOT fatal here, and that is a narrower rule than it looks.**
+     * `console` cannot DELIVER — {@see delivered()} says so, and that is what the round-7 P0 was
+     * about — but it is a legitimate running state: `scout run --once` at a terminal is exactly
+     * that, and `doctor` has reported `console seulement` since Q28. Refusing to start would take
+     * a working local run away to punish a deployment mistake. What a console-only run does
+     * instead is mark nothing notified and report every announcement as undelivered, every pass,
+     * which is loud and correct — and `run` warns at startup on `!hasRemoteChannel()`, pinned by
+     * ScoutTest::testAConsoleOnlyRunWarnsThatNothingWillBeMarkedNotified.
      */
     public function fatalProblem(): ?string
     {
@@ -98,13 +141,7 @@ final readonly class Notifier
     /** Does anything here actually reach the developer when they are not at a terminal? */
     public function hasRemoteChannel(): bool
     {
-        foreach ($this->usable as $channel) {
-            if ($channel->name() !== 'console') {
-                return true;
-            }
-        }
-
-        return false;
+        return $this->counting !== [];
     }
 
     /**
@@ -142,10 +179,30 @@ final readonly class Notifier
      * succeeded" would be too strict — one working channel means the developer heard about it — and
      * "no exception escaped" would be too loose, which is the hole Q28 closes.
      *
+     * It asks {@see $counting}, not `$usable`, and it asks BY NAME rather than by arithmetic. The
+     * arithmetic form (`count($failures) < count($usable)`) was what let a console print stand in
+     * for a delivery; comparing names says what is meant, which is that some channel capable of
+     * reaching a human accepted this notification.
+     *
      * @param list<ChannelError> $failures
      */
     public function delivered(array $failures): bool
     {
-        return count($failures) < count($this->usable) && $this->usable !== [];
+        if ($this->counting === []) {
+            return false;
+        }
+
+        $failedNames = [];
+        foreach ($failures as $failure) {
+            $failedNames[$failure->channelName] = true;
+        }
+
+        foreach ($this->counting as $channel) {
+            if (!isset($failedNames[$channel->name()])) {
+                return true;
+            }
+        }
+
+        return false;
     }
 }

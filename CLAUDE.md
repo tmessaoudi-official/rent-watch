@@ -16,7 +16,7 @@ for the product, and **every constraint in it is a ruling**, not a draft to be i
 before touching anything under `src/`.
 
 Status: **milestone 1 is functionally complete against a frozen payload.** The pure core, the store
-(schema v4), the config layer, the adapter contract, the criteria engine, dedup, the notification
+(schema v8), the config layer, the adapter contract, the criteria engine, dedup, the notification
 layer and the `scout` CLI all exist. What is missing is a NETWORK adapter, and that is blocked on an
 input rather than a decision. As of 2026-08-07 there is a PHP 8.5
 implementation of `models` + `tenure` under `src/php/Core/`, a 122-case language-neutral classifier
@@ -977,6 +977,7 @@ tests/test-drift-scan.sh    Proves drift-scan's S8 still fires — a gate nobody
 tests/test-sabotage-applies.sh   Proves no sabotage expression has rotted into matching nothing
 tests/test-dotenv-cli.sh         Proves the .env loader behind every CLI verb
 tests/test-sabotage-baseline.sh  Proves the sabotage ledger judges its cases in a GREEN scratch tree
+tests/test-ci-workflow.sh   Proves ci.yml still wires every step this file claims CI runs
 tools/fetch-phpunit.sh      Fetches the runner; pinned SHA-256, refuses to install on a mismatch
 tools/phpunit.phar          Test runner (gitignored — see README § Getting started)
 var/claude/                 Reports, review outputs — gitignored scratch (handoffs are the

@@ -1163,7 +1163,7 @@ run_sabotage "a broken channel stops being reported (a send failure goes silent)
 
 run_sabotage "delivery is reported as successful when no channel is usable" \
   src/php/Core/Notify/Notifier.php \
-  's%return count(\$failures) < count(\$this->usable) \&\& \$this->usable !== \[\];%return true;%'
+  's%^        return false;$%        return true;%'
 
 run_sabotage "the process starts with no usable channel at all" \
   src/php/Core/Notify/Notifier.php \
@@ -1171,7 +1171,7 @@ run_sabotage "the process starts with no usable channel at all" \
 
 run_sabotage "console alone starts counting as a remote channel" \
   src/php/Core/Notify/Notifier.php \
-  "s%if (\\\$channel->name() !== 'console') {%if (true) {%"
+  's%^        return \$this->counting !== \[\];$%        return true;%'
 
 run_sabotage "a channel throwing an unexpected error escapes and aborts the run" \
   src/php/Core/Notify/Notifier.php \
@@ -2496,6 +2496,34 @@ run_sabotage "an unnormalisable commune_rank label is accepted, ranking every un
 run_sabotage "verdicts with no evidence stop being countable" \
   src/php/Store/Store.php \
   "s%WHERE tenure IS NOT NULL AND evidence_json IS NULL%WHERE 0%"
+
+# ── console is not a delivery (round 7 P0) ────────────────────────────────────────────────────
+#
+# `Notifier` and `ConsoleChannel` both said in prose that `console` does not count as a channel;
+# the constructor did not implement it. `ConsoleChannel::check()` returns null, so console landed
+# in `$usable`, and `delivered()` asked whether fewer channels FAILED than were usable — so one
+# print to a container log satisfied `markNotified()`, the 24 h alert cooldown, the heartbeat
+# marker and `test-notify`'s exit code. A transient ntfy outage therefore announced a flat to a
+# log, wrote `notified_as = 'MATCH'`, and suppressed it permanently once the network returned.
+#
+# Two independent halves, so each is its own case: the SET console is kept out of, and the
+# QUESTION delivered() asks of that set. Either one alone restores the defect.
+run_sabotage "console re-enters the set that decides whether a listing was delivered" \
+  src/php/Core/Notify/Notifier.php \
+  's%static fn (Channel \$c): bool => \$c->name() !== self::CONSOLE,%static fn (Channel $c): bool => true,%'
+
+# The arithmetic form is the original. It counts, rather than asking which channel accepted — and
+# a count cannot tell a console print from a delivery.
+run_sabotage "delivered() goes back to counting channels instead of naming them" \
+  src/php/Core/Notify/Notifier.php \
+  's%        if (\$this->counting === \[\]) {%        return count($failures) < count($this->usable) \&\& $this->usable !== []; if (false) {%'
+
+# The console-only run is NOT refused at startup — `run --once` at a terminal is exactly that — so
+# this warning is the only thing between a misconfigured deployment and a watcher that announces to
+# a log for ever while marking nothing notified.
+run_sabotage "a run with no remote channel stops saying so" \
+  src/php/Cli/Scout.php \
+  's%        if (!\$seed \&\& !\$notifier->hasRemoteChannel()) {%        if (false) {%'
 
 # THE TALLY LIVES HERE, BELOW EVERY CASE, and that position is load-bearing rather than tidy.
 # It sat mid-file twice: once on 2026-08-20 (295 printed for 303 cases) and again from 2026-08-23,

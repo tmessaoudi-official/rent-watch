@@ -8,9 +8,16 @@ namespace RentWatch\Core\Notify;
  * Writes notifications to a stream. Always available, never a substitute for a real channel.
  *
  * The Q28 ruling is explicit about the second half: under Docker on a VPS, `console` is the
- * container log, which nobody is watching — so it does NOT satisfy "a channel is usable" when
- * deciding whether a startup refusal applies. It is here because a channel that always works is what
- * makes `scout run --once` demonstrable and `test-notify` meaningful, not because it delivers.
+ * container log, which nobody is watching — so it does NOT count as a DELIVERY. It is here because
+ * a channel that always works is what makes `scout run --once` demonstrable, not because it
+ * delivers.
+ *
+ * Precisely which gate that is matters, and this sentence used to name the wrong one. It is
+ * {@see Notifier::delivered()} — the question `markNotified()`, the 24 h alert cooldown, the
+ * heartbeat marker and `test-notify`'s exit code all ask. It is NOT the startup refusal: a
+ * console-only process still starts, because `run --once` at a terminal is that process and
+ * refusing would take a working local run away to punish a deployment mistake. What it cannot do
+ * is mark anything notified.
  */
 final readonly class ConsoleChannel implements Channel
 {

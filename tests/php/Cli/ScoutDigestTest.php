@@ -49,8 +49,20 @@ final class ScoutDigestTest extends TestCase
     /** @var list<string> */
     private array $roots = [];
 
+    protected function setUp(): void
+    {
+        // A REMOTE channel that needs no network and no credential: `email` over the file
+        // transport writes `.eml` into <root>/var/outbox. Before round 7 these tests ran
+        // console-only, and console then satisfied `Notifier::delivered()` — so every assertion
+        // about a listing being marked notified passed for a reason that was itself the P0.
+        putenv('SMTP_TO=watcher@example.test');
+        putenv('SMTP_TRANSPORT=file');
+    }
+
     protected function tearDown(): void
     {
+        putenv('SMTP_TRANSPORT');
+        putenv('SMTP_TO');
         foreach ($this->roots as $root) {
             self::removeTree($root);
         }
@@ -322,6 +334,7 @@ final class ScoutDigestTest extends TestCase
         $this->roots[] = $root;
 
         file_put_contents($root . '/config/criteria.json', json_encode($criteria + [
+            'notify' => ['channels' => ['console', 'email']],
             'communes' => ['Sartrouville'],
             'postcode_prefixes' => ['78'],
             'min_rooms' => 3,

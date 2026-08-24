@@ -38,8 +38,20 @@ final class ScoutReclassifyTest extends TestCase
     /** @var list<string> */
     private array $roots = [];
 
+    protected function setUp(): void
+    {
+        // A REMOTE channel that needs no network and no credential: `email` over the file
+        // transport writes `.eml` into <root>/var/outbox. Before round 7 these tests ran
+        // console-only, and console then satisfied `Notifier::delivered()` — so every assertion
+        // about a listing being marked notified passed for a reason that was itself the P0.
+        putenv('SMTP_TO=watcher@example.test');
+        putenv('SMTP_TRANSPORT=file');
+    }
+
     protected function tearDown(): void
     {
+        putenv('SMTP_TRANSPORT');
+        putenv('SMTP_TO');
         foreach ($this->roots as $root) {
             self::removeTree($root);
         }
@@ -246,10 +258,14 @@ final class ScoutReclassifyTest extends TestCase
         self::assertFalse($store->wasNotified($key));
 
         // The actual retry, exercised rather than asserted about: a second run with a working
-        // channel must find and announce it.
+        // channel must find and announce it. That channel has to be a REMOTE one — it was
+        // `console` until round 7, which delivered nothing and proved the retry worked anyway.
         putenv('NTFY_TOPIC');
         putenv('NTFY_SERVER');
-        $second = $this->scout($this->reconfigure($root, ['notify' => ['channels' => ['console']]]), ['reclassify']);
+        $second = $this->scout(
+            $this->reconfigure($root, ['notify' => ['channels' => ['console', 'email']]]),
+            ['reclassify'],
+        );
 
         self::assertSame(0, $second['code'], $second['err']);
         self::assertStringContainsString('1 promotion', mb_strtolower($second['out']));
@@ -563,6 +579,7 @@ final class ScoutReclassifyTest extends TestCase
     private function reconfigure(string $root, array $criteria): string
     {
         file_put_contents($root . '/config/criteria.json', json_encode($criteria + [
+            'notify' => ['channels' => ['console', 'email']],
             'communes' => ['Sartrouville'],
             'postcode_prefixes' => ['78'],
             'min_rooms' => 3,
@@ -637,6 +654,7 @@ final class ScoutReclassifyTest extends TestCase
         $this->roots[] = $root;
 
         file_put_contents($root . '/config/criteria.json', json_encode($criteria + [
+            'notify' => ['channels' => ['console', 'email']],
             'communes' => ['Sartrouville'],
             'postcode_prefixes' => ['78'],
             'min_rooms' => 3,
