@@ -790,6 +790,26 @@ final class ConfigTest extends TestCase
             : self::assertNull($fired, $why . ($fired === null ? '' : " — fired on: {$fired}"));
     }
 
+    public function testAnUnfoldableCommuneRankLabelIsRefusedAtLoad(): void
+    {
+        // The asymmetry a listing-side fix opened. `communeKey()` used to THROW on a name it could
+        // not fold, so a malformed rank label failed loudly here. Since it returns `''` instead — so
+        // one unreadable listing commune cannot abort a whole pass — `commune_rank['']` became
+        // constructible in REGION MODE, where the "ranked but not in communes" check is deliberately
+        // skipped. `rankOf()` has no `''` guard, so every listing with an unfoldable commune was
+        // then awarded that rank: a review panel measured one scoring "commune de premier choix".
+        //
+        // Config is the input that should fail loudly. A fix for listing data must not widen it.
+        $this->expectException(ConfigError::class);
+        $this->expectExceptionMessageMatches('~commune_rank~');
+
+        ConfigLoader::criteriaFromArray(self::minimalCriteria([
+            'communes' => [],
+            'postcode_prefixes' => ['78'],
+            'commune_rank' => ['Ch&acirc;teau' => 1],
+        ]));
+    }
+
     public function testAnUnfoldableDescriptionStillLeavesTheTitleCHECKED(): void
     {
         // TWO SURFACES, TWO try BLOCKS. The first version of the malformed-text fix wrapped both

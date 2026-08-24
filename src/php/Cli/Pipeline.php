@@ -137,12 +137,18 @@ final readonly class Pipeline
                 );
 
                 if (!$captured) {
-                    // A listing whose own text is not valid UTF-8 cannot be snapshotted, so its
-                    // verdict is stored without one and `scout reclassify` will skip it for ever.
-                    // That is the honest state — nothing can re-judge text nothing can read — but it
-                    // is not a state to discover months later from a skip counter. Counted here so
-                    // the pass says it happened. It used to THROW instead, from outside the
-                    // per-source try/catch, and took the whole pass with it.
+                    // A listing whose PAYLOAD cannot be encoded — malformed UTF-8 anywhere in it,
+                    // not necessarily its prose. A structured field alone will do it, on a listing
+                    // whose title and description are clean, which then classifies normally and can
+                    // be a NOTIFIED MATCH that silently lost its evidence.
+                    //
+                    // Its verdict is stored without a snapshot, which is honest: nothing can
+                    // re-judge what was never captured. But "reclassify will skip it" — what an
+                    // earlier version of this comment said — is only true of an UNKNOWN row.
+                    // `staleVerdicts()` selects `tenure IS NULL OR tenure = 'UNKNOWN'`, so a MATCH
+                    // row is not skipped, it is INVISIBLE to that command. `scout doctor` reports
+                    // the standing count for exactly that reason. It used to THROW instead, from
+                    // outside the per-source try/catch, and took the whole pass with it.
                     ++$unencodable;
                 }
 

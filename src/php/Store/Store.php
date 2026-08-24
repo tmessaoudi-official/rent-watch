@@ -1370,8 +1370,9 @@ final readonly class Store
     /**
      * The listing exactly as the classifier saw it when the stored verdict was formed.
      *
-     * `null` means no snapshot was ever captured — a row stored before schema v7, deliberately not
-     * backfilled. It does NOT mean the snapshot was empty, and the caller must not treat it as one:
+     * `null` means no snapshot was ever captured — either a row stored before schema v7 and
+     * deliberately not backfilled, or (since 2026-08-24) a listing whose payload could not be
+     * JSON-encoded. It does NOT mean the snapshot was empty, and the caller must not treat it as one:
      * `scout reclassify` skips such a row and counts it out loud rather than re-judging it on
      * whatever else is lying around.
      *
@@ -1441,12 +1442,15 @@ final readonly class Store
      * the whole digest, which is the opposite of skipping it and saying so. Decoding belongs to the
      * caller so that its failure is per-row and countable.
      *
-     * **`source`, `external_id`, `url` and `rent_cc` travel with the snapshot, and they are what
-     * makes the pre-v7 backlog announceable at all.** Every row this command was ruled to rescue
-     * was stored before the snapshot column existed, so `evidence_json` is NULL for all of them —
-     * not backfilled, deliberately. Returning only the snapshot would leave the caller with a
-     * choice between skipping those rows and inventing their contents; these four columns are
-     * stored facts, so it has to do neither.
+     * **`source`, `external_id`, `url` and `rent_cc` travel with the snapshot**, so a row whose
+     * `evidence_json` is NULL can still be announced from stored facts rather than skipped or
+     * invented.
+     *
+     * THE PRE-V7 BACKLOG IS NOT WHAT THAT IS FOR, and this docblock said it was. `outcome` is a v7
+     * column too and is equally unbackfilled, so a pre-v7 row has `outcome = NULL` and this query
+     * never returns it at all — see {@see \RentWatch\Cli\Scout::digest()}, which carries the full
+     * reasoning and the reason widening the query is refused. The reachable cause of a NULL
+     * snapshot here is a listing whose payload could not be JSON-encoded.
      *
      * @return list<array{dedup_key: string, source: string, external_id: string, url: ?string, title: string, rent_cc: ?int, evidence_json: ?string, signals_json: ?string}>
      */
@@ -1463,6 +1467,37 @@ final readonly class Store
         $rows = $statement === false ? [] : $statement->fetchAll(\PDO::FETCH_ASSOC);
 
         return $rows;
+    }
+
+    /**
+     * How many stored verdicts have no evidence behind them, so can never be re-judged.
+     *
+     * **The one shape this makes visible is a notified MATCH that silently lost its snapshot**, and
+     * nothing else could see it. `staleVerdicts()` selects `tenure IS NULL OR tenure = 'UNKNOWN'`,
+     * so a row that classified `LLI` and failed to encode is not SKIPPED by `scout reclassify` — it
+     * is invisible to it. `pendingDigest()` only walks digest outcomes. The single report was one
+     * stdout line on the pass that caused it, which under Q8's deployment scrolls past in a log
+     * CLAUDE.md says nobody reads. A review panel found it on 2026-08-24.
+     *
+     * That matters because this is the §1 audit trail: schema v7 exists so a verdict can be
+     * re-examined, and a verdict with no evidence is one nobody can ever check.
+     *
+     * **`tenure IS NOT NULL` scopes it to rows that were actually classified**, so a pre-v3 row —
+     * which has neither a verdict nor a snapshot and is a different, documented state — is not
+     * counted. Every other pre-v7 row IS counted, and that is correct rather than noisy: they are
+     * genuinely unreclassifiable, and on a database migrated from v4 the number starts high and
+     * only ever falls as rows are re-observed under v7.
+     *
+     * Follows the precedent of {@see detailFailureCount()}: a per-listing failure that must not
+     * void anything is persisted and surfaced by `scout doctor` rather than shouted once.
+     */
+    public function evidencelessVerdictCount(): int
+    {
+        $statement = $this->pdo->query(
+            'SELECT COUNT(*) FROM listings WHERE tenure IS NOT NULL AND evidence_json IS NULL',
+        );
+
+        return $statement === false ? 0 : (int) $statement->fetchColumn();
     }
 
     /**

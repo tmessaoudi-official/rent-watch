@@ -2,7 +2,7 @@
 #
 # Does the sabotage ledger still judge its cases in a tree that is green to begin with?
 #
-# THIS EXISTS BECAUSE THE LEDGER WAS VACUOUS FOR A MONTH AND NOTHING SAID SO. From 2026-08-22 the
+# THIS EXISTS BECAUSE THE LEDGER WENT VACUOUS AND NOTHING SAID SO. From 2026-08-22 20:43 the
 # scratch copy every sabotage is judged in omitted `.env.example`, which
 # `DotEnvTest::testTheShippedTemplateParsesCleanly` reads through a repo-root constant. That single
 # test failed in every scratch run, the ledger's detection assertion is `Failures: [1-9]`, and one

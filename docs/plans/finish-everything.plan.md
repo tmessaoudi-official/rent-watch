@@ -93,7 +93,8 @@ because it fails silently in the direction of a wrong verdict.
 Counter reset to zero. All fixed and pushed in five commits (`feb416d`, `299b817`, `a7984a1`,
 `47b5295`, plus this entry). What the round bought, in the order it matters:
 
-- [2026-08-24] **THE GATE ITSELF WAS BROKEN, AND HAD BEEN FOR A MONTH.** The sabotage ledger's
+- [2026-08-24] **THE GATE ITSELF WAS BROKEN** (and this entry first said "for a month" — see the
+  round-3 correction below; the real window was ~27 hours, and the magnitude was invented).** The sabotage ledger's
   scratch copy omitted `.env.example`, so `DotEnvTest` failed in every scratch run; the detection
   assertion is `Failures: [1-9]` and one failure satisfies it. Every case reported `ok` whether or
   not the suite noticed anything, `fail` could never increment, the nightly stayed green — and per
@@ -160,7 +161,7 @@ again. Round 2's job was to refute ROUND 1's fixes, and it did, twice in the sam
   `reclassify` named only the migration where both causes are reachable, and `unencodable` said
   *texte illisible* when the encoder refuses three things — one of which yields a NOTIFIED MATCH
   with perfectly clean prose.
-- [2026-08-24] **The test for the guard that failed silently for a month was executed by nothing** —
+- [2026-08-24] **The test for the guard that failed silently was executed by nothing** —
   no CI step, no `CLAUDE.md` entry, so `test-ci-workflow.sh` could never pin it. That loop was
   self-sealing.
 - [2026-08-24] **All 57 cases added since the harness broke were re-run through the corrected gate.**

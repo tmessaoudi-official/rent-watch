@@ -1096,7 +1096,8 @@ tests/test-drift-scan.sh           Sabotage test FOR that gate — each S8 sub-c
 tests/test-sabotage-baseline.sh    Sabotage test for the LEDGER's own scratch-baseline guard. The
                                    ledger copies an explicit file list into a throwaway tree and
                                    judges every case there; `.env.example` was missing from that
-                                   list for a month, so ONE test failed in every scratch run, the
+                                   list for ~27 hours on 2026-08-22/23, so ONE test failed in
+                                   every scratch run, the
                                    `Failures: [1-9]` detection assertion was satisfied
                                    unconditionally, and all ~375 cases reported `ok` while proving
                                    nothing — nightly green throughout, closing real ledger issues

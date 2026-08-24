@@ -197,10 +197,14 @@ final readonly class Formatter
         // A PLACEHOLDER MUST NOT OUTRANK A STATED FACT. When nothing locates the listing, the title
         // is used before `commune inconnue` — which is a label for the absence of information, and
         // printing it while a real title sits unused throws away the only human-readable thing the
-        // notification had. That is not hypothetical: it is the standing shape of every pre-v7 row
-        // `scout digest` exists to rescue, whose `listings` row holds a title and no commune, and
-        // those entries announced themselves as `commune inconnue · 1005 € CC` — a rescue nobody
-        // can act on is the display twin of the miss the command was built to fix.
+        // notification had. That is not hypothetical: it is the shape `scout digest` announces a
+        // snapshot-less row in — a listing whose payload could not be encoded, NOT a pre-v7 row,
+        // which that query cannot return at all — whose `listings` row holds a title and no
+        // commune. Those entries announced themselves as `commune inconnue · 1005 € CC`, and an
+        // entry nobody can act on is the display twin of the miss the command was built to fix.
+        // (The pre-v7 framing stood here through two review rounds after being corrected at the
+        // query itself; a premise corrected in one place and left in another is the one a reader
+        // lands on from the other direction.)
         $where = $where === '' ? trim($listing->title) : $where;
         $parts = [$where === '' ? 'commune inconnue' : $where];
 

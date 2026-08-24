@@ -181,7 +181,9 @@ if ! (cd "$repo" && php tools/phpunit.phar --no-output >/dev/null 2>&1); then
 fi
 printf '  baseline: suite is green — sabotage results are meaningful\n'
 
-# AND THE SAME BASELINE IN THE SCRATCH COPY, which is the check that was missing for a month.
+# AND THE SAME BASELINE IN THE SCRATCH COPY, which is the check that was missing for the ~27 hours
+# between `4403e9d` (2026-08-22 20:43, the commit that made a test read `.env.example`) and
+# `feb416d` (2026-08-23 23:31, which added it to the copy list).
 #
 # The baseline above runs in `$repo`, so it proves the REPO is green and says nothing about the
 # throwaway tree every sabotage is actually judged in. Those two trees are not the same tree: the
@@ -189,7 +191,11 @@ printf '  baseline: suite is green — sabotage results are meaningful\n'
 # that list omits makes the scratch suite fail for a reason no sabotage caused. `.env.example` was
 # omitted from 2026-08-22, so ONE test failed in every scratch run, the `Failures: [1-9]` detection
 # assertion was satisfied unconditionally, and all ~375 cases reported `ok` while proving nothing —
-# for a month, with the nightly green throughout and closing real ledger issues as it went.
+# for that window. AT MOST ONE nightly ran inside it — an earlier version of this comment said
+# "for a month, with the nightly green throughout and closing real ledger issues as it went", which
+# was a true finding with an invented magnitude, the exact failure this session kept finding
+# elsewhere. What makes the defect serious is not its duration but that it is UNDETECTABLE from the
+# ledger's own output: every case prints `ok`.
 #
 # This builds one unsabotaged scratch copy and requires it GREEN. It is the difference between a
 # gate that certifies §1 and a gate that certifies its own copy list, and it costs one suite run.
@@ -2304,9 +2310,14 @@ run_sabotage "the offline tripwire starts refusing loopback too" \
 # leave `source_runs.ok = 1` with a full item count and nothing notified; the Dedup one before
 # anything is stored at all. That is a correct rule applied to a subset of its surfaces — the
 # failure class CLAUDE.md names — arriving through the fix for that same class.
+# ADDRESSED to `communeKey()`'s own catch. The bare `s%} catch (MalformedText) {%` form matched all
+# THREE catches in this file — one here and two in `excludedBy()` — so its red came from the
+# `excludedBy` tests and said nothing about the guarantee named in the label. A review panel caught
+# that on 2026-08-24, in the same round it caught the two tests for this guard passing input they
+# never supplied. Both lines of defence were vacuous for the same guarantee, in different ways.
 run_sabotage "an unfoldable commune aborts the pass from rankOf and from Dedup" \
   src/php/Config/Criteria.php \
-  's%^        } catch (MalformedText) {$%        } catch (\\LogicException) {%'
+  's%\$folded = Text::fold(\$raw);%&%; /\$folded = Text::fold(\$raw);/,+1 s%catch (MalformedText)%catch (\\LogicException)%'
 
 # The two-surface split in `excludedBy()`. Folding both in ONE try silently disabled
 # `exclude_title_patterns` on a perfectly READABLE title whenever the description was unfoldable —
@@ -2343,6 +2354,38 @@ run_sabotage "the ntfy refusal puts the topic back in the message" \
 run_sabotage "the heartbeat stops being emitted from a finally" \
   src/php/Cli/Scout.php \
   's%                } finally {%                } catch (\\Throwable) {%'
+
+# ── round 3: the beat must not lie, and the config must not widen (2026-08-24) ────────────────────
+# Round 2 moved the heartbeat into a `finally` so a throwing pass could not silence it, and the beat
+# it then emitted was byte-identical to a healthy startup beat: `++$passes` stays inside the try, so
+# `$passes` was 0 and rendered "démarrage de la surveillance", while the health figure read a run log
+# the per-source loop had already committed `ok = 1` to. Two review lenses found it independently.
+# Silence was the DESIGNED alarm here — Q27's banner says so — and round 2 replaced it with an
+# affirmative false-healthy on the one channel the repo says can be believed.
+run_sabotage "the beat stops naming a failed pass, so it reads as healthy" \
+  src/php/Cli/Scout.php \
+  's%\$reasons\[\] = \$failedPasses . . passe(s) EN ÉCHEC.*;%%'
+
+# And the counter behind it. Never incremented, the beat has nothing to name.
+run_sabotage "a failing pass is not counted, so the beat cannot know" \
+  src/php/Cli/Scout.php \
+  's%                        ++\$failedPasses;%%'
+
+# The loader asymmetry a listing-side fix opened. `communeKey()` returning `''` instead of throwing
+# made `commune_rank['']` constructible in REGION MODE, where the "ranked but not in communes" check
+# is deliberately skipped — and `rankOf()` has no `''` guard, so every listing with an unfoldable
+# commune was awarded that rank. Measured at rank 1: "commune de premier choix", with the raw bytes
+# in `reasons[]`. Config is the input that must fail loudly.
+run_sabotage "an unnormalisable commune_rank label is accepted, ranking every unreadable commune" \
+  src/php/Config/ConfigLoader.php \
+  's%^                if (\$key === .\{2\}) {$%                if (false) {%'
+
+# The audit trail. A row that classified LLI and failed to encode is not SKIPPED by reclassify — it
+# is invisible to it, because `staleVerdicts()` selects undetermined verdicts only. `doctor` is the
+# one place it can be seen, and schema v7 exists so a verdict can be re-examined at all.
+run_sabotage "verdicts with no evidence stop being countable" \
+  src/php/Store/Store.php \
+  "s%WHERE tenure IS NOT NULL AND evidence_json IS NULL%WHERE 0%"
 
 # THE TALLY LIVES HERE, BELOW EVERY CASE, and that position is load-bearing rather than tidy.
 # It sat mid-file twice: once on 2026-08-20 (295 printed for 303 cases) and again from 2026-08-23,

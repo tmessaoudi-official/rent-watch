@@ -368,4 +368,44 @@ final class StoreEvidenceTest extends TestCase
             'l' => '2026-08-05T09:00:00+00:00', 'p' => 1785913200, 'n' => 'UNKNOWN', 'b' => 4000,
         ]);
     }
+
+    /**
+     * A verdict with no evidence is COUNTABLE, and before 2026-08-24 one shape of it was not.
+     *
+     * `staleVerdicts()` selects `tenure IS NULL OR tenure = 'UNKNOWN'`, so a row that classified
+     * `LLI` and whose payload failed to encode is not SKIPPED by `scout reclassify` — it is
+     * invisible to it. `pendingDigest()` walks digest outcomes only. The single report was one
+     * stdout line on the pass that caused it. That row is a notified match with no evidence behind
+     * it, which is precisely what schema v7 exists to make impossible.
+     */
+    public function testAVerdictWithNoEvidenceIsCounted(): void
+    {
+        $listing = new RawListing(sourceName: 'demo', externalId: 'e-1', title: 'T4');
+        $sighting = $this->store->record($listing, 1450, '2026-08-23T09:00:00+00:00');
+
+        self::assertSame(0, $this->store->evidencelessVerdictCount());
+
+        $this->store->recordVerdict($sighting->dedupKey, 'LLI', 90, [], $listing);
+        self::assertSame(0, $this->store->evidencelessVerdictCount(), 'a captured snapshot is not counted');
+
+        // The production shape: a listing whose payload cannot be JSON-encoded. Its title and
+        // description are clean — one bad byte in a structured field is enough — so it classifies
+        // normally and can be a notified MATCH.
+        $unencodable = new RawListing(
+            sourceName: 'demo',
+            externalId: 'e-2',
+            title: 'T4 lumineux',
+            fields: ['ref' => "R\xE9f-1234"],
+        );
+        $second = $this->store->record($unencodable, 1450, '2026-08-23T09:00:00+00:00');
+
+        self::assertFalse(
+            $this->store->recordVerdict($second->dedupKey, 'LLI', 90, [], $unencodable),
+            'the snapshot must be refused rather than substituted — U+FFFD inside `conventionné` would delete an excluded label',
+        );
+        self::assertSame(1, $this->store->evidencelessVerdictCount());
+
+        // And it is genuinely invisible to the command that would otherwise have reported it.
+        self::assertSame([], $this->store->staleVerdicts(), 'an LLI row is not an undetermined one');
+    }
 }

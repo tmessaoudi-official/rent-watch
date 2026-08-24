@@ -71,7 +71,14 @@ final class ConfigLoader
         foreach ($r->requireStringList('communes', allowEmptyList: true) as $label) {
             $key = Criteria::communeKey($label);
             if ($key === '') {
-                throw ConfigError::at($pointer . '.communes', 'commune ' . var_export($label, true) . ' has no letters or digits');
+                // The message names BOTH causes: `communeKey()` returns `''` for a name with no
+                // alphanumeric content AND for one it cannot fold, and "has no letters or digits"
+                // is baffling for a label that visibly has plenty of both.
+                throw ConfigError::at(
+                    $pointer . '.communes',
+                    'commune ' . var_export($label, true) . ' cannot be normalised — it has no '
+                        . 'letters or digits, or its text is not readable (bad encoding, or undecoded HTML entities)',
+                );
             }
             if (isset($communeLabels[$key])) {
                 throw ConfigError::at(
@@ -129,6 +136,27 @@ final class ConfigLoader
         if ($rankReader !== null) {
             foreach ($rankReader->keys() as $label) {
                 $key = Criteria::communeKey($label);
+
+                // REFUSED, symmetrically with `communes` above — and the asymmetry was live for a
+                // day. `communeKey()` used to THROW on a name it could not fold, so a malformed rank
+                // label failed loudly here; since it returns `''` instead (so that one unfoldable
+                // listing commune cannot abort a whole pass), `commune_rank['']` became
+                // constructible in REGION MODE, where the `in_array` check below is deliberately
+                // skipped. `rankOf()` has no `''` guard, so EVERY listing whose commune could not be
+                // folded was then awarded that rank — a review panel measured an unreadable commune
+                // scoring rank 1, "commune de premier choix", with the raw bytes in `reasons[]`.
+                //
+                // Score-only, so §1 was never in reach; but a fix for a listing-side failure must
+                // not quietly widen what the CONFIG accepts, and config is the one input that
+                // should fail loudly.
+                if ($key === '') {
+                    throw ConfigError::at(
+                        $pointer . '.commune_rank.' . $label,
+                        'commune ' . var_export($label, true) . ' cannot be normalised — it has no '
+                            . 'letters or digits, or its text is not readable (bad encoding, or undecoded HTML entities)',
+                    );
+                }
+
                 // Skipped in REGION MODE, where there is no list for a rank to be outside of. The
                 // check exists to catch dead config; applied to an empty `communes` it would reject
                 // every rank instead, forcing anyone who widens to a departement to delete the half

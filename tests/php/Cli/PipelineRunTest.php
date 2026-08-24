@@ -73,7 +73,15 @@ final class PipelineRunTest extends TestCase
             description: $o['description'] ?? '4 pieces de 88 m2, LLI, ascenseur.',
             fields: $o['fields'] ?? ['financement' => 'LLI'],
             url: 'https://example.test/' . $id,
-            commune: 'Sartrouville',
+            // HONOURS AN OVERRIDE, and this line is why. It was hardcoded, so two tests written to
+            // pin the malformed-commune guard passed a bad byte that never reached a `RawListing`
+            // — they asserted a guarantee about input they did not supply, and the guard could be
+            // deleted with the whole suite staying green. Found by a review panel on 2026-08-24.
+            //
+            // The sibling helper in NotifyTest carries the same warning for the same reason, and
+            // this file had ALREADY been caught by it once this session, on `title`. A helper that
+            // quietly ignores what a test asked for makes every test using it prove something else.
+            commune: array_key_exists('commune', $o) ? $o['commune'] : 'Sartrouville',
             postcode: '78500',
             rentCc: $o['rentCc'] ?? 1450,
             surfaceM2: 88.0,

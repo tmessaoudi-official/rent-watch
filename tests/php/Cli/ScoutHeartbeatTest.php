@@ -380,6 +380,74 @@ final class ScoutHeartbeatTest extends TestCase
         self::assertFileDoesNotExist($root . '/state/last-refusal.txt');
     }
 
+    public function testABeatAfterAFailingPassDoesNotReadLikeAHealthyOne(): void
+    {
+        // TWO REVIEW LENSES FOUND THIS INDEPENDENTLY, which is the strongest signal the panel gives.
+        //
+        // The sequence: the beat used to sit inside the pass's try, so a throwing pass emitted NO
+        // beat — and Q27's own banner says silence past the interval IS the signal. Moving it to a
+        // `finally` fixed the silence and created something worse: `++$passes` stays inside the try,
+        // so `$passes` was still 0 and rendered as "démarrage de la surveillance"; `$matches` is
+        // passed 0; and the health figure reads the run log, which `Pipeline`'s per-source loop had
+        // already committed `ok = 1` to. The result was byte-identical to a healthy startup beat.
+        // An operator whose watcher had thrown every pass for a week would get a daily push saying
+        // it had just started and every source was fine.
+        //
+        // A SQLITE TRIGGER is how the pass is made to throw, and it is the realistic shape rather
+        // than a contrivance: store writes in `Pipeline`'s cluster loop sit OUTSIDE the per-source
+        // try/catch, and a write failing at runtime — SQLITE_FULL or SQLITE_IOERR on Q8's mounted
+        // volume — is an event, not a state. `Store::open()` still succeeds, because migration is
+        // idempotent and inserts nothing.
+        $root = $this->tempRoot();
+        $db = $root . '/state/rent-watch.sqlite3';
+
+        $this->scoutIn($root, ['run', '--once', '--seed']);
+
+        $pdo = new \PDO('sqlite:' . $db);
+        $pdo->setAttribute(\PDO::ATTR_ERRMODE, \PDO::ERRMODE_EXCEPTION);
+        // BOTH verbs. `Store::record()` INSERTs a listing it has not seen and UPDATEs one it has,
+        // and the seed pass above means every listing is already on record — so an INSERT-only
+        // trigger never fires and the pass succeeds, which is what a first draft of this test
+        // asserted against.
+        $pdo->exec(
+            "CREATE TRIGGER boom_i BEFORE INSERT ON listings
+             BEGIN SELECT RAISE(ABORT, 'disk I/O error'); END;",
+        );
+        $pdo->exec(
+            "CREATE TRIGGER boom_u BEFORE UPDATE ON listings
+             BEGIN SELECT RAISE(ABORT, 'disk I/O error'); END;",
+        );
+        unset($pdo);
+
+        // The marker is made unwritable so every check is due — the documented technique, since a
+        // fixed clock makes the in-loop beat otherwise unreachable.
+        mkdir($root . '/state/heartbeat.txt', 0o775, true);
+
+        $r = $this->scoutIn($root, ['run', '--watch']);
+
+        self::assertStringContainsString('toujours actif', $r['out'], 'the beat must still go out — silence is what the finally fixed');
+        self::assertStringContainsString(
+            'EN ÉCHEC',
+            $r['out'],
+            'and it must SAY the pass failed — a beat identical to a healthy one is worse than no beat',
+        );
+        // The STARTUP beat legitimately says "démarrage" — no pass has run at that point, and a cold
+        // start is exactly what it is. What must not say it is the beat AFTER the failure, so the
+        // assertion is scoped to the tail rather than the whole run.
+        $afterFailure = substr($r['out'], (int) strpos($r['out'], 'EN ÉCHEC'));
+
+        self::assertStringNotContainsString(
+            'démarrage de la surveillance',
+            $afterFailure,
+            'starting is not what a watcher losing every pass is doing',
+        );
+        self::assertStringContainsString(
+            'aucune passe terminée',
+            $afterFailure,
+            'and it says so plainly rather than reporting a count that would read as progress',
+        );
+    }
+
     public function testTheBeatIsEmittedFromAFinallySoAThrowingPassCannotSkipIt(): void
     {
         // THE CLAIM THIS PINS was in a comment and was false: the beat was said to be "outside its

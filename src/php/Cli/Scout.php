@@ -195,6 +195,18 @@ final readonly class Scout
             $this->line('  ⚠ le mode journal n\'est pas WAL : deux processus se bloqueront au lieu de partager');
         }
 
+        // THE ONLY PLACE A NOTIFIED MATCH WITH NO EVIDENCE CAN BE SEEN. `staleVerdicts()` selects
+        // undetermined verdicts, so a row that classified LLI and failed to encode is not skipped by
+        // `reclassify` — it is invisible to it; `pendingDigest()` walks digest outcomes only. Before
+        // this line the sole report was one stdout line on the pass that caused it, which under Q8's
+        // deployment scrolls past in a log nobody reads. This is the §1 audit trail: a verdict with
+        // no evidence is one nobody can ever re-examine.
+        $eviless = $store->evidencelessVerdictCount();
+        if ($eviless > 0) {
+            $this->line('  preuves : ' . $eviless . ' verdict(s) sans instantané — non re-jugeables '
+                . '(antérieurs au schéma v7, ou charge utile non encodable)');
+        }
+
         $notifier = $this->notifier($criteria);
         $this->line('  canaux  : ' . ($notifier->hasRemoteChannel() ? 'au moins un canal distant' : 'console seulement'));
         foreach ($notifier->disabledReport() as $name => $problem) {
@@ -460,6 +472,7 @@ final readonly class Scout
             return $this->failRun($e->getMessage());
         }
         $passes = 0;
+        $failedPasses = 0;
 
         // What this run actually polls, which is NOT the same as what the config enables whenever
         // `--source` is in play. Taken from the built list rather than re-read from the config,
@@ -478,7 +491,7 @@ final readonly class Scout
         }
 
         $loop = new WatchLoop(
-            pass: function () use ($criteria, $store, $notifier, $sources, $verbose, $pacer, $heartbeat, $watched, &$passes): void {
+            pass: function () use ($criteria, $store, $notifier, $sources, $verbose, $pacer, $heartbeat, $watched, &$passes, &$failedPasses): void {
                 // `finally`, and it is the whole point rather than a style choice. This claimed to
                 // be "outside its try/catch by construction" and was not: the heartbeat sat in the
                 // same closure as the pass, and `WatchLoop` wraps that closure in its own `try` — so
@@ -490,17 +503,24 @@ final readonly class Scout
                 // The common case it was right about still holds — all sources 503ing is caught per
                 // source INSIDE `Pipeline` and never reaches here — which is exactly why nobody
                 // re-checked the mechanism.
+                $threw = true;
+
                 try {
                     $this->onePass($criteria, $store, $notifier, PacedSource::wrapAll($sources, $pacer), false, $verbose);
                     ++$passes;
+                    $threw = false;
                 } finally {
+                    if ($threw) {
+                        ++$failedPasses;
+                    }
+
                     // A heartbeat is the one message that must still go out when passes are failing,
                     // since a watcher whose sources are all broken is exactly the state silence
                     // would hide. Its own failure must not mask the pass's: a liveness signal that
                     // can replace the diagnosis is worse than one that is late.
                     try {
                         if ($heartbeat->isDue($this->lastHeartbeat(), $this->now())) {
-                            $this->beat($notifier, $store, $passes, 0, null, $watched);
+                            $this->beat($notifier, $store, $passes, 0, null, $watched, $failedPasses);
                         }
                     } catch (\Throwable $beatFailure) {
                         $this->warn('battement de cœur non émis : ' . Redact::text($beatFailure->getMessage()));
@@ -638,9 +658,10 @@ final readonly class Scout
      * stays unreachable, and that is a stated cost rather than a hidden one.
      *
      * The evidence-less path is still live, and since 2026-08-24 it is reachable in production for
-     * a reason that has nothing to do with v7: a listing whose own text is not valid UTF-8 cannot
-     * be snapshotted, so `Store::recordVerdict()` stores its verdict without one. That listing is
-     * judged, digested, and carries a title — exactly the row this branch announces.
+     * a reason that has nothing to do with v7: a listing whose PAYLOAD cannot be JSON-encoded —
+     * malformed UTF-8 anywhere in it, not necessarily its prose — has its verdict stored without a
+     * snapshot. Such a listing is judged and carries a title, which is exactly the row this branch
+     * announces when it digests.
      *
      * That is deliberately NOT the rule {@see reclassify()} follows. Reclassify FORMS a verdict, so
      * running it on less evidence than the original saw is the §1 breach schema v7 exists to
@@ -1261,12 +1282,40 @@ final readonly class Scout
         int $matches,
         ?string $refusal,
         array $watched,
+        int $failedPasses = 0,
     ): void {
         $now = $this->now();
-        $reasons = [
-            $passes === 0 ? 'démarrage de la surveillance' : $passes . ' passe(s) terminée(s)',
-            $matches . ' annonce(s) notifiée(s)',
-        ];
+
+        // A BEAT AFTER A FAILING PASS MUST NOT READ LIKE A HEALTHY ONE, and until 2026-08-24 it did
+        // — byte for byte. Two review lenses found it independently, which is the strongest signal
+        // this panel produces.
+        //
+        // The sequence that produced it: the beat used to sit inside the pass's try, so a throwing
+        // pass emitted NO beat, and Q27's banner says in as many words that silence past the
+        // interval is the signal. Moving it to a `finally` fixed the silence and created something
+        // worse — `++$passes` stays inside the try, so `$passes` was still 0 and rendered as
+        // "démarrage de la surveillance"; `$matches` is passed 0; and the health figure reads the
+        // run log, which `Pipeline`'s per-source loop already committed `ok = 1` to. An operator
+        // whose watcher had thrown every pass for a week got a daily push saying it had just
+        // started, notified nothing, and all sources were healthy. The only trace of the failure
+        // was a stderr line, which under Docker is the log CLAUDE.md says nobody reads.
+        //
+        // So the beat now carries the vocabulary for it. A failed pass is named FIRST, because it
+        // is the one thing on this notification that asks for action, and "startup" is never
+        // printed once a pass has been attempted — starting is not what a watcher losing every
+        // pass is doing.
+        $reasons = [];
+
+        if ($failedPasses > 0) {
+            $reasons[] = $failedPasses . ' passe(s) EN ÉCHEC — voir les journaux';
+        }
+
+        $reasons[] = match (true) {
+            $passes > 0 => $passes . ' passe(s) terminée(s)',
+            $failedPasses > 0 => 'aucune passe terminée',
+            default => 'démarrage de la surveillance',
+        };
+        $reasons[] = $matches . ' annonce(s) notifiée(s)';
 
         // The health figure counts WHAT THIS RUN WATCHES, not what the config enables. It used to
         // read every enabled source, so `--watch --source=x` against the shipped config reported
