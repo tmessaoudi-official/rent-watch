@@ -168,7 +168,14 @@ jobs:
         run: bash tools/fetch-phpunit.sh
 
       - name: Sabotage ledger — every seeded regression must be caught
-        run: bash tests/sabotage-check.sh
+        # TEE'd, because the alert below has to carry its own evidence. `set -o pipefail` is
+        # explicit: GitHub's default shell is `bash -e`, NOT `-o pipefail`, so without it `tee`'s
+        # exit status would mask a red ledger and the nightly would go green on a failing gate —
+        # the exact class of defect this whole job exists to catch, in the job itself.
+        shell: bash
+        run: |
+          set -o pipefail
+          bash tests/sabotage-check.sh 2>&1 | tee "$RUNNER_TEMP/ledger.log"
 
       # THE LEDGER MUST BE DELIVERED TO SOMEONE. Hard rule 2: "an alert that is computed and never
       # sent is worse than none." This job failed 7/7 from 2026-08-13 to 2026-08-19 — every night,
@@ -187,12 +194,60 @@ jobs:
             const title = `sabotage ledger RED (${day})`;
             const url = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}` +
                         `/actions/runs/${context.runId}`;
+            // WHICH CASES FAILED, in the alert itself. Without this the issue named a run whose
+            // logs need admin rights to download, so the first question anyone asks — "what
+            // broke?" — could not be answered by the person the alert was sent to. That is hard
+            // rule 2 one step on: an alert that reaches a human and carries no evidence still
+            // leaves them unable to act. Observed on 2026-08-24, when issue #3 arrived and the
+            // failing case could only be recovered by re-running the ~5-hour ledger locally.
+            //
+            // The ledger's own tail is the evidence: it prints `undetected or unapplied:` followed
+            // by one line per case, which is precisely the list a reader needs. ANSI colour is
+            // stripped, and the block is capped — a ledger with fifty failures is a different
+            // problem, and pasting fifty lines into an issue body would bury the summary.
+            const fs = require('fs');
+            let detail = '';
+            try {
+              const log = fs.readFileSync(`${process.env.RUNNER_TEMP}/ledger.log`, 'utf8')
+                .replace(/\u001b\[[0-9;]*m/g, '');
+              const tally = log.match(/^\s*\d+ sabotage\(s\) detected, \d+ undetected$/m);
+              const block = log.match(/undetected or unapplied:\n([\s\S]*?)(?:\n\s*\n|$)/);
+              const lines = block ? block[1].split('\n').filter((l) => l.trim() !== '') : [];
+              const shown = lines.slice(0, 25);
+              detail = [
+                tally ? tally[0].trim() : '(tally not found — the ledger may have aborted early)',
+                ``,
+                lines.length > 0 ? '```' : '',
+                ...shown,
+                lines.length > shown.length ? `    … and ${lines.length - shown.length} more` : '',
+                lines.length > 0 ? '```' : '',
+              ].filter((l) => l !== '').join('\n');
+            } catch (e) {
+              // NAMED, not swallowed. A missing log is itself worth knowing: it means the step
+              // died before the ledger produced output, which is an infrastructure failure rather
+              // than a detection failure, and the two need different responses.
+              detail = `(the ledger produced no readable log: ${e.message})`;
+            }
             const body = [
               `The nightly sabotage ledger failed on ${day}.`,
               ``,
               `This is the gate that proves the test suite would actually go red if the tenure`,
               `classifier or the store regressed. While it is failing, a green suite means less`,
               `than it claims — see CLAUDE.md "Common workflows".`,
+              ``,
+              `## What was not caught`,
+              ``,
+              detail,
+              ``,
+              `A case listed as \`undetected\` means the suite stayed GREEN while that regression`,
+              `was seeded — the guarantee it names has no test behind it. A case listed as`,
+              `\`unapplied\` means its sed matched nothing, so it proved nothing either way;`,
+              `\`bash tests/test-sabotage-applies.sh\` catches those in a second, on every push.`,
+              ``,
+              `Reproduce one case without the ~5-hour full run:`,
+              "```",
+              `SABOTAGE_FILTER='<label>' bash tests/sabotage-check.sh`,
+              "```",
               ``,
               `Run: ${url}`,
               `Commit: ${context.sha}`,

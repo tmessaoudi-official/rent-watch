@@ -83,6 +83,20 @@ check "runs the sabotage apply-sweep"       has "tests/test-sabotage-applies.sh"
 # and CLAUDE.md claimed nothing about that file, so the pin could never fire.
 check "runs the ledger's scratch-baseline self-test" \
   has "tests/test-sabotage-baseline.sh"
+
+# THE ALERT MUST CARRY ITS OWN EVIDENCE. Issue #3 (2026-08-24) named a run and nothing else, and
+# that run's logs need admin rights to download — so the first question its reader asks, "what
+# broke?", could not be answered by the person the alert was sent to. Recovering it meant re-running
+# a ~5-hour ledger locally. Hard rule 2 says an alert computed and never sent is worse than none;
+# this is the next step along that line — an alert delivered with no evidence still leaves its
+# reader unable to act.
+#
+# Pinned by the MECHANISM as well as the heading, because a heading survives the body being gutted:
+# the tee that captures the log, and the read that puts it in the issue.
+check "the ledger's output is captured for the alert" has 'tee "$RUNNER_TEMP/ledger.log"'
+check "and pipefail is set, so tee cannot mask a red ledger" has 'set -o pipefail'
+check "the red-ledger issue names WHICH cases were not caught" has 'undetected or unapplied:'
+check "and reads them from the captured log" has 'RUNNER_TEMP}/ledger.log'
 check "runs the drift-scan self-test"        has "tests/test-drift-scan.sh"
 check "runs the sabotage ledger"             has "tests/sabotage-check.sh"
 
