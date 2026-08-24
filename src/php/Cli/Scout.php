@@ -591,14 +591,22 @@ final readonly class Scout
         bool $seed,
         bool $verbose,
         /**
-         * WHAT THE PASS PUSHED, for the Q27 beat. An out-parameter rather than a changed return
-         * type, so the exit-code contract every caller reads stays exactly as it was — and so a
-         * caller that does not care about the figure is not forced to unpack a result object.
+         * What the pass ACTUALLY ANNOUNCED — confirmed deliveries, for the Q27 beat. See
+         * {@see RunResult::$notified} for why this is not `matches`. An out-parameter rather than a
+         * changed return type, so the exit-code contract every caller reads stays exactly as it
+         * was — and so a caller that does not care about the figure is not forced to unpack a
+         * result object.
          */
         ?int &$matchesOut = null,
     ): int {
         $result = (new Pipeline($criteria, $store, $notifier))->runOnce($sources, $this->now(), $seed);
-        $matchesOut = $result->matches;
+
+        // `notified`, NOT `matches`. `matches` counts what the engine JUDGED, before the
+        // already-announced gate and before the channel confirms — so in steady state, where
+        // everything published has already been announced, it is the full standing count while the
+        // pass sends nothing. Wiring the beat to it replaced a hard-coded `0` with a number that
+        // was wrong in the other direction, and grew fastest when delivery was broken.
+        $matchesOut = $result->notified;
 
         $this->line(sprintf(
             '%d source(s), %d annonce(s) analysées · %d correspondance(s), %d à vérifier, %d écartée(s), %d doublon(s)',
@@ -972,6 +980,7 @@ final readonly class Scout
         }
 
         $skipped = 0;
+        $vetoed = 0;
         $unreadable = 0;
         $unencodable = 0;
         $rejudged = 0;
@@ -1011,6 +1020,28 @@ final readonly class Scout
                 null,
                 true,
             );
+
+            // §1 ACROSS THE CLUSTER, the same rule the pipeline judges by — checked BEFORE the
+            // classifier runs, because a listing this command cannot legitimately judge should not
+            // be judged at all.
+            //
+            // The pipeline judges a cluster on its most restrictive member but stores each member's
+            // OWN tenure and OWN snapshot. So a vetoed survivor whose card states no tenure sits at
+            // `tenure = 'UNKNOWN'`, `outcome = 'REJECT'` — and `staleVerdicts()` selects on `tenure`
+            // alone, so this command picked it up and re-judged it on a snapshot in which the
+            // sibling's `PLS` cannot appear. A review panel drove it end to end on 2026-08-24: the
+            // REJECT vanished after one run, and in the promotion case the row was PUSHED as a
+            // match while the store still held `PLS` under its own `group_key`.
+            //
+            // That is this command's own invariant read exactly — **evidence ⊇ original, never ⊂**
+            // — because the cluster's evidence is part of the original.
+            $groupVeto = $store->groupExcludedTenure($key);
+
+            if ($groupVeto !== null) {
+                ++$vetoed;
+
+                continue;
+            }
 
             $classification = $classifier->classify($evidence, $profile);
             $before = $store->outcome($key);
@@ -1079,6 +1110,16 @@ final readonly class Scout
             count($promotions),
         ));
 
+        if ($vetoed > 0) {
+            // Counted out loud, because a silent skip is indistinguishable from a bug — and this
+            // one skips a listing the operator can see sitting in the store as undetermined.
+            $this->line(sprintf(
+                '%d annonce(s) écartée(s) par un doublon au régime exclu — leur verdict a été formé '
+                . 'sur la preuve du groupe, que leur propre instantané ne contient pas.',
+                $vetoed,
+            ));
+        }
+
         if ($skipped > 0) {
             // Both causes are reachable HERE, unlike in `digest()`: `staleVerdicts()` selects
             // `tenure IS NULL`, which a genuine pre-v7 row has, AND `tenure = 'UNKNOWN'`, which a
@@ -1116,7 +1157,8 @@ final readonly class Scout
     /**
      * Write a verdict and the evidence it was formed from, in the one statement the store provides.
      *
-     * Extracted so the two call sites cannot drift: a verdict written from a different snapshot
+     * Extracted so the three call sites cannot drift (it was written for two; `announcePromotions()`
+     * added the third and this line was not updated): a verdict written from a different snapshot
      * than the one just judged is the divergence `evidence_json` exists to make impossible.
      */
     private function writeVerdict(
@@ -1153,6 +1195,24 @@ final readonly class Scout
         $formatter = new Formatter();
         $now = $this->nowIso ?? date('c');
         $undelivered = 0;
+
+        // CAPPED, like both digest paths, and for the same reason one round later. This sends ONE
+        // PUSH PER PROMOTION with no bound, and the population it draws from is every row
+        // `staleVerdicts()` returns — which after a `--seed` is everything that was published at
+        // seed time (In'li alone: ~174). A classifier improvement that resolves a large doubtful
+        // backlog would empty it onto the phone in one run. The remainder is not lost: nothing is
+        // written for a promotion until its channel confirms, so an un-announced row stays exactly
+        // where it was and the next `scout reclassify` reaches it.
+        $remaining = \count($promotions) - Store::DIGEST_BATCH;
+        $promotions = \array_slice($promotions, 0, Store::DIGEST_BATCH);
+
+        if ($remaining > 0) {
+            $this->line(sprintf(
+                '%d promotion(s) au-delà du lot de %d — relancer `scout reclassify` pour la suite.',
+                $remaining,
+                Store::DIGEST_BATCH,
+            ));
+        }
 
         foreach ($promotions as $promotion) {
             $failures = $notifier->send($formatter->match($promotion['listing'], $promotion['verdict']));

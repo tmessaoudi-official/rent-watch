@@ -380,6 +380,118 @@ final class ScoutReclassifyTest extends TestCase
     // ── harness ───────────────────────────────────────────────────────────────────────────────────
 
     /** The listing every promotion test starts from: eligible, and eligible for a stated reason. */
+    /**
+     * A listing its CLUSTER vetoed must not be resurrected by `reclassify`.
+     *
+     * **This is the round-4 cluster veto being undone by a shipped command.** The pipeline judges a
+     * cluster on its most restrictive member, but stores each member's OWN tenure and OWN snapshot
+     * — so a vetoed survivor whose card states no tenure is left `tenure = 'UNKNOWN'`,
+     * `outcome = 'REJECT'`. `staleVerdicts()` selects on `tenure` alone, so `reclassify` picked it
+     * up and re-judged it on its own snapshot, in which the sibling's `PLS` cannot appear.
+     *
+     * That is the invariant this command exists to hold, read exactly: **evidence ⊇ original,
+     * never ⊂.** The cluster's evidence is part of the original. A review panel drove it end to end
+     * on 2026-08-24 through the real pipeline and the real commands.
+     */
+    public function testAListingItsClusterVetoedIsNotResurrected(): void
+    {
+        $root = $this->tempRoot();
+
+        // The survivor: a card stating no tenure at all, rejected by its cluster rather than by
+        // anything in its own text.
+        $survivor = new RawListing(
+            sourceName: 'demo',
+            externalId: 'VETO-1',
+            title: 'T4 lumineux',
+            description: 'Quatre pieces, 88 m2, ascenseur.',
+            commune: 'Sartrouville',
+            postcode: '78500',
+            rentCc: 1450,
+            surfaceM2: 88.0,
+            rooms: 4,
+        );
+        $sibling = new RawListing(
+            sourceName: 'other',
+            externalId: 'VETO-2',
+            title: 'T4 lumineux',
+            description: 'Financement PLS, commission d attribution.',
+            fields: ['financement' => 'PLS'],
+            commune: 'Sartrouville',
+            postcode: '78500',
+            rentCc: 1450,
+            surfaceM2: 88.0,
+            rooms: 4,
+        );
+
+        $key = $this->seed($root, $survivor, 'UNKNOWN', 'REJECT');
+        $siblingKey = $this->seed($root, $sibling, 'PLS', null);
+
+        $store = Store::open($root . '/state/rent-watch.sqlite3');
+        $store->assignGroup([$key, $siblingKey]);
+
+        $r = $this->scout($root, ['reclassify']);
+
+        self::assertSame(0, $r['code']);
+        self::assertStringNotContainsString(
+            'promotion(s) vers MATCH.' . PHP_EOL,
+            str_replace('0 promotion(s) vers MATCH.', '', $r['out']),
+            'a vetoed listing must never be promoted',
+        );
+        self::assertSame(
+            'REJECT',
+            $this->pdo($root)
+                ->query("SELECT outcome FROM listings WHERE dedup_key = '" . $key . "'")
+                ->fetchColumn(),
+            'the cluster veto must survive a re-judgement that cannot see the evidence which caused it',
+        );
+        self::assertStringContainsString(
+            'écartée(s) par un doublon',
+            $r['out'],
+            'the skip must be counted out loud — a silent skip is indistinguishable from a bug',
+        );
+    }
+
+    /**
+     * The counterweight: a clustered listing whose siblings are ELIGIBLE is still re-judged.
+     *
+     * Without this the veto above is one character from skipping every clustered row in the store
+     * — and over-rejection is the invisible direction, because nothing arrives to notice. The
+     * sabotage ledger proved the gap: reading the group's tenures as excluded regardless of what
+     * they say left the whole suite green.
+     */
+    public function testAClusteredListingWithEligibleSiblingsIsStillRejudged(): void
+    {
+        $root = $this->tempRoot();
+
+        $listing = $this->intermediateListing('PAIR-1');
+        $sibling = new RawListing(
+            sourceName: 'other',
+            externalId: 'PAIR-2',
+            title: 'T4 lumineux',
+            description: 'Logement intermédiaire (LLI), attribution directe par le bailleur.',
+            commune: 'Sartrouville',
+            postcode: '78500',
+            rentCc: 1450,
+            surfaceM2: 88.0,
+            rooms: 4,
+        );
+
+        $key = $this->seed($root, $listing, 'UNKNOWN', 'DIGEST');
+        $siblingKey = $this->seed($root, $sibling, 'LLI', null);
+
+        Store::open($root . '/state/rent-watch.sqlite3')->assignGroup([$key, $siblingKey]);
+
+        $r = $this->scout($root, ['reclassify']);
+
+        self::assertSame(0, $r['code']);
+        self::assertStringContainsString(
+            '1 annonce(s) re-jugée(s)',
+            $r['out'],
+            'an eligible sibling is not evidence against anything — the row must still be judged',
+        );
+        self::assertStringNotContainsString('écartée(s) par un doublon', $r['out']);
+    }
+
     private function intermediateListing(string $id): RawListing
     {
         return new RawListing(

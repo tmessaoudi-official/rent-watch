@@ -29,6 +29,28 @@ final readonly class RunResult
         public int $rentDrops = 0,
         public int $undelivered = 0,
         /**
+         * Listings this pass ACTUALLY ANNOUNCED — a confirmed delivery, not a verdict.
+         *
+         * **`matches` is not this, and the Q27 beat was reading `matches`.** `Pipeline` increments
+         * `$matches` when the engine judges a survivor a match, which is BEFORE the
+         * `wasNotifiedAs(..., 'MATCH')` gate and before `delivered()`. In steady state — the
+         * ordinary mode of a `--watch` deployment, where everything published has already been
+         * announced — every one of those hits `continue`, so the pass sends nothing and `matches`
+         * still carries the full standing count. The beat is cumulative, so it grew by that count
+         * every pass: at Q37 cadence and the live criteria, a day-two beat read thousands of
+         * "annonces notifiées" having pushed none.
+         *
+         * Worse in the direction that matters: a failed send is deliberately not marked, so the
+         * listing returns next pass and is counted again. The figure grew FASTEST when nothing was
+         * reaching the phone, which is the one state a liveness signal exists to expose.
+         *
+         * Counts every kind of listing announcement — a new match, a notable rent drop, and each
+         * delivered digest entry — because the operator's question is "did anything reach me", not
+         * "which branch produced it". Found by a review panel on 2026-08-24, one round after the
+         * same field was found hard-coded to `0`.
+         */
+        public int $notified = 0,
+        /**
          * Listings whose PAYLOAD could not be encoded, so no evidence snapshot was captured.
          *
          * **Not "whose text is unreadable", which is what this said until a review panel checked

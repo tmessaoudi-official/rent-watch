@@ -922,7 +922,9 @@ Required coverage, per spec §11 — non-negotiable once `src/` exists:
   `DIGEST < MATCH` is monotone, a write cannot DEMOTE, and a pre-v8 row — a timestamp with no
   recorded kind — reads as MATCH so the historic backlog cannot re-announce itself);
   **group** (schema v4: the key SURVIVES a survivorship flip, a delisted member keeps it, two groups
-  that meet are merged, a listing that clusters alone has NO group, and a singleton reports its own
+  that meet are merged, a listing that clusters alone has NO group, and §1 is judged across the
+  WHOLE cluster — an excluded member vetoes it, an undetermined one does not, and the veto survives
+  a later `scout reclassify` that cannot see the evidence which caused it; a singleton reports its own
   history rather than the empty set SQL gives you for `group_key = NULL`);
   **evidence** (schema v7: the snapshot a verdict was formed from round-trips with hard rule 9
   intact — `floor = 0` is RDC and not an unknown floor, an explicit `hasElevator = false` is not an

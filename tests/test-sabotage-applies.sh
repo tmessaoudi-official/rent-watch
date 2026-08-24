@@ -29,6 +29,7 @@ tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT
 
 total=0
+whole=0
 inert=0
 
 # Split a sed script into its individual commands, RESPECTING SED'S OWN SYNTAX.
@@ -53,9 +54,35 @@ split_sed_script() {
     while ($i < $n) {
       while ($i < $n && ($script[$i] === " " || $script[$i] === ";")) { $i++; }
       if ($i >= $n) { break; }
-      if ($script[$i] !== "s") { exit(0); }
 
       $start = $i;
+
+      // AN OPTIONAL LEADING ADDRESS. Three cases in this ledger are address-prefixed
+      // (`/private function withDetail/,$ s%…%%`), and without this they parsed to nothing and fell
+      // back to whole-script comparison — including the ONE genuinely compound case, whose second
+      // command was therefore never checked on its own. That is the exact blindness this scanner
+      // was written to remove, surviving in the three scripts it could not read.
+      for ($piece = 0; $piece < 2; $piece++) {
+        if ($i < $n && $script[$i] === "/") {
+          for ($i++; $i < $n; $i++) {
+            if ($script[$i] === "\\") { $i++; continue; }
+            if ($script[$i] === "/") { $i++; break; }
+          }
+        } elseif ($i < $n && ($script[$i] === "$" || $script[$i] === "+" || ctype_digit($script[$i]))) {
+          $i++;
+          while ($i < $n && ctype_digit($script[$i])) { $i++; }
+        } else {
+          break;
+        }
+
+        if ($i < $n && $script[$i] === ",") { $i++; continue; }
+        break;
+      }
+
+      while ($i < $n && $script[$i] === " ") { $i++; }
+
+      if ($i >= $n || $script[$i] !== "s") { exit(0); }
+
       $i++;
       if ($i >= $n) { exit(0); }
       $delim = $script[$i];
@@ -103,7 +130,22 @@ run_sabotage() {
   for expression in "$@"; do
     parts=()
     mapfile -t parts < <(split_sed_script "$expression")
-    (( ${#parts[@]} )) || parts=("$expression")
+
+    if (( ${#parts[@]} == 0 )); then
+      # THE FALLBACK IS ANNOUNCED, because it restores exactly the blindness this checker was
+      # rebuilt to remove: a script tested whole passes as soon as ANY of its commands still
+      # matches, so the others may rot unseen. Harmless today — every compound script in the ledger
+      # is a pure `s`-chain and is split — but an address (`/foo/d`), a line number (`1s%…%`) or an
+      # `I`/`w` flag would silently revert that case to one-comparison checking while the summary
+      # still read `ok, all N expressions still apply`. A coverage claim that cannot say where it
+      # stopped is the shape of defect this whole file exists to catch.
+      if [[ "$expression" == *';'* ]]; then
+        printf '  \033[33mWHOLE\033[0m   %s\n           -> not a pure s-chain; tested as ONE script, so a rotted command inside it is invisible\n' "$label"
+        whole=$((whole + 1))
+      fi
+
+      parts=("$expression")
+    fi
 
     for part in "${parts[@]}"; do
       total=$((total + 1))
@@ -131,6 +173,10 @@ source "$tmp/calls.sh"
 if (( total == 0 )); then
   printf '  \033[31mFAIL\033[0m no expressions found — the ledger format changed\n\n'
   exit 1
+fi
+
+if (( whole > 0 )); then
+  printf '\n  \033[33m%d compound script(s) were tested whole\033[0m — see the WHOLE lines above.\n' "$whole"
 fi
 
 if (( inert > 0 )); then

@@ -160,6 +160,52 @@ final class ScoutHeartbeatTest extends TestCase
         );
     }
 
+    public function testTheBeatSaysZeroOnASteadyStatePassThatPushedNothing(): void
+    {
+        // **The round-4 fix replaced a constant `0` with a number that is wrong the other way.**
+        // The beat was wired to `RunResult::matches`, which `Pipeline` increments BEFORE the
+        // `wasNotifiedAs(..., 'MATCH')` gate and before `delivered()` — so it counts every
+        // match-outcome survivor, including every listing already announced on an earlier pass.
+        //
+        // Steady state is the ordinary mode of a `--watch` deployment: everything published has
+        // already been notified, nothing is pushed, and the beat claimed the full standing match
+        // count anyway — cumulatively, growing by that count every pass. At Q37 cadence and the
+        // live criteria (83 matches of 478) a day-two beat would read ~8000 pushes having sent
+        // none. Found by a review panel on 2026-08-24, one round after the constant.
+        //
+        // Seeding is exactly this state: `--seed` marks everything currently published as already
+        // announced. The sibling test above seeds a ONE-ITEM subset, so every match in its watched
+        // pass is genuinely new — `judged` and `pushed` are equal there, which is why `[1-9]\d*`
+        // could not tell them apart.
+        $root = $this->tempRoot([
+            'communes' => [],
+            'postcode_prefixes' => ['75', '77', '78', '91', '92', '93', '94', '95'],
+            'min_rooms' => 1,
+            'min_surface_m2' => 1,
+            'max_rent_cc' => 100000,
+        ]);
+
+        $seed = $this->scoutIn($root, ['run', '--once', '--seed']);
+        self::assertMatchesRegularExpression('~[1-9]\d* correspondance~', $seed['out'], 'the seed must have matched something');
+
+        mkdir($root . '/state/heartbeat.txt', 0o775, true);
+
+        $r = $this->scoutIn($root, ['run', '--watch']);
+
+        // THE IN-LOOP BEAT, not the startup one. The startup beat legitimately says 0 — no pass has
+        // run yet — so a bare `assertStringContainsString('0 annonce')` passes on the broken code
+        // by matching the wrong beat. Written that way first, and it went green against the very
+        // defect it was added for.
+        $inLoop = strstr($r['out'], '1 passe(s) terminée(s)');
+        self::assertIsString($inLoop, 'the watched pass must have completed and beaten');
+
+        self::assertStringContainsString(
+            '0 annonce(s) notifiée(s)',
+            $inLoop,
+            'a pass that pushed nothing must not claim pushes — the beat reports DELIVERIES, not verdicts',
+        );
+    }
+
     public function testTheMarkerIsWrittenToTheStateDirectorySoItSurvivesARestart(): void
     {
         // Q8 puts `state/` on the mounted volume. A marker written anywhere else resets on every

@@ -9,6 +9,7 @@ use RentWatch\Core\RawListing;
 use RentWatch\Core\Redact;
 use RentWatch\Core\SourceHealth;
 use RentWatch\Core\SourceStatus;
+use RentWatch\Core\Tenure;
 use RentWatch\Core\Text;
 
 /**
@@ -58,9 +59,15 @@ final readonly class Store
      * by a review panel on 2026-08-24 at ~95 bytes per entry, linear and unbounded.
      *
      * A cap turns that into a drain: each run clears up to this many and says what is left, so a
-     * backlog shrinks instead of hardening. 50 is ~4.7 KB of body, which clears the smallest limit
-     * this project's channels are documented to have while still emptying a real backlog in a few
-     * runs.
+     * backlog shrinks instead of hardening.
+     *
+     * **50 is a JUDGEMENT, and the first version of this docblock dressed it as a measurement** —
+     * it said 50 "clears the smallest limit this project's channels are documented to have", and no
+     * such limit is documented anywhere in the tree. A review panel grepped for one and found
+     * nothing. The honest basis: at the ~95 bytes per entry measured on the real `Formatter`, 50 is
+     * ~4.7 KB — small enough to sit under the body limits push services typically impose, large
+     * enough that a real backlog empties in a few runs. If a channel ever states a limit, THAT is
+     * the number to derive this from.
      */
     public const int DIGEST_BATCH = 50;
 
@@ -845,6 +852,54 @@ final readonly class Store
     // ── The cross-portal group (schema v4, ruled 2026-08-19) ──────────────────────────────────────
 
     /** The group a listing belongs to, or null if it has never clustered with anything. */
+    /**
+     * The strongest EXCLUDED tenure held by any member of this listing's dedup group, or `null`.
+     *
+     * **`scout reclassify` undid the pipeline's cluster veto without this.** The pipeline judges a
+     * cluster on its most restrictive member (`Pipeline::clusterClassification()`), but it stores
+     * each member's OWN tenure and OWN snapshot — so a vetoed survivor whose card states no tenure
+     * is left `tenure = 'UNKNOWN'`, `outcome = 'REJECT'`. `staleVerdicts()` selects on `tenure`
+     * alone, so `reclassify` picked it up, re-judged it on its own snapshot, and the `PLS` that
+     * caused the rejection was by construction OUTSIDE that snapshot. A review panel drove it end
+     * to end on 2026-08-24 with the shipped pipeline and the shipped commands: the REJECT vanished
+     * after one `reclassify`, and in the promotion case the row was pushed as a match while the
+     * store still held `PLS` under its own `group_key`.
+     *
+     * That is the invariant `reclassify` is built on, read exactly: **it runs on evidence ⊇
+     * original, never ⊂.** The cluster's evidence is part of the original.
+     *
+     * A listing that clustered alone has no `group_key` and returns `null` — the common case, and
+     * one query short-circuits it.
+     */
+    public function groupExcludedTenure(string $dedupKey): ?string
+    {
+        $group = $this->groupKey($dedupKey);
+
+        if ($group === null) {
+            return null;
+        }
+
+        $statement = $this->pdo->prepare(
+            'SELECT tenure FROM listings
+              WHERE group_key = :group AND tenure IS NOT NULL
+              ORDER BY confidence_bp DESC',
+        );
+        $statement->execute(['group' => $group]);
+
+        /** @var list<array{tenure: string}> $rows */
+        $rows = $statement->fetchAll(\PDO::FETCH_ASSOC);
+
+        foreach ($rows as $row) {
+            $tenure = Tenure::tryFrom((string) $row['tenure']);
+
+            if ($tenure !== null && $tenure->isExcluded()) {
+                return $tenure->value;
+            }
+        }
+
+        return null;
+    }
+
     public function groupKey(string $dedupKey): ?string
     {
         $statement = $this->pdo->prepare('SELECT group_key FROM listings WHERE dedup_key = :key');

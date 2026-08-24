@@ -303,6 +303,11 @@ no snapshot and is **skipped, not judged on whatever text remains** — re-judgi
 than the original saw is how a social listing becomes a match. `--since` is deliberately refused;
 see `docs/plans/finish-everything.plan.md` for why.
 
+A listing whose dedup CLUSTER holds an excluded tenure is skipped for the same reason and counted
+out loud. The pipeline judges a cluster on its most restrictive member but stores each member's own
+tenure and own snapshot, so a vetoed survivor looks merely undetermined — and re-judging it on its
+own snapshot alone is exactly the `⊂` this command forbids.
+
 `scout dump` is what makes onboarding a new source take five minutes instead of an hour, so it lands in
 milestone 1.
 

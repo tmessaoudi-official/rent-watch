@@ -219,8 +219,56 @@ Counter reset a third time.
   the author, in the checker written to catch exactly this. Splitting a compound sed script needs
   sed's own syntax; this ledger's patterns contain semicolons.
 
-**Standing conclusion for the next session, and it is the session's main finding:** across all four
-rounds, every P0 was *a correct rule with a reason nobody re-checked* — the invented cause, the
-unclaimed surface, the overclaimed guarantee. A green suite never says a word about any of them.
-The rounds are not converging on zero because each round reviews the previous round's repairs, and
-those repairs keep introducing the same class of defect they fixed.
+**Round 5 (2026-08-24, frozen at `3079941`): FINDINGS — 8 across three lenses, 1 P0. THE CAP.**
+Every finding but two was a refutation of a round-4 repair.
+
+- [2026-08-24] **The cluster veto was undone by `scout reclassify` (P0).** The pipeline judges a
+  cluster on its most restrictive member but stores each member's OWN tenure and OWN snapshot, so a
+  vetoed survivor sits at `tenure = 'UNKNOWN'`, `outcome = 'REJECT'` — and `staleVerdicts()` selects
+  on `tenure` alone. `reclassify` picked it up and re-judged it on a snapshot in which the sibling's
+  `PLS` cannot appear, which is this command's own invariant read backwards. Driven end to end
+  through the shipped pipeline and the shipped commands: the REJECT vanished after one run, and in
+  the promotion case the row was PUSHED as a match while the store still held `PLS` under its own
+  `group_key`. Fixed by `Store::groupExcludedTenure()`, checked before the classifier runs.
+- [2026-08-24] **The beat's new number was wrong in the other direction.** Round 4 replaced a
+  hard-coded `0` with `RunResult::matches` — which `Pipeline` increments when the engine JUDGES,
+  before the already-announced gate and before `delivered()`. In steady state, the ordinary mode of
+  a `--watch` deployment, every match hits `continue` and the pass sends nothing, so the beat
+  claimed the full standing count, cumulatively: ~8000 "annonces notifiées" by day two having pushed
+  none. It grew FASTEST when delivery was broken, since an unsent listing returns next pass and is
+  re-counted. `RunResult::notified` now counts confirmed deliveries.
+- [2026-08-24] **The digest cap landed on the manual drain and not on the unattended path.**
+  `Pipeline`'s own digest emission was still unbounded and all-or-nothing — measured at 120 entries
+  and 20.9 KB in one send, 4.4x the batch this project had just decided was safe. Capped, with the
+  remainder left pending rather than dropped. `announcePromotions()` was uncapped too and is now
+  bounded by the same constant.
+- [2026-08-24] **Two of my own round-4 comments were false.** The `--seed` path's *"STATED COST: a
+  genuine promotion inside the seeded set is never announced"* — `reclassify` announces it — and
+  `DIGEST_BATCH`'s justification, which claimed 50 "clears the smallest limit this project's
+  channels are documented to have" when no such limit is documented anywhere. An invented
+  measurement dressed as one, in the commit that fixed an invented measurement.
+- [2026-08-24] **The pre-v7 premise had a THIRD copy**, in `sabotage-check.sh` — the worst of the
+  three, since that comment is where a future session reads to decide whether a red case should be
+  retargeted or deleted.
+- [2026-08-24] **The veto's over-rejection cost was stated nowhere.** An over-merge used to hide one
+  flat and still notify the survivor; it now rejects both. §1-safe, and invisible, so it is written
+  in the docblock.
+- [2026-08-24] **`test-sabotage-applies.sh` was still blind to three cases** — every address-
+  prefixed script (`/private function withDetail/,$ s%…%%`) failed to parse and fell back to
+  whole-script comparison, silently, including the one genuinely compound case whose second command
+  was therefore never checked alone. The scanner now reads addresses, the fallback announces itself,
+  and the no-op self-substitution it exposed was removed.
+
+**THE CAP IS REACHED: five rounds, five resets, zero clean.** MAXIMAL requires two consecutive
+fully-clean rounds and the protocol caps the loop at five, so continuing is not a decision this
+session may take alone — `CLAUDE.md` § Certification ladder says to ask rather than silently
+proceed.
+
+**Standing conclusion, and it is the session's main finding:** across all five rounds, every P0 was
+*a correct rule with a reason nobody re-checked* — the invented cause, the unclaimed surface, the
+overclaimed guarantee. A green suite never says a word about any of them. The rounds are not
+converging on zero because each round reviews the previous round's repairs, and those repairs keep
+reintroducing the same class of defect they fixed. **That is evidence about the process, not only
+about the code:** the defects are getting narrower (round 4 found two §1 breaches, round 5 found one
+plus five stale claims), but a rule that demands two consecutive clean rounds may not terminate
+while every round is reviewing fresh work.

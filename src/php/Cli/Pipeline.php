@@ -169,6 +169,12 @@ final readonly class Pipeline
         $rejectedCount = 0;
         $rentDrops = 0;
         $undelivered = 0;
+
+        // CONFIRMED DELIVERIES, which is not `$matches`. See `RunResult::$notified` — `$matches` is
+        // incremented when the engine judges, before the already-announced gate and before the
+        // channel confirms, so in steady state it is the standing match count while the pass sends
+        // nothing at all.
+        $notified = 0;
         $rejected = [];
 
         /** @var list<array{listing: RawListing, verdict: Verdict, key: string, keys: list<string>}> $digestEntries */
@@ -289,7 +295,9 @@ final readonly class Pipeline
                         $crossedCeiling,
                     ));
 
-                    if (!$this->notifier->delivered($failures)) {
+                    if ($this->notifier->delivered($failures)) {
+                        ++$notified;
+                    } else {
                         ++$undelivered;
                     }
                 }
@@ -310,6 +318,7 @@ final readonly class Pipeline
             $failures = $this->notifier->send($this->formatter->match($listing, $verdict, $cluster['duplicates']));
 
             if ($this->notifier->delivered($failures)) {
+                ++$notified;
                 $this->store->markNotified($sighting->dedupKey, $nowIso, 'MATCH');
             } else {
                 // Left un-notified ON PURPOSE, so the next run retries. Marking it notified here is
@@ -328,11 +337,18 @@ final readonly class Pipeline
                     foreach ($entry['keys'] as $memberKey) {
                         // SEEDED AS 'MATCH', not 'DIGEST', though these are digest entries.
                         // `--seed` means "nothing currently published is news", and seeding them
-                        // as doubts would announce each one as a match the moment its tenure
-                        // resolved — which for a mixed source with a `detail_map` is most of the
-                        // catalogue, arriving over the following passes. STATED COST: a genuine
-                        // promotion inside the seeded set is never announced. That is the quiet
-                        // direction, and it is what the operator asked for by seeding.
+                        // as doubts would make the PIPELINE announce each one as a match the moment
+                        // its tenure resolved — which for a mixed source with a `detail_map` is
+                        // most of the catalogue, arriving over the following passes.
+                        //
+                        // **The cost this used to state was false.** It said "a genuine promotion
+                        // inside the seeded set is never announced"; `scout reclassify` announces
+                        // it, because `staleVerdicts()` filters on neither `notified_at` nor
+                        // `outcome` and `announcePromotions()` never consults `wasNotifiedAs()`. A
+                        // review panel demonstrated it on 2026-08-24. So the real cost is narrower:
+                        // the PIPELINE will not re-announce a seeded row, and a deliberate
+                        // `scout reclassify` still can — which is the right split, since that
+                        // command is run on purpose rather than every fifteen minutes.
                         $this->store->markNotified($memberKey, $nowIso, 'MATCH');
                     }
                 }
@@ -340,15 +356,30 @@ final readonly class Pipeline
                 // Emitted at the end of any run that produced NEW entries (Q34), rather than once a
                 // day. A third of the corpus routes here, it is the fail-closed rule's only landing
                 // zone, and a daily cadence turns "one glance, later" into "gone".
-                $failures = $this->notifier->send($this->formatter->digest($digestEntries));
+                //
+                // **CAPPED, like the manual drain.** `scout digest` was bounded first and this was
+                // not — and this is the path that runs unattended, so the reasoning applied here
+                // with more force: an unbounded all-or-nothing send whose failure marks nothing
+                // comes back next pass with MORE rows in it, and §1's only landing zone hardens
+                // into permanent undeliverability while stderr promises a retry into a log nobody
+                // reads. Measured by a review panel on 2026-08-24 at 120 entries and 20.9 KB in one
+                // send — 4.4x the batch this project had just decided was safe.
+                //
+                // The remainder is NOT lost: it keeps `outcome = 'DIGEST' AND notified_at IS NULL`,
+                // so the next pass re-collects it and `scout digest` can drain it now. Capping
+                // makes the backlog shrink; leaving it uncapped made it grow.
+                $batch = \array_slice($digestEntries, 0, Store::DIGEST_BATCH);
+                $failures = $this->notifier->send($this->formatter->digest($batch));
 
                 if ($this->notifier->delivered($failures)) {
                     // Marked only AFTER the channel confirmed. Marking first would lose the whole
                     // batch permanently on a failed send — and a digest entry, unlike a match, has
                     // no second chance: nothing else will ever surface it.
-                    foreach ($digestEntries as $entry) {
+                    foreach ($batch as $entry) {
                         $this->store->markNotified($entry['key'], $nowIso, 'DIGEST');
                     }
+
+                    $notified += \count($batch);
                 } else {
                     ++$undelivered;
                 }
@@ -369,6 +400,7 @@ final readonly class Pipeline
             duplicates: $duplicates,
             rentDrops: $rentDrops,
             undelivered: $undelivered,
+            notified: $notified,
             unencodable: $unencodable,
             errors: $errors,
             rejected: $rejected,
@@ -440,6 +472,15 @@ final readonly class Pipeline
      *
      * Ties go to the highest confidence, and the survivor wins an exact tie by being the default —
      * both are excluded in that case, so the choice only affects which reasons are shown.
+     *
+     * **STATED COST, and it is a real one: an OVER-MERGE now costs both flats, not one.** `Dedup`'s
+     * documented failure mode is merging two different flats on two corroborating facts; before
+     * this rule that hid the absorbed one and still notified the survivor, and now an eligible LLI
+     * merged with a stranger carrying `PLS` is silently rejected with it. Demonstrated by a review
+     * panel on 2026-08-24 (same commune, same rooms, rents within `Dedup::RENT_TOLERANCE_EUR`, one
+     * surface unstated). The direction is the one §1 requires — a missed listing is annoying, a
+     * social-housing false positive is not — but silent over-rejection is invisible by definition,
+     * so it is written here rather than left to be discovered.
      *
      * @param list<RawListing>                                                                            $members
      * @param array<int, array{sighting: \RentWatch\Store\Sighting, classification: \RentWatch\Core\Classification}> $observed

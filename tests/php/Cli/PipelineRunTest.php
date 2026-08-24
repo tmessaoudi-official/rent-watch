@@ -727,6 +727,68 @@ final class PipelineRunTest extends TestCase
         );
     }
 
+    /**
+     * The pipeline's own digest emission is CAPPED, like the manual drain.
+     *
+     * `scout digest` was bounded first and this was not — and this is the path that runs
+     * unattended, so the reasoning applies here with more force: an unbounded all-or-nothing send
+     * whose failure marks nothing comes back next pass with MORE rows in it, and §1's only landing
+     * zone hardens into permanent undeliverability while stderr promises a retry into a log nobody
+     * reads. Measured by a review panel on 2026-08-24 at 120 entries and 20.9 KB in one send —
+     * 4.4x the batch this project had just decided was safe.
+     *
+     * The remainder is not lost: it keeps `outcome = 'DIGEST' AND notified_at IS NULL`, so the next
+     * pass re-collects it and `scout digest` can drain it now.
+     */
+    public function testThePipelineDigestIsCappedAndTheRemainderStaysPending(): void
+    {
+        $store = $this->store();
+        $channel = new RecordingChannel();
+
+        $over = Store::DIGEST_BATCH + 12;
+        $listings = [];
+
+        for ($i = 0; $i < $over; $i++) {
+            $listings[] = new RawListing(
+                sourceName: 'fake',
+                externalId: 'D-' . $i,
+                title: 'T4 Sartrouville',
+                description: '4 pieces de 88 m2.',
+                commune: 'Sartrouville',
+                postcode: '78500',
+                rentCc: 1450,
+                surfaceM2: 88.0,
+                rooms: 4,
+            );
+        }
+
+        $result = $this->pipeline($store, new Notifier([$channel]))->runOnce(
+            [new FakeSource('fake', listings: $listings, mixedTenure: true)],
+            self::NOW,
+        );
+
+        self::assertSame($over, $result->digested, 'every one of them is judged doubtful');
+
+        $digests = array_values(array_filter(
+            $channel->sent,
+            static fn (Notification $n): bool => $n->kind === NotificationKind::DIGEST,
+        ));
+        self::assertCount(1, $digests, 'one digest notification per pass');
+        self::assertCount(
+            Store::DIGEST_BATCH,
+            $digests[0]->reasons,
+            'the unattended path must be bounded too — an all-or-nothing send that grows on every '
+            . 'failure hardens the à vérifier bin into permanent undeliverability',
+        );
+
+        // The overflow is still pending, so the next pass or `scout digest` reaches it.
+        self::assertCount(
+            $over - Store::DIGEST_BATCH,
+            $store->pendingDigest(1000),
+            'the remainder must stay pending — capping may not silently drop a listing',
+        );
+    }
+
     // ---------------------------------------------------------------- scoring inputs
 
     public function testFreshnessIsMeasuredFromFIRSTSeenNotFromEverySighting(): void

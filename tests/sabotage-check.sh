@@ -1263,6 +1263,26 @@ run_sabotage "a capped digest stops naming the remainder (the bin reads as empty
   src/php/Cli/Scout.php \
   's%if (\$waiting > count(\$rows)) {%if (false) {%'
 
+# --- the cluster veto must survive every path -----------------------------------------------------
+
+run_sabotage "reclassify stops consulting the group (it resurrects a listing the cluster vetoed)" \
+  src/php/Cli/Scout.php \
+  's%\$groupVeto = \$store->groupExcludedTenure(\$key);%\$groupVeto = null;%'
+
+run_sabotage "the group veto reads eligible tenures as excluded (every clustered row is skipped)" \
+  src/php/Store/Store.php \
+  's%if (\$tenure !== null && \$tenure->isExcluded()) {%if (\$tenure !== null) {%'
+
+# --- the beat reports DELIVERIES, and every announcement path is bounded ---------------------------
+
+run_sabotage "the beat counts verdicts again instead of deliveries (steady state reads as busy)" \
+  src/php/Cli/Scout.php \
+  's%\$matchesOut = \$result->notified;%\$matchesOut = \$result->matches;%'
+
+run_sabotage "the pipeline digest loses its cap (the unattended path grows on every failure)" \
+  src/php/Cli/Pipeline.php \
+  's%\$batch = \\array_slice(\$digestEntries, 0, Store::DIGEST_BATCH);%\$batch = \$digestEntries;%'
+
 run_sabotage "a failed fetch stops being recorded as a failed run" \
   src/php/Cli/Pipeline.php \
   's%\$this->store->recordRun(\$source->name(), 0, false, \$e->getMessage(), \$nowIso, \$durationMs);%%'
@@ -2150,10 +2170,19 @@ run_sabotage "the judged outcome is never recorded" \
 # judged doubtful, undelivered, and then delisted, so no later pass ever re-offers it. Every failure
 # below leaves that listing exactly where it was — unannounced, with nothing anywhere saying so.
 
-# THE ONE THAT MATTERS. Every row in the standing backlog predates schema v7, so `evidence_json` is
-# NULL for all of them by design. A digest that skips evidence-less rows therefore skips precisely
-# the backlog it was ruled to rescue — and reports "aucune annonce en attente" while doing it, which
-# is the silent failure this whole command is the fix for.
+# THE ONE THAT MATTERS. An evidence-less row in the standing backlog is a listing whose own payload
+# could not be encoded — a live source fault, not an old row. A digest that skips those skips
+# precisely what it was ruled to rescue, and reports "aucune annonce en attente" while doing it,
+# which is the silent failure this whole command is the fix for.
+#
+# **This comment used to say those rows "predate schema v7", and that is impossible** —
+# `pendingDigest()` filters on `outcome`, itself a v7 column that is not backfilled, so a genuine
+# pre-v7 row has `outcome = NULL` and is never returned at all. The premise was refuted in round 1
+# and corrected in `Scout.php`, then in `CLAUDE.md` and `RunResult.php` in round 4; this THIRD copy
+# survived to round 5. It matters most here of all three: this is where a future session reads to
+# decide whether a red case should be retargeted or deleted, and believing it would lead to
+# widening `pendingDigest()` to reach pre-v7 rows — a §1 risk that was explicitly refused, since
+# nothing stored distinguishes a pre-v7 digest from a pre-v7 rejection.
 run_sabotage "the on-demand digest skips the very rows it exists to rescue" \
   src/php/Cli/Scout.php \
   's%\$listing ??= new RawListing(%if (\$listing === null) { continue; }\n            \$listing ??= new RawListing(%'
@@ -2177,8 +2206,8 @@ run_sabotage "an unreadable snapshot is swallowed instead of counted" \
   's%++\$unreadable;%%'
 
 # A placeholder outranking a stated fact. `commune inconnue` is a label for the ABSENCE of
-# information; printed while a real title sits unused it turns every rescued pre-v7 row into an
-# entry nobody can identify — the display twin of the miss the command was built to fix.
+# information; printed while a real title sits unused it turns every rescued row into an entry
+# nobody can identify — the display twin of the miss the command was built to fix.
 run_sabotage "an unlocated listing loses its title to the placeholder" \
   src/php/Core/Notify/Formatter.php \
   "s%\$where = \$where === '' ? trim(\$listing->title) : \$where;%%"
@@ -2361,7 +2390,7 @@ run_sabotage "the offline tripwire starts refusing loopback too" \
 # never supplied. Both lines of defence were vacuous for the same guarantee, in different ways.
 run_sabotage "an unfoldable commune aborts the pass from rankOf and from Dedup" \
   src/php/Config/Criteria.php \
-  's%\$folded = Text::fold(\$raw);%&%; /\$folded = Text::fold(\$raw);/,+1 s%catch (MalformedText)%catch (\\LogicException)%'
+  '/\$folded = Text::fold(\$raw);/,+1 s%catch (MalformedText)%catch (\\LogicException)%'
 
 # The two-surface split in `excludedBy()`. Folding both in ONE try silently disabled
 # `exclude_title_patterns` on a perfectly READABLE title whenever the description was unfoldable —
