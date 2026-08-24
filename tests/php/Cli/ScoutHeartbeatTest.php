@@ -587,6 +587,62 @@ final class ScoutHeartbeatTest extends TestCase
         );
     }
 
+    /**
+     * The beat's OWN failure must not mask the pass's.
+     *
+     * *"A liveness signal that can replace the diagnosis is worse than one that is late."* The beat
+     * runs in the pass's `finally`, so an exception raised there propagates INSTEAD of the pass's —
+     * `WatchLoop::onError` would then report the beat's cause as the pass's, on the one channel this
+     * repo says can be believed. The `catch` is what prevents it, and round 7 showed nothing pinned
+     * it: a reviewer turned the catch into `throw $beatFailure;` — the exact stated failure — and
+     * the full suite stayed green. This is the third defect in the same six lines across rounds 2–4
+     * (silence, then false-healthy, then the wrong number); the catch added to end that series was
+     * the one part nothing checked.
+     *
+     * **Structural, and the compromise is stated** — the same trade this file already makes for
+     * `testTheBeatIsEmittedFromAFinallySoAThrowingPassCannotSkipIt`, for the same reason. A
+     * behavioural test needs the pass AND the beat to fail with DISTINGUISHABLE causes in one
+     * process, and every clean trigger collides: the beat's two throwing surfaces are
+     * `Store::health()` (reads `source_runs`, which `Pipeline::recordRun()` writes, so breaking it
+     * fails the pass first with the same message) and `sourceNames()` (re-reads
+     * `config/sources.json`, which startup already read, so a test cannot corrupt it after the loop
+     * begins). Asserting the structure keeps the guarantee from being silently undone.
+     *
+     * It asserts the catch BODY, not merely that a catch exists: the reviewer's mutation kept the
+     * `catch (\Throwable $beatFailure)` line intact and changed what is inside it.
+     */
+    public function testTheBeatsOwnFailureIsCaughtRatherThanReplacingThePasssDiagnosis(): void
+    {
+        $source = file_get_contents(dirname(__DIR__, 3) . '/src/php/Cli/Scout.php');
+        self::assertIsString($source);
+
+        $watchLoop = strstr($source, 'new WatchLoop(');
+        self::assertIsString($watchLoop, 'the watch loop construction moved — this check must follow it');
+        $closure = substr($watchLoop, 0, strpos($watchLoop, 'pacer: $pacer,') ?: strlen($watchLoop));
+
+        $catchAt = strpos($closure, 'catch (\Throwable $beatFailure)');
+        self::assertIsInt(
+            $catchAt,
+            'the beat must be attempted inside its own try/catch, or its failure replaces the pass\'s',
+        );
+
+        $body = substr($closure, $catchAt);
+        $body = substr($body, 0, strpos($body, "\n                    }") ?: strlen($body));
+
+        self::assertStringContainsString(
+            'battement de cœur non émis',
+            $body,
+            'the beat failure has to be REPORTED — swallowing it silently would trade one hidden '
+            . 'failure for another',
+        );
+        self::assertStringNotContainsString(
+            'throw',
+            $body,
+            'the catch must not rethrow: that is the masking this guarantee exists to prevent, and '
+            . 'it is exactly the mutation a round-7 reviewer made with the suite staying green',
+        );
+    }
+
     /** @return array{code: int, out: string, err: string} */
     private function watch(): array
     {

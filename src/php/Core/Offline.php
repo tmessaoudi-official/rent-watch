@@ -52,7 +52,7 @@ final class Offline
     /**
      * The same refusal for a target that has no url — a bare `host:port`, or a local MTA handoff.
      *
-     * **There are FOUR egress points in this tree, not one**, and the first version of this class
+     * **There are FIVE egress points in this tree, not one**, and the first version of this class
      * guarded two: `CurlHttpClient` and `NtfyChannel`. `SmtpTransport` and `ImapMailbox` open raw
      * sockets with `stream_socket_client()` and `SendmailTransport` hands to `mail()`, so all three
      * escaped — while this docblock claimed *every* outbound request was refused. A review panel
@@ -69,6 +69,17 @@ final class Offline
         // The bare host may carry a port (`mail.example.test:993`) and `parse_url` will not read it
         // as a host without a scheme, so one is supplied. Anything unparseable falls through to the
         // literal comparison, which fails closed.
+        //
+        // A BARE IPv6 literal has to be bracketed first: `parse_url('//::1')` returns the host `:`,
+        // not `::1`, so the loopback exemption silently missed it and a wire test bound to `::1`
+        // was refused. Fail-closed, so it was never a leak — but `isLoopbackHost('::1')` says true
+        // and this said false, which is precisely the two-predicates-disagreeing shape round 7
+        // found between this class and `SmtpTransport`. Found by the equivalence test written for
+        // that finding.
+        if (!str_contains($host, '://') && !str_contains($host, '[') && substr_count($host, ':') > 1) {
+            $host = '[' . $host . ']';
+        }
+
         if (self::refusal(str_contains($host, '://') ? $host : '//' . $host) === null) {
             return null;
         }
@@ -108,6 +119,25 @@ final class Offline
             return false;
         }
 
+        return self::isLoopbackHost($host);
+    }
+
+    /**
+     * The same question asked of a BARE HOST, for callers that never had a URL.
+     *
+     * `SmtpTransport` is one: it holds `SMTP_HOST` and gates `SMTP_SECURITY=none` on it. It carried
+     * a private copy of this list until round 7, and the copy had already drifted — it also
+     * admitted `mailhog` and `mailpit`, two strings that appear nowhere else in the repo (not
+     * `.env.example`, not `compose.yaml`, not a doc). The class docblock above says a second copy
+     * "would be one edit away from disagreeing with the first about what loopback means, and the
+     * disagreement would be invisible until it mattered". It was, and it did.
+     *
+     * Split rather than merged because the two inputs are genuinely different shapes: parsing
+     * `mailpit` as a URL yields no host at all, so a bare host handed to {@see isLoopback()} reads
+     * as third-party. One list, two entry points.
+     */
+    public static function isLoopbackHost(string $host): bool
+    {
         return in_array(strtolower(trim($host, '[]')), ['127.0.0.1', 'localhost', '::1'], true);
     }
 }

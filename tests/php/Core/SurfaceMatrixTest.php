@@ -37,8 +37,11 @@ use RentWatch\Core\TenureClassifier;
  *
  * The source is deliberately the WORST case: pure (so the mixed-tenure fail-closed rule cannot
  * rescue anything) and declaring LLI (so the tier-5 default actively pushes toward MATCH). That is
- * In'li, a real configured source, and it is the shape every §1 breach of rounds 4–7 was
- * demonstrated on.
+ * a profile the config schema permits, and it is the shape every §1 breach of rounds 4–7 was
+ * demonstrated on. It used to name In'li as a real configured example of it; that stopped being
+ * true when hydration proved In'li is not pure LLI (the shipped block is `mixed_tenure: true`, and
+ * no enabled source is `false` today). The profile stays worst-case either way — a source that
+ * cannot exist would weaken nothing here, since every real profile is strictly safer.
  */
 #[CoversClass(TenureClassifier::class)]
 final class SurfaceMatrixTest extends TestCase
@@ -346,8 +349,8 @@ final class SurfaceMatrixTest extends TestCase
      *
      * Pure means `mixedTenure: false`, so the fail-closed downgrade cannot rescue a bad verdict.
      * `defaultTenure: LLI` means tier 5 actively pushes toward an eligible answer. Every §1 breach
-     * demonstrated in rounds 4 through 7 was reproduced on exactly this profile, and it is a real
-     * configured source (In'li) rather than a contrived one.
+     * demonstrated in rounds 4 through 7 was reproduced on exactly this profile. It is named `inli`
+     * for history, not because In'li still has this shape — see the class docblock.
      */
     private static function worstCaseSource(): SourceProfile
     {
@@ -383,6 +386,14 @@ final class SurfaceMatrixTest extends TestCase
      * Asserted rather than trusted, because the surface list was hand-written and a review found it
      * spanned ten of fifteen while its docblock said "every surface a RawListing presents". A
      * property added to the model now fails this until the matrix is told how to reach it.
+     *
+     * **And for a while it did not.** The condition carried a second clause,
+     * `&& !str_contains($covered, 'title')` — and `$covered` is built from `surfaces()`, which
+     * hard-codes a key called `title`. So the clause was ALWAYS false, `$missing` could never be
+     * non-empty, and the sentence above was a promise nothing kept: round 7 added a real unread
+     * string property to `RawListing` and this test stayed green while the snapshot reflection
+     * guard caught it. The matrix is the structural §1 control that eight review rounds produced,
+     * and the mechanism that makes it grow with the model was inert. Pinned in the ledger now.
      */
     public function testTheSurfaceListCoversEveryStringPropertyOfTheModel(): void
     {
@@ -402,8 +413,7 @@ final class SurfaceMatrixTest extends TestCase
                 continue;
             }
 
-            if (!str_contains(strtolower($covered), strtolower($parameter->getName()))
-                && !str_contains($covered, 'title')) {
+            if (!str_contains(strtolower($covered), strtolower($parameter->getName()))) {
                 $missing[] = $parameter->getName();
             }
         }

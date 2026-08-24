@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace RentWatch\Tests\Core;
 
 use PHPUnit\Framework\TestCase;
+use RentWatch\Config\Criteria;
 use RentWatch\Core\Dedup;
 use RentWatch\Core\RawListing;
 
@@ -232,6 +233,44 @@ final class DedupTest extends TestCase
         sort($seen);
         self::assertSame(12, count($seen));
         self::assertSame(count($seen), count(array_unique($seen)), 'a listing appeared in two clusters');
+    }
+
+    /**
+     * An UNFOLDABLE commune is an unknown one, not a shared one.
+     *
+     * `Criteria::communeKey()` was changed this session to return `''` instead of throwing on
+     * `MalformedText`, and the commit's own comment says the trigger is common — *"`Text` refuses
+     * any undecoded HTML entity, which is commoner in a scraped payload than cp1252"*. What made
+     * that safe was `Dedup` refusing to cluster on the empty key, and nothing pinned it: a reviewer
+     * deleted the `$communeA === ''` clause in round 7 and the whole suite stayed green while two
+     * flats in different DEPARTMENTS merged.
+     *
+     * The blast radius grew twice inside the same range. `communeKey()` widened the `''`
+     * population, and the cluster veto became DURABLE and permanent — a flat once mis-merged with
+     * an excluded stranger is rejected for the rest of the store's life, because `group_key` is
+     * never cleared. So this guard's failure mode is now permanent silent §1 over-rejection, which
+     * is invisible by definition: nothing arrives to notice.
+     *
+     * The ledger's existing case collapses all four clauses at once, so its detection comes from
+     * the `null` half and the `''` clause could rot alone while the case still reported `ok` —
+     * exactly the compound-rot failure `test-sabotage-applies.sh` was rewritten to prevent, one
+     * level down. This test pins the clause on its own.
+     */
+    public function testTwoUnFOLDABLECommunesAreTwoUnknownsAndNeverTheSameFlat(): void
+    {
+        // Different towns, different departments, and both carry an undecoded HTML entity — so
+        // `communeKey()` returns '' for each and a naive equality reads them as identical.
+        $a = $this->listing('seloger', 'u-1', commune: 'Ch&acirc;teau-Thierry');
+        $b = $this->listing('pap', 'u-2', commune: 'Bourg&ndash;la&ndash;Reine');
+
+        self::assertSame('', Criteria::communeKey((string) $a->commune), 'the premise: unfoldable');
+        self::assertSame('', Criteria::communeKey((string) $b->commune), 'and so is the other');
+
+        self::assertNull(
+            $this->reason($a, $b),
+            'two communes that cannot be normalised are two UNKNOWNS. Merging them hides a flat, '
+            . 'and since the cluster veto is durable the mis-merge would reject both for ever',
+        );
     }
 
     public function testClusteringDoesNotCollapseAWholeResultSet(): void

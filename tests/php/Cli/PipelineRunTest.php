@@ -878,6 +878,102 @@ final class PipelineRunTest extends TestCase
     }
 
     /**
+     * A DELIVERED match marks the survivor and nobody else.
+     *
+     * This is a recorded ruling — *"it must not be 'fixed' by marking members notified on delivery:
+     * that is group-scoped suppression, and an over-merge would then hide a real flat permanently
+     * and silently"* — and until round 7 nothing pinned it. A reviewer made exactly the forbidden
+     * change, on this path and on the digest path separately, and the full suite stayed green both
+     * times.
+     *
+     * It is also the change a future session is MOST likely to make, for two reasons both present
+     * in this file: the `--seed` path twelve lines above does mark every member and IS pinned, so
+     * the asymmetry reads as an oversight; and the live behaviour it would "fix" looks like a bug —
+     * a survivorship flip really does push one grouped flat twice, which is the deliberate
+     * under-merge-safe direction.
+     *
+     * `StoreGroupTest::testAnOverMergedGroupCannotSuppressANotification` does not cover this: it
+     * asserts the STORE offers no group-scoped route, and the forbidden change is in the pipeline.
+     * The failure guarded here is the invisible one — an over-merged pair whose absorbed member is
+     * a genuinely different flat is then never notified, ever, and nothing arrives to say so
+     * (hard rule 8).
+     */
+    public function testADeliveredMatchMarksOnlyTheSurvivorNeverTheWholeCluster(): void
+    {
+        $store = $this->store();
+        $channel = new RecordingChannel();
+
+        $a = $this->listing('m-1', ['source' => 'inli']);
+        $b = $this->listing('m-2', ['source' => 'cdc']);
+
+        $this->pipeline($store, new Notifier([$channel]))->runOnce(
+            [
+                new FakeSource('inli', listings: [$a]),
+                new FakeSource('cdc', listings: [$b]),
+            ],
+            self::NOW,
+        );
+
+        $keyA = $store->dedupKey($a);
+        $keyB = $store->dedupKey($b);
+        self::assertNotSame($keyA, $keyB, 'two distinct rows, or this test proves nothing');
+        self::assertSame(
+            $keyA === $keyB ? 2 : 1,
+            (int) $store->wasNotified($keyA) + (int) $store->wasNotified($keyB),
+            'exactly ONE of the pair may be marked notified. Marking both is group-scoped '
+            . 'suppression: if the merge was wrong, the other flat is silenced for ever',
+        );
+    }
+
+    /**
+     * The same ruling on the digest path, which a reviewer broke independently.
+     *
+     * A digest entry carries `keys` (every clustered member) as well as `key` (the survivor), so
+     * the forbidden loop is even easier to write here than on the match path.
+     */
+    public function testADeliveredDigestMarksOnlyTheEntryKeyNeverEveryMember(): void
+    {
+        $store = $this->store();
+        $channel = new RecordingChannel();
+
+        // No tenure signal ANYWHERE — not in the title either, which is why these are built here
+        // rather than through listing(), whose title says "logement intermediaire". A mixed source
+        // with no signal is fail-closed UNKNOWN, so both go to the digest rather than to a match.
+        $make = static fn (string $source, string $id): RawListing => new RawListing(
+            sourceName: $source,
+            externalId: $id,
+            title: 'T4 Sartrouville',
+            description: '4 pieces de 88 m2, ascenseur.',
+            url: 'https://example.test/' . $id,
+            commune: 'Sartrouville',
+            postcode: '78500',
+            rentCc: 1450,
+            surfaceM2: 88.0,
+            rooms: 4,
+        );
+        $a = $make('inli', 'd-1');
+        $b = $make('cdc', 'd-2');
+
+        $result = $this->pipeline($store, new Notifier([$channel]))->runOnce(
+            [
+                new FakeSource('inli', listings: [$a], mixedTenure: true),
+                new FakeSource('cdc', listings: [$b], mixedTenure: true),
+            ],
+            self::NOW,
+        );
+
+        self::assertGreaterThan(0, $result->digested, 'the pair must actually reach the digest');
+
+        $keyA = $store->dedupKey($a);
+        $keyB = $store->dedupKey($b);
+        self::assertSame(
+            1,
+            (int) $store->wasNotified($keyA) + (int) $store->wasNotified($keyB),
+            'a delivered digest marks the entry key, never every clustered member',
+        );
+    }
+
+    /**
      * The counterweight: a persisted group holding only ELIGIBLE tenures must not veto.
      *
      * Without this the durable veto above is one character from rejecting every clustered listing

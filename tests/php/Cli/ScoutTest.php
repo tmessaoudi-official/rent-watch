@@ -894,6 +894,79 @@ final class ScoutTest extends TestCase
         self::assertStringNotContainsString('aucun canal distant', $r['err']);
     }
 
+    /**
+     * The pipeline's digest cap must NAME its remainder to the operator.
+     *
+     * Both sibling caps assert their line by string — `scout digest`'s *"N autre(s) en attente"* and
+     * `reclassify`'s *"N promotion(s) au-delà du lot"*. This one asserted only the `RunResult`
+     * field, so round 7 deleted the whole `if` block an operator actually reads and the full suite
+     * stayed green. It is the highest-traffic of the three: it runs unattended every fifteen
+     * minutes, and it was the only one whose remainder could vanish silently.
+     */
+    public function testThePipelineNamesTheDigestRemainderToTheOperator(): void
+    {
+        $over = Store::DIGEST_BATCH + 7;
+        $root = $this->doubtfulRoot($over);
+
+        // Seeded first (Q36 refuses to notify on an empty seen-set), then everything is new again.
+        $this->scoutIn($root, ['run', '--seed', '--source=bulk']);
+        $this->republishEverything();
+
+        $r = $this->scoutIn($root, ['run', '--once', '--source=bulk']);
+
+        self::assertStringContainsString('à vérifier non émise(s)', $r['err']);
+        self::assertStringContainsString((string) ($over - Store::DIGEST_BATCH), $r['err']);
+        self::assertStringContainsString('scout digest', $r['err'], 'and it must say how to drain it');
+    }
+
+    /** A temp root carrying one fixture source of `$count` listings with NO tenure signal at all. */
+    private function doubtfulRoot(int $count): string
+    {
+        $items = [];
+        for ($i = 0; $i < $count; ++$i) {
+            $items[] = [
+                'id' => 'bulk-' . $i,
+                'title' => 'T4 Sartrouville',
+                'url' => 'https://example.test/bulk-' . $i,
+                'city' => 'Sartrouville',
+                'zipCode' => '78500',
+                // Distinct rent and surface per item so Dedup cannot cluster them into one entry.
+                'rent' => ['total' => 1400 + $i * 7],
+                'surface' => 80.0 + $i,
+                'rooms' => 4,
+                'description' => 'Appartement lumineux, cuisine equipee.',
+            ];
+        }
+
+        $root = $this->tempRoot(sources: ['bulk' => [
+            'enabled' => true,
+            'family' => 'institutional',
+            'type' => 'fixture',
+            'mixed_tenure' => true,
+            'fixture' => 'payload.json',
+            'items_path' => 'results.items',
+            'map' => [
+                'ref' => 'id',
+                'title' => 'title',
+                'url' => 'url',
+                'commune' => 'city',
+                'cp' => 'zipCode',
+                'rent' => 'rent.total',
+                'charges_included' => true,
+                'surface' => 'surface',
+                'rooms' => 'rooms',
+                'description' => 'description',
+            ],
+        ]]);
+
+        file_put_contents(
+            $root . '/payload.json',
+            json_encode(['results' => ['items' => $items]], JSON_THROW_ON_ERROR),
+        );
+
+        return $root;
+    }
+
     /** @param list<string> $channels */
     private function fixtureRootWithChannels(array $channels): string
     {

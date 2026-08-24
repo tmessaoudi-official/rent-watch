@@ -751,6 +751,40 @@ final class NetworkAdaptersTest extends TestCase
         self::assertNull((new SmtpTransport('localhost', 1025, security: 'none'))->check());
     }
 
+    /**
+     * The reviewer's exact scenario, round 7.
+     *
+     * `SmtpTransport` carried a PRIVATE `isLoopback()` that had drifted from `Offline`'s: it also
+     * admitted `mailhog` and `mailpit`, two strings appearing nowhere else in the repo — not
+     * `.env.example`, not `compose.yaml`, not a doc. So `SMTP_HOST=mailhog SMTP_SECURITY=none` put
+     * `AUTH LOGIN` and `SMTP_PASSWORD` on a compose network in the clear, straight past the guard
+     * whose entire subject is that. `Offline`'s own docblock says a second copy "would be one edit
+     * away from disagreeing with the first about what loopback means, and the disagreement would be
+     * invisible until it mattered" — while that second copy sat in the tree, already disagreeing.
+     */
+    public function testSmtpRefusesPlaintextCredentialsToACatcherHostnameThatIsNotLoopback(): void
+    {
+        foreach (['mailhog', 'mailpit'] as $host) {
+            $problem = (new SmtpTransport($host, 1025, 'user', 'pw', security: 'none'))->check();
+
+            self::assertNotNull($problem, $host . ' is not a loopback address in any network sense');
+            self::assertStringContainsString('loopback', (string) $problem);
+        }
+    }
+
+    /**
+     * And the counterweight, which is why the fix is not simply deleting those two names.
+     *
+     * A local mail catcher needs no AUTH. With no `SMTP_USER` there is no credential to expose, so
+     * what the guard was really protecting is the PAIR — plaintext AND a credential — not the host
+     * on its own. Refusing here would break the one setup those two names were added for, and
+     * loudly, for no gain.
+     */
+    public function testSmtpPermitsPlaintextToANonLoopbackHostWhenNoCredentialIsSent(): void
+    {
+        self::assertNull((new SmtpTransport('mailpit', 1025, security: 'none'))->check());
+    }
+
     public function testSmtpRefusesAUserWithNoPassword(): void
     {
         $problem = (new SmtpTransport('smtp.example.test', 587, 'user', ''))->check();

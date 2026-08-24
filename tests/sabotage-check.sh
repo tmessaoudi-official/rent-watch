@@ -1533,7 +1533,7 @@ run_sabotage "only the band's 20000 CEILING is removed (a sale price parses as a
 
 run_sabotage "SMTP permits plaintext credentials to a remote host" \
   src/php/Core/Notify/SmtpTransport.php \
-  "s%if (\\\$this->security === 'none' \&\& !self::isLoopback(\\\$this->host)) {%if (false) {%"
+  's%!Offline::isLoopbackHost(\$this->host)%false%'
 
 run_sabotage "SMTP continues without STARTTLS when the server does not offer it" \
   src/php/Core/Notify/SmtpTransport.php \
@@ -2524,6 +2524,54 @@ run_sabotage "delivered() goes back to counting channels instead of naming them"
 run_sabotage "a run with no remote channel stops saying so" \
   src/php/Cli/Scout.php \
   's%        if (!\$seed \&\& !\$notifier->hasRemoteChannel()) {%        if (false) {%'
+
+# ── group-scoped suppression is forbidden, on BOTH delivery paths ─────────────────────────────
+#
+# Recorded ruling: a delivered announcement marks the SURVIVOR, never every clustered member —
+# "an over-merge would then hide a real flat permanently and silently". Nothing pinned it until
+# round 7, when a reviewer made exactly the forbidden change on each path in turn and the whole
+# suite stayed green both times. It is also the likeliest change a future session makes: `--seed`
+# twelve lines above marks every member and IS pinned, so the asymmetry reads as an oversight.
+run_sabotage "a delivered match marks the whole cluster, silencing an over-merged flat for ever" \
+  src/php/Cli/Pipeline.php \
+  "s%\\\$this->store->markNotified(\\\$sighting->dedupKey, \\\$nowIso, 'MATCH');%foreach (\\\$clusterKeys[spl_object_id(\\\$listing)] as \\\$mk) { \\\$this->store->markNotified(\\\$mk, \\\$nowIso, 'MATCH'); }%"
+
+# The digest entry carries `keys` as well as `key`, so the forbidden loop is easier to write here.
+run_sabotage "a delivered digest marks every clustered member instead of the entry key" \
+  src/php/Cli/Pipeline.php \
+  "s%\\\$this->store->markNotified(\\\$entry\\['key'\\], \\\$nowIso, 'DIGEST');%foreach (\\\$entry['keys'] as \\\$mk) { \\\$this->store->markNotified(\\\$mk, \\\$nowIso, 'DIGEST'); }%"
+
+# ── round 7 P1s: guarantees that were real and pinned by nothing ──────────────────────────────
+#
+# `Offline` is the single funnel for all five egress points, and each of the five guards IS pinned.
+# What nothing asked was whether the predicate underneath them decides correctly. Weakened to a
+# substring search, `https://evil.test/?x=127.0.0.1` becomes a permitted request — and the class's
+# own docblock says the guarantee is "two putenv lines away from a public POST".
+run_sabotage "the offline tripwire searches the url instead of parsing its host" \
+  src/php/Core/Offline.php \
+  's%return self::isLoopbackHost(\$host);%return true;%'
+
+# An UNFOLDABLE commune is an unknown one, not a shared one. `communeKey()` was changed this session
+# to return '' rather than throw, and what made that safe is this clause. The ledger's older Dedup
+# case collapses all four clauses at once, so its detection comes from the `null` half and this one
+# could rot alone — the compound-rot failure test-sabotage-applies.sh was rewritten to prevent.
+run_sabotage "two unfoldable communes are treated as the same commune" \
+  src/php/Core/Dedup.php \
+  "s%|| \$communeA === '' %%"
+
+# "A liveness signal that can replace the diagnosis is worse than one that is late." The beat runs
+# in the pass's finally, so a throwing beat propagates INSTEAD of the pass's own exception and
+# WatchLoop::onError reports the wrong cause on the one channel this repo says can be believed.
+run_sabotage "the beat's own failure masks the pass's diagnosis" \
+  src/php/Cli/Scout.php \
+  's%\$this->warn(.battement de cœur non émis.*$%throw \$beatFailure;%'
+
+# The highest-traffic of the three caps — it runs unattended every fifteen minutes — and the only
+# one whose remainder could be deleted with the whole suite green. Both siblings assert their line
+# by string; this one asserted only the RunResult field.
+run_sabotage "the pipeline stops naming the digest remainder to the operator" \
+  src/php/Cli/Scout.php \
+  's%if (\$result->digestOverflow > 0) {%if (false) {%'
 
 # THE TALLY LIVES HERE, BELOW EVERY CASE, and that position is load-bearing rather than tidy.
 # It sat mid-file twice: once on 2026-08-20 (295 printed for 303 cases) and again from 2026-08-23,

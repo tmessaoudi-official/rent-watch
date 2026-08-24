@@ -43,11 +43,19 @@ final readonly class SmtpTransport implements MailTransport
         if (!in_array($this->security, ['tls', 'starttls', 'none'], true)) {
             return 'SMTP_SECURITY must be tls, starttls or none, got ' . var_export($this->security, true);
         }
-        if ($this->security === 'none' && !self::isLoopback($this->host)) {
+        if ($this->security === 'none' && $this->user !== '' && !Offline::isLoopbackHost($this->host)) {
             // Refused rather than warned. A credential on a plaintext connection to a remote host is
             // a credential on the wire, and "the user chose it" is not a reason to help.
-            return 'SMTP_SECURITY=none is only permitted for a loopback host — refusing to send '
-                . 'credentials in the clear to ' . $this->host;
+            //
+            // Two things about this condition were wrong until round 7. It called a PRIVATE copy of
+            // `isLoopback` that had drifted from `Offline`'s — the copy also admitted `mailhog` and
+            // `mailpit`, undocumented strings appearing nowhere else in the repo, so
+            // `SMTP_HOST=mailhog SMTP_SECURITY=none` put `AUTH LOGIN` and `SMTP_PASSWORD` on a
+            // compose network in the clear, past the guard whose whole subject is that. And it
+            // refused on the HOST alone: a local mail catcher needs no AUTH, and with no user there
+            // is no credential to expose, so what it was really guarding is the pair.
+            return 'SMTP_SECURITY=none is only permitted for a loopback host, or with no SMTP_USER '
+                . '— refusing to send credentials in the clear to ' . $this->host;
         }
         if ($this->user !== '' && $this->password === '') {
             return 'SMTP_USER is set but SMTP_PASSWORD is empty';
@@ -154,10 +162,10 @@ final readonly class SmtpTransport implements MailTransport
             'allow_self_signed' => false,
         ]]);
 
-        // The offline tripwire, on the second of four egress points. This one opens a raw socket, so
+        // The offline tripwire, on the second of five egress points. This one opens a raw socket, so
         // it never passed `CurlHttpClient`'s funnel — and it sends `AUTH LOGIN` with `SMTP_PASSWORD`
         // to a host read from `.env`. See `Core\Offline`, which claimed to cover "every outbound
-        // request" while covering two of the four.
+        // request" while covering two of the five.
         $refusal = Offline::refusalForHost($this->host . ':' . $this->port, 'the SMTP server');
         if ($refusal !== null) {
             throw new ChannelError('email', $refusal);
@@ -280,8 +288,4 @@ final readonly class SmtpTransport implements MailTransport
         return preg_replace('~^\.~m', '..', str_replace(["\r\n", "\r", "\n"], "\r\n", $body)) ?? $body;
     }
 
-    private static function isLoopback(string $host): bool
-    {
-        return in_array(strtolower($host), ['localhost', '127.0.0.1', '::1', 'mailhog', 'mailpit'], true);
-    }
 }
