@@ -259,6 +259,13 @@ Every finding but two was a refutation of a round-4 repair.
   was therefore never checked alone. The scanner now reads addresses, the fallback announces itself,
   and the no-op self-substitution it exposed was removed.
 
+- [2026-08-24 23:55] AGREED: **the cap is lifted for a sixth round** rather than closing A4 with a
+  documented residual, narrowing to the §1 surface, or redefining the exit condition. Reasoning
+  offered and accepted: round 5 added genuinely unreviewed code (`Store::groupExcludedTenure()`, the
+  promotion cap, the deliveries counter), so round 6 is not a re-read of the same tree; and rounds 4
+  and 5 each produced a §1 breach that a green suite said nothing about. Reverses by choosing any of
+  the other three options at the next gate.
+
 **THE CAP IS REACHED: five rounds, five resets, zero clean.** MAXIMAL requires two consecutive
 fully-clean rounds and the protocol caps the loop at five, so continuing is not a decision this
 session may take alone — `CLAUDE.md` § Certification ladder says to ask rather than silently
