@@ -236,14 +236,49 @@ final class ProseTest extends TestCase
         yield 'spec row among others' => ['Ascenseur : non | Balcon : oui', false, 'the row ends at the pipe'];
         yield 'spec row, aucun' => ['Ascenseur : aucun', false, 'the other denial word'];
 
-        // The counterweight, and why the reader is deliberately narrow: a trailing `non` that
-        // begins another phrase is NOT a denial of the lift's existence.
-        yield 'out of service is still a lift' => [
+        yield 'spec row, em dash both sides' => [
+            'Ascenseur — non — Balcon — oui',
+            false,
+            'the dash is a row separator as well as a leading one — the denial still ends its row',
+        ];
+        yield 'spec row, full stop' => ['Ascenseur : non. Balcon : oui', false, 'so is a full stop'];
+
+        // ── the OTHER safe answer: a trailing `non` followed by a word is UNKNOWN ────────────
+        //
+        // The first version of this reader required the denial to TERMINATE the phrase, which took
+        // the commonest French "not stated" values with it and defaulted them to `true` — the one
+        // direction this class's docblock forbids. Two review lenses found that independently.
+        // Vocabulary would have been the wrong fix (the list is open, and `non conforme` is not in
+        // it); the STRUCTURE decides instead, and both branches are safe.
+        yield 'not stated is unknown, not absent' => [
+            'Ascenseur : non renseigné',
+            null,
+            '"non renseigné" means nobody said — null, never a lift bonus',
+        ];
+        yield 'not communicated' => ['Ascenseur : non communiqué', null, 'same shape'];
+        yield 'not available' => ['Ascenseur : non disponible', null, 'same shape'];
+        yield 'out of service is not an absent lift' => [
             'Ascenseur non conforme, remise en service en mai.',
-            true,
-            'a lift that exists and is out of order is not an absent lift',
+            null,
+            'a lift that exists and is out of order is neither absent nor assertable',
         ];
         yield 'affirmed spec row' => ['Ascenseur : oui', true, 'the mirror of the denial'];
+
+        // ── the two NARROWING rules the reader states, which nothing pinned ─────────────────
+        //
+        // Round 8: letting the leading class match `\s\S` (any character) instead of separators
+        // left the whole suite green, while the docblock calls the adjacency rule load-bearing.
+        //
+        // Its sibling claim — that the 16-character window is what keeps the NEXT field's value
+        // out — turned out to be FALSE, and no test is written for it here on purpose: widening
+        // the window to 200 changes nothing, because the adjacency rule already excludes anything
+        // with a word in it. The window bounds the scan; adjacency is the guarantee. Said plainly
+        // in `Prose` rather than pinned with a case invented to make it look load-bearing.
+        yield 'a denial with a WORD in between is not adjacent' => [
+            'Ascenseur: cave non',
+            true,
+            'only separators may sit between the noun and its denial, or `cave non` denies the lift',
+        ];
 
         yield 'silence' => ['Chauffage collectif. Commerces à proximité.', null, 'unmentioned is not absent'];
         yield 'empty' => ['', null, 'unknown stays unknown'];

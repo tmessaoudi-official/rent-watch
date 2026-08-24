@@ -106,6 +106,20 @@ final readonly class Scout
         mixed $err = null,
         private ?string $nowIso = null,
         ?HttpClient $http = null,
+        /**
+         * A ready-built notifier, used INSTEAD of the one this class assembles from config.
+         *
+         * The same kind of seam as `$http` above, and here for the same reason: without it, a test
+         * that needs a delivery to SUCCEED has to configure a channel that really delivers, and
+         * the only offline candidate — `email` over `SMTP_TRANSPORT=file` — cannot, by
+         * {@see Channel::reachesRecipient()}. Four CLI test classes used exactly that as their
+         * "remote" channel for one review round, so every assertion about a listing being marked
+         * notified passed for the reason that was itself the round-8 P0.
+         *
+         * Tests about CHANNEL BUILDING — an unknown name, a missing credential, the console-only
+         * warning — must NOT inject, or they would stop exercising the thing they are about.
+         */
+        private ?Notifier $notifier = null,
     ) {
         $this->out = $out ?? STDOUT;
         $this->err = $err ?? STDERR;
@@ -184,7 +198,7 @@ final readonly class Scout
     {
         $criteria = $this->criteria();
         $store = $this->store();
-        $sources = $this->sources($store, $this->onlySources($flags), $criteria);
+        $sources = $this->sources($store, $this->onlySources($flags), $criteria, $flags);
         $now = $this->now();
 
         $this->line('rent-watch doctor · ' . $now);
@@ -208,7 +222,22 @@ final readonly class Scout
         }
 
         $notifier = $this->notifier($criteria);
-        $this->line('  canaux  : ' . ($notifier->hasRemoteChannel() ? 'au moins un canal distant' : 'console seulement'));
+        // NAMED, not summarised. "au moins un canal distant" was the whole report, and it cannot
+        // distinguish a push to a phone from an `.eml` written into a directory the container
+        // destroys on rebuild — which is precisely the round-8 P0, and this is where it would have
+        // been visible. `compte` is the answer to `Channel::reachesRecipient()`: whether a
+        // successful send through it means a listing may be marked notified for ever.
+        $this->line('  canaux  : ' . ($notifier->hasRemoteChannel()
+            ? 'au moins un canal atteint un destinataire'
+            : 'AUCUN canal n\'atteint de destinataire — rien ne sera marqué notifié'));
+        foreach ($notifier->inventory() as $channel) {
+            $this->line(sprintf(
+                '            - %-8s %s [%s]',
+                $channel['name'],
+                $channel['describe'],
+                $channel['counts'] ? 'compte comme délivré' : 'NE COMPTE PAS',
+            ));
+        }
         foreach ($notifier->disabledReport() as $name => $problem) {
             $this->line('  ⚠ canal ' . $name . ' désactivé : ' . $problem);
         }
@@ -409,18 +438,14 @@ final readonly class Scout
             $this->warn('canal ' . $name . ' désactivé : ' . $problem);
         }
 
-        if (!$seed && !$notifier->hasRemoteChannel()) {
-            // `console` cannot deliver (see Notifier::delivered()), so this run will announce to a
-            // log and mark NOTHING notified. That is the safe direction and it is deliberately not
-            // fatal — `run --once` at a terminal is exactly this — but it must not be quiet: under
-            // Q8 the process is headless and the container log is nobody's notification channel.
-            $this->warn(
-                'aucun canal distant : les annonces iront dans le journal et RIEN ne sera marqué '
-                . 'notifié. Ajoutez `ntfy` ou `email` à notify.channels et renseignez .env.',
-            );
+        if (!$seed) {
+            // Skipped under `--seed` because seeding deliberately notifies nothing, so having no
+            // delivering channel is not a problem for that run — warning there would be the noise
+            // that teaches an operator to skip this line. Pinned in both directions.
+            $this->warnIfNothingDelivers($notifier);
         }
 
-        $sources = $this->sources($store, $this->onlySources($flags), $criteria);
+        $sources = $this->sources($store, $this->onlySources($flags), $criteria, $flags);
         if ($sources === []) {
             $this->line('aucune source activée — rien à faire.');
 
@@ -853,6 +878,8 @@ final readonly class Scout
             $this->warn('canal ' . $name . ' désactivé : ' . $problem);
         }
 
+        $this->warnIfNothingDelivers($notifier);
+
         $failures = $notifier->send($notification);
         foreach ($failures as $failure) {
             $this->warn($failure->getMessage());
@@ -1006,6 +1033,8 @@ final readonly class Scout
             foreach ($notifier->disabledReport() as $name => $problem) {
                 $this->warn('canal ' . $name . ' désactivé : ' . $problem);
             }
+
+            $this->warnIfNothingDelivers($notifier);
         }
 
         $skipped = 0;
@@ -1532,7 +1561,8 @@ final readonly class Scout
      *
      * @return list<Source>
      */
-    private function sources(Store $store, ?array $only = null, ?Criteria $criteria = null): array
+    /** @param list<string> $argv the flags this invocation was handed, for hard rule 4's opt-in */
+    private function sources(Store $store, ?array $only = null, ?Criteria $criteria = null, array $argv = []): array
     {
         $out = [];
         $known = [];
@@ -1570,7 +1600,7 @@ final readonly class Scout
                     . 'exécutée parce qu\'elle est nommée explicitement');
             }
 
-            if ($definition->requiresScrapingOptIn() && !$this->scrapingAllowed()) {
+            if ($definition->requiresScrapingOptIn() && !$this->scrapingAllowed($argv)) {
                 // Hard rule 4 / Q26. Direct scraping of a private portal refuses to run without an
                 // explicit flag, and the flag is never persisted in config — so starting a scrape is
                 // a deliberate act each time rather than a boolean somebody flipped once.
@@ -1785,13 +1815,62 @@ final readonly class Scout
         );
     }
 
-    private function scrapingAllowed(): bool
+    /**
+     * Hard rule 4's opt-in: has the operator accepted the legal risk of scraping a private portal?
+     *
+     * Reads BOTH the argv this invocation was handed and the process argv, and that is deliberate
+     * rather than belt-and-braces. It used to read `$_SERVER['argv']` alone, which is a different
+     * source of truth from every other flag in this class — so the PERMITTING branch was
+     * unreachable through the seam every test uses, and all three existing tests assert refusal.
+     * Nothing proved the flag actually works, and nothing would have gone red if this literal
+     * drifted from the one in `help`.
+     *
+     * The failure direction was closed (over-refusal, never over-permission), which is why this is
+     * a P2 and not the other kind. But hard rule 4's gate is the one place in the tree where "no
+     * test covers the permitting path" is worth saying out loud.
+     */
+    /** @param list<string> $argv */
+    private function scrapingAllowed(array $argv): bool
     {
-        return in_array('--i-accept-legal-risk', $_SERVER['argv'] ?? [], true);
+        $flag = '--i-accept-legal-risk';
+
+        return in_array($flag, $argv, true) || in_array($flag, $_SERVER['argv'] ?? [], true);
+    }
+
+    /**
+     * Say so when NOTHING in the notifier can reach a recipient.
+     *
+     * `console` cannot deliver, and neither can `email` over `SMTP_TRANSPORT=file` — so a run in
+     * that state announces to this terminal and marks NOTHING notified. Deliberately not fatal:
+     * `run --once` at a terminal is exactly that shape, and refusing would take a working local
+     * run away to punish a deployment mistake. But it must not be QUIET, because under Q8 the
+     * process is headless and the container log is nobody's notification channel.
+     *
+     * Shared by `run`, `digest` and `reclassify`. It lived only on `run` for one review round,
+     * and the other two do not merely lack the warning — they print a retry promise that is
+     * unconditionally FALSE in that configuration ("elles seront réessayées"), for ever, while the
+     * §1 digest backlog never drains.
+     */
+    private function warnIfNothingDelivers(Notifier $notifier): void
+    {
+        if ($notifier->hasRemoteChannel()) {
+            return;
+        }
+
+        $this->warn(
+            'aucun canal n\'atteint de destinataire : les annonces seront écrites ici et RIEN '
+            . 'ne sera marqué notifié. `console` et `email` via SMTP_TRANSPORT=file ne '
+            . 'comptent pas — voir `scout doctor`. Configurez `ntfy`, ou `email` via '
+            . 'SMTP_TRANSPORT=smtp|sendmail.',
+        );
     }
 
     private function notifier(Criteria $criteria): Notifier
     {
+        if ($this->notifier !== null) {
+            return $this->notifier;
+        }
+
         $channels = [];
 
         foreach ($criteria->notify->channels as $name) {

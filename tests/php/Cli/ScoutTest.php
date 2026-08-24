@@ -8,6 +8,9 @@ use PHPUnit\Framework\TestCase;
 use RentWatch\Adapters\HtmlSource;
 use RentWatch\Store\Store;
 use RentWatch\Cli\Scout;
+use RentWatch\Core\Notify\ConsoleChannel;
+use RentWatch\Core\Notify\Notifier;
+use RentWatch\Tests\Support\DeliveringChannel;
 use RentWatch\Core\RawListing;
 
 /**
@@ -34,12 +37,6 @@ final class ScoutTest extends TestCase
 
     protected function setUp(): void
     {
-        // A REMOTE channel that needs no network and no credential: `email` over the file
-        // transport writes `.eml` into <root>/var/outbox. Before round 7 these tests ran
-        // console-only, and console then satisfied `Notifier::delivered()` — so every assertion
-        // about a listing being marked notified passed for a reason that was itself the P0.
-        putenv('SMTP_TO=watcher@example.test');
-        putenv('SMTP_TRANSPORT=file');
         $this->dbPath = sys_get_temp_dir() . '/rentwatch-cli-' . bin2hex(random_bytes(8)) . '.sqlite3';
         putenv('RENT_WATCH_DB=' . $this->dbPath);
         // `--watch` never returns on its own. Every test here that reaches it expects to be stopped
@@ -51,12 +48,12 @@ final class ScoutTest extends TestCase
 
     protected function tearDown(): void
     {
-        putenv('SMTP_TRANSPORT');
-        putenv('SMTP_TO');
         putenv('RENT_WATCH_DB');
         putenv('RENT_WATCH_MAX_PASSES');
         putenv('NTFY_TOPIC');
+        putenv('NTFY_SERVER');
         putenv('SMTP_TO');
+        putenv('SMTP_TRANSPORT');
 
         if ($this->dbPath !== null) {
             foreach (['', '-wal', '-shm'] as $suffix) {
@@ -65,12 +62,36 @@ final class ScoutTest extends TestCase
         }
 
         foreach ($this->tempRoots as $root) {
-            @unlink($root . '/config/criteria.json');
-            @unlink($root . '/config/sources.json');
-            @rmdir($root . '/config');
-            @rmdir($root);
+            self::removeTree($root);
         }
         $this->tempRoots = [];
+    }
+
+    /**
+     * A channel that COUNTS and always succeeds, composed with `console` inside the helpers.
+     *
+     * These tests assert that a listing was marked notified, which requires a real delivery, and
+     * no offline CONFIGURATION can provide one: `console` cannot reach anyone and neither can
+     * `email` over `SMTP_TRANSPORT=file` — which is what these four classes used for one review
+     * round, making every such assertion pass for the reason that was itself the round-8 P0.
+     *
+     * It returns a CHANNEL rather than a `Notifier` on purpose. The helper composes it with a
+     * `ConsoleChannel` bound to the test's own `$out` stream, so stdout assertions keep working
+     * and the shape matches production: one channel to read, one that delivers.
+     */
+    private function delivering(): DeliveringChannel
+    {
+        return new DeliveringChannel();
+    }
+
+    /**
+     * `console` plus the delivering double, or `null` to let `Scout` build from config.
+     *
+     * @param resource $out
+     */
+    private static function compose(mixed $out, ?DeliveringChannel $delivering): ?Notifier
+    {
+        return $delivering === null ? null : new Notifier([new ConsoleChannel($out), $delivering]);
     }
 
     /**
@@ -78,7 +99,7 @@ final class ScoutTest extends TestCase
      *
      * @return array{code: int, out: string, err: string}
      */
-    private function scout(array $argv): array
+    private function scout(array $argv, ?DeliveringChannel $delivering = null): array
     {
         $out = fopen('php://memory', 'r+');
         $err = fopen('php://memory', 'r+');
@@ -105,7 +126,7 @@ final class ScoutTest extends TestCase
 
         // A FIXED clock. Without one, `STALE` and the counting window depend on wall time, and a
         // test that passes at 23:59 and fails at 00:01 teaches people to re-run rather than to read.
-        $code = (new Scout(self::ROOT, $out, $err, '2026-08-07T12:00:00+02:00'))->run($argv);
+        $code = (new Scout(self::ROOT, $out, $err, '2026-08-07T12:00:00+02:00', null, self::compose($out, $delivering)))->run($argv);
 
         rewind($out);
         rewind($err);
@@ -156,7 +177,6 @@ final class ScoutTest extends TestCase
         $this->tempRoots[] = $root;
 
         file_put_contents($root . '/config/criteria.json', json_encode($criteria + [
-            'notify' => ['channels' => ['console', 'email']],
             'communes' => ['Sartrouville'],
             'postcode_prefixes' => ['78'],
             'min_rooms' => 4,
@@ -181,14 +201,14 @@ final class ScoutTest extends TestCase
      *
      * @return array{code: int, out: string, err: string}
      */
-    private function scoutIn(string $root, array $argv): array
+    private function scoutIn(string $root, array $argv, ?DeliveringChannel $delivering = null): array
     {
         $out = fopen('php://memory', 'r+');
         $err = fopen('php://memory', 'r+');
         self::assertIsResource($out);
         self::assertIsResource($err);
 
-        $code = (new Scout($root, $out, $err, '2026-08-07T12:00:00+02:00'))->run($argv);
+        $code = (new Scout($root, $out, $err, '2026-08-07T12:00:00+02:00', null, self::compose($out, $delivering)))->run($argv);
         rewind($out);
         rewind($err);
 
@@ -434,10 +454,10 @@ final class ScoutTest extends TestCase
         // Seeded, then the stored rows are renamed so the fixture's listings are new again — which
         // is the closest an offline test gets to "a source published something".
         $root = $this->demoRoot();
-        $this->scoutIn($root, ['run', '--seed']);
+        $this->scoutIn($root, ['run', '--seed'], $this->delivering());
         $this->republishEverything();
 
-        $r = $this->scoutIn($root, ['run', '--once']);
+        $r = $this->scoutIn($root, ['run', '--once'], $this->delivering());
 
         self::assertSame(0, $r['code'], $r['err']);
         // The high-priority match, with its score, its commune, its rent and its reasons — the
@@ -464,10 +484,10 @@ final class ScoutTest extends TestCase
     {
         // §1, at the only surface the developer actually sees. The fixture carries a PLAI listing.
         $root = $this->demoRoot();
-        $this->scoutIn($root, ['run', '--seed']);
+        $this->scoutIn($root, ['run', '--seed'], $this->delivering());
         $this->republishEverything();
 
-        $r = $this->scoutIn($root, ['run', '--once']);
+        $r = $this->scoutIn($root, ['run', '--once'], $this->delivering());
 
         // COUNTERWEIGHT FIRST. Two assertions of absence pass perfectly on a run that was refused
         // and printed nothing at all — which is exactly what happened when the Q36 guard started
@@ -625,6 +645,39 @@ final class ScoutTest extends TestCase
         self::assertStringContainsString('ignorée', $r['err'], 'skipping must be LOUD — a silent skip is a source that quietly does not run');
     }
 
+
+    /**
+     * And the flag ACTUALLY WORKS — the permitting branch, which no test reached.
+     *
+     * `scrapingAllowed()` read `$_SERVER['argv']` alone, a different source of truth from every
+     * other flag in `Scout`, so the accepting branch was unreachable through the seam every test
+     * here uses: all three existing cases assert refusal. Nothing proved the opt-in was honourable,
+     * and nothing would have gone red if this literal drifted from the one printed by `help`.
+     *
+     * The failure direction was closed — over-refusal, never over-permission — which is why round 8
+     * rated it P2. But hard rule 4's gate is the one place in this tree where "no test covers the
+     * permitting path" is worth saying out loud.
+     */
+    public function testTheLegalRiskFlagActuallyPermitsTheSource(): void
+    {
+        $root = $this->tempRoot(sources: ['portal' => [
+            'enabled' => true,
+            'family' => 'private',
+            'type' => 'json',
+            'mixed_tenure' => true,
+            'url' => 'https://example.test/search',
+            'map' => ['ref' => 'id'],
+        ]]);
+
+        $r = $this->scoutIn($root, ['doctor', '--i-accept-legal-risk']);
+
+        self::assertStringNotContainsString(
+            'ignorée',
+            $r['err'],
+            'with the flag the source must be RUN, not skipped — otherwise the opt-in is a refusal '
+            . 'with extra steps and nobody would know',
+        );
+    }
 
     // ── `--source=<name>` is an instruction, not a filter ─────────────────────────────────────────
 
@@ -856,17 +909,6 @@ final class ScoutTest extends TestCase
     }
 
     /**
-     * `test-notify` is the documented proof that a DEPLOYED image can reach the user, so its exit
-     * code has to mean that and nothing weaker.
-     *
-     * This test used to run against the repo root and assert exit 0 with `console` as the only
-     * channel — which was the round-7 P0 stated as a guarantee: one print to a container log
-     * satisfying the one command whose entire job is proving the channel works. It is now two
-     * tests, and the root is a TEMP one: reading the repo's own config made the outcome depend on
-     * `config/criteria.local.json`, which is gitignored, so this passed here and would have gone
-     * red in CI.
-     */
-    /**
      * The console-only run is not refused, so the warning is the ONLY thing standing between a
      * misconfigured deployment and a watcher that announces to a log for ever while marking
      * nothing notified. An unpinned operator line is what lens C found three of in round 7.
@@ -878,15 +920,62 @@ final class ScoutTest extends TestCase
 
         $r = $this->scoutIn($root, ['run', '--once']);
 
-        self::assertStringContainsString('aucun canal distant', $r['err']);
+        self::assertStringContainsString('aucun canal n\'atteint de destinataire', $r['err']);
         self::assertStringContainsString('RIEN ne sera marqué notifié', $r['err']);
+    }
+
+    /**
+     * `--seed` is exempt, and that exemption is a decision rather than an oversight.
+     *
+     * Seeding deliberately notifies nothing, so having no delivering channel is not a problem for
+     * that run — warning there would be the noise that teaches an operator to skip the line. Round
+     * 8 found the `!$seed` clause unpinned: removing it left the whole suite green.
+     */
+    public function testSeedingDoesNotWarnAboutDeliveryBecauseItNotifiesNothing(): void
+    {
+        $root = $this->fixtureRootWithChannels(['console']);
+
+        $r = $this->scoutIn($root, ['run', '--seed']);
+
+        self::assertStringNotContainsString('atteint de destinataire', $r['err']);
+    }
+
+    /**
+     * `digest` and `reclassify` have the identical property and printed a retry promise that is
+     * unconditionally FALSE without a delivering channel — "elles seront réessayées", for ever,
+     * while the §1 digest backlog never drains. The warning lived only on `run` for one round.
+     */
+    public function testDigestAndReclassifyWarnWhenNothingCanDeliver(): void
+    {
+        // Both verbs need something to act on, or they return before a notifier is even built —
+        // which is correct (no work, no warning) and would make this test pass vacuously.
+        $root = $this->fixtureRootWithChannels(['console']);
+        $this->scoutIn($root, ['run', '--seed']);
+        $this->republishEverything();
+        $this->scoutIn($root, ['run', '--once']);
+
+        foreach (['digest', 'reclassify'] as $verb) {
+            $r = $this->scoutIn($root, [$verb]);
+
+            self::assertStringContainsString(
+                'aucun canal n\'atteint de destinataire',
+                $r['err'],
+                $verb . ' must say so too — it marks nothing and promises a retry that cannot work',
+            );
+        }
     }
 
     public function testARunWithARemoteChannelDoesNotWarnAboutIt(): void
     {
         // The counterweight: a warning that fires always is furniture, and an operator stops
         // reading it. This is the direction that makes the assertion above mean something.
-        $root = $this->fixtureRootWithChannels(['console', 'email']);
+        //
+        // Built from CONFIG, not injected — the warning asks `hasRemoteChannel()`, which is about
+        // what the configuration produced. `ntfy` is the channel that counts; the topic is enough
+        // for `check()` to pass, and the send failing is irrelevant to whether the warning fires.
+        putenv('NTFY_TOPIC=rent-watch-test');
+        putenv('NTFY_SERVER=http://127.0.0.1:1');
+        $root = $this->fixtureRootWithChannels(['console', 'ntfy']);
         $this->scoutIn($root, ['run', '--seed']);
 
         $r = $this->scoutIn($root, ['run', '--once']);
@@ -1012,6 +1101,20 @@ final class ScoutTest extends TestCase
         return $root;
     }
 
+    /**
+     * `test-notify` is the documented proof that a DEPLOYED image can reach the user, so its exit
+     * code has to mean that and nothing weaker.
+     *
+     * This test used to run against the repo root and assert exit 0 with `console` as the only
+     * channel — the round-7 P0 stated as a guarantee: one print to a container log satisfying the
+     * one command whose entire job is proving the channel works. It is three tests now, and the
+     * root is a TEMP one: reading the repo's own config made the outcome depend on
+     * `config/criteria.local.json`, which is gitignored, so it passed locally and would have gone
+     * red in CI.
+     *
+     * The docblock sat above an UNRELATED test for a round, because it was left where the split
+     * happened rather than moved with the tests it describes. Found by a review lens.
+     */
     public function testTestNotifyFailsWhenConsoleIsTheOnlyChannel(): void
     {
         $root = $this->tempRoot(['notify' => ['channels' => ['console']]]);
@@ -1022,13 +1125,34 @@ final class ScoutTest extends TestCase
         self::assertStringContainsString('test de notification', $r['out'], 'it still prints');
     }
 
-    public function testTestNotifySucceedsThroughARemoteChannel(): void
+    /**
+     * THE ROUND-8 P0, at the surface that matters: `email` over `SMTP_TRANSPORT=file` is not a
+     * channel either.
+     *
+     * It writes an `.eml` and sends nothing — `.env.example` says so — and under Q8's Docker
+     * deployment the outbox is image-local, destroyed by the next rebuild. It nonetheless voted as
+     * a delivery for a whole review round, because the previous fix filtered on the literal name
+     * `console`. `test-notify` returned 0 for a message that went to a file, which is the exact
+     * opposite of what that command exists to prove.
+     */
+    public function testTestNotifyFailsWhenTheOnlyOtherChannelWritesToAFile(): void
     {
-        // `email` over the file transport — remote in the sense that matters here (it is not
-        // `console`), and it needs no network and no credential. setUp() points it at the root.
+        putenv('SMTP_TO=watcher@example.test');
+        putenv('SMTP_TRANSPORT=file');
         $root = $this->tempRoot(['notify' => ['channels' => ['console', 'email']]]);
 
         $r = $this->scoutIn($root, ['test-notify']);
+
+        self::assertSame(1, $r['code'], 'a file on this machine is not proof the channel works');
+        self::assertStringContainsString('test de notification', $r['out'], 'it still prints');
+    }
+
+    public function testTestNotifySucceedsThroughARemoteChannel(): void
+    {
+        // A channel that genuinely reaches a recipient, injected — see delivering().
+        $root = $this->tempRoot();
+
+        $r = $this->scoutIn($root, ['test-notify'], $this->delivering());
 
         self::assertSame(0, $r['code'], $r['err']);
         self::assertStringContainsString('test de notification', $r['out']);
@@ -1050,5 +1174,31 @@ final class ScoutTest extends TestCase
             $r['out'],
             'the stub said it was waiting on storage that now exists',
         );
+    }
+
+    /**
+     * Delete a temp root and everything under it.
+     *
+     * `@rmdir($root)` was the whole cleanup, and it cannot remove a non-empty tree — it just fails
+     * silently behind the `@`. Once these tests started building a `var/outbox`, every run left
+     * the root behind: round 8 measured **10334 leftover roots and 2752 `.eml` files** accumulated
+     * on one machine. Unbounded growth in CI and on the dev box, plus one more suppressed failure
+     * reporting success. Ported from ScoutReclassifyTest, which had it already.
+     */
+    private static function removeTree(string $path): void
+    {
+        if (!is_dir($path)) {
+            return;
+        }
+
+        $entries = new \RecursiveIteratorIterator(
+            new \RecursiveDirectoryIterator($path, \FilesystemIterator::SKIP_DOTS),
+            \RecursiveIteratorIterator::CHILD_FIRST,
+        );
+        foreach ($entries as $entry) {
+            /** @var \SplFileInfo $entry */
+            $entry->isDir() ? @rmdir($entry->getPathname()) : @unlink($entry->getPathname());
+        }
+        @rmdir($path);
     }
 }

@@ -41,6 +41,22 @@ final readonly class ConsoleChannel implements Channel
         return 'console';
     }
 
+    /**
+     * NO. Under Q8 the process is headless on a VPS and this is the container log.
+     *
+     * It is here because a channel that always works is what makes `scout run --once`
+     * demonstrable — not because it delivers.
+     */
+    public function reachesRecipient(): bool
+    {
+        return false;
+    }
+
+    public function describe(): string
+    {
+        return 'sortie standard (sous Docker : le journal du conteneur)';
+    }
+
     public function check(): ?string
     {
         return null;

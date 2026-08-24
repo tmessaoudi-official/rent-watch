@@ -1369,7 +1369,7 @@ run_sabotage "doctor stops printing the journal mode (a silent WAL refusal)" \
 
 run_sabotage "the scraping opt-in gate is removed (hard rule 4 / Q26)" \
   src/php/Cli/Scout.php \
-  's%if (\$definition->requiresScrapingOptIn() \&\& !\$this->scrapingAllowed()) {%if (false) {%'
+  's%if (\$definition->requiresScrapingOptIn() \&\& !\$this->scrapingAllowed(\$argv)) {%if (false) {%'
 
 run_sabotage "an unknown notification channel name is silently dropped" \
   src/php/Cli/Scout.php \
@@ -2510,7 +2510,7 @@ run_sabotage "verdicts with no evidence stop being countable" \
 # QUESTION delivered() asks of that set. Either one alone restores the defect.
 run_sabotage "console re-enters the set that decides whether a listing was delivered" \
   src/php/Core/Notify/Notifier.php \
-  's%static fn (Channel \$c): bool => \$c->name() !== self::CONSOLE,%static fn (Channel $c): bool => true,%'
+  's%static fn (Channel \$c): bool => \$c->reachesRecipient(),%static fn (Channel $c): bool => true,%'
 
 # The arithmetic form is the original. It counts, rather than asking which channel accepted — and
 # a count cannot tell a console print from a delivery.
@@ -2523,7 +2523,7 @@ run_sabotage "delivered() goes back to counting channels instead of naming them"
 # a log for ever while marking nothing notified.
 run_sabotage "a run with no remote channel stops saying so" \
   src/php/Cli/Scout.php \
-  's%        if (!\$seed \&\& !\$notifier->hasRemoteChannel()) {%        if (false) {%'
+  's%        if (\$notifier->hasRemoteChannel()) {%        if (true) {%'
 
 # ── group-scoped suppression is forbidden, on BOTH delivery paths ─────────────────────────────
 #
@@ -2595,6 +2595,30 @@ run_sabotage "a lift denial that follows the noun is read as a lift" \
 run_sabotage "the floor anchor goes optional, so a building height answers for the flat" \
   src/php/Core/Prose.php \
   's%(?:au|en)\\s+(?:le%(?:au|en)?\\s+(?:le%'
+
+# ── round 8: a delivery is a CAPABILITY, not a name ───────────────────────────────────────────
+#
+# Round 7 filtered `console` out of the counting set BY NAME. Round 8 found the same hole one door
+# along: `email` over SMTP_TRANSPORT=file writes an `.eml` into a directory the container destroys
+# on rebuild, is not called `console`, and so voted as a delivery — `test-notify`, the documented
+# proof that a deployed image can reach the user, returned 0 for a message that went to a file.
+# The property is `Channel::reachesRecipient()` now, on the interface, once.
+run_sabotage "a file transport starts counting as a delivered notification" \
+  src/php/Core/Notify/FileTransport.php \
+  's%^        return false;$%        return true;%'
+
+# The other half of the same rule, and the one round 7 fixed by name.
+run_sabotage "the console channel starts counting as a delivered notification" \
+  src/php/Core/Notify/ConsoleChannel.php \
+  's%        return false;%        return true;%'
+
+# The §1 structural control must GROW WITH THE MODEL. Its expansion guard carried a second clause
+# that was always false — `$covered` is built from `surfaces()`, which hard-codes a key called
+# `title` — so `$missing` could never be non-empty and a new unread property passed unnoticed.
+# This is the src-side mutation the guard exists to catch; it must go red.
+run_sabotage "a new listing field reaches no matrix surface and nothing says so" \
+  src/php/Core/RawListing.php \
+  "s%        public string \$description = '',%        public string \$description = '', public ?string \$agencyBlurb = null,%"
 
 # THE TALLY LIVES HERE, BELOW EVERY CASE, and that position is load-bearing rather than tidy.
 # It sat mid-file twice: once on 2026-08-20 (295 printed for 303 cases) and again from 2026-08-23,

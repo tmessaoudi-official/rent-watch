@@ -27,4 +27,15 @@ interface MailTransport
 
     /** For `doctor`. Never a credential. */
     public function describe(): string;
+
+    /**
+     * Does mail sent through this actually leave the machine?
+     *
+     * `EmailChannel` delegates {@see Channel::reachesRecipient()} here, because the answer is a
+     * property of the CONFIGURATION rather than of the channel: `email` reaches a human over SMTP
+     * and over a host MTA, and does not over {@see FileTransport}, which writes `.eml` files and
+     * sends nothing. Round 8 found that difference deciding whether a listing was marked notified
+     * for ever.
+     */
+    public function reachesRecipient(): bool;
 }

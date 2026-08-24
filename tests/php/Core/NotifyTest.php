@@ -336,7 +336,7 @@ final class NotifyTest extends TestCase
         // The Q28 correction. An expired SMTP password must not take down the sources, the seen-set
         // and the price history to punish one channel.
         // The survivor has to be a REMOTE channel. It used to be `console`, which made this test
-        // pass for a reason unrelated to what it names — see testConsoleAloneIsAStartupRefusal.
+        // pass for a reason unrelated to what it names — see testConsoleAloneCanStartButCanNeverDeliver.
         $notifier = new Notifier([
             $this->brokenChannel('email', 'SMTP_TO is not set'),
             $this->workingChannel('ntfy'),
@@ -396,6 +396,33 @@ final class NotifyTest extends TestCase
     }
 
     /**
+     * `delivered()` asks WHICH channel accepted, not HOW MANY failed.
+     *
+     * The docblock says so — *"comparing names says what is meant"* — and round 8 found nothing
+     * pinning it: replacing the by-name walk with `count($failures) < count($this->counting)` left
+     * the whole suite green, because the ledger case reverts to arithmetic over `$usable`, which
+     * the `$counting` set alone already catches.
+     *
+     * The discriminating case is a FAILING channel that does not count. Arithmetic sees one
+     * failure against one counting channel and says undelivered — so a failed console write would
+     * report a successful ntfy push as lost, and that flat would be re-announced every fifteen
+     * minutes for ever.
+     */
+    public function testDeliveredAsksWhichChannelAcceptedNotHowManyFailed(): void
+    {
+        $notifier = new Notifier([$this->workingChannel('ntfy'), $this->failingChannel('console')]);
+
+        $failures = $notifier->send($this->anyNotification());
+
+        self::assertCount(1, $failures, 'the console write failed');
+        self::assertTrue(
+            $notifier->delivered($failures),
+            'ntfy accepted it, so it was delivered — a failure on a channel that does not count '
+            . 'must not make a real push read as lost',
+        );
+    }
+
+    /**
      * The other direction, and the reason console is not simply dropped from the send list: it is
      * what makes `scout run --once` demonstrable. It still receives every notification; it just
      * does not vote on whether one was delivered.
@@ -448,6 +475,16 @@ final class NotifyTest extends TestCase
             public function check(): ?string
             {
                 return null;
+            }
+
+            public function reachesRecipient(): bool
+            {
+                return true;
+            }
+
+            public function describe(): string
+            {
+                return 'test double';
             }
 
             public function send(Notification $notification): void
@@ -636,6 +673,16 @@ final class NotifyTest extends TestCase
                 return $this->p;
             }
 
+            public function reachesRecipient(): bool
+            {
+                return $this->n !== 'console';
+            }
+
+            public function describe(): string
+            {
+                return 'test double';
+            }
+
             public function send(Notification $notification): void
             {
                 throw new ChannelError($this->n, 'must not be reached');
@@ -659,6 +706,16 @@ final class NotifyTest extends TestCase
                 return null;
             }
 
+            public function reachesRecipient(): bool
+            {
+                return $this->n !== 'console';
+            }
+
+            public function describe(): string
+            {
+                return 'test double';
+            }
+
             public function send(Notification $notification): void {}
         };
     }
@@ -676,6 +733,16 @@ final class NotifyTest extends TestCase
             public function check(): ?string
             {
                 return null;
+            }
+
+            public function reachesRecipient(): bool
+            {
+                return $this->n !== 'console';
+            }
+
+            public function describe(): string
+            {
+                return 'test double';
             }
 
             public function send(Notification $notification): void

@@ -31,6 +31,24 @@ final readonly class NtfyChannel implements Channel
         return 'ntfy';
     }
 
+    /** YES — a push to a phone is the whole reason this channel exists. */
+    public function reachesRecipient(): bool
+    {
+        return true;
+    }
+
+    /**
+     * The SERVER, never the topic.
+     *
+     * `.env.example` says to treat the topic as a secret: anyone who knows it can read every
+     * notification. `doctor` prints this, and a `doctor` transcript is exactly the thing pasted
+     * into a report.
+     */
+    public function describe(): string
+    {
+        return 'push ntfy via ' . $this->server;
+    }
+
     public function check(): ?string
     {
         if (trim($this->topic) === '') {

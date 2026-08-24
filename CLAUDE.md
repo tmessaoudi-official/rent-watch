@@ -404,7 +404,7 @@ in `.env.example` read by no code at all: `NotificationKind::HEARTBEAT` existed,
 quiet market until somebody thought to look. `scout run --watch` now emits a LOW-priority beat
 every `HEARTBEAT_HOURS` (default 24) — **whether or not anything matched**, which is the
 entire point — carrying passes completed, listings notified and sources OK. **The startup beat is
-`isDue()`-gated, not unconditional** (`Scout.php:466`): the marker is on the mounted volume, so a
+`isDue()`-gated, not unconditional** (`Scout::runCommand()`, the startup `isDue()` check — cited by LINE for one round, and the line moved twice; a symbol survives an edit above it): the marker is on the mounted volume, so a
 restart inside the interval sends nothing, and only a cold start — no marker — beats immediately.
 That is the correct behaviour (a redeploy loop must not spam the channel) but it is NOT a
 channel-health check, and reading it as one costs time: a redeploy on 2026-08-23 15:48 left the

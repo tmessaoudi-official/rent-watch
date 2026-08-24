@@ -163,6 +163,22 @@ channel listed without its credentials is **disabled loudly** at startup (`⚠ c
 NTFY_TOPIC is not set…`) — never silently, because hard rule 2 counts an alert computed and never
 sent as worse than no alert at all.
 
+> **⚠ `console` is not a channel, and neither is `email` over `SMTP_TRANSPORT=file`.** Both write
+> to this machine and reach nobody, so **neither counts as a delivery**: a run whose only channels
+> are those announces every match to the terminal and marks NOTHING notified, which means it
+> re-announces the same listings on every pass and never writes the heartbeat marker. It is not
+> refused — `run --once` at a terminal is exactly that shape — but it warns at startup, `doctor`
+> says `AUCUN canal n'atteint de destinataire`, and **`scout test-notify` exits 1**.
+>
+> This matters because the SHIPPED `config/criteria.json` is `channels: ["console"]`. A deployment
+> that never adds a real channel in `criteria.local.json` looks healthy and delivers nothing. Run
+> `scout doctor` after any deploy: it now lists every channel, what it is, and whether it counts.
+>
+> Two review rounds were spent on this. Round 7 found `console` satisfying every "did it reach the
+> user" gate; the fix filtered it out **by name**, and round 8 found `email` over a file transport
+> walking through the same hole. It is a capability now — `Channel::reachesRecipient()` — asked
+> once, on the interface.
+
 Put the channel list in **`config/criteria.local.json`**, which is gitignored, rather than in the
 committed `config/criteria.json`. Compose mounts `./config` into the container, so it reaches the
 deployment; and the committed file stays free of anything that would make a fresh clone, a CI job or
@@ -228,11 +244,15 @@ connection the server did not upgrade**, and that refusal is proven by a sabotag
 scripted loopback server and its wire transcript. Sending yourself mail from your own address is
 normal and Gmail delivers it.
 
-Then verify — and verify the delivery, not the exit code:
+Then verify. **The exit code is now the guarantee**, and this section said the opposite for as
+long as it existed — *"verify the delivery, not the exit code"* was written when a console print
+satisfied `test-notify`, so the exit code meant nothing. It means something now: 0 only when a
+channel that can actually reach you accepted the message.
 
 ```bash
-scout test-notify              # console prints; ntfy and email are SILENT on success
-ls -t var/outbox | head -1     # `file` transport: the message that was not sent
+scout test-notify              # 0 = a real channel accepted it. 1 = nothing that counts did.
+scout doctor                   # lists every channel, what it is, and whether it counts
+ls -t var/outbox | head -1     # `file` transport: the message that was written and NOT sent
 ```
 
 > **`bin/scout` loads `.env` itself** (2026-08-22), so the host and the container read the same

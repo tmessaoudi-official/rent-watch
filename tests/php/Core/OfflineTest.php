@@ -83,6 +83,20 @@ final class OfflineTest extends TestCase
         self::assertNotNull(Offline::refusalForHost('imap.example.test:993', 'the alert mailbox'));
     }
 
+    /**
+     * A host carrying CREDENTIALS does not take the loopback exemption.
+     *
+     * `parse_url` reads `user:pw@localhost` as userinfo plus the host `localhost`, so the part
+     * after the `@` would have decided. Nothing in the tree produces that shape — the adapters
+     * pass `$host . ':' . $port` — but the value comes from `.env`, and this predicate decides
+     * whether a request may leave. Fail closed.
+     */
+    public function testAHostCarryingCredentialsIsNotLoopback(): void
+    {
+        self::assertFalse(Offline::isLoopback('//user:pw@localhost'));
+        self::assertNotNull(Offline::refusalForHost('user:pw@localhost', 'the alert mailbox'));
+    }
+
     /** The message names the component, never the credential — it is shown to the operator. */
     public function testTheRefusalNamesTheComponentAndNotTheCredential(): void
     {
@@ -108,7 +122,11 @@ final class OfflineTest extends TestCase
      */
     public function testTheHostPredicateAndTheUrlPredicateAgree(): void
     {
-        foreach (['127.0.0.1', 'localhost', '[::1]', 'LOCALHOST', 'evil.test', 'mailhog', 'mailpit'] as $host) {
+        // `::1` BARE is in this list deliberately. It is the one input on which the two
+        // predicates diverged, and the first version of this test listed only the bracketed form
+        // — so the test written to catch "two predicates disagreeing" was blind to the surviving
+        // instance, while the sibling test twelve lines below documented it. Found by two lenses.
+        foreach (['127.0.0.1', 'localhost', '::1', '[::1]', 'LOCALHOST', 'evil.test', 'mailhog', 'mailpit', '2001:db8::1'] as $host) {
             self::assertSame(
                 Offline::isLoopbackHost($host),
                 Offline::isLoopback('//' . $host),
@@ -123,7 +141,10 @@ final class OfflineTest extends TestCase
      * `parse_url('//::1')` returns the host `:`, so the exemption missed it and a wire test bound
      * to `::1` was refused. Fail-closed, so never a leak — but `isLoopbackHost('::1')` said true
      * while this said false, the same two-predicates-disagreeing shape as the `SmtpTransport` copy.
-     * `refusalForHost()` now brackets it before parsing.
+     *
+     * Round 8: the first fix bracketed inside `refusalForHost()`, which left the PREDICATES still
+     * disagreeing — a workaround at one call site, not one truth. The normalisation now lives at
+     * the single place the parse happens, and the equivalence test above carries bare `::1`.
      */
     public function testABareIpv6LoopbackIsExemptedLikeItsBracketedForm(): void
     {

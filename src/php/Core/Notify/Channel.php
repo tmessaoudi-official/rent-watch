@@ -33,4 +33,35 @@ interface Channel
 
     /** @throws ChannelError on any delivery failure */
     public function send(Notification $notification): void;
+
+    /**
+     * Can this channel reach a human who is NOT at this machine?
+     *
+     * The question `Notifier::delivered()` asks, and therefore the question behind
+     * `markNotified()`, the 24 h alert cooldown, the heartbeat marker and `test-notify`'s exit
+     * code. It is a CAPABILITY rather than a name, and that distinction has now cost two review
+     * rounds in a row.
+     *
+     * Round 7 found `console` satisfying every one of those gates: a print to a container log
+     * counted as a delivery, so a transient ntfy outage announced a flat to a log, wrote
+     * `notified_as = 'MATCH'` and suppressed it for ever. The fix filtered `console` out BY NAME —
+     * and round 8 found the same hole one door along: `email` over `SMTP_TRANSPORT=file` writes
+     * `.eml` to a directory the container destroys on rebuild, and it is not called `console`, so
+     * it voted. `test-notify` — the documented proof that a deployed image can reach the user —
+     * returned 0 for a message that went to a file.
+     *
+     * So the property lives here, on the interface, once. A name filter answers "is it this one";
+     * this answers the thing actually being asked.
+     */
+    public function reachesRecipient(): bool;
+
+    /**
+     * What this channel is, for `doctor`. NEVER a credential.
+     *
+     * On the interface because `doctor` needs it polymorphically. `EmailChannel` had this method
+     * with a docblock saying "For `doctor`" for as long as it existed, and `doctor` could not call
+     * it — the method was not on the interface and nothing referenced it. It is the one diagnostic
+     * that would have shown a file transport standing in for a real one.
+     */
+    public function describe(): string;
 }

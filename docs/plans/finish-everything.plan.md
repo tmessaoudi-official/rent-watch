@@ -164,6 +164,74 @@ purest instance yet: **a rule stated in TWO docblocks that the constructor never
   match-marking site and no test either way. Same shape as the "predates schema v7" sentence this
   project has now corrected six times. Both paths are pinned rather than cross-referenced now.
 
+### Round 8 (2026-08-25, frozen at `896fde5`): 23 FINDINGS — 1 P0, 3 P1. Seventh reset.
+
+**The P0 was created by the round-7 fix, and it is the same defect one door along.** Round 7 found
+`console` satisfying every "did it reach the user" gate and filtered it out BY NAME. `email` over
+`SMTP_TRANSPORT=file` writes an `.eml` into a directory `compose.yaml` does not mount — the
+container destroys it on rebuild — and it is not called `console`, so it voted: `hasRemoteChannel()`
+true, the new startup warning suppressed, `doctor` reporting a remote channel, `markNotified(...,
+'MATCH')` written permanently, the heartbeat marker written, and **`test-notify` exiting 0 for a
+message that went to a file**. Worse, the fix's own tests pinned it: four CLI classes had been moved
+to file-transport email AS their remote channel, so any correct fix broke them.
+
+- [2026-08-25] AGREED: **a delivery is a CAPABILITY, not a name.** `Channel::reachesRecipient()` is
+  on the interface; `MailTransport` carries it too and `EmailChannel` delegates, because the answer
+  is a property of the CONFIGURATION (`email` counts over SMTP and sendmail, not over file). The
+  name filter and its constant are DELETED rather than kept alongside — two mechanisms answering one
+  question is the shape that produced both this P0 and the `isLoopback` P1 the same round.
+- [2026-08-25] AGREED: **the test seam is an injected double, not a configured file transport.**
+  `Scout` takes an optional `Notifier`, the same kind of seam as its `HttpClient`. No offline
+  CONFIGURATION can play the part of a delivering channel, and reaching for the nearest thing that
+  looked like one is what made sixteen assertions pass for the wrong reason. Tests about channel
+  BUILDING must not inject, and that is stated where the seam is declared.
+- [2026-08-25] **`EmailChannel::describe()` was documented "For `doctor`" and called by nothing** —
+  it was not even on the `Channel` interface, so `doctor` could not have called it polymorphically.
+  It is the one diagnostic that would have shown a file transport standing in for a real channel.
+  `doctor` now lists every channel, what it is, and whether it counts.
+- [2026-08-25] **Round 7's SMTP narrowing replaced a refusal with NOTHING.** Gating
+  `SMTP_SECURITY=none` on the credential rather than the host is right — with no `SMTP_USER` there
+  is no credential to expose — but the MESSAGE still crosses the internet in clear and no surface
+  said so, while `.env.example` still promised a blanket refusal. `describe()` now carries
+  `⚠ EN CLAIR vers un hôte distant`, asserted in both directions.
+- [2026-08-25] **`Prose::elevator()`'s trailing-denial reader closed a proper subset of its class,**
+  found independently by two lenses: it required the denial to END the phrase, so `non renseigné`,
+  `non communiqué` and `non disponible` — the commonest French "not stated" values — fell through
+  to `true`. Replaced by a STRUCTURAL rule: an adjacent trailing denial is never `true`; bare
+  terminal → `false`, `non <word>` → `null`. Vocabulary would have been the wrong fix, since the
+  list is open and `non conforme` is not in it. **This flips round 7's `non conforme → true` pin to
+  `null`**, and that pin was justified by reasoning rather than a captured payload while two lenses
+  showed the design it protected minting wrong `true`s — which is the evidence the correction rule
+  requires.
+- [2026-08-25] **A claim that the window was load-bearing turned out to be FALSE, and is recorded
+  rather than pinned.** `LIFT_TRAILING_WINDOW` widened 16 → 200 changes nothing: the adjacency rule
+  already excludes anything with a word in it. Writing a case to make it look load-bearing would be
+  the dead-safety-code mistake this repo has removed twice.
+- [2026-08-25] **The two `isLoopback` predicates still disagreed.** Round 7 bracketed bare IPv6
+  inside `refusalForHost()` — a workaround at one call site — so `isLoopbackHost('::1')` said true
+  while `isLoopback('//::1')` said false, and the equivalence test written to catch exactly that was
+  given the BRACKETED form. Normalisation now lives at the single place the parse happens, the test
+  carries bare `::1`, and a host carrying credentials (`user:pw@localhost`, which `parse_url` reads
+  as userinfo plus a loopback host) fails closed.
+- [2026-08-25] **`Pinned in the ledger now.` was false when it was written**, in the commit that
+  fixed eight overclaimed guarantees. The ledger only mutates `src/`, never test files, so it could
+  not have acquired a case for the surface-matrix guard by accident. The real pin is a src-side case
+  that adds a constructor parameter to `RawListing`.
+- [2026-08-25] Also: the startup warning lived only on `run`, while `digest` and `reclassify` have
+  the identical property and printed a retry promise that is unconditionally false in that state;
+  `delivered()`'s by-name rule was unpinned (the discriminating case is a FAILING channel that does
+  not count); hard rule 4's opt-in read `$_SERVER['argv']`, a different source of truth from every
+  other flag, so its PERMITTING branch was unreachable through the test seam and all three existing
+  cases asserted refusal; a docblock sat above an unrelated test; `CLAUDE.md` cited `Scout.php:466`
+  for a line that had moved twice (cited by SYMBOL now); and the tests leaked temp roots — **21446
+  of them on this machine** — because `@rmdir` cannot remove a non-empty tree and fails silently.
+- [2026-08-25] **Two of round 7's three commit messages miscounted their own ledger additions**
+  (`bbc98d8` said "5 new + 2 retargeted" for 6 new + 1; `896fde5` said "3 new + 3 retargeted, 4/4"
+  where 3+3 contradicts its own 4/4). A reviewer re-ran all 16 and got 16/16 detected, so the
+  coverage was real and the evidence lines were not. Corrected here because history is immutable —
+  the second time in two rounds, so the rule is now explicit: **count new and retargeted cases from
+  `git diff` of the ledger file, never from memory.**
+
 ## A4 — the MAXIMAL round
 
 **Round 1 (2026-08-24, frozen at `e41240c`): FINDINGS — 15 across three lenses, 3 of them P0.**

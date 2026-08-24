@@ -72,7 +72,14 @@ final class Prose
      *
      * Much shorter than {@see LIFT_WINDOW} on purpose: a backward window is scanning a sentence
      * for its verb, while this is only reaching across the separator in a spec-block row
-     * (`Ascenseur : non`). Widening it would start reading the NEXT field's value.
+     * (`Ascenseur : non`).
+     *
+     * **It is a bound on the scan, not the guarantee**, and this sentence used to claim otherwise
+     * — *"widening it would start reading the NEXT field's value"*. Round 8 set it to 200 and the
+     * whole suite stayed green, because the ADJACENCY rule below (only separators may sit between
+     * the noun and the denial) already excludes anything with a word in it. Recorded rather than
+     * pinned with a case invented to make it look load-bearing: dead safety code reads as a second
+     * line of defence and is not one.
      */
     private const LIFT_TRAILING_WINDOW = 16;
 
@@ -173,8 +180,39 @@ final class Prose
             // erroring — under-extraction being the safe direction.
             $after = substr($folded, $at + \strlen('ascenseur'), self::LIFT_TRAILING_WINDOW);
 
-            if (preg_match('/^[\s:=\-.\x{2013}\x{2014}]*\b(?:non|aucun|aucune|pas)\b\s*(?:$|[\r\n.,;|\/])/u', $after) === 1) {
-                return false;
+            if (preg_match(
+                // The leading class is INTRA-ROW only — no `.`, no `|`, no newline. With `.` in it
+                // this reader reached across a sentence boundary and answered for the NEXT
+                // sentence's negation: `…dispose d'un ascenseur. Aucun ascenseur dans la
+                // résidence.` returned `null` instead of letting the backward scan find the real
+                // denial. Caught by the case written for that exact shape.
+                '/^[\s:=\-\x{2013}\x{2014}]*\b(?:non|aucun|aucune|pas)\b(?<tail>.*)$/us',
+                $after,
+                $trailing,
+            ) === 1) {
+                // AN ADJACENT TRAILING DENIAL IS NEVER `true`. Which of the two safe answers it
+                // gets depends on what follows it:
+                //
+                //   `Ascenseur : non`            -> FALSE. The row denies the lift.
+                //   `Ascenseur : non renseigné`  -> NULL.  "not stated" is unknown, not absent.
+                //   `Ascenseur non conforme`     -> NULL.  A lift that exists and is out of order.
+                //
+                // The first version of this reader required the denial to END the phrase, which
+                // took `non renseigné` / `non communiqué` / `non disponible` with it — the
+                // commonest French spec values for "unknown" — and defaulted them to `true`, the
+                // one direction this class's docblock forbids. Two review lenses found that
+                // independently. Vocabulary would have been the wrong fix: the list is open, and
+                // `non conforme` is not in it. The STRUCTURE decides instead, and both branches
+                // are safe — `null` says nothing, `false` only lowers the score.
+                // Only the REST OF THIS ROW counts. `Ascenseur : non | Balcon : oui` denies the
+                // lift and then starts a different field, so the tail is cut at the first row
+                // separator before being weighed — otherwise the next field's value would decide
+                // this one's verdict.
+                $tail = (string) ($trailing['tail'] ?? '');
+                $row = preg_split('/[\r\n|;\/.\x{2013}\x{2014}]/u', $tail, 2);
+                $tail = trim(\is_array($row) ? (string) $row[0] : $tail, " \t:-");
+
+                return $tail === '' ? false : null;
             }
 
             // The noun alone asserts the lift: French amenity prose says `ascenseur, gardien,

@@ -34,6 +34,17 @@ final readonly class FileTransport implements MailTransport
         return 'fichiers .eml dans ' . $this->directory;
     }
 
+    /**
+     * NO. It writes a file and sends nothing — the whole point of it.
+     *
+     * Under Q8's Docker deployment the outbox is image-local (`compose.yaml` mounts only `./state`
+     * and `./config`), so it does not even survive a rebuild.
+     */
+    public function reachesRecipient(): bool
+    {
+        return false;
+    }
+
     public function send(string $to, string $subject, string $body, array $headers): void
     {
         $problem = $this->check();

@@ -66,11 +66,10 @@
     },
     "_freshness_minutes": "A listing first seen within this window earns the full freshness bonus (S7). The brief notes good LLI units go within hours.",
     "freshness_minutes": 60,
-    "_notify": "Routing, ruled 2026-08-07. Nothing is batched: the premise of the whole tool is that good stock goes within hours. The SHIPPED config is console only, because a channel needing a credential cannot be the default in a repo whose .env is not filled in. This FROZEN test copy adds `email`, which the harness points at the file transport (SMTP_TRANSPORT=file): console cannot satisfy `Notifier::delivered()`, so without a remote channel these tests would assert that a listing was marked notified when nothing was delivered — which is the round-7 P0 itself, pinned.",
+    "_notify": "Routing, ruled 2026-08-07. Nothing is batched: the premise of the whole tool is that good stock goes within hours. Console only, matching the shipped config. Round 7 added `email` here over the file transport so these tests would have a channel that counts; round 8 found that a file transport cannot reach anyone either, so the tests inject a DeliveringChannel through Scout's constructor instead — a double that is honest about being one.",
     "notify": {
         "channels": [
-            "console",
-            "email"
+            "console"
         ],
         "high_priority_score": 70,
         "rent_drop_min_eur": 20,

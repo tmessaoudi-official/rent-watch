@@ -1533,6 +1533,23 @@ final class RecordingChannel implements Channel
     /** @var list<Notification> */
     public array $sent = [];
 
+    /**
+     * YES — these doubles stand in for a real push channel.
+     *
+     * Deliberate: a double that could not reach a recipient would make every assertion about a
+     * listing being marked notified pass for the wrong reason, which is exactly the round-8 P0
+     * (`email` over a file transport voting as a delivery).
+     */
+    public function reachesRecipient(): bool
+    {
+        return true;
+    }
+
+    public function describe(): string
+    {
+        return 'test double';
+    }
+
     public function name(): string
     {
         return 'recording';
@@ -1552,6 +1569,23 @@ final class RecordingChannel implements Channel
 /** A channel that always fails, for the delivery-gating tests. */
 final class FailingChannel implements Channel
 {
+    /**
+     * YES — these doubles stand in for a real push channel.
+     *
+     * Deliberate: a double that could not reach a recipient would make every assertion about a
+     * listing being marked notified pass for the wrong reason, which is exactly the round-8 P0
+     * (`email` over a file transport voting as a delivery).
+     */
+    public function reachesRecipient(): bool
+    {
+        return true;
+    }
+
+    public function describe(): string
+    {
+        return 'test double';
+    }
+
     public function name(): string
     {
         return 'failing';

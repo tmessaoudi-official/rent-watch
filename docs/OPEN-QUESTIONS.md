@@ -293,7 +293,18 @@ the criteria.
 shipped default enables `console` only, because a channel that needs a credential cannot be the
 default in a repo whose `.env` is not filled in. Enabling `ntfy` or `email` without its credential is a
 **startup refusal**, not a silent no-op — an unsent notification is the failure this project cannot
-afford. LIBRE listings go fast, which is the argument for push; email is the argument for a readable
+afford.
+
+> **AMENDED twice, and the second amendment inverts what the sentence above implies.** Q28 already
+> scoped the refusal: it fires only when NOTHING is usable, so with `console` in the list — which
+> the shipped config has — a credential-less `ntfy` or `email` is reported and disabled, never a
+> refusal. **And as of 2026-08-25 `console` does not COUNT as a delivery, nor does `email` over
+> `SMTP_TRANSPORT=file`.** So a console-only deployment is the very state this answer says the
+> project cannot afford — every notification unsent, by construction — and it is deliberately still
+> allowed to start, because `run --once` at a terminal is that shape. What changed instead: nothing
+> is marked notified, the run warns at startup, `doctor` names every channel and whether it counts,
+> and `test-notify` exits 1. Reversing this means making `hasRemoteChannel()` false a startup
+> refusal in `Scout::runCommand()`. LIBRE listings go fast, which is the argument for push; email is the argument for a readable
 record. Having both, gated on config, costs one interface and two small classes.
 
 

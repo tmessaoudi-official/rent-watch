@@ -785,6 +785,33 @@ final class NetworkAdaptersTest extends TestCase
         self::assertNull((new SmtpTransport('mailpit', 1025, security: 'none'))->check());
     }
 
+    /**
+     * The narrowing must not be SILENT.
+     *
+     * Round 7 changed the `SMTP_SECURITY=none` guard from "refuse for any non-loopback host" to
+     * "refuse only when a credential would go with it" — right about credentials, and it replaced
+     * a refusal with nothing at all: no warning, no `disabledReport()` entry, no `doctor` line.
+     * The message body — every notified listing plus the recipient — crosses the internet in the
+     * clear, and the only surface that could have said so was `describe()`, which nothing called.
+     */
+    public function testAnUnencryptedRemoteConnectionSaysSoEvenThoughItIsPermitted(): void
+    {
+        $permitted = new SmtpTransport('smtp.example.test', 25, security: 'none');
+
+        self::assertNull($permitted->check(), 'no credential, so it is not refused');
+        self::assertStringContainsString(
+            'EN CLAIR',
+            $permitted->describe(),
+            'but `doctor` must say the mail is leaving unencrypted',
+        );
+
+        self::assertStringNotContainsString(
+            'EN CLAIR',
+            (new SmtpTransport('localhost', 1025, security: 'none'))->describe(),
+            'a loopback test server is not a warning — a notice that always fires is furniture',
+        );
+    }
+
     public function testSmtpRefusesAUserWithNoPassword(): void
     {
         $problem = (new SmtpTransport('smtp.example.test', 587, 'user', ''))->check();

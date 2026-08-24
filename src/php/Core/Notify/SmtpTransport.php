@@ -67,9 +67,32 @@ final readonly class SmtpTransport implements MailTransport
         return null;
     }
 
+    /** YES — it opens a socket to a mail server. */
+    public function reachesRecipient(): bool
+    {
+        return true;
+    }
+
+    /**
+     * `doctor` reads this, and it must SAY when the mail is leaving in the clear.
+     *
+     * Round 7 narrowed the `SMTP_SECURITY=none` guard from "refuse for any non-loopback host" to
+     * "refuse only when a credential would go with it" — correctly reasoned about credentials, and
+     * it replaced a refusal with NOTHING: no warning, no `disabledReport()` entry, no line here.
+     * The message body — every notified listing plus the recipient — crosses the internet in clear
+     * and the only surface that could say so was this method, which nothing called. Both halves
+     * are fixed in the same round: `describe()` is on the `Channel` interface now and `doctor`
+     * prints it.
+     */
     public function describe(): string
     {
-        return 'SMTP ' . $this->host . ':' . $this->port . ' (' . $this->security . ')';
+        $line = 'SMTP ' . $this->host . ':' . $this->port . ' (' . $this->security . ')';
+
+        if ($this->security === 'none' && !Offline::isLoopbackHost($this->host)) {
+            $line .= ' ⚠ EN CLAIR vers un hôte distant';
+        }
+
+        return $line;
     }
 
     public function send(string $to, string $subject, string $body, array $headers): void

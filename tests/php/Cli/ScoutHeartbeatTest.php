@@ -7,6 +7,9 @@ namespace RentWatch\Tests\Cli;
 use PHPUnit\Framework\Attributes\CoversNothing;
 use PHPUnit\Framework\TestCase;
 use RentWatch\Cli\Scout;
+use RentWatch\Core\Notify\ConsoleChannel;
+use RentWatch\Core\Notify\Notifier;
+use RentWatch\Tests\Support\DeliveringChannel;
 
 /**
  * Q27 in the loop, rather than in the policy object.
@@ -34,12 +37,6 @@ final class ScoutHeartbeatTest extends TestCase
 
     protected function setUp(): void
     {
-        // A REMOTE channel that needs no network and no credential: `email` over the file
-        // transport writes `.eml` into <root>/var/outbox. Before round 7 these tests ran
-        // console-only, and console then satisfied `Notifier::delivered()` — so every assertion
-        // about a listing being marked notified passed for a reason that was itself the P0.
-        putenv('SMTP_TO=watcher@example.test');
-        putenv('SMTP_TRANSPORT=file');
         // `--watch`'s success case never returns, so the bound is not optional: without it a wrong
         // expectation does not fail, it hangs — and it hangs the suite and the sabotage ledger
         // behind it.
@@ -52,14 +49,12 @@ final class ScoutHeartbeatTest extends TestCase
 
     protected function tearDown(): void
     {
-        putenv('SMTP_TRANSPORT');
-        putenv('SMTP_TO');
         putenv('RENT_WATCH_MAX_PASSES');
         putenv('HEARTBEAT_HOURS');
         putenv('RENT_WATCH_DB');
 
         foreach ($this->roots as $root) {
-            $this->removeTree($root);
+            self::removeTree($root);
         }
 
         $this->roots = [];
@@ -97,8 +92,8 @@ final class ScoutHeartbeatTest extends TestCase
         // marker surviving it is exactly what Q8's mounted volume is for.
         $root = $this->tempRoot();
 
-        $first = $this->watchIn($root);
-        $second = $this->scoutIn($root, ['run', '--watch']);
+        $first = $this->watchIn($root, $this->delivering());
+        $second = $this->scoutIn($root, ['run', '--watch'], null, $this->delivering());
 
         self::assertSame(1, substr_count($first['out'], 'toujours actif'), 'the first start beats');
         self::assertStringNotContainsString(
@@ -154,12 +149,12 @@ final class ScoutHeartbeatTest extends TestCase
         $subset['results']['items'] = \array_slice($payload['results']['items'], 0, 1);
         file_put_contents($root . '/tests/fixtures/fixture_demo/search.json', json_encode($subset, JSON_THROW_ON_ERROR));
 
-        $this->scoutIn($root, ['run', '--once', '--seed']);
+        $this->scoutIn($root, ['run', '--once', '--seed'], null, $this->delivering());
 
         file_put_contents($root . '/tests/fixtures/fixture_demo/search.json', $full);
         mkdir($root . '/state/heartbeat.txt', 0o775, true);
 
-        $r = $this->scoutIn($root, ['run', '--watch']);
+        $r = $this->scoutIn($root, ['run', '--watch'], null, $this->delivering());
 
         self::assertMatchesRegularExpression(
             '~[1-9]\d* annonce\(s\) notifiée\(s\)~',
@@ -220,7 +215,7 @@ final class ScoutHeartbeatTest extends TestCase
         // deploy, and a marker that resets makes every restart emit a beat — which is harmless, and
         // makes the interval meaningless.
         $root = $this->tempRoot();
-        $this->watchIn($root);
+        $this->watchIn($root, $this->delivering());
 
         self::assertFileExists($root . '/state/heartbeat.txt');
         self::assertStringContainsString(
@@ -235,7 +230,7 @@ final class ScoutHeartbeatTest extends TestCase
         $root = $this->tempRoot();
         file_put_contents($root . '/state/heartbeat.txt', '2026-08-22T11:00:00+02:00');
 
-        $r = $this->watchIn($root);
+        $r = $this->watchIn($root, $this->delivering());
 
         self::assertStringNotContainsString('toujours actif', $r['out'], 'one hour is inside a 24h interval');
     }
@@ -643,20 +638,47 @@ final class ScoutHeartbeatTest extends TestCase
         );
     }
 
-    /** @return array{code: int, out: string, err: string} */
-    private function watch(): array
+    /**
+     * A channel that COUNTS and always succeeds, composed with `console` inside the helpers.
+     *
+     * These tests assert that a listing was marked notified, which requires a real delivery, and
+     * no offline CONFIGURATION can provide one: `console` cannot reach anyone and neither can
+     * `email` over `SMTP_TRANSPORT=file` — which is what these four classes used for one review
+     * round, making every such assertion pass for the reason that was itself the round-8 P0.
+     *
+     * It returns a CHANNEL rather than a `Notifier` on purpose. The helper composes it with a
+     * `ConsoleChannel` bound to the test's own `$out` stream, so stdout assertions keep working
+     * and the shape matches production: one channel to read, one that delivers.
+     */
+    private function delivering(): DeliveringChannel
     {
-        return $this->watchIn($this->tempRoot());
+        return new DeliveringChannel();
+    }
+
+    /**
+     * `console` plus the delivering double, or `null` to let `Scout` build from config.
+     *
+     * @param resource $out
+     */
+    private static function compose(mixed $out, ?DeliveringChannel $delivering): ?Notifier
+    {
+        return $delivering === null ? null : new Notifier([new ConsoleChannel($out), $delivering]);
     }
 
     /** @return array{code: int, out: string, err: string} */
-    private function watchIn(string $root): array
+    private function watch(?DeliveringChannel $delivering = null): array
+    {
+        return $this->watchIn($this->tempRoot(), $delivering);
+    }
+
+    /** @return array{code: int, out: string, err: string} */
+    private function watchIn(string $root, ?DeliveringChannel $delivering = null): array
     {
         // Seeded first, because `run` refuses to notify on an empty seen-set (Q36) and would never
         // reach the loop.
-        $this->scoutIn($root, ['run', '--once', '--seed']);
+        $this->scoutIn($root, ['run', '--once', '--seed'], null, $delivering);
 
-        return $this->scoutIn($root, ['run', '--watch']);
+        return $this->scoutIn($root, ['run', '--watch'], null, $delivering);
     }
 
     /**
@@ -664,7 +686,7 @@ final class ScoutHeartbeatTest extends TestCase
      *
      * @return array{code: int, out: string, err: string}
      */
-    private function scoutIn(string $root, array $argv, ?string $db = null): array
+    private function scoutIn(string $root, array $argv, ?string $db = null, ?DeliveringChannel $delivering = null): array
     {
         $out = fopen('php://memory', 'r+');
         $err = fopen('php://memory', 'r+');
@@ -676,7 +698,7 @@ final class ScoutHeartbeatTest extends TestCase
         // exercised a perfectly good database and failed for a reason unrelated to its subject.
         putenv('RENT_WATCH_DB=' . ($db ?? $root . '/state/rent-watch.sqlite3'));
 
-        $code = (new Scout($root, $out, $err, self::NOW))->run($argv);
+        $code = (new Scout($root, $out, $err, self::NOW, null, self::compose($out, $delivering)))->run($argv);
         rewind($out);
         rewind($err);
 
@@ -698,7 +720,6 @@ final class ScoutHeartbeatTest extends TestCase
         );
 
         file_put_contents($root . '/config/criteria.json', json_encode($criteria + [
-            'notify' => ['channels' => ['console', 'email']],
             'communes' => ['Sartrouville'],
             'postcode_prefixes' => ['78'],
             'min_rooms' => 4,
@@ -753,4 +774,5 @@ final class ScoutHeartbeatTest extends TestCase
 
         @rmdir($path);
     }
+
 }

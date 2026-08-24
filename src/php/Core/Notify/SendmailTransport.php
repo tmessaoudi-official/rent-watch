@@ -12,6 +12,16 @@ final readonly class SendmailTransport implements MailTransport
         return function_exists('mail') ? null : 'PHP mail() is unavailable in this build';
     }
 
+    /**
+     * YES. `mail()` hands the message to a local MTA, which relays it off the machine — which is
+     * also why {@see \RentWatch\Core\Offline} refuses this one outright with no loopback
+     * exemption: there is no host to inspect.
+     */
+    public function reachesRecipient(): bool
+    {
+        return true;
+    }
+
     public function describe(): string
     {
         return 'mail() via le MTA de l\'hôte';

@@ -6,6 +6,9 @@ namespace RentWatch\Tests\Cli;
 
 use PHPUnit\Framework\TestCase;
 use RentWatch\Cli\Scout;
+use RentWatch\Core\Notify\ConsoleChannel;
+use RentWatch\Core\Notify\Notifier;
+use RentWatch\Tests\Support\DeliveringChannel;
 use RentWatch\Core\RawListing;
 use RentWatch\Store\Store;
 
@@ -40,18 +43,10 @@ final class ScoutReclassifyTest extends TestCase
 
     protected function setUp(): void
     {
-        // A REMOTE channel that needs no network and no credential: `email` over the file
-        // transport writes `.eml` into <root>/var/outbox. Before round 7 these tests ran
-        // console-only, and console then satisfied `Notifier::delivered()` — so every assertion
-        // about a listing being marked notified passed for a reason that was itself the P0.
-        putenv('SMTP_TO=watcher@example.test');
-        putenv('SMTP_TRANSPORT=file');
     }
 
     protected function tearDown(): void
     {
-        putenv('SMTP_TRANSPORT');
-        putenv('SMTP_TO');
         foreach ($this->roots as $root) {
             self::removeTree($root);
         }
@@ -76,7 +71,7 @@ final class ScoutReclassifyTest extends TestCase
             rooms: 4,
         ), tenure: 'UNKNOWN', outcome: 'DIGEST');
 
-        $result = $this->scout($root, ['reclassify']);
+        $result = $this->scout($root, ['reclassify'], $this->delivering());
 
         self::assertSame(0, $result['code'], $result['err']);
         self::assertStringContainsString('1 promotion', mb_strtolower($result['out']));
@@ -137,7 +132,7 @@ final class ScoutReclassifyTest extends TestCase
             rooms: 4,
         ), tenure: 'UNKNOWN', outcome: 'DIGEST');
 
-        $result = $this->scout($root, ['reclassify']);
+        $result = $this->scout($root, ['reclassify'], $this->delivering());
 
         // Loud AND scoped. One damaged row voiding the whole run is the blast-radius mistake detail
         // hydration already made once: a single bad page must not stop every other listing being
@@ -258,14 +253,12 @@ final class ScoutReclassifyTest extends TestCase
         self::assertFalse($store->wasNotified($key));
 
         // The actual retry, exercised rather than asserted about: a second run with a working
-        // channel must find and announce it. That channel has to be a REMOTE one — it was
-        // `console` until round 7, which delivered nothing and proved the retry worked anyway.
+        // channel must find and announce it. That channel has to be one that genuinely REACHES a
+        // recipient — it was `console` until round 7, then `email` over a file transport until
+        // round 8, and neither delivers anything, so the retry proved itself either way.
         putenv('NTFY_TOPIC');
         putenv('NTFY_SERVER');
-        $second = $this->scout(
-            $this->reconfigure($root, ['notify' => ['channels' => ['console', 'email']]]),
-            ['reclassify'],
-        );
+        $second = $this->scout($root, ['reclassify'], $this->delivering());
 
         self::assertSame(0, $second['code'], $second['err']);
         self::assertStringContainsString('1 promotion', mb_strtolower($second['out']));
@@ -326,7 +319,7 @@ final class ScoutReclassifyTest extends TestCase
         $root = $this->tempRoot();
         $key = $this->seed($root, $this->intermediateListing('I-9'), tenure: 'UNKNOWN', outcome: 'REJECT');
 
-        $result = $this->scout($root, ['reclassify']);
+        $result = $this->scout($root, ['reclassify'], $this->delivering());
 
         self::assertSame(0, $result['code'], $result['err']);
         self::assertStringContainsString('1 promotion', mb_strtolower($result['out']));
@@ -497,7 +490,7 @@ final class ScoutReclassifyTest extends TestCase
 
         Store::open($root . '/state/rent-watch.sqlite3')->assignGroup([$key, $siblingKey]);
 
-        $r = $this->scout($root, ['reclassify']);
+        $r = $this->scout($root, ['reclassify'], $this->delivering());
 
         self::assertSame(0, $r['code']);
         self::assertStringContainsString(
@@ -526,7 +519,7 @@ final class ScoutReclassifyTest extends TestCase
             $this->seed($root, $this->intermediateListing('PROMO-' . $i), 'UNKNOWN', 'DIGEST');
         }
 
-        $first = $this->scout($root, ['reclassify']);
+        $first = $this->scout($root, ['reclassify'], $this->delivering());
 
         self::assertSame(0, $first['code']);
         self::assertStringContainsString(
@@ -541,7 +534,7 @@ final class ScoutReclassifyTest extends TestCase
         );
 
         // Nothing is written for an un-announced promotion, so the remainder is still reachable.
-        $second = $this->scout($root, ['reclassify']);
+        $second = $this->scout($root, ['reclassify'], $this->delivering());
 
         self::assertStringContainsString(
             '4 promotion(s) vers MATCH.',
@@ -579,7 +572,6 @@ final class ScoutReclassifyTest extends TestCase
     private function reconfigure(string $root, array $criteria): string
     {
         file_put_contents($root . '/config/criteria.json', json_encode($criteria + [
-            'notify' => ['channels' => ['console', 'email']],
             'communes' => ['Sartrouville'],
             'postcode_prefixes' => ['78'],
             'min_rooms' => 3,
@@ -625,11 +617,38 @@ final class ScoutReclassifyTest extends TestCase
     }
 
     /**
+     * A channel that COUNTS and always succeeds, composed with `console` inside the helpers.
+     *
+     * These tests assert that a listing was marked notified, which requires a real delivery, and
+     * no offline CONFIGURATION can provide one: `console` cannot reach anyone and neither can
+     * `email` over `SMTP_TRANSPORT=file` — which is what these four classes used for one review
+     * round, making every such assertion pass for the reason that was itself the round-8 P0.
+     *
+     * It returns a CHANNEL rather than a `Notifier` on purpose. The helper composes it with a
+     * `ConsoleChannel` bound to the test's own `$out` stream, so stdout assertions keep working
+     * and the shape matches production: one channel to read, one that delivers.
+     */
+    private function delivering(): DeliveringChannel
+    {
+        return new DeliveringChannel();
+    }
+
+    /**
+     * `console` plus the delivering double, or `null` to let `Scout` build from config.
+     *
+     * @param resource $out
+     */
+    private static function compose(mixed $out, ?DeliveringChannel $delivering): ?Notifier
+    {
+        return $delivering === null ? null : new Notifier([new ConsoleChannel($out), $delivering]);
+    }
+
+    /**
      * @param list<string> $argv
      *
      * @return array{code: int, out: string, err: string}
      */
-    private function scout(string $root, array $argv): array
+    private function scout(string $root, array $argv, ?DeliveringChannel $delivering = null): array
     {
         $out = fopen('php://memory', 'r+');
         $err = fopen('php://memory', 'r+');
@@ -638,7 +657,7 @@ final class ScoutReclassifyTest extends TestCase
 
         putenv('RENT_WATCH_DB=' . $root . '/state/rent-watch.sqlite3');
 
-        $code = (new Scout($root, $out, $err, self::NOW))->run($argv);
+        $code = (new Scout($root, $out, $err, self::NOW, null, self::compose($out, $delivering)))->run($argv);
         rewind($out);
         rewind($err);
 

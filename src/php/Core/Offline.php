@@ -76,10 +76,6 @@ final class Offline
         // and this said false, which is precisely the two-predicates-disagreeing shape round 7
         // found between this class and `SmtpTransport`. Found by the equivalence test written for
         // that finding.
-        if (!str_contains($host, '://') && !str_contains($host, '[') && substr_count($host, ':') > 1) {
-            $host = '[' . $host . ']';
-        }
-
         if (self::refusal(str_contains($host, '://') ? $host : '//' . $host) === null) {
             return null;
         }
@@ -114,12 +110,53 @@ final class Offline
      */
     public static function isLoopback(string $url): bool
     {
-        $host = parse_url($url, PHP_URL_HOST);
+        $host = parse_url(self::bracketBareIpv6($url), PHP_URL_HOST);
         if (!is_string($host)) {
             return false;
         }
 
+        // `parse_url` reads `user:pw@localhost` as userinfo plus the host `localhost`, so a value
+        // carrying credentials would take the loopback exemption on the strength of the part after
+        // the `@`. Nothing in the tree produces that shape — the adapters pass `$host . ':' . $port`
+        // — but it comes from `.env`, and this predicate decides whether a request is allowed to
+        // leave. Fail closed.
+        if (str_contains($url, '@')) {
+            return false;
+        }
+
         return self::isLoopbackHost($host);
+    }
+
+    /**
+     * Bracket a BARE IPv6 literal so `parse_url` can read it as a host.
+     *
+     * `parse_url('//::1')` returns the host `:`, not `::1` — so the two predicates in this class
+     * disagreed about `::1` for a round: {@see isLoopbackHost()} said loopback and
+     * {@see isLoopback()} said third-party. Fail-closed, so never a leak, and that is exactly what
+     * made it survive: it was worked around inside {@see refusalForHost()} rather than fixed here,
+     * and the equivalence test written to catch two predicates disagreeing was given the BRACKETED
+     * form and so could not see the surviving instance.
+     *
+     * Applied at the one place the parse happens, so there is a single truth.
+     */
+    private static function bracketBareIpv6(string $url): string
+    {
+        $authority = $url;
+        $scheme = strpos($authority, '://');
+        if ($scheme !== false) {
+            $authority = substr($authority, $scheme + 3);
+        } elseif (str_starts_with($authority, '//')) {
+            $authority = substr($authority, 2);
+        } else {
+            return $url;
+        }
+
+        $authority = strtok($authority, '/?#');
+        if ($authority === false || str_contains($authority, '[') || substr_count($authority, ':') < 2) {
+            return $url;
+        }
+
+        return str_replace($authority, '[' . $authority . ']', $url);
     }
 
     /**

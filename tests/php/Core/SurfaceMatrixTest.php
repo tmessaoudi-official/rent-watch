@@ -393,7 +393,14 @@ final class SurfaceMatrixTest extends TestCase
      * non-empty, and the sentence above was a promise nothing kept: round 7 added a real unread
      * string property to `RawListing` and this test stayed green while the snapshot reflection
      * guard caught it. The matrix is the structural §1 control that eight review rounds produced,
-     * and the mechanism that makes it grow with the model was inert. Pinned in the ledger now.
+     * and the mechanism that makes it grow with the model was inert.
+     *
+     * **"Pinned in the ledger now" is what that sentence said next, and it was false when it was
+     * written** — the ledger only ever mutates `src/`, never test files, so it could not acquire a
+     * case for this by accident and had none. Round 8 caught it, in the commit that fixed eight
+     * overclaimed guarantees. The real pin is a SRC-side case that adds a constructor parameter to
+     * `RawListing` and expects red: *"a new listing field reaches no matrix surface and nothing
+     * says so"*.
      */
     public function testTheSurfaceListCoversEveryStringPropertyOfTheModel(): void
     {

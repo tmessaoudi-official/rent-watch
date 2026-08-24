@@ -33,6 +33,18 @@ final readonly class EmailChannel implements Channel
         return $this->transport->describe();
     }
 
+    /**
+     * Delegated, because the answer is a property of the TRANSPORT and not of this channel.
+     *
+     * `email` reaches a human over SMTP and over a host MTA; over {@see FileTransport} it writes
+     * an `.eml` and sends nothing. Round 8 found that difference deciding whether a listing was
+     * marked notified for ever — `test-notify` returned 0 for a message that went to a file.
+     */
+    public function reachesRecipient(): bool
+    {
+        return $this->transport->reachesRecipient();
+    }
+
     public function name(): string
     {
         return 'email';

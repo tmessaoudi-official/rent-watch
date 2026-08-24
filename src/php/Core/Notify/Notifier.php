@@ -27,6 +27,9 @@ namespace RentWatch\Core\Notify;
  * `console` deliberately does not count toward "a channel is usable" — under Docker it is the
  * container log, which is not a notification channel for anyone.
  *
+ * More precisely: `console` cannot REACH ANYONE, and neither can `email` over a file transport.
+ * The question is a capability, not a name — see {@see Channel::reachesRecipient()}.
+ *
  * **That last sentence was prose for a long time and the constructor did not implement it.**
  * `ConsoleChannel::check()` returns `null`, so console landed in `$usable`, and `delivered()`
  * asked whether fewer channels failed than were usable — so ONE console print satisfied every
@@ -37,24 +40,21 @@ namespace RentWatch\Core\Notify;
  */
 final readonly class Notifier
 {
-    /**
-     * The one channel name that does not count as a delivery.
-     *
-     * Named here rather than compared inline so the rule has a single spelling: it is asked by
-     * the constructor and by {@see hasRemoteChannel()}, and those two disagreeing is exactly the
-     * shape of defect this class already carries a scar from.
-     */
-    private const string CONSOLE = 'console';
-
     /** @var list<Channel> */
     private array $usable;
 
     /**
      * The usable channels that can actually reach a human who is not at a terminal.
      *
-     * `$usable` is the send list; this is the QUORUM. They differ by exactly `console`, and
-     * keeping them as two sets rather than filtering at each call site is deliberate — the bug
-     * this fixes was one call site out of five asking the wrong question.
+     * `$usable` is the send list; this is the QUORUM. Keeping them as two sets rather than
+     * filtering at each call site is deliberate — the bug this fixes was one call site out of five
+     * asking the wrong question.
+     *
+     * Membership is {@see Channel::reachesRecipient()}, a CAPABILITY, and it replaced a filter on
+     * the literal name `console` after that filter lasted exactly one review round: `email` over
+     * `SMTP_TRANSPORT=file` writes `.eml` to a directory the container destroys on rebuild, is not
+     * called `console`, and so voted. Two mechanisms answering one question is the shape this file
+     * already carries a scar from; there is now one.
      *
      * @var list<Channel>
      */
@@ -88,7 +88,7 @@ final readonly class Notifier
         $this->usable = $usable;
         $this->counting = array_values(array_filter(
             $usable,
-            static fn (Channel $c): bool => $c->name() !== self::CONSOLE,
+            static fn (Channel $c): bool => $c->reachesRecipient(),
         ));
         $this->disabled = $disabled;
     }
@@ -136,6 +136,31 @@ final readonly class Notifier
     public function disabledReport(): array
     {
         return $this->disabled;
+    }
+
+    /**
+     * Every usable channel, for `doctor`: name, what it is, and whether it COUNTS.
+     *
+     * This is the diagnostic that would have shown a file transport standing in for a real
+     * channel. `EmailChannel::describe()` existed with a docblock saying "For `doctor`" for as
+     * long as the class did, and `doctor` could not call it — the method was not on the interface
+     * and nothing in the tree referenced it. Round 8 found the dead method and the P0 it would
+     * have exposed in the same pass.
+     *
+     * @return list<array{name: string, describe: string, counts: bool}>
+     */
+    public function inventory(): array
+    {
+        $rows = [];
+        foreach ($this->usable as $channel) {
+            $rows[] = [
+                'name' => $channel->name(),
+                'describe' => $channel->describe(),
+                'counts' => $channel->reachesRecipient(),
+            ];
+        }
+
+        return $rows;
     }
 
     /** Does anything here actually reach the developer when they are not at a terminal? */
