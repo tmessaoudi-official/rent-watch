@@ -293,6 +293,41 @@ final class StoreTest extends TestCase
     }
 
     /**
+     * An UNRECOGNISED announcement kind ranks as the strongest, which is the quiet direction.
+     *
+     * `markNotified()` writes `$as` unvalidated, so `announcementRank()`'s `default` arm is
+     * reachable by any caller passing a third string. Its docblock states the rule — *"re-announcing
+     * on a value nobody understands is the loud direction in the one place §1 wants the quiet one"*
+     * — and round 7 found nothing pinned it: flipping the arm so an unknown kind ranks LOWEST left
+     * the whole suite green.
+     *
+     * The sibling rule, a pre-v8 NULL reading as MATCH, IS pinned (below, and in the ledger). This
+     * is the same guarantee reached through the other door.
+     */
+    public function testAnUnrecognisedAnnouncementKindIsTreatedAsTheStrongest(): void
+    {
+        $listing = $this->listing(externalId: 'ANN-P5');
+        $key = $this->store->dedupKey($listing);
+        $this->store->record($listing, 900, '2026-08-07T09:00:00+00:00');
+
+        $this->store->markNotified($key, '2026-08-07T10:00:00+00:00', 'TELEGRAPH');
+
+        self::assertTrue(
+            $this->store->wasNotifiedAs($key, 'TELEGRAPH'),
+            'the kind it was actually announced as',
+        );
+        self::assertTrue(
+            $this->store->wasNotifiedAs($key, 'DIGEST'),
+            'and it outranks a digest, so nothing re-announces it as a doubt',
+        );
+        self::assertTrue(
+            $this->store->wasNotifiedAs($key, 'MATCH'),
+            'a kind nobody understands must SUPPRESS rather than re-announce — the flat may '
+            . 'already be on the user\'s phone, and §1 wants the quiet direction here',
+        );
+    }
+
+    /**
      * A PRE-v8 row — a timestamp with no recorded kind — reads as MATCH, and that is the quiet
      * direction on purpose.
      *

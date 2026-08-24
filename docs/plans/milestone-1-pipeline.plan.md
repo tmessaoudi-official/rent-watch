@@ -1695,7 +1695,7 @@ from the diff — so they are written here rather than left for a later session 
   both cases are loud. That is consistent, and it is the direction hard rule 3 wants — but it does
   mean a pass can now fail on an input that previously passed.
 - **A delivered digest marks only the survivor**, so a later pass whose shuffle flips survivorship can
-  digest the same flat again. This is the SAME trade already documented for matches, and it must not
+  digest the same flat again. This is the same trade the MATCH path makes, and — corrected 2026-08-24 — it was NOT "already documented" anywhere: `git grep` over the whole tree found that phrase citing only itself, with no comment at `Pipeline.php`'s match-marking site and no test asserting the behaviour either way. Both paths are pinned now (`testADeliveredMatchMarksOnlyTheSurvivorNeverTheWholeCluster` and its digest twin), which is what the citation was standing in for. It must not
   be "fixed" by marking members notified on delivery: that is group-scoped suppression, and an
   over-merge would then hide a real flat permanently and silently. `--seed` marks every member and is
   not an exception to this — seeding is about listings that are currently published, not about groups.

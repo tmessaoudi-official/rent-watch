@@ -967,6 +967,29 @@ final class ScoutTest extends TestCase
         return $root;
     }
 
+    /**
+     * `replay` is an alias of `dump`, and `help` has to say so.
+     *
+     * Round 7 found a THREE-WAY disagreement: README and the spec both said
+     * `scout replay <fixture>`, the code is `'replay' => $this->dump($flags)` — which takes a
+     * source NAME — and `scout help` did not mention the verb at all, so the tool's own help denied
+     * it existed. A documented verb absent from help is how a three-way drift survives.
+     */
+    public function testReplayIsAnAliasOfDumpAndSaysSoInHelp(): void
+    {
+        $help = $this->scout(['help']);
+
+        self::assertStringContainsString('scout replay', $help['out'], 'a documented verb must be listed');
+
+        $r = $this->scout(['replay', 'fixture_demo']);
+        self::assertSame(0, $r['code'], $r['err']);
+
+        // And the shape the docs used to promise, so the disagreement cannot come back silently.
+        $byPath = $this->scout(['replay', 'tests/fixtures/fixture_demo/search.json']);
+        self::assertSame(2, $byPath['code'], 'a fixture PATH is not what this verb takes');
+        self::assertStringContainsString('source inconnue', $byPath['err']);
+    }
+
     /** @param list<string> $channels */
     private function fixtureRootWithChannels(array $channels): string
     {

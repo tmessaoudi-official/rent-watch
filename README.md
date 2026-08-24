@@ -290,8 +290,17 @@ scout run --watch [-v]        # loop: every 15 min ± 5 of jitter, paced per hos
 scout test-notify             # verify the notification channel
 scout digest [--dry-run]      # emit the pending "à vérifier" rollup, on demand
 scout reclassify [--dry-run]  # re-judge stored UNKNOWN verdicts against today's classifier
-scout replay <fixture>        # re-run parsing against a saved fixture
+scout replay <source>         # alias of `dump` — see the amendment below
 ```
+
+`scout replay` is an ALIAS OF `dump`, and takes a SOURCE NAME — not a fixture path. This line said
+`<fixture>` for as long as the verb existed, and `scout replay tests/fixtures/inli/search.html`
+answers *"source inconnue"* and exits 2. A three-way disagreement, since the verb was also absent
+from `scout help` entirely: the spec asked for one thing, the code did another, and the tool's own
+help denied the verb existed. Documented as it behaves rather than quietly dropped — for a
+`type: fixture` source `dump` IS a replay against a saved payload, which is most of what the spec
+asked for. Building the fixture-path form is recorded as outstanding in
+`spec/PROJECT_BRIEF.md`.
 
 `scout digest` reads the STORE, not the last pass, and that is the difference that makes it worth
 having: the pipeline already re-offers an undelivered digest entry next run, but only while the ad

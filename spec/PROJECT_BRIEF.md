@@ -283,8 +283,17 @@ scout run --seed              # populate the seen-set without notifying (empty s
 scout digest [--dry-run]      # emit the "à vérifier" digest on demand — added 2026-08-07 (1c)
 scout reclassify [--dry-run]  # re-judge stored undetermined verdicts — added 2026-08-07 (Q35)
 scout test-notify             # verify the notification channel
-scout replay <fixture>        # re-run parsing against a saved fixture
+scout replay <source>         # alias of `dump` — see the amendment below
 ```
+
+**Amended 2026-08-24 on `replay`, which is an ALIAS rather than the verb specified.** This line
+read `scout replay <fixture>`; the implementation is `'replay' => $this->dump($flags)`, which takes
+a SOURCE NAME, and the verb was missing from `scout help` altogether — so the spec, the code and the
+tool's own help each said something different, and a fixture path exits 2 with *"source inconnue"*.
+Now listed in `help` and documented as an alias. For a `type: fixture` source, `dump` already IS a
+replay against a saved payload; what is NOT built is replaying an arbitrary fixture file through a
+network source's field map, which is the useful half for developing a map offline. Outstanding, not
+withdrawn — unlike `--since`, nothing about it is unsound.
 
 **Amended 2026-08-24 on `--since`, which is REFUSED rather than built.** Q35 named it, and its
 staleness mechanism is a classifier version stored with the verdict — a column that does not exist.

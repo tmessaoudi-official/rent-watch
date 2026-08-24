@@ -156,6 +156,29 @@ final class ProseTest extends TestCase
             'a shop on the ground floor is not the tenant floor',
         ];
 
+        // ── the `au|en` ANCHOR itself, which nothing exercised (round 7) ────────────────────
+        //
+        // `Prose::floor()`'s docblock states that "the `au|en` anchor is what keeps a bare count
+        // out **even when singular**", and the ledger pinned only the other half — the `\b` on
+        // `etage`. A reviewer made the anchor optional and the whole suite stayed green while a
+        // building's height was read as the tenant's floor: the exact defect class this reader was
+        // written to fix, on the half nobody wrote a case for.
+        yield 'a singular count with no anchor is not a position' => [
+            "Appartement T3 dans un immeuble de 4 étage.",
+            null,
+            'the count is singular here (a typo real copy makes), so ONLY the anchor keeps it out',
+        ];
+        yield 'an ordinal with no preposition is not extracted' => [
+            'Bel appartement, 3 étage, lumineux.',
+            null,
+            'no au/en, so nothing says this is the position rather than a count',
+        ];
+        yield 'a residence height with no anchor stays out' => [
+            'Résidence de 18 étage, gardien.',
+            null,
+            'unanchored, and a building height must never answer for the flat',
+        ];
+
         yield 'silence' => ['Chauffage collectif. Commerces à proximité.', null, 'unknown stays unknown'];
         yield 'empty' => ['', null, 'unknown stays unknown'];
     }
@@ -197,6 +220,30 @@ final class ProseTest extends TestCase
             false,
             'ambiguity resolves to the safe direction',
         ];
+
+        // ── a denial that FOLLOWS the noun (round 7) ────────────────────────────────────────
+        //
+        // The scan only looked BACKWARD, and the code justified the bare-noun assertion with
+        // "a denial always carries a marker, so a bare noun cannot be one" — true only of a marker
+        // placed BEFORE the noun. `Ascenseur : non` is an ordinary French spec-block row, and it
+        // read `true`: a bonus awarded for a lift that does not exist, the direction this class's
+        // docblock forbids. The 20-capture ground truth contains only pre-positioned negations, so
+        // it could not see this.
+        yield 'spec row, colon' => ['Ascenseur : non', false, 'the denial follows the noun'];
+        yield 'spec row, no space' => ['Ascenseur: Non', false, 'and case is folded'];
+        yield 'spec row, em dash' => ['Ascenseur — non', false, 'real copy uses dashes as separators'];
+        yield 'spec row, en dash' => ['Ascenseur – non', false, 'both dashes'];
+        yield 'spec row among others' => ['Ascenseur : non | Balcon : oui', false, 'the row ends at the pipe'];
+        yield 'spec row, aucun' => ['Ascenseur : aucun', false, 'the other denial word'];
+
+        // The counterweight, and why the reader is deliberately narrow: a trailing `non` that
+        // begins another phrase is NOT a denial of the lift's existence.
+        yield 'out of service is still a lift' => [
+            'Ascenseur non conforme, remise en service en mai.',
+            true,
+            'a lift that exists and is out of order is not an absent lift',
+        ];
+        yield 'affirmed spec row' => ['Ascenseur : oui', true, 'the mirror of the denial'];
 
         yield 'silence' => ['Chauffage collectif. Commerces à proximité.', null, 'unmentioned is not absent'];
         yield 'empty' => ['', null, 'unknown stays unknown'];

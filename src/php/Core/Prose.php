@@ -67,6 +67,15 @@ final class Prose
     /** How far back from `ascenseur` a marker is allowed to govern it. */
     private const LIFT_WINDOW = 40;
 
+    /**
+     * How far AFTER the noun a denial may sit and still be read as denying it.
+     *
+     * Much shorter than {@see LIFT_WINDOW} on purpose: a backward window is scanning a sentence
+     * for its verb, while this is only reaching across the separator in a spec-block row
+     * (`Ascenseur : non`). Widening it would start reading the NEXT field's value.
+     */
+    private const LIFT_TRAILING_WINDOW = 16;
+
     private const LIFT_NEGATIONS = ['sans', 'aucun', 'aucune', 'pas d', 'depourvu', 'depourvue', 'ni '];
 
     private const LIFT_ASSERTIONS = ['avec', 'dispose', 'possede', 'equipe', 'presence', 'par', 'dote', 'offre'];
@@ -145,9 +154,31 @@ final class Prose
                 return false;
             }
 
+            // A TRAILING denial, which the backward window structurally cannot see.
+            //
+            // The comment below used to justify the bare-noun assertion with "a denial always
+            // carries a marker, so a bare noun cannot be one" — true only of a marker placed
+            // BEFORE the noun. `Ascenseur : non` is an ordinary French spec-block row and would
+            // arrive as prose from any `<p>`-scoped selector, and it read as `true`: a bonus
+            // awarded for a lift that does not exist, which is the direction this class's own
+            // docblock forbids. Found by a review panel on 2026-08-24.
+            //
+            // Deliberately narrow. The denial must be ADJACENT — only separators between it and
+            // the noun — and must END the phrase, so `ascenseur non conforme` (a lift that exists
+            // and is out of service) is not read as an absent one.
+            //
+            // The `u` flag is needed for the en/em dashes real listing copy uses as separators.
+            // `preg_match` returns `false` rather than `1` on invalid UTF-8, so a payload that
+            // somehow reaches here unfolded falls through to the pre-existing behaviour instead of
+            // erroring — under-extraction being the safe direction.
+            $after = substr($folded, $at + \strlen('ascenseur'), self::LIFT_TRAILING_WINDOW);
+
+            if (preg_match('/^[\s:=\-.\x{2013}\x{2014}]*\b(?:non|aucun|aucune|pas)\b\s*(?:$|[\r\n.,;|\/])/u', $after) === 1) {
+                return false;
+            }
+
             // The noun alone asserts the lift: French amenity prose says `ascenseur, gardien,
-            // parking` without a verb. A denial always carries a marker, so a bare noun cannot be
-            // one.
+            // parking` without a verb.
             $verdict = true;
         }
 

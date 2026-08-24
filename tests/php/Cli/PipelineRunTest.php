@@ -878,6 +878,123 @@ final class PipelineRunTest extends TestCase
     }
 
     /**
+     * Q34: the digest announces only what is NEW since the last successful emission.
+     *
+     * The ledger case for this — `the digest re-emits everything on every pass (Q34)` — was the ONE
+     * case the nightly ledger found undetected at `9591545`, and it is detected at HEAD. But
+     * nothing this session targeted it: the cover is INCIDENTAL, contributed by tests written for
+     * the digest cap and the per-path `notified` counters, and incidental cover evaporates the
+     * moment those tests change for their own reasons. This names the guarantee directly.
+     *
+     * The failure it guards is not a crash but a habit: a digest that re-lists the same doubtful
+     * flats every fifteen minutes is one the developer learns to skip, and the fail-closed rule
+     * loses its only landing zone.
+     */
+    public function testTheDigestAnnouncesOnlyWhatIsNewSinceTheLastSuccessfulEmission(): void
+    {
+        $store = $this->store();
+        $channel = new RecordingChannel();
+        $pipeline = $this->pipeline($store, new Notifier([$channel]));
+
+        // Distinct rents so the two are distinguishable in the digest LINE, which carries commune,
+        // size and rent rather than the external id — and so Dedup cannot cluster them into one.
+        $doubtful = static fn (string $id, int $rent = 1450): RawListing => new RawListing(
+            sourceName: 'fake',
+            externalId: $id,
+            title: 'T4 Sartrouville',
+            description: '4 pieces de 88 m2, cuisine equipee.',
+            url: 'https://example.test/' . $id,
+            commune: 'Sartrouville',
+            postcode: '78500',
+            rentCc: $rent,
+            surfaceM2: 88.0,
+            rooms: 4,
+        );
+
+        $first = $pipeline->runOnce(
+            [new FakeSource('fake', listings: [$doubtful('q-1')], mixedTenure: true)],
+            self::NOW,
+        );
+        self::assertSame(1, $first->digested, 'the premise: it reaches the digest');
+        self::assertCount(1, $this->digestsIn($channel), 'and is announced once');
+
+        // Pass 2: the SAME listing is still published, plus one genuinely new one.
+        $channel->sent = [];
+        $pipeline->runOnce(
+            [new FakeSource('fake', listings: [$doubtful('q-1'), $doubtful('q-2', 1490)], mixedTenure: true)],
+            '2026-08-08T12:00:00+02:00',
+        );
+
+        $digests = $this->digestsIn($channel);
+        self::assertCount(1, $digests, 'one digest notification per pass');
+        self::assertCount(
+            1,
+            $digests[0]->reasons,
+            'ONLY the new listing. Re-listing q-1 every fifteen minutes is how a digest becomes '
+            . 'furniture, and a digest nobody reads costs the fail-closed rule its landing zone',
+        );
+        self::assertStringContainsString('1490', $digests[0]->reasons[0], 'and it is the NEW one');
+    }
+
+    /** @return list<Notification> */
+    private function digestsIn(RecordingChannel $channel): array
+    {
+        return array_values(array_filter(
+            $channel->sent,
+            static fn (Notification $n): bool => $n->kind === NotificationKind::DIGEST,
+        ));
+    }
+
+    /**
+     * The remainder is a property of the BACKLOG, not of whether the channel accepted the batch.
+     *
+     * `$digestOverflow` was assigned inside the delivered branch, so a FAILED batch send reported
+     * `0` — a 500-entry backlog whose 50-entry batch was rejected printed "1 notification(s) non
+     * délivrée(s)" and no remainder line at all. `undelivered` does move, so this is small; it is
+     * still a number that reads healthy on the exact pass it should not, which is the shape of
+     * every defect round 7 found.
+     */
+    public function testTheDigestRemainderIsReportedEvenWhenTheBatchSendFAILED(): void
+    {
+        $store = $this->store();
+        $over = Store::DIGEST_BATCH + 9;
+
+        $listings = [];
+        for ($i = 0; $i < $over; ++$i) {
+            $listings[] = new RawListing(
+                sourceName: 'fake',
+                externalId: 'o-' . $i,
+                title: 'T4 Sartrouville',
+                description: '4 pieces, cuisine equipee.',
+                url: 'https://example.test/o-' . $i,
+                commune: 'Sartrouville',
+                postcode: '78500',
+                rentCc: 1400 + $i * 7,
+                surfaceM2: 80.0 + $i,
+                rooms: 4,
+            );
+        }
+
+        // Every channel fails, so nothing is delivered and nothing is marked.
+        $result = $this->pipeline($store, new Notifier([new FailingChannel()]))->runOnce(
+            [new FakeSource('fake', listings: $listings, mixedTenure: true)],
+            self::NOW,
+        );
+
+        // Against what was actually JUDGED doubtful, not against `$over` — Dedup may cluster a pair
+        // out of a generated set, and pinning the generator rather than the invariant would make
+        // this test fail for a reason that has nothing to do with the remainder.
+        self::assertGreaterThan(0, $result->digested - Store::DIGEST_BATCH, 'the cap must bite');
+        self::assertSame(
+            $result->digested - Store::DIGEST_BATCH,
+            $result->digestOverflow,
+            'the remainder exists whether or not the batch was accepted — reporting 0 here says '
+            . 'the backlog is drained on the one pass where none of it was even sent',
+        );
+        self::assertGreaterThan(0, $result->undelivered, 'and the failure is still counted');
+    }
+
+    /**
      * A DELIVERED match marks the survivor and nobody else.
      *
      * This is a recorded ruling — *"it must not be 'fixed' by marking members notified on delivery:

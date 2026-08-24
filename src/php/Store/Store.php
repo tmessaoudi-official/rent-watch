@@ -1658,11 +1658,14 @@ final readonly class Store
     /** How many rows are waiting in total, so a capped batch can say what it left behind. */
     public function pendingDigestCount(): int
     {
-        $statement = $this->pdo->query(
+        // No `$statement === false` guard: `ERRMODE_EXCEPTION` is set at construction, so `query()`
+        // throws rather than returning false — see the note further down this file, where four such
+        // branches were removed as dead. Both counters added in round 6 reintroduced one, and both
+        // fabricated `0`: "nothing waiting", which is the operator-facing reading they exist to
+        // prevent. Dead safety code reads as a second line of defence and is not one.
+        return (int) $this->pdo->query(
             "SELECT COUNT(*) FROM listings WHERE outcome = 'DIGEST' AND notified_at IS NULL",
-        );
-
-        return $statement === false ? 0 : (int) $statement->fetchColumn();
+        )->fetchColumn();
     }
 
     /**
@@ -1689,11 +1692,10 @@ final readonly class Store
      */
     public function evidencelessVerdictCount(): int
     {
-        $statement = $this->pdo->query(
+        // Same as `pendingDigestCount()`: no dead false-guard, and no fabricated zero.
+        return (int) $this->pdo->query(
             'SELECT COUNT(*) FROM listings WHERE tenure IS NOT NULL AND evidence_json IS NULL',
-        );
-
-        return $statement === false ? 0 : (int) $statement->fetchColumn();
+        )->fetchColumn();
     }
 
     /**

@@ -1251,7 +1251,7 @@ run_sabotage "promotions stop being capped (a resolved backlog empties onto the 
 
 run_sabotage "a capped pipeline digest stops naming its remainder (the rest is invisible)" \
   src/php/Cli/Pipeline.php \
-  's%\$digestOverflow = max(0, \$left);%%'
+  's%\$digestOverflow = max%\$digestOverflow = 0; \$dead = max%'
 
 # --- the beat's three contributors, each pinned on its own ----------------------------------------
 
@@ -2572,6 +2572,29 @@ run_sabotage "the beat's own failure masks the pass's diagnosis" \
 run_sabotage "the pipeline stops naming the digest remainder to the operator" \
   src/php/Cli/Scout.php \
   's%if (\$result->digestOverflow > 0) {%if (false) {%'
+
+# ── round 7 P2s ───────────────────────────────────────────────────────────────────────────────
+#
+# An unrecognised announcement kind must rank as the STRONGEST, so a value nobody understands
+# suppresses rather than re-announces — the quiet direction, in the one place §1 wants it. The
+# sibling rule (a pre-v8 NULL reading as MATCH) was pinned; this arm was not.
+run_sabotage "an unrecognised announcement kind re-announces instead of staying quiet" \
+  src/php/Store/Store.php \
+  "s%            default => 2,%            default => 0,%"
+
+# A denial that FOLLOWS the noun. `Ascenseur : non` is an ordinary French spec-block row and read
+# as `true` — a bonus awarded for a lift that does not exist, the direction Prose's own docblock
+# forbids. The backward-only window structurally could not see it.
+run_sabotage "a lift denial that follows the noun is read as a lift" \
+  src/php/Core/Prose.php \
+  's%self::LIFT_TRAILING_WINDOW);%0);%'
+
+# The `au|en` anchor is what keeps a bare COUNT out of the floor even when the noun is singular.
+# The ledger pinned only the `\b` on `etage`; made optional, a building's height becomes the
+# tenant's floor — the exact defect this reader was written to fix.
+run_sabotage "the floor anchor goes optional, so a building height answers for the flat" \
+  src/php/Core/Prose.php \
+  's%(?:au|en)\\s+(?:le%(?:au|en)?\\s+(?:le%'
 
 # THE TALLY LIVES HERE, BELOW EVERY CASE, and that position is load-bearing rather than tidy.
 # It sat mid-file twice: once on 2026-08-20 (295 printed for 303 cases) and again from 2026-08-23,

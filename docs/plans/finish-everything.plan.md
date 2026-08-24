@@ -120,6 +120,50 @@ because it fails silently in the direction of a wrong verdict.
   the gitignored `config/criteria.local.json`. It therefore passed here and would have gone red in
   CI. Verified empirically by hiding that file and re-running the whole suite — green both ways now.
 
+### Round 7 (2026-08-24, frozen at `a6c20ec`): 23 FINDINGS — 1 P0, 7 P1
+
+Sixth reset. Every finding is the same class the standing conclusion names, and the P0 is its
+purest instance yet: **a rule stated in TWO docblocks that the constructor never implemented.**
+
+- [2026-08-24] **P0 — `console` counted as a delivered notification.** Recorded above in its own
+  entry. The detail worth keeping here is that `RunResult::notified` was introduced EARLIER THE
+  SAME SESSION as the fix for a number that read healthy while delivery was broken — and it counted
+  console prints. A fix landing on top of the defect it was fixing.
+- [2026-08-24] **Seven P1s, each proved by reproducing the reviewer's own mutation.** The surface
+  matrix could not grow (its expansion guard's second clause was always false, so the §1 structural
+  control eight rounds produced was inert); group-scoped suppression was forbidden by ruling and
+  guarded by nothing, on BOTH delivery paths; two `isLoopback` implementations disagreed, the
+  private one admitting `mailhog`/`mailpit` so `SMTP_SECURITY=none` put AUTH LOGIN on a compose
+  network in the clear; `Offline` — the single funnel for all five egress points — had no test of
+  its own, so a substring search passed; `Dedup`'s empty-commune clause, which this session's own
+  `communeKey()` change made load-bearing; the beat's own failure could replace the pass's
+  diagnosis; and the pipeline's digest remainder was the only one of three caps whose operator line
+  could be deleted silently.
+- [2026-08-24] **`Offline`'s new suite found a divergence nobody reported**: `parse_url('//::1')`
+  yields the host `:`, so a bare IPv6 loopback was refused while `isLoopbackHost('::1')` said true.
+  Fail-closed, never a leak — and the same two-predicates-disagreeing shape as the finding it was
+  written for. That is the argument for testing a predicate rather than only its callers.
+- [2026-08-24] **The Q34 gate now has a test that NAMES it.** `the digest re-emits everything on
+  every pass (Q34)` was the one case the nightly ledger found undetected at `9591545`, and it is
+  detected at HEAD — but nothing this session targeted it. The cover was INCIDENTAL, contributed by
+  tests written for the digest cap and the per-path counters, and incidental cover evaporates when
+  those tests change for their own reasons. Named directly now.
+- [2026-08-24] **`scout replay` was a THREE-WAY disagreement** — README and spec said
+  `<fixture>`, the code is an alias of `dump` taking a source NAME, and `scout help` did not list
+  the verb at all. A documented verb absent from `help` is how a drift like that survives. Now
+  listed, documented as it behaves, and the unbuilt half (replaying an arbitrary fixture file
+  through a network source's field map) recorded as outstanding in the spec rather than dropped.
+- [2026-08-24] **Two counts corrected here because history is immutable.** `a6c20ec` says
+  "the full ~416-case ledger" and `42cd9e1` says "412 expressions / ~412-case ledger": 416 was the
+  EXPRESSION count and cases were 412. Expressions and cases are different numbers — a case may
+  carry several expressions, which is exactly why `test-sabotage-applies.sh` checks them
+  individually. Today: 424 cases, 428 expressions.
+- [2026-08-24] **A plan sentence cited a ruling that existed nowhere.**
+  `milestone-1-pipeline.plan.md:1697` said the survivor-only marking was "the SAME trade already
+  documented for matches"; `git grep` found that phrase citing only itself, with no comment at the
+  match-marking site and no test either way. Same shape as the "predates schema v7" sentence this
+  project has now corrected six times. Both paths are pinned rather than cross-referenced now.
+
 ## A4 — the MAXIMAL round
 
 **Round 1 (2026-08-24, frozen at `e41240c`): FINDINGS — 15 across three lenses, 3 of them P0.**

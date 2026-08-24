@@ -403,6 +403,17 @@ final readonly class Pipeline
                 // so the next pass re-collects it and `scout digest` can drain it now. Capping
                 // makes the backlog shrink; leaving it uncapped made it grow.
                 $batch = \array_slice($digestEntries, 0, Store::DIGEST_BATCH);
+
+                // ASSIGNED BEFORE THE SEND, not inside the success branch. It sat there until round
+                // 7, so on a FAILED batch send the remainder read `0` — a 500-entry backlog whose
+                // 50-entry batch was rejected printed "1 notification(s) non délivrée(s)" and no
+                // remainder line at all. The pass summary's `à vérifier` is what was JUDGED, never
+                // what is pending, so nothing anywhere named it. The number is a property of the
+                // BACKLOG and the cap, not of whether the channel accepted this batch — and it
+                // reading healthy on the one pass it should not is the shape of every defect this
+                // round found.
+                $digestOverflow = max(0, \count($digestEntries) - \count($batch));
+
                 $failures = $this->notifier->send($this->formatter->digest($batch));
 
                 if ($this->notifier->delivered($failures)) {
@@ -413,17 +424,13 @@ final readonly class Pipeline
                         $this->store->markNotified($entry['key'], $nowIso, 'DIGEST');
                     }
 
-                    $notified += \count($batch);
-
                     // THE REMAINDER IS NAMED, like both sibling caps. `Formatter::digest()` titles
                     // on the BATCH, so a 120-entry backlog pushed as "À vérifier : 50 annonce(s)"
                     // and the pass summary's `à vérifier` is what was JUDGED this pass, never what
                     // is still pending — so nothing anywhere said a remainder existed. The claim
                     // that the next pass re-collects it holds only while the ad is still published,
                     // and the delisted case is exactly what `scout digest` was built to rescue.
-                    $left = \count($digestEntries) - \count($batch);
-
-                    $digestOverflow = max(0, $left);
+                    $notified += \count($batch);
                 } else {
                     ++$undelivered;
                 }
@@ -509,13 +516,18 @@ final readonly class Pipeline
      * its reasons travel with it, so the rejection says which portal stated what.
      *
      * **THAT SENTENCE WAS FALSE OF EVERY PASS BUT THE FIRST**, and it took a sixth review round to
-     * catch. The scan below reads `$members`, which is what `Dedup` clustered out of THIS pass's
-     * harvest — the store was never consulted — while `assignGroup()` returns before any UPDATE for
-     * a single member, so a survivor that clusters alone keeps the `group_key` it earned when the
-     * excluded sibling was there. A failed source fetch, a `--source=<name>` run or the sibling
-     * delisting was enough to make the flat a match on the next pass. `$groupTenure` is the durable
-     * half and is checked first; the in-pass scan below still earns its place, because a listing
-     * seen for the FIRST time has no group yet.
+     * catch. The check USED to read a `$members` parameter — what `Dedup` clustered out of THIS
+     * pass's harvest, the store never consulted — while `assignGroup()` returns before any UPDATE
+     * for a single member, so a survivor that clusters alone keeps the `group_key` it earned when
+     * the excluded sibling was there. A failed source fetch, a `--source=<name>` run or the sibling
+     * delisting was enough to make the flat a match on the next pass. `$groupTenure` — read from
+     * the PERSISTED group — is what answers now.
+     *
+     * There is no in-pass scan any more, and this docblock described one for a round after it was
+     * deleted, with a reason that was also wrong in the direction this review keeps finding: it
+     * said a first-ever sighting "has no group yet". It does. `assignGroup()` runs in the recording
+     * loop at the top of `runOnce()`, before any judging — which is precisely WHY the scan was dead
+     * code and why disabling it left the whole suite green.
      *
      * **An UNKNOWN sibling deliberately does NOT veto.** Absence of a signal is not evidence, and
      * most search cards state no tenure at all — In\'li\'s entire card text is four facts and no

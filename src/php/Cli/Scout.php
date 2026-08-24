@@ -1892,7 +1892,8 @@ final readonly class Scout
             'scout — veille sur les annonces de location en Île-de-France',
             '',
             '  scout doctor                  état, durée et volume de chaque source',
-            '  scout dump <source>           première annonce brute + field map appliqué',
+            '  scout dump <source>           première annonce brute + field map appliqué
+  scout replay <source>         alias de `dump` (prend un NOM de source, pas un fichier)',
             '  scout run --once [-v]         une passe complète',
             '  scout run --seed              amorce le seen-set sans notifier',
             '  scout run --watch [-v]        boucle : 15 min ± 5 de jitter (Q37)',
