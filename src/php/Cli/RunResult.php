@@ -51,6 +51,17 @@ final readonly class RunResult
          */
         public int $notified = 0,
         /**
+         * Digest entries this pass produced and did NOT send, because the batch was capped.
+         *
+         * Reported out loud for the same reason both sibling caps report theirs: `Formatter::digest()`
+         * titles on the batch, and the pass summary's *à vérifier* is what was JUDGED rather than
+         * what is still pending — so without this, a 120-entry backlog pushed as "50 annonce(s)"
+         * and nothing anywhere said the rest existed. The next pass re-collects them ONLY while
+         * the ad is still published; the delisted case is precisely what `scout digest` rescues,
+         * and the operator has to know to run it.
+         */
+        public int $digestOverflow = 0,
+        /**
          * Listings whose PAYLOAD could not be encoded, so no evidence snapshot was captured.
          *
          * **Not "whose text is unreadable", which is what this said until a review panel checked

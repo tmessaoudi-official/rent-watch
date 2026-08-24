@@ -14,6 +14,8 @@ use RentWatch\Core\Notify\Formatter;
 use RentWatch\Core\Notify\Notifier;
 use RentWatch\Core\Outcome;
 use RentWatch\Core\RawListing;
+use RentWatch\Core\Tenure;
+use RentWatch\Core\TenureSignal;
 use RentWatch\Core\TenureClassifier;
 use RentWatch\Core\Verdict;
 use RentWatch\Store\Store;
@@ -170,6 +172,8 @@ final readonly class Pipeline
         $rentDrops = 0;
         $undelivered = 0;
 
+        $digestOverflow = 0;
+
         // CONFIRMED DELIVERIES, which is not `$matches`. See `RunResult::$notified` — `$matches` is
         // incremented when the engine judges, before the already-announced gate and before the
         // channel confirms, so in steady state it is the standing match count while the pass sends
@@ -202,7 +206,19 @@ final readonly class Pipeline
             //
             // It inverts the documented dedup trade-off too: over-merging is supposed to cost a
             // hidden second flat, and here it LAUNDERED an excluded tenure into a notification.
-            $judged = $this->clusterClassification($cluster['members'], $observed, $classification);
+            // THE PERSISTED GROUP, not this pass's harvest. `Dedup` clusters what was fetched
+            // right now and never consults the store, so the veto used to be a function of who
+            // happened to be fetched together — while `assignGroup()` returns before any UPDATE for
+            // a single member, so the row KEEPS the group it earned when the excluded sibling was
+            // present. A failed source fetch, a `--source=<name>` run, or the sibling delisting was
+            // enough to launder the flat into a match on the very next pass, and that pass
+            // overwrote the stored REJECT with MATCH while the survivor's own tenure resolved —
+            // putting the row outside `staleVerdicts()` AND `pendingDigest()`, beyond the reach of
+            // either repair command.
+            $judged = $this->clusterClassification(
+                $classification,
+                $this->store->groupExcludedTenure($sighting->dedupKey),
+            );
 
             $verdict = $engine->judge($listing, $judged, $this->ageSeconds($sighting->dedupKey, $nowIso));
 
@@ -303,6 +319,24 @@ final readonly class Pipeline
                 }
             }
 
+            // **THE MATCH PATH IS DELIBERATELY UNCAPPED**, and that decision is written here because
+            // a review panel found it stated nowhere while the three announcement paths beside it
+            // were all capped this session. It IS the biggest measured burst in the tree — 92
+            // notified rows in one live pass on 2026-08-22 after Q1-Q3 widened three filters in a
+            // day, as 92 separate pushes.
+            //
+            // The digest's reasoning does not transfer, and the difference is the whole argument.
+            // A digest is ONE all-or-nothing send whose failure marks nothing, so the batch that
+            // failed came back strictly LARGER every pass: self-perpetuating growth, and the cap
+            // turns it into a drain. A match is sent per listing and marked per listing, so a burst
+            // is bounded by how many new flats exist and a failure retries exactly one of them.
+            // Nothing compounds.
+            //
+            // Against that, capping costs the thing the product is for — the brief says a
+            // notification "within minutes of publication", and a capped match waits a full Q37
+            // interval for no benefit. Reverses by wrapping this send the way the digest branch is
+            // wrapped, if a channel is ever observed rate-limiting a real burst.
+            //
             // ASKED AS A MATCH, not merely "was this listing announced". A delivered digest sets
             // `notified_at`, so the plain question suppressed the match notification of any listing
             // promoted DIGEST -> MATCH — while `++$matches` above still counted it, so the pass
@@ -380,6 +414,16 @@ final readonly class Pipeline
                     }
 
                     $notified += \count($batch);
+
+                    // THE REMAINDER IS NAMED, like both sibling caps. `Formatter::digest()` titles
+                    // on the BATCH, so a 120-entry backlog pushed as "À vérifier : 50 annonce(s)"
+                    // and the pass summary's `à vérifier` is what was JUDGED this pass, never what
+                    // is still pending — so nothing anywhere said a remainder existed. The claim
+                    // that the next pass re-collects it holds only while the ad is still published,
+                    // and the delisted case is exactly what `scout digest` was built to rescue.
+                    $left = \count($digestEntries) - \count($batch);
+
+                    $digestOverflow = max(0, $left);
                 } else {
                     ++$undelivered;
                 }
@@ -401,6 +445,7 @@ final readonly class Pipeline
             rentDrops: $rentDrops,
             undelivered: $undelivered,
             notified: $notified,
+            digestOverflow: $digestOverflow,
             unencodable: $unencodable,
             errors: $errors,
             rejected: $rejected,
@@ -463,6 +508,15 @@ final readonly class Pipeline
      * member carries an excluded tenure, that member's classification is what the engine judges —
      * its reasons travel with it, so the rejection says which portal stated what.
      *
+     * **THAT SENTENCE WAS FALSE OF EVERY PASS BUT THE FIRST**, and it took a sixth review round to
+     * catch. The scan below reads `$members`, which is what `Dedup` clustered out of THIS pass's
+     * harvest — the store was never consulted — while `assignGroup()` returns before any UPDATE for
+     * a single member, so a survivor that clusters alone keeps the `group_key` it earned when the
+     * excluded sibling was there. A failed source fetch, a `--source=<name>` run or the sibling
+     * delisting was enough to make the flat a match on the next pass. `$groupTenure` is the durable
+     * half and is checked first; the in-pass scan below still earns its place, because a listing
+     * seen for the FIRST time has no group yet.
+     *
      * **An UNKNOWN sibling deliberately does NOT veto.** Absence of a signal is not evidence, and
      * most search cards state no tenure at all — In\'li\'s entire card text is four facts and no
      * label — so vetoing on doubt would digest nearly every clustered match in the tree. Over-
@@ -482,28 +536,49 @@ final readonly class Pipeline
      * social-housing false positive is not — but silent over-rejection is invisible by definition,
      * so it is written here rather than left to be discovered.
      *
-     * @param list<RawListing>                                                                            $members
-     * @param array<int, array{sighting: \RentWatch\Store\Sighting, classification: \RentWatch\Core\Classification}> $observed
+     * **And since the veto now reads the PERSISTED group, that cost is PERMANENT.** `group_key` is
+     * never cleared — `grep "SET group_key"` finds only the two `assignGroup()` UPDATEs — so a flat
+     * once mis-merged with an excluded stranger is rejected for the rest of the store's life, even
+     * on passes where the two no longer cluster. Deliberate: the alternative is a veto that lapses
+     * the moment a source has a bad day, which is the hole this durable read was added to close. If
+     * it ever bites, the repair is to unpick the group in the store, not to weaken the rule.
+     *
+     * **ONE MECHANISM, not two.** This began as a scan over the members clustered in THIS pass,
+     * and the durable read was added beside it in round 6. The sabotage ledger then showed the
+     * in-pass scan was DEAD: `assignGroup()` runs in the recording loop, before any judging, so
+     * for every cluster of two or more the persisted group is already up to date when this is
+     * called — disabling the in-pass scan left the whole suite green. Dead safety code is worse
+     * than none: it reads as a second line of defence and is not one. Removed rather than kept.
      */
-    private function clusterClassification(array $members, array $observed, Classification $survivor): Classification
+    private function clusterClassification(Classification $survivor, ?Tenure $groupTenure): Classification
     {
-        if (!$survivor->tenure->isExcluded() && \count($members) > 1) {
-            foreach ($members as $member) {
-                $memberClassification = $observed[spl_object_id($member)]['classification'] ?? null;
-
-                if ($memberClassification === null || !$memberClassification->tenure->isExcluded()) {
-                    continue;
-                }
-
-                if ($survivor->tenure->isExcluded() && $survivor->confidenceBp >= $memberClassification->confidenceBp) {
-                    continue;
-                }
-
-                $survivor = $memberClassification;
-            }
+        // No re-check that `$groupTenure` is excluded: `Store::groupExcludedTenure()` returns
+        // nothing else, and the caller-side re-check that used to sit here was unreachable — a
+        // sabotage case written against it went undetected because no input can reach it.
+        if ($survivor->tenure->isExcluded() || $groupTenure === null) {
+            return $survivor;
         }
 
-        return $survivor;
+        $tenure = $groupTenure;
+
+        return new Classification(
+            tenure: $tenure,
+            // CARRIED FOR THE RECORD, not for the decision. `CriteriaEngine` branches on
+            // `$classification->outcome` alone — it never reads tenure or confidence — so this
+            // number decides nothing, and an earlier version of this comment claimed it had to
+            // "clear the fail-closed floor on its own". It does not; that was an invented
+            // justification, and the sabotage case written to pin it correctly went undetected.
+            // 100 is what a stored, explicit tenure on a sibling is worth to `scout dump` and to
+            // anyone reading the row.
+            confidenceBp: 100,
+            signals: [new TenureSignal(
+                tier: 1,
+                tenure: $tenure,
+                reason: 'régime exclu (' . $tenure->value . ') relevé sur un doublon de cette annonce',
+                evidence: $tenure->value,
+            )],
+            outcome: Outcome::REJECT,
+        );
     }
 
     /**

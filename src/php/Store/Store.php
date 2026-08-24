@@ -870,8 +870,14 @@ final readonly class Store
      *
      * A listing that clustered alone has no `group_key` and returns `null` — the common case, and
      * one query short-circuits it.
+     *
+     * **Returns a `Tenure`, not a string, and that is the contract.** It returned the enum's value
+     * and every caller re-parsed it and re-asked `isExcluded()` — a check that can never fail,
+     * because this method only ever returns an excluded tenure. The sabotage ledger proved it: a
+     * case written against the caller's re-check went undetected, since no input reaches it. Dead
+     * safety code reads as a second line of defence and is not one; the type says it instead.
      */
-    public function groupExcludedTenure(string $dedupKey): ?string
+    public function groupExcludedTenure(string $dedupKey): ?Tenure
     {
         $group = $this->groupKey($dedupKey);
 
@@ -893,7 +899,7 @@ final readonly class Store
             $tenure = Tenure::tryFrom((string) $row['tenure']);
 
             if ($tenure !== null && $tenure->isExcluded()) {
-                return $tenure->value;
+                return $tenure;
             }
         }
 

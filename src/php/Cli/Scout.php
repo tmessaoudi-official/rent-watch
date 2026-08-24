@@ -633,9 +633,19 @@ final readonly class Scout
         }
 
         if ($result->unencodable > 0) {
-            // Named on the pass that causes it. These rows are judged and digested normally, but no
-            // snapshot could be taken, so `scout reclassify` will skip them for ever — a fact worth
-            // one line now rather than a mystery in a skip counter later.
+            // Named on the pass that causes it, rather than left to be discovered from a skip
+            // counter months later.
+            //
+            // **This comment used to say those rows are "judged and digested normally" and that
+            // `reclassify` "will skip them for ever". Both halves are false**, and the code
+            // contradicting them is a few files away: a structured field alone can fail to encode
+            // on a listing whose prose is clean, so the row classifies normally and can be a
+            // NOTIFIED MATCH — and `staleVerdicts()` selects `tenure IS NULL OR tenure = 'UNKNOWN'`,
+            // so such a row is not SKIPPED by reclassify, it is INVISIBLE to it, and invisible to
+            // `pendingDigest()` too. `scout doctor`'s `preuves` line is the only thing that ever
+            // surfaces it. This was the FOURTH live copy of that premise; the previous three were
+            // corrected in three separate review rounds, and a fifth round found this one sitting
+            // directly above the operator line it explains.
             // "charge utile", not "texte illisible". `ListingSnapshot::encode()` refuses three
             // distinct things — malformed UTF-8 anywhere in the listing (including a STRUCTURED
             // FIELD whose title and description are perfectly clean), a nesting depth over 512, and
@@ -644,6 +654,14 @@ final readonly class Scout
             // illisible. Substituting U+FFFD instead of refusing is not the answer and was checked:
             // it would delete an excluded label out of the middle of `conventionné`.
             $this->warn($result->unencodable . ' annonce(s) à la charge utile non encodable — verdict enregistré sans instantané, non re-jugeable');
+        }
+
+        if ($result->digestOverflow > 0) {
+            $this->warn(sprintf(
+                '%d annonce(s) à vérifier non émise(s) ce passage (lot de %d) — `scout digest` pour la suite.',
+                $result->digestOverflow,
+                Store::DIGEST_BATCH,
+            ));
         }
 
         if ($result->undelivered > 0) {
@@ -1101,6 +1119,21 @@ final readonly class Scout
             }
         }
 
+        // CAPPED HERE, before the summary, so the two numbers describe the same set. The cap used
+        // to live inside `announcePromotions()`, which meant the summary said 54 while 50 were
+        // announced — the same "counts what it found, not what it sent" defect the Q27 beat carried
+        // twice this session, rebuilt in a third place.
+        $overflow = max(0, \count($promotions) - Store::DIGEST_BATCH);
+        $promotions = \array_slice($promotions, 0, Store::DIGEST_BATCH);
+
+        if ($overflow > 0) {
+            $this->line(sprintf(
+                '%d promotion(s) au-delà du lot de %d — relancer `scout reclassify` pour la suite.',
+                $overflow,
+                Store::DIGEST_BATCH,
+            ));
+        }
+
         $this->line(sprintf(
             '%d annonce(s) re-jugée(s), %d verdict(s) modifié(s), %d promotion(s) vers MATCH.',
             $rejudged,
@@ -1196,23 +1229,8 @@ final readonly class Scout
         $now = $this->nowIso ?? date('c');
         $undelivered = 0;
 
-        // CAPPED, like both digest paths, and for the same reason one round later. This sends ONE
-        // PUSH PER PROMOTION with no bound, and the population it draws from is every row
-        // `staleVerdicts()` returns — which after a `--seed` is everything that was published at
-        // seed time (In'li alone: ~174). A classifier improvement that resolves a large doubtful
-        // backlog would empty it onto the phone in one run. The remainder is not lost: nothing is
-        // written for a promotion until its channel confirms, so an un-announced row stays exactly
-        // where it was and the next `scout reclassify` reaches it.
-        $remaining = \count($promotions) - Store::DIGEST_BATCH;
-        $promotions = \array_slice($promotions, 0, Store::DIGEST_BATCH);
-
-        if ($remaining > 0) {
-            $this->line(sprintf(
-                '%d promotion(s) au-delà du lot de %d — relancer `scout reclassify` pour la suite.',
-                $remaining,
-                Store::DIGEST_BATCH,
-            ));
-        }
+        // The list arrives already capped — see the caller. Capping HERE made the summary count a
+        // different set from the one announced.
 
         foreach ($promotions as $promotion) {
             $failures = $notifier->send($formatter->match($promotion['listing'], $promotion['verdict']));

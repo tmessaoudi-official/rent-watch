@@ -7,6 +7,7 @@ namespace RentWatch\Tests\Store;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 use RentWatch\Core\RawListing;
+use RentWatch\Core\Tenure;
 use RentWatch\Store\Store;
 
 /**
@@ -336,4 +337,61 @@ final class StoreGroupTest extends TestCase
 
         $this->temporaryPaths = [];
     }
+    /**
+     * The group veto reports the HIGHEST-CONFIDENCE excluded member, not an arbitrary one.
+     *
+     * It was inert while the only caller null-checked the result, so no test could tell "strongest"
+     * from "any" — a review panel said so on 2026-08-24. `Pipeline` now builds the rejection from
+     * the returned tenure, so the value reaches the operator in the rejection line and the choice
+     * is load-bearing.
+     */
+    public function testTheGroupVetoReportsTheHighestConfidenceExcludedMember(): void
+    {
+        $weak = $this->listing('inli', 'GRP-W');
+        $strong = $this->listing('cdc', 'GRP-S');
+
+        $weakKey = $this->store->record($weak, 900, '2026-08-07T09:00:00+00:00')->dedupKey;
+        $strongKey = $this->store->record($strong, 900, '2026-08-07T09:00:00+00:00')->dedupKey;
+
+        $this->store->recordVerdict($weakKey, 'PLS', 30, ['faible'], $weak);
+        $this->store->recordVerdict($strongKey, 'PLAI', 95, ['explicite'], $strong);
+        $this->store->assignGroup([$weakKey, $strongKey]);
+
+        self::assertSame(
+            Tenure::PLAI,
+            $this->store->groupExcludedTenure($weakKey),
+            'the strongest excluded member is what the rejection should name',
+        );
+    }
+
+    /** A group holding only eligible tenures vetoes nothing. */
+    public function testTheGroupVetoIsSilentOnAnEligibleGroup(): void
+    {
+        $a = $this->listing('inli', 'GRP-A');
+        $b = $this->listing('cdc', 'GRP-B');
+
+        $aKey = $this->store->record($a, 900, '2026-08-07T09:00:00+00:00')->dedupKey;
+        $bKey = $this->store->record($b, 900, '2026-08-07T09:00:00+00:00')->dedupKey;
+
+        $this->store->recordVerdict($aKey, 'LLI', 90, ['explicite'], $a);
+        $this->store->recordVerdict($bKey, 'UNKNOWN', 0, ['aucun signal'], $b);
+        $this->store->assignGroup([$aKey, $bKey]);
+
+        self::assertNull($this->store->groupExcludedTenure($aKey));
+    }
+
+    /** A listing that clustered alone has no group, and therefore no veto. */
+    public function testASingletonHasNoGroupVeto(): void
+    {
+        $solo = $this->listing('inli', 'GRP-SOLO');
+        $key = $this->store->record($solo, 900, '2026-08-07T09:00:00+00:00')->dedupKey;
+        $this->store->recordVerdict($key, 'PLS', 99, ['explicite'], $solo);
+        $this->store->assignGroup([$key]);
+
+        self::assertNull(
+            $this->store->groupExcludedTenure($key),
+            'a singleton is not a group — its own tenure is judged on its own path',
+        );
+    }
+
 }

@@ -492,6 +492,48 @@ final class ScoutReclassifyTest extends TestCase
         self::assertStringNotContainsString('écartée(s) par un doublon', $r['out']);
     }
 
+    /**
+     * The promotion announcements are CAPPED, and the cap is pinned.
+     *
+     * Round 5 capped three announcement paths in one commit; two got a named test and this one got
+     * none — deleting the `array_slice` left the whole suite green, and no ledger case touched it
+     * either. The population it bounds is the worst case the cap was added for: `staleVerdicts()`
+     * after a `--seed` is everything published at seed time, at one push per promotion. Found by a
+     * review panel on 2026-08-24.
+     */
+    public function testPromotionAnnouncementsAreCappedAndTheRemainderSurvives(): void
+    {
+        $root = $this->tempRoot();
+        $over = Store::DIGEST_BATCH + 4;
+
+        for ($i = 0; $i < $over; $i++) {
+            $this->seed($root, $this->intermediateListing('PROMO-' . $i), 'UNKNOWN', 'DIGEST');
+        }
+
+        $first = $this->scout($root, ['reclassify']);
+
+        self::assertSame(0, $first['code']);
+        self::assertStringContainsString(
+            Store::DIGEST_BATCH . ' promotion(s) vers MATCH.',
+            $first['out'],
+            'one batch, capped',
+        );
+        self::assertStringContainsString(
+            '4 promotion(s) au-delà du lot',
+            $first['out'],
+            'the remainder must be named, or the operator believes the backlog is drained',
+        );
+
+        // Nothing is written for an un-announced promotion, so the remainder is still reachable.
+        $second = $this->scout($root, ['reclassify']);
+
+        self::assertStringContainsString(
+            '4 promotion(s) vers MATCH.',
+            $second['out'],
+            'capping may not silently drop a promotion — the next run must reach it',
+        );
+    }
+
     private function intermediateListing(string $id): RawListing
     {
         return new RawListing(

@@ -789,6 +789,247 @@ final class PipelineRunTest extends TestCase
         );
     }
 
+    /**
+     * The cluster veto must survive the excluded sibling NOT BEING FETCHED.
+     *
+     * **It gated on `count($members) > 1`, where `$members` is this pass's harvest.** `Dedup` is fed
+     * the listings fetched right now and never consults the store, so a survivor that clusters
+     * alone on a later pass was judged alone — while `assignGroup()` returns before any UPDATE for
+     * a single member, so the row KEEPS the `group_key` it earned when the excluded sibling was
+     * present. The store still held `PLS` under that key at the moment the match was pushed.
+     *
+     * Three reachable triggers, all documented shapes: a source fetch that fails (caught per source,
+     * pass continues, its listings simply absent), a `--source=<name>` run, and the excluded sibling
+     * delisting while the other portal still publishes.
+     *
+     * And the same pass overwrites the stored `REJECT` with `MATCH` while the survivor's own tenure
+     * resolves — putting the row outside `staleVerdicts()` AND `pendingDigest()`, so neither
+     * `reclassify` nor `digest` can reach it afterwards. The "no third selector" argument this file
+     * makes twice for other holes applies against this one.
+     *
+     * Round 5 taught `reclassify` to ask the store; the caller that runs every fifteen minutes was
+     * not taught. Found by a review panel on 2026-08-24.
+     */
+    public function testTheClusterVetoSurvivesTheExcludedSiblingNotBeingFetched(): void
+    {
+        $store = $this->store();
+        $channel = new RecordingChannel();
+        $pipeline = $this->pipeline($store, new Notifier([$channel]));
+
+        // The survivor states an eligible tenure OUTRIGHT, so on its own it resolves to a match —
+        // which is what makes the group the only thing standing between it and a push.
+        $survivor = new RawListing(
+            sourceName: 'inli',
+            externalId: 'i-1',
+            title: 'T4 Sartrouville',
+            description: 'Logement intermédiaire (LLI), 4 pieces de 88 m2, ascenseur.',
+            commune: 'Sartrouville',
+            postcode: '78500',
+            rentCc: 1450,
+            surfaceM2: 88.0,
+            rooms: 4,
+        );
+        $excluded = new RawListing(
+            sourceName: 'cdc',
+            externalId: 'c-1',
+            title: 'T4 Sartrouville',
+            description: 'Financement PLS. Commission d attribution, demande de logement social.',
+            fields: ['financement' => 'PLS'],
+            commune: 'Sartrouville',
+            postcode: '78500',
+            rentCc: 1450,
+            surfaceM2: 88.0,
+            rooms: 4,
+        );
+
+        // Pass 1: both present. The veto fires and the pair is grouped.
+        $pipeline->runOnce(
+            [
+                new FakeSource('inli', listings: [$survivor], mixedTenure: true),
+                new FakeSource('cdc', listings: [$excluded], mixedTenure: true),
+            ],
+            self::NOW,
+        );
+
+        self::assertSame('REJECT', $store->outcome($store->dedupKey($survivor)), 'pass 1 must veto');
+
+        // Pass 2: the excluded source FAILS. Its listing is absent from the harvest, so the survivor
+        // clusters alone — but the store still knows what it was clustered with.
+        $channel->sent = [];
+        $pipeline->runOnce(
+            [
+                new FakeSource('inli', listings: [$survivor], mixedTenure: true),
+                new FakeSource('cdc', throw: new SourceError('cdc', 'timeout'), mixedTenure: true),
+            ],
+            '2026-08-08T12:00:00+02:00',
+        );
+
+        self::assertNotContains(
+            NotificationKind::MATCH,
+            array_map(static fn (Notification $n): NotificationKind => $n->kind, $channel->sent),
+            'a flat whose GROUP holds an excluded tenure must not be notified because the sibling '
+            . 'happened not to be fetched this pass — §1 is a property of the flat, not of the harvest',
+        );
+        self::assertSame(
+            'REJECT',
+            $store->outcome($store->dedupKey($survivor)),
+            'and the stored rejection must not be overwritten by a re-judgement on less evidence',
+        );
+    }
+
+    /**
+     * The counterweight: a persisted group holding only ELIGIBLE tenures must not veto.
+     *
+     * Without this the durable veto above is one character from rejecting every clustered listing
+     * in the store — for ever, since `group_key` is never cleared. Over-rejection is the invisible
+     * direction: nothing arrives to notice. The `reclassify` half of this rule shipped with exactly
+     * this gap and the sabotage ledger caught it, so the pipeline half gets the same guard.
+     */
+    public function testAPersistedGroupOfEligibleSiblingsDoesNotVeto(): void
+    {
+        $store = $this->store();
+        $channel = new RecordingChannel();
+        $pipeline = $this->pipeline($store, new Notifier([$channel]));
+
+        $a = $this->listing('p-1', ['source' => 'inli']);
+        $b = $this->listing('p-2', ['source' => 'cdc']);
+
+        $pipeline->runOnce(
+            [
+                new FakeSource('inli', listings: [$a]),
+                new FakeSource('cdc', listings: [$b]),
+            ],
+            self::NOW,
+        );
+
+        self::assertNotNull($store->groupKey($store->dedupKey($a)), 'the pair must have clustered');
+
+        // Second pass, one source absent — the survivor is alone, and its group says nothing bad.
+        (new \PDO('sqlite:' . (string) $this->dbPath))->exec('UPDATE listings SET notified_at = NULL, notified_as = NULL');
+        $channel->sent = [];
+        $pipeline->runOnce([new FakeSource('inli', listings: [$a])], '2026-08-08T12:00:00+02:00');
+
+        self::assertContains(
+            NotificationKind::MATCH,
+            array_map(static fn (Notification $n): NotificationKind => $n->kind, $channel->sent),
+            'a group of eligible siblings is not evidence against anything',
+        );
+    }
+
+    // ---------------------------------------------------------------- what the pass announced
+
+    /**
+     * `notified` counts a delivered MATCH.
+     *
+     * Each of the three contributors is asserted SEPARATELY. Removing any one of them left the
+     * suite green — only removing all three reddened anything, because the heartbeat test asserts
+     * that *some* path counted. That is the round-4/round-5 defect one level down: aggregate is not
+     * per-path, in the same way shape was not value. Found by a review panel on 2026-08-24.
+     */
+    public function testNotifiedCountsADeliveredMatch(): void
+    {
+        $store = $this->store();
+        $result = $this->pipeline($store, new Notifier([new RecordingChannel()]))->runOnce(
+            [new FakeSource('fake', listings: [$this->listing()])],
+            self::NOW,
+        );
+
+        self::assertSame(1, $result->matches);
+        self::assertSame(1, $result->notified, 'a delivered match is an announcement');
+    }
+
+    /** `notified` counts a delivered RENT DROP, which is a separate announcement from a match. */
+    public function testNotifiedCountsADeliveredRentDrop(): void
+    {
+        $store = $this->store();
+        $channel = new RecordingChannel();
+        $pipeline = $this->pipeline($store, new Notifier([$channel]));
+
+        $pipeline->runOnce([new FakeSource('fake', listings: [$this->listing('d1', ['rentCc' => 1450])])], self::NOW);
+
+        // Same listing, notably cheaper. It is already notified, so the MATCH path is suppressed
+        // and the rent drop is the only announcement the pass makes.
+        $result = $pipeline->runOnce(
+            [new FakeSource('fake', listings: [$this->listing('d1', ['rentCc' => 1200])])],
+            '2026-08-08T12:00:00+02:00',
+        );
+
+        self::assertSame(1, $result->rentDrops);
+        self::assertSame(
+            1,
+            $result->notified,
+            'a rent drop reached the user even though the match itself was suppressed',
+        );
+    }
+
+    /** `notified` counts every DELIVERED DIGEST ENTRY, not the notification that carried them. */
+    public function testNotifiedCountsEveryDeliveredDigestEntry(): void
+    {
+        $store = $this->store();
+        $doubtful = [];
+
+        for ($i = 0; $i < 3; $i++) {
+            $doubtful[] = new RawListing(
+                sourceName: 'fake',
+                externalId: 'u-' . $i,
+                title: 'T4 Sartrouville',
+                description: '4 pieces de 88 m2.',
+                commune: 'Sartrouville',
+                postcode: '78500',
+                rentCc: 1450,
+                surfaceM2: 88.0,
+                rooms: 4,
+            );
+        }
+
+        $result = $this->pipeline($store, new Notifier([new RecordingChannel()]))->runOnce(
+            [new FakeSource('fake', listings: $doubtful, mixedTenure: true)],
+            self::NOW,
+        );
+
+        self::assertSame(3, $result->digested);
+        self::assertSame(
+            3,
+            $result->notified,
+            'a digest-only pass announced three listings — reporting 0 would read as a mute watcher, '
+            . 'and a mixed source before hydration is exactly that steady state',
+        );
+    }
+
+    /** A capped digest says how many it did NOT send, on the pass that capped them. */
+    public function testACappedPipelineDigestReportsItsRemainder(): void
+    {
+        $store = $this->store();
+        $over = Store::DIGEST_BATCH + 9;
+        $listings = [];
+
+        for ($i = 0; $i < $over; $i++) {
+            $listings[] = new RawListing(
+                sourceName: 'fake',
+                externalId: 'o-' . $i,
+                title: 'T4 Sartrouville',
+                description: '4 pieces de 88 m2.',
+                commune: 'Sartrouville',
+                postcode: '78500',
+                rentCc: 1450,
+                surfaceM2: 88.0,
+                rooms: 4,
+            );
+        }
+
+        $result = $this->pipeline($store, new Notifier([new RecordingChannel()]))->runOnce(
+            [new FakeSource('fake', listings: $listings, mixedTenure: true)],
+            self::NOW,
+        );
+
+        self::assertSame(
+            9,
+            $result->digestOverflow,
+            'the notification titles on the BATCH and the pass summary counts what was JUDGED, so '
+            . 'without this nothing anywhere says a remainder exists',
+        );
+    }
+
     // ---------------------------------------------------------------- scoring inputs
 
     public function testFreshnessIsMeasuredFromFIRSTSeenNotFromEverySighting(): void

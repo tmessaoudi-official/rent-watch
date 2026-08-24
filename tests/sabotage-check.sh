@@ -1235,13 +1235,40 @@ run_sabotage "a pre-v8 announcement reads as a DOUBT (the historic backlog re-an
 
 # --- §1 across a cross-portal cluster --------------------------------------------------------------
 
-run_sabotage "only the SURVIVOR is judged again (a PLS sibling stops vetoing the cluster)" \
+# The durable veto reads the group, so the group must EXIST before anything is judged. This pins
+# the ordering rather than the scan: `assignGroup()` runs in the recording loop, and moving or
+# dropping it leaves `groupExcludedTenure()` with nothing to find on the very pass that formed the
+# cluster. Replaced the old in-pass-scan case, which became dead when that scan was removed.
+run_sabotage "the cluster is never recorded as a group (the durable veto has nothing to read)" \
   src/php/Cli/Pipeline.php \
-  's%\$judged = \$this->clusterClassification(\$cluster\[.members.\], \$observed, \$classification);%\$judged = \$classification;%'
+  's%\$this->store->assignGroup(\$memberKeys);%%'
 
-run_sabotage "an UNDETERMINED sibling vetoes too (every clustered match is digested)" \
+# --- every announcement path is bounded AND says what it left behind ------------------------------
+
+run_sabotage "promotions stop being capped (a resolved backlog empties onto the phone at once)" \
+  src/php/Cli/Scout.php \
+  's%\$promotions = \\array_slice(\$promotions, 0, Store::DIGEST_BATCH);%%'
+
+run_sabotage "a capped pipeline digest stops naming its remainder (the rest is invisible)" \
   src/php/Cli/Pipeline.php \
-  's%if (\$memberClassification === null || !\$memberClassification->tenure->isExcluded()) {%if (\$memberClassification === null || \$memberClassification->tenure->isEligible()) {%'
+  's%\$digestOverflow = max(0, \$left);%%'
+
+# --- the beat's three contributors, each pinned on its own ----------------------------------------
+
+run_sabotage "a delivered MATCH stops counting as an announcement" \
+  src/php/Cli/Pipeline.php \
+  's%^                ++\$notified;$%%'
+
+run_sabotage "a delivered digest entry stops counting as an announcement" \
+  src/php/Cli/Pipeline.php \
+  's%\$notified += \\count(\$batch);%%'
+
+# NOT A CASE: the over-fire direction at the PIPELINE layer. It was written against a caller-side
+# re-check of `Store::groupExcludedTenure()`'s result, and the ledger showed it undetected — because
+# that method returns nothing but an excluded tenure, so no input can reach the branch. The re-check
+# was removed and the method now returns `?Tenure`, putting the contract in the type. The over-fire
+# guarantee lives one layer down, at "the group veto reads eligible tenures as excluded", which is
+# real and detected. Recorded so nobody re-adds a case here.
 
 # --- Q27: the beat's own figures ------------------------------------------------------------------
 
@@ -1272,6 +1299,16 @@ run_sabotage "reclassify stops consulting the group (it resurrects a listing the
 run_sabotage "the group veto reads eligible tenures as excluded (every clustered row is skipped)" \
   src/php/Store/Store.php \
   's%if (\$tenure !== null && \$tenure->isExcluded()) {%if (\$tenure !== null) {%'
+
+run_sabotage "the pipeline veto reads only THIS pass's harvest (a missing sibling launders the flat)" \
+  src/php/Cli/Pipeline.php \
+  's%\$this->store->groupExcludedTenure(\$sighting->dedupKey),%null,%'
+
+# NOT A CASE: `confidenceBp` on the durable veto's synthetic Classification. `CriteriaEngine`
+# branches on `$classification->outcome` alone, never on tenure or confidence, so mutating that
+# number changes no verdict — which the ledger proved by leaving the suite green. It was written
+# against a docblock claiming the value "must clear the fail-closed floor on its own"; the claim was
+# invented and both it and the case are gone. Recorded here so nobody adds it back.
 
 # --- the beat reports DELIVERIES, and every announcement path is bounded ---------------------------
 

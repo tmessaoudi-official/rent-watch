@@ -271,7 +271,51 @@ fully-clean rounds and the protocol caps the loop at five, so continuing is not 
 session may take alone — `CLAUDE.md` § Certification ladder says to ask rather than silently
 proceed.
 
-**Standing conclusion, and it is the session's main finding:** across all five rounds, every P0 was
+**Round 6 (2026-08-24, frozen at `888a2d7`): FINDINGS — the same P0 from two lenses independently,
+plus one P2 and one documented decision.**
+
+- [2026-08-24] **The cluster veto was PER-PASS (P0, found independently by two lenses).** Round 5
+  taught `reclassify` to read the persisted group; the pipeline — which runs unattended every
+  fifteen minutes — was not taught. `clusterClassification()` scanned `$cluster['members']`, which
+  is what `Dedup` clustered out of THIS pass's harvest, and `assignGroup()` returns before any
+  UPDATE for a single member, so a survivor that clusters alone KEEPS the `group_key` it earned when
+  the excluded sibling was present. A failed source fetch, a `--source=<name>` run, or the sibling
+  delisting was enough to push the flat as a match on the next pass — and that pass overwrote the
+  stored `REJECT` with `MATCH` while the survivor's own tenure resolved, putting the row outside
+  `staleVerdicts()` AND `pendingDigest()`, beyond either repair command. Both lenses drove it end to
+  end. The veto now reads `Store::groupExcludedTenure()`.
+- [2026-08-24] **The in-pass scan then turned out to be DEAD CODE, and the ledger is what proved
+  it.** `assignGroup()` runs in the recording loop, before any judging, so for every cluster of two
+  or more the persisted group is already current — disabling the in-pass scan left the whole suite
+  green. Removed rather than kept: dead safety code reads as a second line of defence and is not
+  one. Its two sabotage cases were retargeted at guarantees that still exist (the group being
+  recorded before judging, and the over-fire direction at the pipeline layer).
+- [2026-08-24] **And a second sabotage case pinned nothing, for a reason I had invented one commit
+  earlier.** The durable veto's synthetic `Classification` carries `confidenceBp: 100`, and the
+  docblock claimed it "must clear the fail-closed floor on its own". `CriteriaEngine` branches on
+  `$classification->outcome` alone — it never reads tenure or confidence — so the number decides
+  nothing. Both the claim and the case are gone, with a note in the ledger so nobody re-adds it.
+- [2026-08-24] **The match and rent-drop paths are the last uncapped announcements, and that is now
+  a WRITTEN decision rather than an omission.** They carry the biggest measured burst in the tree
+  (92 pushes in one live pass), but the digest's reasoning does not transfer: a digest is one
+  all-or-nothing send whose failure re-sends a strictly larger batch, while a match is sent and
+  marked per listing, so nothing compounds. Capping it would cost the thing the brief exists for.
+  The reversal condition is recorded at the call site.
+
+- [2026-08-24] **Round 6 also found five things nobody had pinned, and one number I inflated.**
+  `announcePromotions()`'s cap had no test and no ledger case — deleting the slice left the whole
+  suite green; each of `RunResult::notified`'s three contributors could be removed individually with
+  the suite green, since the heartbeat test only asserts that SOME path counted (aggregate is not
+  per-path, the same way shape was not value); the pipeline's digest cap truncated silently while
+  both sibling caps named their remainder; a FOURTH live copy of the refuted "reclassify skips them
+  for ever" premise sat directly above the operator line it explains; and `42cd9e1`'s message says
+  "the 5 new cases 5/5 detected" when the commit adds **four** — the fifth was a retargeted case,
+  not a new one. History is immutable, so it is corrected here rather than there.
+- [2026-08-24] **And capping promotions inside `announcePromotions()` rebuilt the beat's own defect
+  a third time**: the summary counted `$promotions` before the slice, so it said 54 while 50 were
+  sent. Capped in the caller now, so both numbers describe the same set.
+
+**Standing conclusion, and it is the session's main finding:** across all six rounds, every P0 was
 *a correct rule with a reason nobody re-checked* — the invented cause, the unclaimed surface, the
 overclaimed guarantee. A green suite never says a word about any of them. The rounds are not
 converging on zero because each round reviews the previous round's repairs, and those repairs keep

@@ -923,8 +923,11 @@ Required coverage, per spec §11 — non-negotiable once `src/` exists:
   recorded kind — reads as MATCH so the historic backlog cannot re-announce itself);
   **group** (schema v4: the key SURVIVES a survivorship flip, a delisted member keeps it, two groups
   that meet are merged, a listing that clusters alone has NO group, and §1 is judged across the
-  WHOLE cluster — an excluded member vetoes it, an undetermined one does not, and the veto survives
-  a later `scout reclassify` that cannot see the evidence which caused it; a singleton reports its own
+  WHOLE cluster — an excluded member vetoes it, an undetermined one does not, and the veto is
+  DURABLE: it is read from the persisted group, so it survives both a later `scout reclassify` that
+  cannot see the evidence which caused it AND a later pass in which the excluded sibling was not
+  fetched at all (a failed source, a `--source=<name>` run, a delisting). Stated cost: `group_key`
+  is never cleared, so an over-merge rejects both flats permanently; a singleton reports its own
   history rather than the empty set SQL gives you for `group_key = NULL`);
   **evidence** (schema v7: the snapshot a verdict was formed from round-trips with hard rule 9
   intact — `floor = 0` is RDC and not an unknown floor, an explicit `hasElevator = false` is not an
