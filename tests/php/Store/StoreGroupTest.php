@@ -242,7 +242,7 @@ final class StoreGroupTest extends TestCase
         $cdc = $this->record('cdc', 'B-9', 1200);
 
         $this->store->assignGroup([$inli, $cdc]);
-        $this->store->markNotified($inli, '2026-08-10T09:00:00+00:00');
+        $this->store->markNotified($inli, '2026-08-10T09:00:00+00:00', 'MATCH');
 
         self::assertTrue($this->store->wasNotified($inli));
         self::assertFalse(

@@ -31,13 +31,57 @@ trap 'rm -rf "$tmp"' EXIT
 total=0
 inert=0
 
+# Split a sed script into its individual commands, RESPECTING SED'S OWN SYNTAX.
+#
+# Splitting on `;` cannot work: this ledger's expressions routinely contain a semicolon INSIDE a
+# pattern (`markNotified(...);$`), and a naive split produces fragments that are not commands. The
+# first version of this checker refused to split in that case, which was safe and left exactly the
+# rot it exists to find invisible.
+#
+# So the script is scanned the way sed reads it — `s`, a delimiter character, three unescaped
+# delimiters, then flags — using PHP, which this project already requires to run at all. Anything
+# the scanner does not fully understand yields NOTHING, and the caller then tests the script whole:
+# a checker that guessed wrong would report false INERTs on valid cases, which is worse than the
+# coverage it would buy.
+split_sed_script() {
+  php -r '
+    $script = $argv[1];
+    $out = [];
+    $i = 0;
+    $n = strlen($script);
+
+    while ($i < $n) {
+      while ($i < $n && ($script[$i] === " " || $script[$i] === ";")) { $i++; }
+      if ($i >= $n) { break; }
+      if ($script[$i] !== "s") { exit(0); }
+
+      $start = $i;
+      $i++;
+      if ($i >= $n) { exit(0); }
+      $delim = $script[$i];
+      if (ctype_alnum($delim) || $delim === "\\") { exit(0); }
+      $i++;
+
+      for ($seen = 0; $seen < 2 && $i < $n; $i++) {
+        if ($script[$i] === "\\") { $i++; continue; }
+        if ($script[$i] === $delim) { $seen++; }
+      }
+      if ($seen < 2) { exit(0); }
+
+      while ($i < $n && strpos("gGpi0123456789", $script[$i]) !== false) { $i++; }
+      $out[] = substr($script, $start, $i - $start);
+    }
+
+    foreach ($out as $command) { echo $command, "\n"; }
+  ' -- "$1"
+}
+
 # Redefined here rather than sourced: this checks the EXPRESSIONS, not the suite, so it must not
 # copy a tree or run a test. Same argument order as the real one, so the two cannot drift apart
 # without this failing loudly.
 run_sabotage() {
   local label="$1" target="$2"
   shift 2
-  total=$((total + 1))
 
   if [[ ! -f "$repo/$target" ]]; then
     printf '  \033[31mMISSING\033[0m %s\n           -> %s\n' "$label" "$target"
@@ -45,18 +89,33 @@ run_sabotage() {
     return
   fi
 
-  cp "$repo/$target" "$tmp/f"
-  cp "$tmp/f" "$tmp/orig"
-
-  local expression
+  # EVERY EXPRESSION IS TESTED ON ITS OWN, and this used to apply them all to one copy and
+  # compare once. That made a multi-expression case rot ONE EXPRESSION AT A TIME, invisibly:
+  # a change to `markNotified()`'s signature voided the second half of the `--seed` case while
+  # the first half still matched, so the file changed, the case reported `ok`, and the guarantee
+  # it named — that seeding marks the survivor — was no longer being broken at all. Caught by
+  # the author on 2026-08-24, in the checker written to catch exactly this.
+  #
+  # A single argument may itself be a compound sed script (`s%a%b%; s%c%d%`). Those are split
+  # only when EVERY part looks like a sed command, so a `;` inside a pattern cannot corrupt a
+  # case into false failures.
+  local expression part parts
   for expression in "$@"; do
-    sed -i "$expression" "$tmp/f" 2>/dev/null
-  done
+    parts=()
+    mapfile -t parts < <(split_sed_script "$expression")
+    (( ${#parts[@]} )) || parts=("$expression")
 
-  if cmp -s "$tmp/orig" "$tmp/f"; then
-    printf '  \033[31mINERT\033[0m   %s\n           -> %s\n' "$label" "$target"
-    inert=$((inert + 1))
-  fi
+    for part in "${parts[@]}"; do
+      total=$((total + 1))
+      cp "$repo/$target" "$tmp/f"
+      sed -i "$part" "$tmp/f" 2>/dev/null
+
+      if cmp -s "$repo/$target" "$tmp/f"; then
+        printf '  \033[31mINERT\033[0m   %s\n           -> %s :: %s\n' "$label" "$target" "${part# }"
+        inert=$((inert + 1))
+      fi
+    done
+  done
 }
 
 # Only the invocations, and whole ones: a run_sabotage call spans as many continued lines as it

@@ -43,7 +43,7 @@ final class StoreDetailTest extends TestCase
      */
     public function testAFreshStoreIsAtTheCurrentSchemaVersion(): void
     {
-        self::assertSame(7, Store::SCHEMA_VERSION, 'v7 added listings.evidence_json and listings.outcome');
+        self::assertSame(8, Store::SCHEMA_VERSION, 'v7 added listings.evidence_json and listings.outcome; v8 added listings.notified_as');
         self::assertSame(Store::SCHEMA_VERSION, $this->store->schemaVersion());
     }
 

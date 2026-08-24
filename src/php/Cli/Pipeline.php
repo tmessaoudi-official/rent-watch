@@ -7,6 +7,7 @@ namespace RentWatch\Cli;
 use RentWatch\Adapters\Source;
 use RentWatch\Adapters\SourceError;
 use RentWatch\Config\Criteria;
+use RentWatch\Core\Classification;
 use RentWatch\Core\CriteriaEngine;
 use RentWatch\Core\Dedup;
 use RentWatch\Core\Notify\Formatter;
@@ -185,7 +186,19 @@ final readonly class Pipeline
             // earlier draft did, with both branches of a ternary returning null — would have given
             // every listing the freshness bonus forever, quietly flattening the one component that
             // is supposed to separate a flat published this hour from one that has sat for a week.
-            $verdict = $engine->judge($listing, $classification, $this->ageSeconds($sighting->dedupKey, $nowIso));
+            // §1 ACROSS THE WHOLE CLUSTER, not just the survivor. Every member is classified above
+            // and each verdict stored, but only the survivor was ever JUDGED — so the same flat
+            // published on a pure-LLI portal and on a mixed one that says `PLS` outright was a
+            // match or a reject depending on which source happened to be polled first, and
+            // `Core\Pacer` shuffles source order every pass. A coin-flip, not a stable answer.
+            // The store then held that `PLS` under the same `group_key` as the row it had just
+            // pushed as a match, and the notification's own `reasons[]` named the sibling.
+            //
+            // It inverts the documented dedup trade-off too: over-merging is supposed to cost a
+            // hidden second flat, and here it LAUNDERED an excluded tenure into a notification.
+            $judged = $this->clusterClassification($cluster['members'], $observed, $classification);
+
+            $verdict = $engine->judge($listing, $judged, $this->ageSeconds($sighting->dedupKey, $nowIso));
 
             // Schema v7. Recorded for ALL THREE outcomes and BEFORE the branches below, because
             // both of them `continue` — writing it inside the digest branch alone would leave a
@@ -211,12 +224,14 @@ final readonly class Pipeline
                 // designed to avoid — and a digest the developer has learned to skip costs the
                 // fail-closed rule its only landing zone.
                 //
-                // `notified_at` is reused rather than given a parallel column: being carried in a
-                // DELIVERED digest is being told about the listing, which is what the field means.
-                // `scout reclassify` announces such a listing DIRECTLY when its verdict improves
-                // (Q35) — it never consults `wasNotified()` and never clears this column, which an
-                // earlier version of this comment claimed it did. Being told a flat is doubtful is
-                // not being told it is a match, so the second announcement is the point.
+                // `notified_at` answers "has this listing been announced at all", which is the
+                // right question HERE: being told a flat is a match certainly covers being told it
+                // is doubtful, so a match is never re-announced as a doubt.
+                //
+                // The reverse is NOT true, and this comment used to claim `scout reclassify` closed
+                // that gap. It did not — the pipeline's own re-judgement removes the row from
+                // `staleVerdicts()` before reclassify can ever see it. Schema v8's `notified_as` is
+                // what closes it, and the match path below asks `wasNotifiedAs(..., 'MATCH')`.
                 if (!$this->store->wasNotified($sighting->dedupKey)) {
                     $digestEntries[] = [
                         'listing' => $listing,
@@ -247,7 +262,7 @@ final readonly class Pipeline
                 // This is not group-scoped suppression: it marks listings that were seen and seeded,
                 // and it would mark them identically if they had clustered with nothing.
                 foreach ($clusterKeys[spl_object_id($listing)] as $memberKey) {
-                    $this->store->markNotified($memberKey, $nowIso);
+                    $this->store->markNotified($memberKey, $nowIso, 'MATCH');
                 }
 
                 continue;
@@ -280,14 +295,22 @@ final readonly class Pipeline
                 }
             }
 
-            if ($this->store->wasNotified($sighting->dedupKey)) {
+            // ASKED AS A MATCH, not merely "was this listing announced". A delivered digest sets
+            // `notified_at`, so the plain question suppressed the match notification of any listing
+            // promoted DIGEST -> MATCH — while `++$matches` above still counted it, so the pass
+            // reported a match the operator never received. The same pass overwrites `tenure` and
+            // `outcome`, taking the row out of `staleVerdicts()` and `pendingDigest()`, so neither
+            // `scout reclassify` nor `scout digest` could reach it afterwards. There is no third
+            // selector. Found by a review panel on 2026-08-24, against a docblock in this file that
+            // asserted `reclassify` covered exactly this population.
+            if ($this->store->wasNotifiedAs($sighting->dedupKey, 'MATCH')) {
                 continue;
             }
 
             $failures = $this->notifier->send($this->formatter->match($listing, $verdict, $cluster['duplicates']));
 
             if ($this->notifier->delivered($failures)) {
-                $this->store->markNotified($sighting->dedupKey, $nowIso);
+                $this->store->markNotified($sighting->dedupKey, $nowIso, 'MATCH');
             } else {
                 // Left un-notified ON PURPOSE, so the next run retries. Marking it notified here is
                 // the hole Q28 closes: the run reports success, the listing is recorded as sent, and
@@ -303,7 +326,14 @@ final readonly class Pipeline
                 // announced by the first pass that reshuffles source order.
                 foreach ($digestEntries as $entry) {
                     foreach ($entry['keys'] as $memberKey) {
-                        $this->store->markNotified($memberKey, $nowIso);
+                        // SEEDED AS 'MATCH', not 'DIGEST', though these are digest entries.
+                        // `--seed` means "nothing currently published is news", and seeding them
+                        // as doubts would announce each one as a match the moment its tenure
+                        // resolved — which for a mixed source with a `detail_map` is most of the
+                        // catalogue, arriving over the following passes. STATED COST: a genuine
+                        // promotion inside the seeded set is never announced. That is the quiet
+                        // direction, and it is what the operator asked for by seeding.
+                        $this->store->markNotified($memberKey, $nowIso, 'MATCH');
                     }
                 }
             } else {
@@ -317,7 +347,7 @@ final readonly class Pipeline
                     // batch permanently on a failed send — and a digest entry, unlike a match, has
                     // no second chance: nothing else will ever surface it.
                     foreach ($digestEntries as $entry) {
-                        $this->store->markNotified($entry['key'], $nowIso);
+                        $this->store->markNotified($entry['key'], $nowIso, 'DIGEST');
                     }
                 } else {
                     ++$undelivered;
@@ -392,6 +422,47 @@ final readonly class Pipeline
         }
 
         return $undelivered;
+    }
+
+    /**
+     * The classification the CLUSTER is judged on: an excluded member vetoes, nothing else does.
+     *
+     * §1 is a property of the FLAT, and a cross-portal cluster is one flat seen twice. So if any
+     * member carries an excluded tenure, that member's classification is what the engine judges —
+     * its reasons travel with it, so the rejection says which portal stated what.
+     *
+     * **An UNKNOWN sibling deliberately does NOT veto.** Absence of a signal is not evidence, and
+     * most search cards state no tenure at all — In\'li\'s entire card text is four facts and no
+     * label — so vetoing on doubt would digest nearly every clustered match in the tree. Over-
+     * rejection is the invisible failure here, because nothing arrives to notice. The excluded set
+     * is closed and explicit; doubt is already handled by the fail-closed threshold on the
+     * survivor\'s own classification.
+     *
+     * Ties go to the highest confidence, and the survivor wins an exact tie by being the default —
+     * both are excluded in that case, so the choice only affects which reasons are shown.
+     *
+     * @param list<RawListing>                                                                            $members
+     * @param array<int, array{sighting: \RentWatch\Store\Sighting, classification: \RentWatch\Core\Classification}> $observed
+     */
+    private function clusterClassification(array $members, array $observed, Classification $survivor): Classification
+    {
+        if (!$survivor->tenure->isExcluded() && \count($members) > 1) {
+            foreach ($members as $member) {
+                $memberClassification = $observed[spl_object_id($member)]['classification'] ?? null;
+
+                if ($memberClassification === null || !$memberClassification->tenure->isExcluded()) {
+                    continue;
+                }
+
+                if ($survivor->tenure->isExcluded() && $survivor->confidenceBp >= $memberClassification->confidenceBp) {
+                    continue;
+                }
+
+                $survivor = $memberClassification;
+            }
+        }
+
+        return $survivor;
     }
 
     /**

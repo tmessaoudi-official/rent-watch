@@ -223,8 +223,106 @@ final class StoreTest extends TestCase
         $this->store->record($listing, 900, '2026-08-07T09:00:00+00:00');
         self::assertFalse($this->store->wasNotified($key));
 
-        $this->store->markNotified($key, '2026-08-07T09:05:00+00:00');
+        $this->store->markNotified($key, '2026-08-07T09:05:00+00:00', 'MATCH');
         self::assertTrue($this->store->wasNotified($key));
+    }
+
+    /**
+     * WHAT a listing was announced as is a different fact from WHETHER it was (schema v8).
+     *
+     * `notified_at` alone was answering both, and the match path read a delivered digest as
+     * "already told about this listing" — so a promotion DIGEST -> MATCH was silently swallowed
+     * while the pass counted it. Found by a review panel on 2026-08-24.
+     */
+    public function testADigestAnnouncementDoesNotCountAsHavingAnnouncedAMatch(): void
+    {
+        $listing = $this->listing(externalId: 'ANN-P1');
+        $key = $this->store->dedupKey($listing);
+        $this->store->record($listing, 900, '2026-08-07T09:00:00+00:00');
+
+        $this->store->markNotified($key, '2026-08-07T09:05:00+00:00', 'DIGEST');
+
+        self::assertTrue($this->store->wasNotified($key), 'the listing HAS been announced');
+        self::assertTrue($this->store->wasNotifiedAs($key, 'DIGEST'), 'and announced as a doubt');
+        self::assertFalse(
+            $this->store->wasNotifiedAs($key, 'MATCH'),
+            'being told a flat is doubtful is not being told it is a match',
+        );
+    }
+
+    /** A match covers a doubt, so a digest never re-announces something already pushed as a match. */
+    public function testAMatchAnnouncementCoversTheDigestQuestionToo(): void
+    {
+        $listing = $this->listing(externalId: 'ANN-P2');
+        $key = $this->store->dedupKey($listing);
+        $this->store->record($listing, 900, '2026-08-07T09:00:00+00:00');
+
+        $this->store->markNotified($key, '2026-08-07T09:05:00+00:00', 'MATCH');
+
+        self::assertTrue($this->store->wasNotifiedAs($key, 'MATCH'));
+        self::assertTrue($this->store->wasNotifiedAs($key, 'DIGEST'), 'DIGEST < MATCH — the order is monotone');
+    }
+
+    /**
+     * The write cannot DEMOTE.
+     *
+     * A later digest pass on a flat already pushed as a match must not reopen it for re-
+     * announcement — that is a duplicate push, and the ordering exists precisely to forbid it.
+     */
+    public function testAnAnnouncementIsNeverDowngraded(): void
+    {
+        $listing = $this->listing(externalId: 'ANN-P3');
+        $key = $this->store->dedupKey($listing);
+        $this->store->record($listing, 900, '2026-08-07T09:00:00+00:00');
+
+        $this->store->markNotified($key, '2026-08-07T09:05:00+00:00', 'MATCH');
+        $this->store->markNotified($key, '2026-08-08T09:05:00+00:00', 'DIGEST');
+
+        self::assertTrue($this->store->wasNotifiedAs($key, 'MATCH'), 'a match must not be demoted to a doubt');
+    }
+
+    /** A listing nobody ever announced is not "announced as" anything. */
+    public function testANeverAnnouncedListingWasNotAnnouncedAsAnything(): void
+    {
+        $listing = $this->listing(externalId: 'ANN-P4');
+        $key = $this->store->dedupKey($listing);
+        $this->store->record($listing, 900, '2026-08-07T09:00:00+00:00');
+
+        self::assertFalse($this->store->wasNotifiedAs($key, 'DIGEST'));
+        self::assertFalse($this->store->wasNotifiedAs($key, 'MATCH'));
+    }
+
+    /**
+     * A PRE-v8 row — a timestamp with no recorded kind — reads as MATCH, and that is the quiet
+     * direction on purpose.
+     *
+     * Those rows were announced by a version that did not record what it said. Reading them as
+     * digests would re-announce the whole historic backlog as matches the moment each tenure
+     * resolved, which is a flood out of the seen-set — the failure Q36 exists to prevent.
+     */
+    public function testAPreV8AnnouncementIsReadAsAMatchSoTheBacklogStaysQuiet(): void
+    {
+        // File-backed, because the pre-v8 shape can only be produced by a second connection —
+        // the in-memory store this class otherwise uses is private to its own handle.
+        $path = sys_get_temp_dir() . '/rentwatch-prev8-' . bin2hex(random_bytes(8)) . '.sqlite3';
+
+        try {
+            $store = Store::open($path);
+            $listing = $this->listing(externalId: 'ANN-P5');
+            $key = $store->dedupKey($listing);
+            $store->record($listing, 900, '2026-08-07T09:00:00+00:00');
+            $store->markNotified($key, '2026-08-07T09:05:00+00:00', 'DIGEST');
+
+            // Exactly what the v8 migration leaves behind: the timestamp, and no kind.
+            (new \PDO('sqlite:' . $path))->exec('UPDATE listings SET notified_as = NULL');
+
+            self::assertTrue($store->wasNotifiedAs($key, 'MATCH'), 'an unrecorded kind must not re-announce');
+            self::assertTrue($store->wasNotified($key), 'and it is still an announced listing');
+        } finally {
+            foreach (['', '-wal', '-shm'] as $suffix) {
+                @unlink($path . $suffix);
+            }
+        }
     }
 
     // ── Source health (spec §8) ───────────────────────────────────────────────────────────────────
@@ -340,7 +438,7 @@ final class StoreTest extends TestCase
     {
         $this->expectException(\InvalidArgumentException::class);
 
-        $this->store->markNotified('inli:id:never-recorded', '2026-08-07T09:00:00+00:00');
+        $this->store->markNotified('inli:id:never-recorded', '2026-08-07T09:00:00+00:00', 'MATCH');
     }
 
     /**
@@ -741,7 +839,7 @@ final class StoreTest extends TestCase
 
         $first = Store::open($path);
         self::assertTrue($first->record($listing, 1000, '2026-08-07T09:00:00+00:00')->isNew);
-        $first->markNotified($first->dedupKey($listing), '2026-08-07T09:05:00+00:00');
+        $first->markNotified($first->dedupKey($listing), '2026-08-07T09:05:00+00:00', 'MATCH');
         unset($first);
 
         $reopened = Store::open($path);
@@ -862,7 +960,7 @@ final class StoreTest extends TestCase
 
         $this->store->record($listing, 1000, '2026-08-01T09:00:00+00:00');
         $this->store->record($listing, 940, '2026-08-05T09:00:00+00:00');
-        $this->store->markNotified($key, '2026-08-05T09:05:00+00:00');
+        $this->store->markNotified($key, '2026-08-05T09:05:00+00:00', 'MATCH');
 
         $snapshot = $this->store->snapshot($key);
 

@@ -44,7 +44,7 @@ final class StoreEvidenceTest extends TestCase
 
     public function testAFreshStoreIsAtTheCurrentSchemaVersion(): void
     {
-        self::assertSame(7, Store::SCHEMA_VERSION, 'v7 added listings.evidence_json and listings.outcome');
+        self::assertSame(8, Store::SCHEMA_VERSION, 'v7 added listings.evidence_json and listings.outcome; v8 added listings.notified_as');
         self::assertSame(Store::SCHEMA_VERSION, $this->store->schemaVersion());
     }
 
@@ -114,6 +114,21 @@ final class StoreEvidenceTest extends TestCase
                 $upgraded->outcome('inli:id:ANN-1'),
                 'a pre-v7 row was never judged under a version that recorded the outcome',
             );
+
+            // v8's column is added by the upgrade and left NULL, for the same reason. It is read
+            // back as the STRONGEST announcement rather than the weakest — see
+            // `StoreTest::testAPreV8AnnouncementIsReadAsAMatchSoTheBacklogStaysQuiet` — because a
+            // historic row re-announced as a match is a flood out of the seen-set.
+            $columns = array_column(
+                (new \PDO('sqlite:' . $path))->query('PRAGMA table_info(listings)')->fetchAll(\PDO::FETCH_ASSOC),
+                'name',
+            );
+            self::assertContains('notified_as', $columns, 'the v8 step did not run on an upgrade');
+
+            $announced = (new \PDO('sqlite:' . $path))
+                ->query("SELECT notified_as FROM listings WHERE dedup_key = 'inli:id:ANN-1'")
+                ->fetchColumn();
+            self::assertNull($announced === false ? null : $announced, 'a pre-v8 announcement kind must not be invented');
         } finally {
             @unlink($path);
         }
@@ -221,7 +236,7 @@ final class StoreEvidenceTest extends TestCase
 
         self::assertCount(1, $this->store->pendingDigest());
 
-        $this->store->markNotified($key, '2026-08-23T10:00:00+00:00');
+        $this->store->markNotified($key, '2026-08-23T10:00:00+00:00', 'MATCH');
 
         self::assertSame([], $this->store->pendingDigest(), 'a delivered entry must not repeat');
     }

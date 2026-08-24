@@ -165,10 +165,62 @@ again. Round 2's job was to refute ROUND 1's fixes, and it did, twice in the sam
   no CI step, no `CLAUDE.md` entry, so `test-ci-workflow.sh` could never pin it. That loop was
   self-sealing.
 - [2026-08-24] **All 57 cases added since the harness broke were re-run through the corrected gate.**
-  55 detected; 2 were real gaps a month of unconditional `ok` had hidden — `Prose::floor`'s `\b`
+  55 detected; 2 were real gaps the ~27 hours of unconditional `ok` had hidden — `Prose::floor`'s `\b`
   (`en 4 étages` is a triplex, not the 4th floor) and the hydration cache test, which asserted a
   description was `!== ''`, something the CARD already satisfies.
 
-**Standing conclusion for the next session, and it is the session's main finding:** across both
+**Round 3 (2026-08-24, frozen at `9591545`): FINDINGS — 19 across three lenses.** Counter reset
+again. Landed as `cc64160` and `5626488`.
+
+- [2026-08-24] **The `finally` that was supposed to make the beat unskippable made the channel lie.**
+  `++$passes` sat inside the `try`, so a failing pass beat with `$passes === 0`, which renders as
+  *"démarrage de la surveillance"* — a beat announcing a healthy start, sent because the pass had
+  just failed. Found independently by two lenses.
+- [2026-08-24] **Two commune tests never touched the guard they were written for.** The `listing()`
+  helper hardcoded `commune`, so both passed input that never reached a `RawListing` — the SECOND
+  time this helper trap was hit in one session, the first being `title`. A test asserting a
+  guarantee about input it does not supply is a guarantee nobody holds.
+- [2026-08-24] **"For a month" was invented, in the entries warning about invented magnitudes.**
+  The real window was ~27 hours (`4403e9d` 2026-08-22 20:43 → `feb416d` 2026-08-23 23:31), with at
+  most one nightly inside it. Eight sites were corrected — there were **nine**; the ninth is
+  corrected above, by round 4.
+- [2026-08-24] **A red nightly named a run URL and nothing else.** No tally, no case names, no
+  reproduce command, and the job logs need admin rights. An alert that cannot be acted on is the
+  retraction failure read forwards.
+
+**Round 4 (2026-08-24, frozen at `5626488`): FINDINGS — 10 across three lenses, 2 of them P0.**
+Counter reset a third time.
+
+- [2026-08-24] **§1 was judged on the SURVIVOR of a dedup cluster alone (P0).** Every member was
+  classified and each verdict stored, and only the survivor was judged — so the same flat published
+  on a pure-LLI portal and on a mixed one stating `PLS` was a MATCH or a REJECT depending on which
+  source was polled first, and `Pacer` shuffles that order every pass. The store then held `PLS` at
+  confidence 99 under the same `group_key` as the row it had just pushed as a 75/100 match. Fixed:
+  an excluded member vetoes the cluster; an UNDETERMINED one deliberately does not, and that
+  counterweight is its own test.
+- [2026-08-24] **A DIGEST → MATCH promotion was announced by nothing (P0).** A delivered digest sets
+  `notified_at`, the match path read that as "already told about this listing", and the same pass
+  overwrote `tenure` and `outcome` — so the row left `staleVerdicts()` and `pendingDigest()` in the
+  same statement that suppressed its notification. `matches=1` on the pass summary, nothing sent,
+  nothing able to reach it again. Cityloger's whole un-hydrated population takes this path. Fixed by
+  schema **v8**'s `notified_as`; a pre-v8 row reads as MATCH so the historic backlog stays quiet.
+- [2026-08-24] **The beat's "listings notified" was the literal `0` at both call sites.** The one
+  number separating a producing watcher from a mute one was constant, and the test that named itself
+  the Q27 contract asserted `\d+`, which matches `0`. Shape is not value.
+- [2026-08-24] **`scout digest` sent the whole backlog as one all-or-nothing notification**, and each
+  failure made the next attempt strictly larger — so a size-dependent rejection would harden §1's
+  only landing zone into permanent undeliverability. Now capped, and the remainder is announced.
+- [2026-08-24] **The pre-v7 premise, refuted in round 1, was still live in `CLAUDE.md`** — the file
+  this repo declares wins on any conflict — and `RunResult`'s docblock still carried the claim
+  round 3's own commit message says it fixed. Both corrected.
+- [2026-08-24] **`test-sabotage-applies.sh` could not see a case rot one expression at a time.**
+  It applied a case's expressions together and compared once, so this session's own `markNotified()`
+  signature change silently voided half of an existing case while it still reported `ok` — found by
+  the author, in the checker written to catch exactly this. Splitting a compound sed script needs
+  sed's own syntax; this ledger's patterns contain semicolons.
+
+**Standing conclusion for the next session, and it is the session's main finding:** across all four
 rounds, every P0 was *a correct rule with a reason nobody re-checked* — the invented cause, the
 unclaimed surface, the overclaimed guarantee. A green suite never says a word about any of them.
+The rounds are not converging on zero because each round reviews the previous round's repairs, and
+those repairs keep introducing the same class of defect they fixed.

@@ -110,6 +110,56 @@ final class ScoutHeartbeatTest extends TestCase
         self::assertMatchesRegularExpression('~\d+/\d+ source\(s\) en bon état~', $r['out']);
     }
 
+    public function testTheHeartbeatReportsTheNumberItActuallyPushed(): void
+    {
+        // **This field was the literal `0` at both call sites**, so the one number separating a
+        // producing watcher from a mute one was constant: on the day matching genuinely stopped,
+        // the beat read byte-for-byte identical to the day it pushed 33. `CLAUDE.md` and `beat()`'s
+        // own docblock both claimed it carried this. Found by a review panel on 2026-08-24.
+        //
+        // The sibling test above asserts the SHAPE with `\d+`, which matches `0` — so it accepted
+        // the constant for as long as the constant existed. Shape is not value; this one demands a
+        // number the pass actually produced.
+        //
+        // Reaching the in-loop beat needs the documented unwritable-marker seam: under a fixed
+        // clock the startup beat writes the marker at NOW and every later check asks
+        // `isDue(NOW, NOW)`. A DIRECTORY where the file goes makes every check due — `beat()` writes
+        // with `@file_put_contents` precisely so a full volume cannot crash a liveness signal — and
+        // two beats is then the CORRECT result, per Q27's documented one-too-many bias.
+        $root = $this->tempRoot([
+            // Region mode, and wide open: the point is to produce matches, not to test filtering.
+            'communes' => [],
+            'postcode_prefixes' => ['75', '77', '78', '91', '92', '93', '94', '95'],
+            'min_rooms' => 1,
+            'min_surface_m2' => 1,
+            'max_rent_cc' => 100000,
+        ]);
+
+        // SEEDED ON A SUBSET, then the full payload restored. `watchIn()` seeds the whole fixture
+        // first — Q36 refuses to notify on an empty seen-set — and after that nothing is new, so
+        // the watch pass would legitimately push zero and the test would assert nothing. Here the
+        // seed sees one listing and the watched pass sees the rest, which is what a real pass does.
+        $full = (string) file_get_contents($root . '/tests/fixtures/fixture_demo/search.json');
+        /** @var array{results: array{items: list<array<string, mixed>>}} $payload */
+        $payload = json_decode($full, true, 512, JSON_THROW_ON_ERROR);
+        $subset = $payload;
+        $subset['results']['items'] = \array_slice($payload['results']['items'], 0, 1);
+        file_put_contents($root . '/tests/fixtures/fixture_demo/search.json', json_encode($subset, JSON_THROW_ON_ERROR));
+
+        $this->scoutIn($root, ['run', '--once', '--seed']);
+
+        file_put_contents($root . '/tests/fixtures/fixture_demo/search.json', $full);
+        mkdir($root . '/state/heartbeat.txt', 0o775, true);
+
+        $r = $this->scoutIn($root, ['run', '--watch']);
+
+        self::assertMatchesRegularExpression(
+            '~[1-9]\d* annonce\(s\) notifiée\(s\)~',
+            $r['out'],
+            'the beat must report what the pass actually pushed — a hard-coded 0 conveys nothing at any time',
+        );
+    }
+
     public function testTheMarkerIsWrittenToTheStateDirectorySoItSurvivesARestart(): void
     {
         // Q8 puts `state/` on the mounted volume. A marker written anywhere else resets on every

@@ -541,6 +541,192 @@ final class PipelineRunTest extends TestCase
         );
     }
 
+    // ---------------------------------------------------------------- promotion
+
+    /**
+     * A listing that was DIGESTED and is later judged a MATCH must be announced as one.
+     *
+     * **`notified_at` was answering a question nobody asked it.** Being carried in a delivered
+     * digest set it, and the match branch's gate reads it as "already told about this listing" — so
+     * a listing promoted DIGEST -> MATCH on a later pass hit `continue` and no match notification
+     * was ever sent. The pass summary counted it (`matches=1`), which is the worst part: the
+     * operator is told a match was produced and nothing arrives.
+     *
+     * Nothing could reach it afterwards either. The same pass overwrites `tenure` (leaving
+     * `staleVerdicts()`, so `scout reclassify` cannot see it) and `outcome` (leaving
+     * `pendingDigest()`, so `scout digest` cannot either). There is no third selector.
+     *
+     * This is production, not a constructed case: `cityloger` is `mixed_tenure` with no
+     * `default_tenure` and a search card that carries no tenure at all, so every un-hydrated
+     * listing digests — and its `detail_map` exists precisely to resolve them on a later pass.
+     * Found by a review panel on 2026-08-24, against a docblock this session had written claiming
+     * `scout reclassify` covered exactly this population.
+     */
+    public function testAListingPromotedFromDigestToMatchIsAnnouncedRatherThanSwallowed(): void
+    {
+        $store = $this->store();
+        $channel = new RecordingChannel();
+        $pipeline = $this->pipeline($store, new Notifier([$channel]));
+
+        // Pass 1: a mixed source, no tenure signal anywhere -> UNKNOWN -> DIGEST, and delivered.
+        $doubtful = new RawListing(
+            sourceName: 'fake',
+            externalId: 'p1',
+            title: 'T4 Sartrouville',
+            description: '4 pieces de 88 m2.',
+            commune: 'Sartrouville',
+            postcode: '78500',
+            rentCc: 1450,
+            surfaceM2: 88.0,
+            rooms: 4,
+        );
+
+        $pipeline->runOnce([new FakeSource('fake', listings: [$doubtful], mixedTenure: true)], self::NOW);
+
+        self::assertSame('DIGEST', $store->outcome($store->dedupKey($doubtful)));
+        self::assertSame(
+            [NotificationKind::DIGEST],
+            array_map(static fn (Notification $n): NotificationKind => $n->kind, $channel->sent),
+            'pass 1 must announce the doubt and nothing else',
+        );
+
+        // Pass 2: the SAME listing, its detail page now read, stating the tenure outright.
+        $resolved = new RawListing(
+            sourceName: 'fake',
+            externalId: 'p1',
+            title: 'T4 Sartrouville',
+            description: '4 pieces de 88 m2. Logement intermediaire (LLI).',
+            fields: ['financement' => 'LLI'],
+            commune: 'Sartrouville',
+            postcode: '78500',
+            rentCc: 1450,
+            surfaceM2: 88.0,
+            rooms: 4,
+        );
+
+        $channel->sent = [];
+        $result = $pipeline->runOnce([new FakeSource('fake', listings: [$resolved], mixedTenure: true)], '2026-08-08T12:00:00+02:00');
+
+        self::assertSame(1, $result->matches, 'the pass must judge it a match');
+        self::assertSame(
+            [NotificationKind::MATCH],
+            array_map(static fn (Notification $n): NotificationKind => $n->kind, $channel->sent),
+            'a promotion the pass COUNTED as a match must reach the channel — being told a flat is '
+            . 'doubtful is not being told it is a match, and no other command can reach the row again',
+        );
+    }
+
+    // ---------------------------------------------------------------- cross-portal clusters
+
+    /**
+     * An excluded tenure on ANY member of a cluster must veto the whole cluster (§1).
+     *
+     * **Only the survivor was judged.** The pipeline classifies every member and stores each
+     * verdict, then judges `$observed[...]` for the survivor alone — nothing read a sibling's
+     * tenure. So the same flat, published on a pure-LLI portal and on a mixed one that states
+     * `PLS` outright, was a MATCH or a REJECT depending purely on which source was polled first
+     * — and `Core\Pacer` shuffles source order on every pass, so it was a fresh coin-flip each
+     * time rather than a stable wrong answer.
+     *
+     * The store then held `PLS` at high confidence under the SAME `group_key` as the row it had
+     * just pushed as a match, and the notification's own `reasons[]` named the excluded sibling.
+     *
+     * It also inverts the documented dedup trade-off: over-merging is supposed to cost a hidden
+     * second flat, and here it LAUNDERED an excluded tenure into a notification. Found by a review
+     * panel on 2026-08-24.
+     *
+     * An UNKNOWN sibling deliberately does NOT veto — absence of a signal is not evidence, and
+     * most cards carry no tenure at all, so vetoing on doubt would digest nearly every clustered
+     * match. Only the excluded set vetoes. The counterweight is the next test.
+     */
+    public function testAnExcludedTenureOnAnyClusterMemberVetoesTheMatchWhicheverSourceRanFirst(): void
+    {
+        // The same flat, twice: a card with no tenure text on a pure-LLI portal, and one on a mixed
+        // portal that says PLS outright. Identical postcode, rent, surface and rooms, so they cluster.
+        $bare = new RawListing(
+            sourceName: 'inli',
+            externalId: 'i-1',
+            title: 'T4 Sartrouville',
+            description: '4 pieces de 88 m2, ascenseur.',
+            commune: 'Sartrouville',
+            postcode: '78500',
+            rentCc: 1450,
+            surfaceM2: 88.0,
+            rooms: 4,
+        );
+        $excluded = new RawListing(
+            sourceName: 'cdc',
+            externalId: 'c-1',
+            title: 'T4 Sartrouville',
+            description: '4 pieces de 88 m2. Commission d attribution, demande de logement social.',
+            fields: ['financement' => 'PLS'],
+            commune: 'Sartrouville',
+            postcode: '78500',
+            rentCc: 1450,
+            surfaceM2: 88.0,
+            rooms: 4,
+        );
+
+        foreach ([['inli-first', $bare, $excluded], ['cdc-first', $excluded, $bare]] as [$order, $first, $second]) {
+            $store = $this->store();
+            $channel = new RecordingChannel();
+
+            $this->pipeline($store, new Notifier([$channel]))->runOnce(
+                [
+                    new FakeSource($first->sourceName, listings: [$first], mixedTenure: $first->sourceName === 'cdc'),
+                    new FakeSource($second->sourceName, listings: [$second], mixedTenure: $second->sourceName === 'cdc'),
+                ],
+                self::NOW,
+            );
+
+            self::assertNotContains(
+                NotificationKind::MATCH,
+                array_map(static fn (Notification $n): NotificationKind => $n->kind, $channel->sent),
+                $order . ': a cluster holding an explicit PLS member must never be notified as a match — '
+                . 'whichever member happened to survive dedup',
+            );
+        }
+    }
+
+    /**
+     * The counterweight: a merely UNDETERMINED sibling must not veto a match.
+     *
+     * Without this, the fix above is one line from digesting every clustered match in the tree —
+     * most cards state no tenure at all, so the bare member of nearly every cross-portal pair
+     * classifies UNKNOWN. Over-rejection is invisible, because nothing arrives.
+     */
+    public function testAnUndeterminedSiblingDoesNotVetoAMatch(): void
+    {
+        $store = $this->store();
+        $channel = new RecordingChannel();
+
+        $bare = new RawListing(
+            sourceName: 'mixed',
+            externalId: 'm-1',
+            title: 'T4 Sartrouville',
+            description: '4 pieces de 88 m2, ascenseur.',
+            commune: 'Sartrouville',
+            postcode: '78500',
+            rentCc: 1450,
+            surfaceM2: 88.0,
+            rooms: 4,
+        );
+
+        $this->pipeline($store, new Notifier([$channel]))->runOnce(
+            [
+                new FakeSource('inli', listings: [$this->listing('a1', ['source' => 'inli'])]),
+                new FakeSource('mixed', listings: [$bare], mixedTenure: true),
+            ],
+            self::NOW,
+        );
+
+        self::assertContains(
+            NotificationKind::MATCH,
+            array_map(static fn (Notification $n): NotificationKind => $n->kind, $channel->sent),
+            'a sibling that merely states nothing is not evidence against the match',
+        );
+    }
+
     // ---------------------------------------------------------------- scoring inputs
 
     public function testFreshnessIsMeasuredFromFIRSTSeenNotFromEverySighting(): void
@@ -677,14 +863,14 @@ final class PipelineRunTest extends TestCase
 
     // ---------------------------------------------------------------- schema
 
-    public function testTheSchemaVersionIsSeven(): void
+    public function testTheSchemaVersionIsEight(): void
     {
         // A bare constant assertion, and it earns its place: lowering `SCHEMA_VERSION` makes
         // `migrate()` return early on an EXISTING database, so an older one opens cleanly and then
         // throws `no such column` on the first write. A fresh database hides it entirely, because
         // `CREATE TABLE IF NOT EXISTS` always writes the current DDL.
-        self::assertSame(7, Store::SCHEMA_VERSION);
-        self::assertSame(7, $this->store()->schemaVersion());
+        self::assertSame(8, Store::SCHEMA_VERSION);
+        self::assertSame(8, $this->store()->schemaVersion());
     }
 
     public function testAVersionOneDatabaseIsUpgradedThroughEveryLaterStep(): void
@@ -702,7 +888,7 @@ final class PipelineRunTest extends TestCase
         unset($pdo, $store);
 
         $reopened = Store::open((string) $this->dbPath);
-        self::assertSame(7, $reopened->schemaVersion());
+        self::assertSame(8, $reopened->schemaVersion());
 
         // v5's table and v6's column are created by their own migration steps, not by the
         // fresh-database DDL, and this is the only path that proves the difference: a v1 database
@@ -717,8 +903,8 @@ final class PipelineRunTest extends TestCase
             'name',
         );
 
-        foreach (['seen_epoch', 'tenure', 'confidence_bp', 'signals_json', 'group_key', 'evidence_json', 'outcome'] as $column) {
-            self::assertContains($column, $columns, "the v1 -> v7 upgrade did not add `{$column}`");
+        foreach (['seen_epoch', 'tenure', 'confidence_bp', 'signals_json', 'group_key', 'evidence_json', 'outcome', 'notified_as'] as $column) {
+            self::assertContains($column, $columns, "the v1 -> v8 upgrade did not add `{$column}`");
         }
 
         // v6's ALTER runs against a table v5 has just created in the SAME migration, which is the
@@ -748,7 +934,7 @@ final class PipelineRunTest extends TestCase
         $pdo->exec("UPDATE schema_meta SET value = '5' WHERE key = 'schema_version'");
         unset($pdo);
 
-        self::assertSame(7, Store::open($path)->schemaVersion(), 'a re-run migration must not throw');
+        self::assertSame(8, Store::open($path)->schemaVersion(), 'a re-run migration must not throw');
     }
 
     // ---------------------------------------------------------------- helpers

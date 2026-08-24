@@ -1209,7 +1209,7 @@ run_sabotage "a known duplicate is silently dropped instead of shown" \
 
 run_sabotage "--seed stops marking listings notified (the flood moves one run later)" \
   src/php/Cli/Pipeline.php \
-  's%MARKED NOTIFIED WITHOUT SENDING%DISABLED%; s%^                \$this->store->markNotified(\$sighting->dedupKey, \$nowIso);$%%'
+  's%MARKED NOTIFIED WITHOUT SENDING%DISABLED%; s%^                \$this->store->markNotified(\$sighting->dedupKey, \$nowIso, .MATCH.);$%%'
 
 run_sabotage "the digest re-emits everything on every pass (Q34)" \
   src/php/Cli/Pipeline.php \
@@ -1218,6 +1218,50 @@ run_sabotage "the digest re-emits everything on every pass (Q34)" \
 run_sabotage "a match is marked notified even when no channel confirmed" \
   src/php/Cli/Pipeline.php \
   's%if (\$this->notifier->delivered(\$failures)) {%if (true) {%'
+
+# --- schema v8: a promotion must survive the digest that preceded it ------------------------------
+
+run_sabotage "the match gate forgets WHAT the listing was announced as (a promotion is swallowed)" \
+  src/php/Cli/Pipeline.php \
+  's%wasNotifiedAs(\$sighting->dedupKey, .MATCH.)%wasNotified(\$sighting->dedupKey)%'
+
+run_sabotage "an announcement may be DOWNGRADED (a match reopens for re-announcement)" \
+  src/php/Store/Store.php \
+  's%WHEN notified_at IS NOT NULL AND COALESCE%WHEN 0 = 1 AND COALESCE%'
+
+run_sabotage "a pre-v8 announcement reads as a DOUBT (the historic backlog re-announces as matches)" \
+  src/php/Store/Store.php \
+  "s%\\\$row\\['notified_as'\\] === null ? 'MATCH' :%\\\$row['notified_as'] === null ? 'DIGEST' :%"
+
+# --- §1 across a cross-portal cluster --------------------------------------------------------------
+
+run_sabotage "only the SURVIVOR is judged again (a PLS sibling stops vetoing the cluster)" \
+  src/php/Cli/Pipeline.php \
+  's%\$judged = \$this->clusterClassification(\$cluster\[.members.\], \$observed, \$classification);%\$judged = \$classification;%'
+
+run_sabotage "an UNDETERMINED sibling vetoes too (every clustered match is digested)" \
+  src/php/Cli/Pipeline.php \
+  's%if (\$memberClassification === null || !\$memberClassification->tenure->isExcluded()) {%if (\$memberClassification === null || \$memberClassification->tenure->isEligible()) {%'
+
+# --- Q27: the beat's own figures ------------------------------------------------------------------
+
+run_sabotage "the beat's notified count goes back to a hard-coded 0 (constant at any traffic level)" \
+  src/php/Cli/Scout.php \
+  's%\$this->beat(\$notifier, \$store, \$passes, \$notified, null, \$watched, \$failedPasses);%\$this->beat(\$notifier, \$store, \$passes, 0, null, \$watched, \$failedPasses);%'
+
+run_sabotage "the pass result is discarded again (nothing feeds the beat's count)" \
+  src/php/Cli/Scout.php \
+  's%\$notified += \$pushed ?? 0;%%'
+
+# --- the digest backlog must DRAIN, not harden -----------------------------------------------------
+
+run_sabotage "the digest batch loses its cap (one all-or-nothing send that grows on every failure)" \
+  src/php/Store/Store.php \
+  "s%bindValue(':limit', max(1, \\\$limit)%bindValue(':limit', max(1, 100000)%"
+
+run_sabotage "a capped digest stops naming the remainder (the bin reads as empty)" \
+  src/php/Cli/Scout.php \
+  's%if (\$waiting > count(\$rows)) {%if (false) {%'
 
 run_sabotage "a failed fetch stops being recorded as a failed run" \
   src/php/Cli/Pipeline.php \

@@ -204,6 +204,50 @@ final class ScoutDigestTest extends TestCase
     // ── harness ───────────────────────────────────────────────────────────────────────────────────
 
     /** Writes one listing judged DIGEST and never delivered, and returns its dedup key. */
+    public function testTheBacklogIsSentInBoundedBatchesThatSayWhatIsLeft(): void
+    {
+        // **The query was unbounded and the send is all-or-nothing.** Any rejection that is a
+        // function of payload size was therefore permanently self-perpetuating: the batch that
+        // failed came back next time with MORE rows in it, so the *à vérifier* bin — §1's only
+        // landing zone — hardened into permanent undeliverability while the command printed a
+        // single warning to a log nobody reads. Measured by a review panel on 2026-08-24 at ~95
+        // bytes per entry, linear and unbounded.
+        //
+        // The remainder must be ANNOUNCED as well as bounded: a cap that stayed quiet about what it
+        // left behind would read as the whole backlog, and an operator who believes the bin is
+        // empty stops running the command.
+        $root = $this->tempRoot();
+        $over = Store::DIGEST_BATCH + 7;
+
+        for ($i = 0; $i < $over; $i++) {
+            $this->seedDigestRow($root, new RawListing(
+                sourceName: 'cdc_habitat',
+                externalId: 'BATCH-' . $i,
+                title: 'Appartement T4',
+                description: 'Aucun régime annoncé',
+                commune: 'Sartrouville',
+                postcode: '78500',
+                rentCc: 1450,
+                surfaceM2: 82.0,
+                rooms: 4,
+            ));
+        }
+
+        $result = $this->scout($root, ['digest', '--dry-run']);
+
+        self::assertSame(0, $result['code']);
+        self::assertSame(
+            Store::DIGEST_BATCH,
+            substr_count($result['out'], 'Sartrouville'),
+            'one batch, capped — an unbounded backlog in one all-or-nothing send can never drain',
+        );
+        self::assertStringContainsString(
+            '7 autre(s) en attente',
+            $result['out'],
+            'the remainder must be named, or a capped batch reads as the whole bin',
+        );
+    }
+
     private function seedDigestRow(string $root, RawListing $listing): string
     {
         $store = Store::open($root . '/state/rent-watch.sqlite3');

@@ -8,6 +8,7 @@ use PHPUnit\Framework\TestCase;
 use RentWatch\Adapters\HtmlSource;
 use RentWatch\Store\Store;
 use RentWatch\Cli\Scout;
+use RentWatch\Core\RawListing;
 
 /**
  * The CLI, driven end to end against the committed fixture source.
@@ -215,11 +216,45 @@ final class ScoutTest extends TestCase
     /**
      * Hard rule 2 reaches the one failure no other column can show.
      *
-     * A detail page that stops parsing does not change a source's COUNT and does not fail its run,
-     * so `ok / 168 annonces` stays true while every listing quietly loses its title. That is the
-     * broken-selector-forever shape one layer down, and `detailFailureCount` is what sees it — but
-     * a count nobody reads is not a signal, and this is the assertion that it is read.
+     * A verdict whose snapshot could not be encoded is invisible to BOTH commands that walk the
+     * store: `staleVerdicts()` selects undetermined verdicts, so a row that classified `LLI` and
+     * failed to encode is not skipped by `reclassify` — it is unreachable by it — and
+     * `pendingDigest()` walks digest outcomes only. This line is the entire audit trail, and a
+     * review panel deleted the whole report block and watched the suite stay green (1804/1804).
+     * A count nobody reads is not a signal; this is the assertion that it is read.
      */
+    public function testDoctorReportsVerdictsWhoseEvidenceWasNeverCaptured(): void
+    {
+        // A root with an ENABLED source, because `doctor` reports the refusal and returns before
+        // any store column when nothing is enabled.
+        $root = $this->fixtureRoot(enabled: true);
+
+        // The suite pins `RENT_WATCH_DB` in setUp, and that is the store `doctor` will open.
+        $store = Store::open((string) $this->dbPath);
+        $listing = new RawListing(
+            sourceName: 'cdc_habitat',
+            externalId: 'NO-SNAP-1',
+            title: 'Appartement T4',
+            description: 'Logement intermédiaire',
+            commune: 'Sartrouville',
+            postcode: '78500',
+            rentCc: 1450,
+            surfaceM2: 82.0,
+            rooms: 4,
+        );
+        $key = $store->record($listing, 1450, '2026-08-24T12:00:00+02:00')->dedupKey;
+        $store->recordVerdict($key, 'LLI', 9000, ['label explicite'], $listing);
+
+        // Exactly the shape `recordVerdict()` leaves behind when `ListingSnapshot::encode()`
+        // refuses the payload — the verdict stands, the evidence does not.
+        (new \PDO('sqlite:' . (string) $this->dbPath))->exec('UPDATE listings SET evidence_json = NULL');
+
+        $r = $this->scoutIn($root, ['doctor']);
+
+        self::assertStringContainsString('preuves', $r['out']);
+        self::assertStringContainsString('1 verdict(s) sans instantané', $r['out']);
+    }
+
     /**
      * A WATCHER'S CLOCK MUST NOT BE FROZEN AT PROCESS START.
      *

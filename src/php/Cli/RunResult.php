@@ -39,10 +39,21 @@ final readonly class RunResult
          * be a NOTIFIED MATCH which silently lost its evidence. The earlier wording told the
          * operator such a listing was *illisible* and *digested*, and both were wrong.
          *
-         * Their verdict IS stored, so they are not mistaken for pre-v3 rows — but `scout reclassify`
-         * skips them for ever, because re-judging on evidence that was never captured is the breach
-         * §1 forbids. Counted so a pass says it happened rather than leaving it to be discovered
-         * months later from a skip counter. This used to be an exception that took the whole pass.
+         * Their verdict IS stored, so they are not mistaken for pre-v3 rows — and re-judging on
+         * evidence that was never captured is the breach §1 forbids, so nothing may re-judge them.
+         *
+         * **"`scout reclassify` skips them for ever" is what this said, and it is TRUE ONLY OF AN
+         * `UNKNOWN` ROW.** `Store::staleVerdicts()` selects `tenure IS NULL OR tenure = 'UNKNOWN'`,
+         * so the very listing this paragraph is about — one that classified `LLI`, was NOTIFIED,
+         * and lost its snapshot — is not skipped by that command, it is INVISIBLE to it. It is
+         * outside `pendingDigest()` too, its outcome being `MATCH`. A round-3 commit message
+         * claimed this correction had landed; it landed in `Pipeline` and in
+         * `Store::evidencelessVerdictCount()` and not here, and a fourth review round found the
+         * original wording still standing. `scout doctor`'s `preuves` line is what surfaces the
+         * standing count, and it is the only thing that does.
+         *
+         * Counted so a pass says it happened rather than leaving it to be discovered months later
+         * from a skip counter. This used to be an exception that took the whole pass.
          */
         public int $unencodable = 0,
         public array $errors = [],

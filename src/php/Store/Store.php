@@ -46,7 +46,23 @@ final readonly class Store
      * without complaint and then threw a raw `no such column` at the first sighting. That is the
      * whole argument for this constant existing, demonstrated against itself.
      */
-    public const int SCHEMA_VERSION = 7;
+    public const int SCHEMA_VERSION = 8;
+
+    /**
+     * How many undelivered digest rows one `scout digest` may carry.
+     *
+     * **The query was unbounded and the send is all-or-nothing**, so any rejection that is a
+     * function of payload size was permanently self-perpetuating: the batch that failed came back
+     * next time with more rows in it, and the *à vérifier* bin — §1's only landing zone — became
+     * undeliverable for good while the command printed one warning to a log nobody reads. Measured
+     * by a review panel on 2026-08-24 at ~95 bytes per entry, linear and unbounded.
+     *
+     * A cap turns that into a drain: each run clears up to this many and says what is left, so a
+     * backlog shrinks instead of hardening. 50 is ~4.7 KB of body, which clears the smallest limit
+     * this project's channels are documented to have while still emptying a real backlog in a few
+     * runs.
+     */
+    public const int DIGEST_BATCH = 50;
 
     /** Spec §8: the mean is rolling over seven days, not over a fixed number of runs. */
     public const int ROLLING_WINDOW_DAYS = 7;
@@ -229,6 +245,20 @@ final readonly class Store
                 last_seen_at  TEXT NOT NULL,
                 seen_epoch    INTEGER NOT NULL,
                 notified_at   TEXT,
+                -- Schema v8. WHAT the listing was last announced AS, because `notified_at` alone
+                -- was answering two different questions with one value. Being carried in a
+                -- delivered digest set it, and the match path read it as "already told about this
+                -- listing" -- so a listing promoted DIGEST -> MATCH on a later pass was silently
+                -- swallowed, while the pass summary counted the match. Nothing could reach it
+                -- afterwards either: the same pass overwrote `tenure` (out of `staleVerdicts()`)
+                -- and `outcome` (out of `pendingDigest()`), and there is no third selector.
+                --
+                -- Monotone: DIGEST < MATCH. A row announced as a match is never re-announced as a
+                -- doubt. NULL on a pre-v8 row means "announced under a version that did not record
+                -- what it said", and is NOT backfilled -- same precedent as `tenure`, `group_key`
+                -- and `evidence_json`. `wasNotifiedAs()` reads a NULL-with-a-timestamp as MATCH,
+                -- which is the fail-quiet direction for the backlog: it re-announces nothing.
+                notified_as   TEXT,
                 -- Schema v3 (Q24). A listing stored under an old classifier cannot be re-evaluated
                 -- or explained without re-fetching it, and by then the source may have removed the
                 -- ad. Combined with the seen-set's "new exactly once" guarantee, a listing digested
@@ -547,6 +577,23 @@ final readonly class Store
                 // digest`. Without the index that is a full scan of the seen-set, which grows
                 // without bound — the one table nothing ever prunes.
                 $this->pdo->exec('CREATE INDEX IF NOT EXISTS listings_outcome ON listings (outcome, notified_at)');
+            }
+
+            if ($recorded < 8) {
+                // Additive and re-runnable like every step above; the column list is read first
+                // because SQLite has no `ADD COLUMN IF NOT EXISTS`.
+                //
+                // NOT BACKFILLED. A row already carrying `notified_at` was announced by a version
+                // that did not record what it said, and writing 'DIGEST' into those would re-
+                // announce every one of them as a match the moment its tenure resolved -- a flood
+                // out of the seen-set, which is the failure Q36 exists to prevent. `wasNotifiedAs()`
+                // therefore treats a NULL-with-a-timestamp as the strongest thing it could have
+                // been, so the pre-v8 backlog stays quiet.
+                $existing = array_column($this->pdo->query('PRAGMA table_info(listings)')->fetchAll(), 'name');
+
+                if (!\in_array('notified_as', $existing, true)) {
+                    $this->pdo->exec('ALTER TABLE listings ADD COLUMN notified_as TEXT');
+                }
             }
 
             $stamp = $this->pdo->prepare("UPDATE schema_meta SET value = :value WHERE key = 'schema_version'");
@@ -977,11 +1024,15 @@ final readonly class Store
     }
 
     /**
-     * Whether this listing has ALREADY been pushed to the user.
+     * Whether this listing has ALREADY been pushed to the user, AT ALL.
      *
      * Seen and notified are deliberately different facts: a listing that went to the low-priority
      * *"à vérifier"* digest was seen and not notified, and one whose rent later drops must be able
      * to reach the user even though it is no longer new.
+     *
+     * This is the DIGEST side's gate — announcing a doubt twice is the alert fatigue Q34 exists to
+     * avoid, and being told a flat is a match certainly covers being told it is doubtful. The match
+     * side must ask {@see self::wasNotifiedAs()} instead, because the reverse is not true.
      */
     public function wasNotified(string $dedupKey): bool
     {
@@ -992,13 +1043,84 @@ final readonly class Store
         return $row !== false && $row['notified_at'] !== null;
     }
 
+    /**
+     * Whether this listing has already been announced AS the given outcome or better (schema v8).
+     *
+     * **`wasNotified()` alone made a promotion unreachable.** A delivered digest sets
+     * `notified_at`, the match path read that as "already told about this listing", and so a
+     * listing promoted DIGEST -> MATCH hit `continue` and no match notification was ever sent —
+     * while the pass summary counted it, which is the part that makes it invisible. The same pass
+     * then overwrote `tenure` and `outcome`, taking the row out of both `staleVerdicts()` and
+     * `pendingDigest()`, so neither `scout reclassify` nor `scout digest` could reach it either.
+     *
+     * The ordering is monotone and closed: DIGEST < MATCH. A row already announced as a MATCH is
+     * never re-announced as anything.
+     *
+     * **A pre-v8 row — a timestamp with no recorded kind — reads as MATCH.** That is the quiet
+     * direction on purpose: those rows were announced by a version that did not record what it
+     * said, and treating them as digests would re-announce the entire historic backlog as matches
+     * the moment their tenure resolved. That is a flood out of the seen-set, which is the failure
+     * Q36 exists to prevent. A never-announced row returns false, as it must.
+     */
+    public function wasNotifiedAs(string $dedupKey, string $outcome): bool
+    {
+        $statement = $this->pdo->prepare('SELECT notified_at, notified_as FROM listings WHERE dedup_key = :key');
+        $statement->execute(['key' => $dedupKey]);
+        $row = $statement->fetch();
+
+        if ($row === false || $row['notified_at'] === null) {
+            return false;
+        }
+
+        $announced = $row['notified_as'] === null ? 'MATCH' : (string) $row['notified_as'];
+
+        return self::announcementRank($announced) >= self::announcementRank($outcome);
+    }
+
+    /**
+     * How strong an announcement is, so a promotion can be recognised and a demotion cannot.
+     *
+     * An unrecognised value ranks as MATCH — the strongest — because the only way one gets into
+     * the column is a caller passing something this method has not been taught, and re-announcing
+     * on a value nobody understands is the loud direction in the one place §1 wants the quiet one.
+     */
+    private static function announcementRank(string $outcome): int
+    {
+        return match ($outcome) {
+            'DIGEST' => 1,
+            default => 2,
+        };
+    }
+
     /** @throws \InvalidArgumentException if the key was never recorded — a silent no-op here would re-notify forever */
-    public function markNotified(string $dedupKey, string $atIso): void
+    /**
+     * Record that this listing was announced, and AS WHAT (schema v8).
+     *
+     * `$as` is REQUIRED rather than defaulted, and that is deliberate. Neither default is safe:
+     * 'MATCH' would let a digest caller that forgot it suppress the very promotion this column
+     * exists to allow, and 'DIGEST' would let a match caller that forgot it re-announce a flat
+     * already pushed. A new caller has to decide, which is the only version of this that stays
+     * correct as callers are added.
+     *
+     * **The write cannot DEMOTE.** A row already announced as a match keeps that, whatever a later
+     * digest pass says — done in SQL rather than read-then-write so two `scout` processes on the
+     * same store (WAL, and this project ships a `--watch` loop) cannot interleave into a lost
+     * update. `notified_at` still moves, because the listing genuinely was carried again.
+     */
+    public function markNotified(string $dedupKey, string $atIso, string $as): void
     {
         self::epoch($atIso);
 
-        $statement = $this->pdo->prepare('UPDATE listings SET notified_at = :at WHERE dedup_key = :key');
-        $statement->execute(['at' => $atIso, 'key' => $dedupKey]);
+        $statement = $this->pdo->prepare(
+            'UPDATE listings
+                SET notified_at = :at,
+                    notified_as = CASE
+                        WHEN notified_at IS NOT NULL AND COALESCE(notified_as, \'MATCH\') = \'MATCH\' THEN \'MATCH\'
+                        ELSE :as
+                    END
+              WHERE dedup_key = :key',
+        );
+        $statement->execute(['at' => $atIso, 'as' => $as, 'key' => $dedupKey]);
 
         if ($statement->rowCount() === 0) {
             throw new \InvalidArgumentException(sprintf('annonce inconnue, impossible de la marquer notifiée : %s', $dedupKey));
@@ -1454,19 +1576,32 @@ final readonly class Store
      *
      * @return list<array{dedup_key: string, source: string, external_id: string, url: ?string, title: string, rent_cc: ?int, evidence_json: ?string, signals_json: ?string}>
      */
-    public function pendingDigest(): array
+    public function pendingDigest(int $limit = self::DIGEST_BATCH): array
     {
-        $statement = $this->pdo->query(
+        $statement = $this->pdo->prepare(
             "SELECT dedup_key, source, external_id, url, title, rent_cc, evidence_json, signals_json
                FROM listings
               WHERE outcome = 'DIGEST' AND notified_at IS NULL
-              ORDER BY seen_epoch ASC, dedup_key ASC",
+              ORDER BY seen_epoch ASC, dedup_key ASC
+              LIMIT :limit",
         );
+        $statement->bindValue(':limit', max(1, $limit), \PDO::PARAM_INT);
+        $statement->execute();
 
         /** @var list<array{dedup_key: string, source: string, external_id: string, url: ?string, title: string, rent_cc: ?int, evidence_json: ?string, signals_json: ?string}> $rows */
-        $rows = $statement === false ? [] : $statement->fetchAll(\PDO::FETCH_ASSOC);
+        $rows = $statement->fetchAll(\PDO::FETCH_ASSOC);
 
         return $rows;
+    }
+
+    /** How many rows are waiting in total, so a capped batch can say what it left behind. */
+    public function pendingDigestCount(): int
+    {
+        $statement = $this->pdo->query(
+            "SELECT COUNT(*) FROM listings WHERE outcome = 'DIGEST' AND notified_at IS NULL",
+        );
+
+        return $statement === false ? 0 : (int) $statement->fetchColumn();
     }
 
     /**

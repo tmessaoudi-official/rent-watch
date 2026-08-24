@@ -474,6 +474,16 @@ final readonly class Scout
         $passes = 0;
         $failedPasses = 0;
 
+        // Q27's "listings notified" figure. It was the LITERAL `0` at both call sites below, so the
+        // one number that separates a producing watcher from a mute one was constant — on the day
+        // matching genuinely stopped, the beat read byte-for-byte identical to the day it pushed 33.
+        // `CLAUDE.md` and `beat()`'s own docblock both claimed it carried this. Found by a review
+        // panel on 2026-08-24, one line from the field round 3 had just repaired.
+        //
+        // Cumulative over the process, like `$passes`, because a beat reporting only the last pass
+        // would read as zero on any quiet interval and re-open the same ambiguity.
+        $notified = 0;
+
         // What this run actually polls, which is NOT the same as what the config enables whenever
         // `--source` is in play. Taken from the built list rather than re-read from the config,
         // because the built list is the thing the loop will iterate: any future reason a source is
@@ -487,11 +497,12 @@ final readonly class Scout
         $refusal = $this->takeLastRefusal();
 
         if ($heartbeat->isDue($this->lastHeartbeat(), $this->now())) {
-            $this->beat($notifier, $store, $passes, 0, $refusal, $watched);
+            // Genuinely zero here: no pass has run yet in this process.
+            $this->beat($notifier, $store, $passes, $notified, $refusal, $watched);
         }
 
         $loop = new WatchLoop(
-            pass: function () use ($criteria, $store, $notifier, $sources, $verbose, $pacer, $heartbeat, $watched, &$passes, &$failedPasses): void {
+            pass: function () use ($criteria, $store, $notifier, $sources, $verbose, $pacer, $heartbeat, $watched, &$passes, &$failedPasses, &$notified): void {
                 // `finally`, and it is the whole point rather than a style choice. This claimed to
                 // be "outside its try/catch by construction" and was not: the heartbeat sat in the
                 // same closure as the pass, and `WatchLoop` wraps that closure in its own `try` — so
@@ -506,8 +517,12 @@ final readonly class Scout
                 $threw = true;
 
                 try {
-                    $this->onePass($criteria, $store, $notifier, PacedSource::wrapAll($sources, $pacer), false, $verbose);
+                    // The RESULT is used now rather than discarded: it carries what the pass
+                    // actually pushed, which is the figure the beat reports.
+                    $pushed = null;
+                    $this->onePass($criteria, $store, $notifier, PacedSource::wrapAll($sources, $pacer), false, $verbose, $pushed);
                     ++$passes;
+                    $notified += $pushed ?? 0;
                     $threw = false;
                 } finally {
                     if ($threw) {
@@ -520,7 +535,7 @@ final readonly class Scout
                     // can replace the diagnosis is worse than one that is late.
                     try {
                         if ($heartbeat->isDue($this->lastHeartbeat(), $this->now())) {
-                            $this->beat($notifier, $store, $passes, 0, null, $watched, $failedPasses);
+                            $this->beat($notifier, $store, $passes, $notified, null, $watched, $failedPasses);
                         }
                     } catch (\Throwable $beatFailure) {
                         $this->warn('battement de cœur non émis : ' . Redact::text($beatFailure->getMessage()));
@@ -575,8 +590,15 @@ final readonly class Scout
         array $sources,
         bool $seed,
         bool $verbose,
+        /**
+         * WHAT THE PASS PUSHED, for the Q27 beat. An out-parameter rather than a changed return
+         * type, so the exit-code contract every caller reads stays exactly as it was — and so a
+         * caller that does not care about the figure is not forced to unpack a result object.
+         */
+        ?int &$matchesOut = null,
     ): int {
         $result = (new Pipeline($criteria, $store, $notifier))->runOnce($sources, $this->now(), $seed);
+        $matchesOut = $result->matches;
 
         $this->line(sprintf(
             '%d source(s), %d annonce(s) analysées · %d correspondance(s), %d à vérifier, %d écartée(s), %d doublon(s)',
@@ -682,6 +704,13 @@ final readonly class Scout
         $store = $this->store();
         $rows = $store->pendingDigest();
 
+        // CAPPED, and the remainder is announced. The query was unbounded and the send is all-or-
+        // nothing, so a rejection that is a function of payload size re-sent a strictly LARGER
+        // batch every time and the *à vérifier* bin — §1's only landing zone — hardened into
+        // permanent undeliverability, with one warning line to show for it. Found by a review panel
+        // on 2026-08-24. A cap makes the backlog drain instead.
+        $waiting = $store->pendingDigestCount();
+
         if ($rows === []) {
             $this->line('Aucune annonce en attente dans le récapitulatif « à vérifier ».');
 
@@ -760,6 +789,16 @@ final readonly class Scout
             $this->line($unreadable . ' instantané(s) illisible(s) — voir les avertissements ci-dessus.');
         }
 
+        if ($waiting > count($rows)) {
+            // Said out loud, because a capped batch that stayed silent about the remainder would
+            // look like the whole backlog — and the operator would stop running the command.
+            $this->line(sprintf(
+                '%d autre(s) en attente — relancer `scout digest` pour la suite (lot de %d).',
+                $waiting - count($rows),
+                Store::DIGEST_BATCH,
+            ));
+        }
+
         if ($dryRun) {
             $this->line('--dry-run : rien n\'a été envoyé, rien n\'a été marqué comme émis.');
 
@@ -793,7 +832,7 @@ final readonly class Scout
 
         $now = $this->nowIso ?? date('c');
         foreach ($entries as $entry) {
-            $store->markNotified($entry['key'], $now);
+            $store->markNotified($entry['key'], $now, 'DIGEST');
         }
 
         $this->line(count($entries) . ' annonce(s) émise(s).');
@@ -1136,7 +1175,7 @@ final readonly class Scout
                 $this->warn('instantané non capturé pour ' . $promotion['key'] . ' — annonce non re-jugeable ensuite');
             }
             $store->recordOutcome($promotion['key'], $promotion['verdict']->outcome->value);
-            $store->markNotified($promotion['key'], $now);
+            $store->markNotified($promotion['key'], $now, 'MATCH');
         }
 
         if ($undelivered > 0) {

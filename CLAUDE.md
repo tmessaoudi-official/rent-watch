@@ -31,8 +31,15 @@ PHPUnit suite. `scout run --once` is demonstrable end to end today against a fro
 worth knowing before touching either, because they look symmetrical and are not: **`digest`
 announces an evidence-less row, `reclassify` skips one.** `digest` reads the store rather than the
 pass — the pipeline re-offers an undelivered entry only while the ad is still published, so an entry
-delisted in between is lost — and every row in that backlog predates schema v7, so skipping
-snapshot-less rows would skip exactly what the command exists to rescue. `reclassify` FORMS a
+delisted in between is lost — and a snapshot-less row in that backlog is a listing whose own payload
+could not be encoded, which is a live source fault rather than an old row, so skipping it would skip
+exactly what the command exists to rescue. **This sentence used to say those rows "predate schema
+v7", and that is impossible**: `pendingDigest()` filters on `outcome`, itself a v7 column that is
+not backfilled, so a genuine pre-v7 row has `outcome = NULL` and is never returned at all. The
+inverted premise was corrected twice in code and left standing here until a fourth review round;
+believing it would lead a future session to widen `pendingDigest()` to reach pre-v7 rows, which is
+a §1 risk that was explicitly refused — nothing stored distinguishes a pre-v7 digest from a pre-v7
+rejection. `reclassify` FORMS a
 verdict instead of announcing one, and re-judging on less evidence than the original saw is a §1
 breach rather than a smaller improvement: a card whose field says `PLS` while its title says
 *logement intermédiaire* classifies `UNKNOWN` by CONFLICT, and on the title alone it becomes a
@@ -831,6 +838,10 @@ bash tests/test-ci-workflow.sh          # proves ci.yml still wires every step C
                                         #   AND that the ledger's baseline gate cannot redden itself
                                         #   (needs tools/phpunit.phar — it executes that gate)
 bash .claude/skills/rw-repair/drift-scan.sh                         # config/doc drift; exit 1 on P0/P1
+bash tests/test-sabotage-applies.sh     # proves every sabotage EXPRESSION still matches something —
+                                        #   an expression that matches nothing reports coverage it
+                                        #   does not have, and each is checked ON ITS OWN
+bash tests/test-dotenv-cli.sh           # proves the .env loader the CLI actually uses
 bash tests/test-sabotage-baseline.sh    # proves the LEDGER is judged in a green scratch tree —
                                         #   it was not, from 2026-08-22 to 2026-08-24, so every one
                                         #   of its ~375 cases reported `ok` while proving nothing
@@ -906,7 +917,10 @@ Required coverage, per spec §11 — non-negotiable once `src/` exists:
   instant); **health** (every `SourceStatus` member reachable and asserted, every `SourceHealth`
   field asserted — five were once replaceable with constants while the suite stayed green);
   **seen-set** (a listing is new exactly once, and *notified* is a different fact from *seen* — the
-  store's two most basic guarantees, and the two that had no category for three rounds);
+  store's two most basic guarantees, and the two that had no category for three rounds; plus schema
+  v8's third: WHAT a listing was announced as is a different fact from WHETHER it was, the ordering
+  `DIGEST < MATCH` is monotone, a write cannot DEMOTE, and a pre-v8 row — a timestamp with no
+  recorded kind — reads as MATCH so the historic backlog cannot re-announce itself);
   **group** (schema v4: the key SURVIVES a survivorship flip, a delisted member keeps it, two groups
   that meet are merged, a listing that clusters alone has NO group, and a singleton reports its own
   history rather than the empty set SQL gives you for `group_key = NULL`);
@@ -955,6 +969,8 @@ tests/sabotage-check.sh     Proves the classifier suite detects a regression
 tests/test-tenure-guard.sh  Proves the §1 tripwire fires, and stays quiet on ordinary PHP
 tests/test-fetch-phpunit.sh Proves the runner fetch refuses a bad signature
 tests/test-drift-scan.sh    Proves drift-scan's S8 still fires — a gate nobody has seen red is untested
+tests/test-sabotage-applies.sh   Proves no sabotage expression has rotted into matching nothing
+tests/test-dotenv-cli.sh         Proves the .env loader behind every CLI verb
 tests/test-sabotage-baseline.sh  Proves the sabotage ledger judges its cases in a GREEN scratch tree
 tools/fetch-phpunit.sh      Fetches the runner; pinned SHA-256, refuses to install on a mismatch
 tools/phpunit.phar          Test runner (gitignored — see README § Getting started)
@@ -1093,6 +1109,15 @@ tests/test-tenure-guard.sh         Sabotage test FOR that hook — must-fire and
 tests/sabotage-check.sh            Breaks the classifier many ways; the suite must catch every one
 tests/test-fetch-phpunit.sh        Proves the runner fetch refuses a bad signature
 tests/test-drift-scan.sh           Sabotage test FOR that gate — each S8 sub-check must go red
+tests/test-sabotage-applies.sh     Proves every sabotage expression still matches something. It
+                                   checks each expression INDIVIDUALLY — it used to apply a case's
+                                   expressions together and compare once, so a multi-expression case
+                                   could rot one expression at a time while the case still reported
+                                   `ok`. A `markNotified()` signature change did exactly that on
+                                   2026-08-24. Splitting a compound sed script needs sed's own
+                                   syntax, not a split on `;`: this ledger's patterns contain
+                                   semicolons
+tests/test-dotenv-cli.sh          Proves the .env loader every CLI verb reads
 tests/test-sabotage-baseline.sh    Sabotage test for the LEDGER's own scratch-baseline guard. The
                                    ledger copies an explicit file list into a throwaway tree and
                                    judges every case there; `.env.example` was missing from that
