@@ -1355,6 +1355,73 @@ final class ConfigTest extends TestCase
     }
 
     /**
+     * **`card_separator` without `id_from: content` is refused, because the combination is legal
+     * on paper and silently useless in practice.**
+     *
+     * `identityFor()` returns `null` for anything but `content`, so every card is dropped — and the
+     * zero-cards guard then throws *"le gabarit du portail a changé"*. Loud, which is right, and a
+     * WRONG DIAGNOSIS, which is not: the template is fine and the config is incoherent. Someone
+     * would go looking at the portal's markup for a fault that is three lines away in JSON.
+     *
+     * It has to be refused rather than defaulted, because `link` is a real answer for a portal
+     * whose alerts DO carry listing URLs — silently promoting it to `content` would hand such a
+     * source content-addressed ids it never asked for, and change every identity it already has.
+     */
+    public function testSegmentationWithoutContentIdentityIsRefused(): void
+    {
+        $this->expectException(ConfigError::class);
+        $this->expectExceptionMessageMatches('/id_from/');
+
+        ConfigLoader::sourcesFromArray(['sources' => ['x' => [
+            'enabled' => false,
+            'family' => 'private',
+            'type' => 'email_alert',
+            'mixed_tenure' => false,
+            'params' => ['card_separator' => "Voir l'annonce"],
+            'map' => ['ref' => 'url', 'charges_included' => true],
+        ]]]);
+    }
+
+    /**
+     * A `title_pattern` or `residence_pattern` that does not compile is refused at load.
+     *
+     * `matchParam()` uses `@preg_match`, so an unbalanced bracket does not warn and does not throw
+     * — it returns `false` and the field is `null` for ever. On `residence_pattern` that is worse
+     * than cosmetic: the residence name is one of the three facts the identity floor accepts, so a
+     * typo silently narrows what can be identified at all.
+     */
+    public function testAnUncompilableEmailPatternIsRefused(): void
+    {
+        $this->expectException(ConfigError::class);
+        $this->expectExceptionMessageMatches('/residence_pattern/');
+
+        ConfigLoader::sourcesFromArray(['sources' => ['x' => [
+            'enabled' => false,
+            'family' => 'private',
+            'type' => 'email_alert',
+            'mixed_tenure' => false,
+            'params' => [
+                'card_separator' => "Voir l'annonce",
+                'id_from' => 'content',
+                'residence_pattern' => '~^([unclosed~m',
+            ],
+            'map' => ['ref' => 'url', 'charges_included' => true],
+        ]]]);
+    }
+
+    /** The shipped seloger patterns compile, asserted against the real file rather than a copy. */
+    public function testTheShippedEmailPatternsCompile(): void
+    {
+        $seloger = ConfigLoader::loadSources(self::ROOT . '/config/sources.json')['seloger'];
+
+        foreach (['title_pattern', 'residence_pattern'] as $key) {
+            $pattern = $seloger->params[$key] ?? null;
+            self::assertIsString($pattern, "seloger lost its {$key}");
+            self::assertNotFalse(@preg_match($pattern, 'Appartement Test,'), "{$key} does not compile");
+        }
+    }
+
+    /**
      * An `id_from` this adapter does not implement is refused rather than ignored.
      *
      * Silently falling back to link-identity is the dangerous direction: on a portal whose links

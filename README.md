@@ -14,13 +14,26 @@ Single language, single user, single machine. CLI plus push notifications — **
 
 ## Status
 
-**The pure core and the store are built. Nothing else is.**
+**It runs. Four institutional sources are live in production, and the first private portal is built.**
 
-`src/php/Core/` holds a PHP 8.5 implementation of the domain models and the tenure classifier —
-the part that needs no mailbox, no reverse-engineered endpoint and no credential, and the part
-everything else depends on. `src/php/Store/` holds the SQLite seen-set, price history and run log,
-which is what makes "notify once" and "tell me when a rent drops" possible at all. There is no
-adapter, no notification channel and no CLI yet.
+> That paragraph replaced one saying *"the pure core and the store are built, nothing else is —
+> there is no adapter, no notification channel and no CLI yet"*, which had been false for weeks.
+> `.env.example`'s own header carries the ruling: a stale *"this is only a sketch"* notice on a live
+> thing is worse than no notice at all.
+
+`scout run --watch` polls **In'li, CDC Habitat, Cityloger and Logirep** on the Q37 cadence, hydrates
+detail pages behind a novelty gate, classifies every listing by tenure, scores it, and pushes what
+matches. `doctor`, `dump`, `run --once/--seed/--watch`, `test-notify`, `digest` and `reclassify` all
+work end to end. The store is at schema v8.
+
+**SeLoger is built and proven offline** — the first Tier B portal, ingesting alert emails rather than
+scraping (hard rule 4). It ships `enabled: false` because the IMAP credentials are the one thing
+missing; `MAILBOX_DIR=tests/fixtures/seloger scout doctor --source=seloger` runs it against two real
+frozen alerts.
+
+**What is genuinely absent:** the transit/geo enrichment layer (`src/php/Enrich/`, no code at all),
+AL'in (needs an authenticated capture), classifier tier 4 (needs the `plafonds` figures), and
+`src/phorj/` (on indefinite hold).
 
 | Path | What it is |
 |---|---|

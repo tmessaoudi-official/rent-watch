@@ -2687,6 +2687,21 @@ run_sabotage "a segmented mixed-tenure source is allowed to load" \
   src/php/Config/ConfigLoader.php \
   "s%if (isset(\\\$params\['card_separator'\]) && \\\$params\['card_separator'\] !== '' && \\\$mixedTenure) {%if (false) {%"
 
+# A combination that is legal on paper and useless in practice: with the default `link`,
+# identityFor() answers for no card, every card is dropped, and the zero-cards guard then reports
+# that the PORTAL'S TEMPLATE changed. Loud with the wrong diagnosis is its own failure mode -- it
+# sends the reader to the markup for a fault three lines away in JSON.
+run_sabotage "a segmented source loads without content identity, so it blames the portal" \
+  src/php/Config/ConfigLoader.php \
+  "s%?? 'link') !== 'content') {%?? 'link') !== 'content' \&\& false) {%"
+
+# matchParam() reads these with @preg_match, so a pattern that does not compile never warns and
+# never throws -- it returns false and the field is null for ever. On residence_pattern that
+# silently narrows the identity floor, since the residence is one of the three facts it accepts.
+run_sabotage "an uncompilable email pattern is accepted and never matches anything" \
+  src/php/Config/ConfigLoader.php \
+  "s%, '') === false) {%, '') === false \&\& false) {%"
+
 # THE TALLY LIVES HERE, BELOW EVERY CASE, and that position is load-bearing rather than tidy.
 # It sat mid-file twice: once on 2026-08-20 (295 printed for 303 cases) and again from 2026-08-23,
 # when 21 schema-v7 / digest / reclassify cases were appended past it and the headline read 354 for

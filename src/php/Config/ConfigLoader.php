@@ -456,6 +456,44 @@ final class ConfigLoader
             );
         }
 
+        // Legal on paper, silently useless in practice. `identityFor()` answers only for `content`,
+        // so with the default `link` every card is dropped and the zero-cards guard then throws
+        // "le gabarit du portail a changé" — loud, which is right, and a WRONG DIAGNOSIS, which is
+        // not: the template is fine and the config is incoherent, and someone would go reading the
+        // portal's markup for a fault three lines away in JSON.
+        //
+        // Refused rather than silently promoted to `content`: `link` is a real answer for a portal
+        // whose alerts DO carry listing URLs, and promoting it would hand such a source
+        // content-addressed ids it never asked for, changing every identity it already holds.
+        if (isset($params['card_separator']) && $params['card_separator'] !== ''
+            && ($params['id_from'] ?? 'link') !== 'content') {
+            throw ConfigError::at(
+                $where . '.params.id_from',
+                'une source segmentée par card_separator a besoin de `id_from: content` — '
+                    . 'l\'identité par lien ne distingue pas deux cartes du même message',
+            );
+        }
+
+        // `matchParam()` reads these with `@preg_match`, so a pattern that does not compile never
+        // warns and never throws: it returns false, and the field is null for ever. On
+        // `residence_pattern` that silently narrows the identity floor, since the residence is one
+        // of the three facts it accepts.
+        foreach (['title_pattern', 'residence_pattern'] as $patternKey) {
+            $pattern = $params[$patternKey] ?? null;
+
+            if ($pattern === null || $pattern === '') {
+                continue;
+            }
+
+            if (@preg_match($pattern, '') === false) {
+                throw ConfigError::at(
+                    $where . '.params.' . $patternKey,
+                    'expression régulière invalide — elle ne compile pas, donc elle ne '
+                        . 'correspondrait jamais à rien sans le dire',
+                );
+            }
+        }
+
         $idFrom = $params['id_from'] ?? null;
         if ($idFrom !== null && $idFrom !== '' && !in_array($idFrom, ['link', 'content'], true)) {
             // Ignoring an unknown value would fall back to link-identity — which on a portal whose
