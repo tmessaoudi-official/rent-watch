@@ -23,6 +23,7 @@ use RentWatch\Config\ConfigLoader;
 use RentWatch\Config\Criteria;
 use RentWatch\Config\SourceDefinition;
 use RentWatch\Core\CriteriaEngine;
+use RentWatch\Core\DigestSchedule;
 use RentWatch\Core\Heartbeat;
 use RentWatch\Core\ListingSnapshot;
 use RentWatch\Core\Notify\Channel;
@@ -241,14 +242,30 @@ final readonly class Scout
         foreach ($notifier->disabledReport() as $name => $problem) {
             $this->line('  ⚠ canal ' . $name . ' désactivé : ' . $problem);
         }
-        // The digest cadence is stated as what RUNS, not as what is configured. This line used to
-        // read `digest à 8h`, which promised a daily emission nothing schedules: `digest_hour` is
-        // parsed, printed here, and read by no other code. Telling an operator a rollup fires every
-        // morning when none does is the "computed and never sent" shape hard rule 2 names, arriving
-        // through the diagnostic that exists to prevent it.
-        $this->line('  fuseau  : ' . date_default_timezone_get()
-            . ' · digest : à la fin de toute passe produisant du nouveau, et sur demande (`scout digest`)');
-        $this->line('  note    : `digest_hour` (' . $criteria->notify->digestHour . 'h) est configuré mais AUCUN planificateur ne le lit — voir Q34');
+        // The digest cadence is stated as what RUNS, not as what is configured. This line once read
+        // `digest à 8h`, promising a daily emission nothing scheduled; then it said so, naming the
+        // gap; the floor now exists, so it says that instead. All three versions describe the same
+        // config key, which is why the rule is to print behaviour rather than settings.
+        //
+        // THE RESOLVED LOCAL TIME IS PRINTED, per Q34's own ruling, and BOTH zones are shown because
+        // they can disagree. `bin/scout:44` sets the process default from `TZ`, so normally they
+        // match — but a `TZ` PHP cannot parse leaves the default at UTC with only a Notice, and then
+        // the two differ and the operator can see it. Resolved by the same function the floor uses:
+        // a second implementation here is how a diagnostic ends up disagreeing with the behaviour it
+        // reports.
+        try {
+            $digestZone = DigestSchedule::zoneFromEnv(($tz = getenv('TZ')) === false ? null : $tz);
+            $zoneNote = $digestZone->getName() . ' (il y est '
+                . (new \DateTimeImmutable($this->now()))->setTimezone($digestZone)->format('H\hi') . ')';
+        } catch (\InvalidArgumentException $e) {
+            // Doctor DIAGNOSES, it does not refuse — but it must not print a plausible hour derived
+            // from a zone that would stop `run` at startup.
+            $zoneNote = 'TZ INUTILISABLE — `scout run --watch` refusera de démarrer : ' . $e->getMessage();
+        }
+
+        $this->line('  fuseau  : PHP=' . date_default_timezone_get() . ' · récapitulatif=' . $zoneNote);
+        $this->line('  digest  : à la fin de toute passe produisant du nouveau, sur demande (`scout digest`), '
+            . 'et en plancher quotidien à ' . $criteria->notify->digestHour . 'h (Q34) — silencieux si rien n\'est en attente');
         $this->line('');
 
         if ($sources === []) {
@@ -504,6 +521,19 @@ final readonly class Scout
         // who typo'd this in a compose file would otherwise see nothing at all.
         try {
             $heartbeat = Heartbeat::fromEnv(($raw = getenv('HEARTBEAT_HOURS')) === false ? null : $raw);
+
+            // Q34's daily floor, built here for the same reason and refusing at the same moment: an
+            // unusable `digest_hour` or `TZ` must stop the watcher at startup, not a day into an
+            // unattended run.
+            //
+            // The zone is resolved explicitly rather than read from `date_default_timezone_get()`.
+            // NOT because the default is wrong — `bin/scout:44` already sets it from `TZ` — but
+            // because `date_default_timezone_set()` answers a bad zone name with `false` and a
+            // Notice, leaving UTC standing. That is a typo in a compose file quietly moving the
+            // floor two hours all summer, with nothing but a notice in a container log to show for
+            // it. `zoneFromEnv()` refuses instead, here, before the loop starts.
+            $digestSchedule = new DigestSchedule($criteria->notify->digestHour);
+            $digestZone = DigestSchedule::zoneFromEnv(($tz = getenv('TZ')) === false ? null : $tz);
         } catch (\InvalidArgumentException $e) {
             return $this->failRun($e->getMessage());
         }
@@ -537,8 +567,16 @@ final readonly class Scout
             $this->beat($notifier, $store, $passes, $notified, $refusal, $watched);
         }
 
+        // Before the first pass, deliberately. A backlog left undelivered when the container was
+        // last stopped is exactly what a restart should drain, and waiting for the first pass to
+        // finish would delay it by a full Q37 cadence for no benefit. Silent if the bin is empty,
+        // which on an ordinary restart it is.
+        if ($digestSchedule->isDue($this->lastDigestEmission(), $this->now(), $digestZone)) {
+            $this->floorDigest($notifier, $store, $this->now());
+        }
+
         $loop = new WatchLoop(
-            pass: function () use ($criteria, $store, $notifier, $sources, $verbose, $pacer, $heartbeat, $watched, &$passes, &$failedPasses, &$notified): void {
+            pass: function () use ($criteria, $store, $notifier, $sources, $verbose, $pacer, $heartbeat, $digestSchedule, $digestZone, $watched, &$passes, &$failedPasses, &$notified): void {
                 // `finally`, and it is the whole point rather than a style choice. This claimed to
                 // be "outside its try/catch by construction" and was not: the heartbeat sat in the
                 // same closure as the pass, and `WatchLoop` wraps that closure in its own `try` — so
@@ -576,6 +614,19 @@ final readonly class Scout
                     } catch (\Throwable $beatFailure) {
                         $this->warn('battement de cœur non émis : ' . Redact::text($beatFailure->getMessage()));
                     }
+
+                    // Q34's floor, in the `finally` for the same reason the beat is: the bin it
+                    // drains is §1's only landing zone, and a pass that threw is exactly when a
+                    // backlog is most likely to be sitting in it. Its own failure is contained for
+                    // the same reason too — a rollup that cannot send must not replace the
+                    // diagnosis of whatever made the pass fail.
+                    try {
+                        if ($digestSchedule->isDue($this->lastDigestEmission(), $this->now(), $digestZone)) {
+                            $this->floorDigest($notifier, $store, $this->now());
+                        }
+                    } catch (\Throwable $digestFailure) {
+                        $this->warn('récapitulatif quotidien non émis : ' . Redact::text($digestFailure->getMessage()));
+                    }
                 }
             },
             pacer: $pacer,
@@ -610,6 +661,11 @@ final readonly class Scout
         // Said out loud so the operator knows what silence will mean. An interval nobody was told
         // about cannot be used to judge whether the watcher has gone quiet.
         $this->line(sprintf('battement de cœur toutes les %d h (Q27) — le silence au-delà est un signal', $heartbeat->intervalHours));
+        $this->line(sprintf(
+            'plancher quotidien du récapitulatif « à vérifier » à %dh %s (Q34) — silencieux si rien n\'est en attente',
+            $digestSchedule->hour,
+            $digestZone->getName(),
+        ));
 
         return $loop->run($maxPasses);
     }
@@ -764,67 +820,22 @@ final readonly class Scout
         }
 
         $store = $this->store();
-        $rows = $store->pendingDigest();
+        $batch = $this->collectDigest($store);
 
-        // CAPPED, and the remainder is announced. The query was unbounded and the send is all-or-
-        // nothing, so a rejection that is a function of payload size re-sent a strictly LARGER
-        // batch every time and the *à vérifier* bin — §1's only landing zone — hardened into
-        // permanent undeliverability, with one warning line to show for it. Found by a review panel
-        // on 2026-08-24. A cap makes the backlog drain instead.
-        $waiting = $store->pendingDigestCount();
+        foreach ($batch->warnings as $warning) {
+            $this->warn($warning);
+        }
 
-        if ($rows === []) {
+        if ($batch->isEmpty()) {
             $this->line('Aucune annonce en attente dans le récapitulatif « à vérifier ».');
 
             return 0;
         }
 
-        $entries = [];
-        $withoutSnapshot = 0;
-        $unreadable = 0;
-
-        foreach ($rows as $row) {
-            $listing = null;
-            $json = $row['evidence_json'];
-
-            if (is_string($json) && $json !== '') {
-                try {
-                    $listing = ListingSnapshot::decode($json);
-                } catch (\JsonException | \InvalidArgumentException $e) {
-                    // Per-row, which is why the store hands these back RAW. Decoding the batch in
-                    // one query would let the first damaged row take every readable entry with it —
-                    // one bad row costing the whole digest, the opposite of degrading it and saying
-                    // so. Redacted: a snapshot quotes the listing payload back, and an adapter
-                    // error message is a secrets channel.
-                    ++$unreadable;
-                    $this->warn(sprintf(
-                        'instantané illisible pour %s — annonce dégradée : %s',
-                        $row['dedup_key'],
-                        Redact::text($e->getMessage()),
-                    ));
-                }
-            } else {
-                ++$withoutSnapshot;
-            }
-
-            $listing ??= new RawListing(
-                sourceName: $row['source'],
-                externalId: $row['external_id'],
-                title: $row['title'],
-                url: $row['url'],
-                rentCc: $row['rent_cc'],
-            );
-
-            /** @var list<string> $reasons */
-            $reasons = $this->decodeSignals($row['signals_json']);
-
-            $entries[] = [
-                'listing' => $listing,
-                'verdict' => Verdict::digest($reasons),
-                'key' => $row['dedup_key'],
-                'keys' => [$row['dedup_key']],
-            ];
-        }
+        $entries = $batch->entries;
+        $withoutSnapshot = $batch->withoutSnapshot;
+        $unreadable = $batch->unreadable();
+        $waiting = $batch->waiting;
 
         $notification = (new Formatter())->digest($entries);
 
@@ -851,12 +862,12 @@ final readonly class Scout
             $this->line($unreadable . ' instantané(s) illisible(s) — voir les avertissements ci-dessus.');
         }
 
-        if ($waiting > count($rows)) {
+        if ($batch->overflow() > 0) {
             // Said out loud, because a capped batch that stayed silent about the remainder would
             // look like the whole backlog — and the operator would stop running the command.
             $this->line(sprintf(
                 '%d autre(s) en attente — relancer `scout digest` pour la suite (lot de %d).',
-                $waiting - count($rows),
+                $batch->overflow(),
                 Store::DIGEST_BATCH,
             ));
         }
@@ -902,6 +913,80 @@ final readonly class Scout
         $this->line(count($entries) . ' annonce(s) émise(s).');
 
         return 0;
+    }
+
+    /**
+     * Collect one drain of the *à vérifier* bin — the half `scout digest` and Q34's daily floor share.
+     *
+     * CAPPED, and the remainder is reported by {@see DigestBatch::overflow()}. The query was once
+     * unbounded and the send is all-or-nothing, so a rejection that is a function of payload size
+     * re-sent a strictly LARGER batch every time and the bin — §1's only landing zone — hardened
+     * into permanent undeliverability, with one warning line to show for it. Found by a review panel
+     * on 2026-08-24. A cap makes the backlog drain instead.
+     *
+     * **Never throws, and never prints.** Both properties are load-bearing. The floor calls this
+     * from inside the watch loop's `finally`, where a throw would be caught by `WatchLoop` and
+     * counted as a failed pass — one damaged row reporting every source as broken. And printing here
+     * would put the command's phrasing in the loop's output, so warnings are returned for the caller
+     * to voice.
+     */
+    private function collectDigest(Store $store): DigestBatch
+    {
+        $rows = $store->pendingDigest();
+        $waiting = $store->pendingDigestCount();
+
+        $entries = [];
+        $warnings = [];
+        $withoutSnapshot = 0;
+
+        foreach ($rows as $row) {
+            $listing = null;
+            $json = $row['evidence_json'];
+
+            if (is_string($json) && $json !== '') {
+                try {
+                    $listing = ListingSnapshot::decode($json);
+                } catch (\JsonException | \InvalidArgumentException $e) {
+                    // Per-row, which is why the store hands these back RAW. Decoding the batch in
+                    // one query would let the first damaged row take every readable entry with it —
+                    // one bad row costing the whole digest, the opposite of degrading it and saying
+                    // so. Redacted: a snapshot quotes the listing payload back, and an adapter
+                    // error message is a secrets channel.
+                    $warnings[] = sprintf(
+                        'instantané illisible pour %s — annonce dégradée : %s',
+                        $row['dedup_key'],
+                        Redact::text($e->getMessage()),
+                    );
+                }
+            } else {
+                ++$withoutSnapshot;
+            }
+
+            $listing ??= new RawListing(
+                sourceName: $row['source'],
+                externalId: $row['external_id'],
+                title: $row['title'],
+                url: $row['url'],
+                rentCc: $row['rent_cc'],
+            );
+
+            /** @var list<string> $reasons */
+            $reasons = $this->decodeSignals($row['signals_json']);
+
+            $entries[] = [
+                'listing' => $listing,
+                'verdict' => Verdict::digest($reasons),
+                'key' => $row['dedup_key'],
+                'keys' => [$row['dedup_key']],
+            ];
+        }
+
+        return new DigestBatch(
+            entries: $entries,
+            waiting: $waiting,
+            withoutSnapshot: $withoutSnapshot,
+            warnings: $warnings,
+        );
     }
 
     /**
@@ -1523,6 +1608,89 @@ final readonly class Scout
         if ($notifier->delivered($failures)) {
             @file_put_contents($this->stateFile('heartbeat.txt'), $now . "\n");
         }
+    }
+
+    /** The instant of the last digest emission, or `null` when this deployment has sent none. */
+    private function lastDigestEmission(): ?string
+    {
+        $path = $this->stateFile('digest.txt');
+
+        if (!is_file($path)) {
+            return null;
+        }
+
+        $raw = file_get_contents($path);
+
+        return \is_string($raw) && trim($raw) !== '' ? trim($raw) : null;
+    }
+
+    /**
+     * Q34's DAILY FLOOR: drain the *à vérifier* bin if the local `digest_hour` has come round again.
+     *
+     * The gap this closes: both other emission paths are event-driven — the pipeline emits at the end
+     * of a pass that produced NEW entries, and `scout digest` emits when a human types it. So a
+     * backlog that failed to send, or that was left over by the batch cap, sat in §1's only landing
+     * zone until somebody thought to look. Q34 rules a daily floor for exactly that, and it was the
+     * one third of the ruling never built.
+     *
+     * **SILENT WHEN THE BIN IS EMPTY, and the marker is NOT written in that case** (developer ruling,
+     * 2026-08-26). Two consequences, both wanted. A quiet day costs nothing at all — no push, and
+     * `Core/Heartbeat` already carries the daily liveness signal, so an unconditional emission would
+     * be a second scheduled push saying nothing the beat did not. And because no marker is written,
+     * the window stays open: an entry whose send failed earlier is retried on the next pass rather
+     * than waiting for tomorrow, which is what Q34's *"an unsent digest is retried"* asks for.
+     *
+     * The marker is written ONLY after the channel confirms delivery, exactly as {@see beat()} does
+     * and for a sharper reason: marking a window served on a failed send would consume the day's
+     * floor without anything reaching the developer.
+     *
+     * Takes the loop's notifier rather than building one, because building a `Notifier` per check
+     * would re-print every `disabledReport()` warning on every pass of a run that lasts weeks.
+     */
+    private function floorDigest(Notifier $notifier, Store $store, string $now): void
+    {
+        $batch = $this->collectDigest($store);
+
+        if ($batch->isEmpty()) {
+            // Nothing to say, so nothing is said, and the window stays open for whatever arrives.
+            return;
+        }
+
+        foreach ($batch->warnings as $warning) {
+            $this->warn($warning);
+        }
+
+        $notification = (new Formatter())->digest($batch->entries);
+        $failures = $notifier->send($notification);
+
+        foreach ($failures as $failure) {
+            $this->warn(Redact::text($failure->getMessage()));
+        }
+
+        if (!$notifier->delivered($failures)) {
+            // Nothing marked and no marker written: the batch survives, the window stays open, and
+            // the next pass retries. Marking first would consume these entries permanently on a
+            // failed send, and they have no other route to the developer.
+            $this->warn('récapitulatif quotidien non délivré — rien marqué, nouvel essai au prochain passage.');
+
+            return;
+        }
+
+        foreach ($batch->entries as $entry) {
+            $store->markNotified($entry['key'], $now, 'DIGEST');
+        }
+
+        $this->line(sprintf(
+            'récapitulatif quotidien « à vérifier » : %d annonce(s) émise(s)%s.',
+            $batch->count(),
+            $batch->overflow() > 0
+                // Named, like every other cap in this file. A floor that drains one batch a day
+                // without saying so reads as the whole backlog having been dealt with.
+                ? sprintf(' — %d autre(s) en attente (lot de %d)', $batch->overflow(), Store::DIGEST_BATCH)
+                : '',
+        ));
+
+        @file_put_contents($this->stateFile('digest.txt'), $now . "\n");
     }
 
     /** @return list<string> */

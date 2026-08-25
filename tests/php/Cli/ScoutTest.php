@@ -347,13 +347,40 @@ final class ScoutTest extends TestCase
         // number three other tests already assert bare.
         self::assertStringContainsString('schéma v' . Store::SCHEMA_VERSION, $r['out']);
 
-        // The CADENCE THAT RUNS, and the configured hour named as configured-only. This asserted
-        // `digest à 8h` until 2026-08-24, pinning a promise nothing keeps: `digest_hour` is parsed,
-        // printed, and read by no scheduler, so on a day with nothing new no rollup is emitted. A
-        // test that pins the wrong claim makes it permanent, which is why this asserts both halves.
+        // THE CADENCE THAT RUNS — all three of Q34's paths, now that the third exists. This line has
+        // been rewritten three times and each version was true when written: `digest à 8h` promised
+        // a daily emission nothing scheduled; `AUCUN planificateur` named that gap honestly; the
+        // floor now exists, so it says so. The rule the three versions share is that doctor prints
+        // BEHAVIOUR, never settings — which is why this asserts the running cadence rather than the
+        // config key.
         self::assertStringContainsString('sur demande', $r['out'], 'Q34: doctor must state the cadence that actually runs');
-        self::assertStringContainsString('8h', $r['out'], 'the configured hour is still shown, with its timezone');
-        self::assertStringContainsString('AUCUN planificateur', $r['out'], 'and it is named as configured-but-unread');
+        self::assertStringContainsString('plancher quotidien', $r['out'], 'Q34: the daily floor now runs and must be named');
+        self::assertStringContainsString('8h', $r['out'], 'the configured hour is shown');
+        self::assertStringContainsString(
+            'silencieux si rien',
+            $r['out'],
+            'and the ruled empty-day behaviour is stated, so an operator does not read silence as a fault',
+        );
+        self::assertStringNotContainsString(
+            'AUCUN planificateur',
+            $r['out'],
+            'the gap note must go when the gap does — a stale diagnostic is how doctor stops being believed',
+        );
+
+        // THE ZONE THE FLOOR ACTUALLY USES, printed SEPARATELY from the process default, because the
+        // two CAN disagree: `bin/scout:44` sets the default from `TZ`, but a `TZ` PHP cannot parse
+        // leaves it at UTC with only a Notice — and then the floor's zone and the process zone
+        // differ and doctor is the only thing that would say so.
+        //
+        // `PHP=` is asserted as a LABEL, not as `PHP=UTC`. Under PHPUnit the default is UTC because
+        // the bootstrap does not run `bin/scout`; under the real CLI it is Europe/Paris. Pinning the
+        // value would pin a harness artefact and go red the day the bootstrap changed.
+        self::assertStringContainsString('fuseau  : PHP=', $r['out'], 'the process default is named');
+        self::assertStringContainsString(
+            'récapitulatif=Europe/Paris',
+            $r['out'],
+            'Q34 rules the RESOLVED local time is printed; it must come from the same resolution the floor uses',
+        );
     }
 
     /**

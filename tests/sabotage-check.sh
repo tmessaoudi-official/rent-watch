@@ -1288,7 +1288,7 @@ run_sabotage "the digest batch loses its cap (one all-or-nothing send that grows
 
 run_sabotage "a capped digest stops naming the remainder (the bin reads as empty)" \
   src/php/Cli/Scout.php \
-  's%if (\$waiting > count(\$rows)) {%if (false) {%'
+  's%if ($batch->overflow() > 0) {%if (false) {%'
 
 # --- the cluster veto must survive every path -----------------------------------------------------
 
@@ -1963,7 +1963,75 @@ run_sabotage "the beat stops disclosing that it is scoped (a forgotten --source 
 # it had to reach that call site deliberately.
 run_sabotage "the in-loop beat loses an argument to the closure boundary (dies on day two)" \
   src/php/Cli/Scout.php \
-  's%$heartbeat, $watched, \&$passes%$heartbeat, \&$passes%'
+  's%$heartbeat, $digestSchedule, $digestZone, $watched%$digestSchedule, $digestZone, $watched%'
+
+# ── Q34: the daily digest floor ───────────────────────────────────────────────
+# The bin this drains is §1's ONLY landing zone — every listing the classifier could not resolve
+# confidently. Both other emission paths are event-driven (end of a pass that produced new entries,
+# or a human typing `scout digest`), so before the floor existed a backlog that failed to send simply
+# sat there. Every case below is silent in the same way the Q27 ones are: the bin quietly stops
+# draining, and an operator seeing no rollup reads it as "nothing to check" — which is exactly what
+# the ruled empty-day behaviour also looks like.
+
+# THE ZONE. Not because PHP ignores `TZ` in the app — `bin/scout:44` sets the default from it, and
+# an earlier version of this comment claimed otherwise from a `php -r` measurement that never read
+# the entrypoint. What breaks here is narrower and real: the window is computed against whatever
+# offset the incoming instant carries rather than the CONFIGURED zone, so the floor's hour drifts
+# with the caller's clock instead of meaning 08:00 where the operator lives.
+run_sabotage "the floor computes its window in the instant's own offset, not the configured zone" \
+  src/php/Core/DigestSchedule.php \
+  's%$local = $now->setTimezone($zone);%$local = $now;%'
+
+# And the resolution itself: reverting this makes every deployment run on the default zone whatever
+# `TZ` says, which is silent — a watcher in another zone simply emits at the wrong hour for ever.
+run_sabotage "TZ is ignored entirely and everything runs in the default zone" \
+  src/php/Core/DigestSchedule.php \
+  's%if ($raw === null || trim($raw) === %if (true || trim($raw) === %'
+
+# THE MARKER is what makes this a floor rather than a second pipeline. Without its write the bin
+# drains on EVERY pass — once per Q37 cadence, all day.
+run_sabotage "the digest floor never records its window (drains every pass, not daily)" \
+  src/php/Cli/Scout.php \
+  's%@file_put_contents($this->stateFile(.digest.txt.), $now%@file_put_contents("/dev/null", $now%'
+
+run_sabotage "a marker in the future suppresses the floor until the clock catches up" \
+  src/php/Core/DigestSchedule.php \
+  's%if (self::isAfter($last, $now)) {%if (false) {%'
+
+run_sabotage "an unreadable digest marker suppresses the floor instead of forcing one" \
+  src/php/Core/DigestSchedule.php \
+  's%if ($now === null || $last === null) {%if (false) {%'
+
+run_sabotage "the cold start stops draining (a backlog surviving a restart is never rescued)" \
+  src/php/Core/DigestSchedule.php \
+  's%if ($lastEmittedIso === null || trim($lastEmittedIso) === %if (false \&\& %'
+
+# THE EMPTY-DAY RULING. Removing the early return makes the floor emit a rollup with nothing in it
+# every day — a second scheduled push saying nothing the heartbeat did not, and the fastest way to
+# train its reader to swipe the channel away. (The expression also bites the `scout digest` copy of
+# the same guard, which is the point of them sharing one collector: neither may drift alone.)
+run_sabotage "an empty digest bin is announced anyway (a daily push with nothing in it)" \
+  src/php/Cli/Scout.php \
+  's%if ($batch->isEmpty()) {%if (false) {%'
+
+# THE FAILED-SEND ASYMMETRY: marking before delivery consumes the day's floor with nothing having
+# reached anyone, and these entries have no other route to the developer.
+run_sabotage "digest entries are marked before the channel confirms (a failed send eats the backlog)" \
+  src/php/Cli/Scout.php \
+  's%if (!$notifier->delivered($failures)) {%if (false) {%'
+
+run_sabotage "the digest floor is never checked at all (the bin only ever drains by hand)" \
+  src/php/Cli/Scout.php \
+  's%$digestSchedule->isDue(%false \&\& $digestSchedule->isDue(%'
+
+# THE IN-LOOP CALL SITE, uniquely — the same trap the beat fell into and for the same reason: under
+# a fixed clock the startup emission writes the marker and every later check is false, so this call
+# site is unreachable by any ordinary test. Dropping the schedule from the closure's `use` list
+# leaves it null INSIDE the loop while the startup check keeps working, so only a test that forces a
+# second due-check can see it — which is what the unwritable-marker case does.
+run_sabotage "the floor loses its schedule to the closure boundary (dies on the first due day)" \
+  src/php/Cli/Scout.php \
+  's%$heartbeat, $digestSchedule, $digestZone, $watched%$heartbeat, $watched%'
 
 # ── region mode (2026-08-22) ─────────────────────────────────────────────────────────────────────
 # `communes: []` means "the postcode prefixes are the whole location filter". It is the first
