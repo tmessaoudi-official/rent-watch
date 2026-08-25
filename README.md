@@ -407,7 +407,11 @@ Worked example with all four answered: `docs/SOURCES.md` § *B1 SeLoger*.
 ## Legal posture
 
 - Email-alert (IMAP) ingestion is the **primary** path for private portals — within ToS, no bot to
-  detect, faster than polling, immune to markup churn.
+  detect, faster than polling, and far steadier than a search page — though NOT "immune to markup
+  churn", which this file claimed until 2026-08-25. An email template is markup too, and a real
+  SeLoger alert broke the parser four ways the first time it was fed one. The honest claim: email
+  templates change far less often than search pages, and the zero-cards guard makes a break loud
+  instead of silent.
 - Direct scraping of those portals is opt-in, disabled by default, `legal_risk: true`, and refuses to
   run without an explicit flag.
 - No CAPTCHA solving, no proxy rotation, no fingerprint spoofing. `robots.txt` respected, honest

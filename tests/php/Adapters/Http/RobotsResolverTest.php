@@ -316,6 +316,140 @@ final class RobotsResolverTest extends TestCase
         self::assertStringContainsString('cause inconnue', Robots::unavailable()->refusal('/x'));
     }
 
+    // ── a 200 that is not a robots.txt ────────────────────────────────────────────────────────────
+
+    /**
+     * **A 200 CARRYING MARKUP IS "THERE IS NO ROBOTS.TXT", NOT "THERE ARE NO RULES".**
+     *
+     * Single-page applications serve their `index.html` for every unmatched path, so `/robots.txt`
+     * answers `200 text/html` with an app shell. Parsed as robots that yields ZERO directives —
+     * which reads as *allow everything*, and the whole fail-closed posture is defeated by a 200.
+     *
+     * Measured on a real candidate: `al-in.fr/robots.txt` returns the Angular app shell,
+     * `Content-Type: text/html;charset=UTF-8`, HTTP 200 [2026-08-25]. AL'in is the one remaining
+     * route to the Action Logement stock, so this is not a hypothetical host.
+     *
+     * It belongs on the *unreachable* side of the table rather than the *absent* side, and the
+     * class docblock already says why: 404 is knowledge — we asked and established no file exists.
+     * A 200 of HTML establishes nothing. The server answered something, and we cannot tell a
+     * catch-all from a robots.txt served through a broken rewrite.
+     */
+    public function testATwoHundredOfHtmlIsUnreadableRatherThanPermissive(): void
+    {
+        $resolver = $this->resolver([
+            'https://spa.test/robots.txt' => new HttpResponse(
+                200,
+                "<!DOCTYPE html>\n<html lang=\"fr\"><body><app-root></app-root></body></html>",
+                ['content-type' => 'text/html;charset=UTF-8'],
+            ),
+        ]);
+
+        $robots = $resolver->forUrl('https://spa.test/annonces');
+
+        self::assertFalse($robots->parsed);
+        self::assertFalse($robots->allows('/annonces'), 'an app shell is not a licence');
+        self::assertNotNull($robots->unavailableReason);
+        self::assertStringContainsString('text/html', (string) $robots->unavailableReason);
+    }
+
+    /**
+     * The header alone is not enough, which is why the body is sniffed too.
+     *
+     * Plenty of SPA servers label the catch-all `text/plain`, or label everything from one static
+     * handler. A real `robots.txt` never begins with `<`: the grammar allows a comment (`#`) or a
+     * field name, and nothing else.
+     */
+    public function testAnHtmlBodyLabelledAsTextIsStillUnreadable(): void
+    {
+        $resolver = $this->resolver([
+            'https://spa.test/robots.txt' => new HttpResponse(
+                200,
+                "<!DOCTYPE html>\n<html><body>app</body></html>",
+                ['content-type' => 'text/plain'],
+            ),
+        ]);
+
+        self::assertFalse($resolver->forUrl('https://spa.test/x')->parsed);
+    }
+
+    /**
+     * A JSON catch-all is the same hole with a different first character.
+     *
+     * An API gateway answering `{"error":"not found"}` with a 200 parses to zero directives exactly
+     * as an app shell does. `{` is as impossible at the start of a robots.txt as `<`.
+     */
+    public function testAJsonBodyIsUnreadableRatherThanPermissive(): void
+    {
+        $resolver = $this->resolver([
+            'https://api.test/robots.txt' => new HttpResponse(
+                200,
+                '{"error":"not found"}',
+                ['content-type' => 'application/json'],
+            ),
+        ]);
+
+        self::assertFalse($resolver->forUrl('https://api.test/x')->parsed);
+    }
+
+    /**
+     * A PARAMETERISED media type still parses. `text/plain; charset=utf-8` is the ordinary way to
+     * serve one, and a check comparing the whole header string would fail every real host.
+     */
+    public function testAParameterisedMediaTypeStillParses(): void
+    {
+        $resolver = $this->resolver([
+            'https://ok.test/robots.txt' => new HttpResponse(
+                200,
+                "User-agent: *\nDisallow: /private/\n",
+                ['content-type' => 'text/plain; charset=utf-8'],
+            ),
+        ]);
+
+        $robots = $resolver->forUrl('https://ok.test/annonces');
+
+        self::assertTrue($robots->parsed);
+        self::assertFalse($robots->allows('/private/x'), 'the rules must still apply');
+    }
+
+    /**
+     * An ABSENT `Content-Type` still parses, because absence is not evidence.
+     *
+     * Servers omit it; RFC 9309 says the file MUST be `text/plain` but a missing header does not
+     * tell us the body is markup, and the body sniff already covers the case where it is. Failing
+     * closed here would take out real hosts for a header nobody looks at.
+     */
+    public function testAnAbsentContentTypeStillParses(): void
+    {
+        $resolver = $this->resolver([
+            'https://bare.test/robots.txt' => new HttpResponse(200, "User-agent: *\nDisallow: /x/\n"),
+        ]);
+
+        $robots = $resolver->forUrl('https://bare.test/annonces');
+
+        self::assertTrue($robots->parsed);
+        self::assertFalse($robots->allows('/x/y'));
+    }
+
+    /**
+     * And the row this fix must NOT creep into: a 404 body is not sniffed, because a 404 never
+     * reaches the parser with its body in the first place. Pinned so the two paths stay separate.
+     */
+    public function testAnHtml404StillAllowsEverything(): void
+    {
+        $resolver = $this->resolver([
+            'https://gone.test/robots.txt' => new HttpResponse(
+                404,
+                '<!DOCTYPE html><html><body>Not found</body></html>',
+                ['content-type' => 'text/html'],
+            ),
+        ]);
+
+        $robots = $resolver->forUrl('https://gone.test/annonces');
+
+        self::assertTrue($robots->parsed, 'an absent file is knowledge, whatever the error page looks like');
+        self::assertTrue($robots->allows('/annonces'));
+    }
+
     /** @param array<string, HttpResponse> $table */
     private function resolver(array $table): RobotsResolver
     {

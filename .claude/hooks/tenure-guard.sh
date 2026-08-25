@@ -95,8 +95,24 @@ esac
 # comment in a YAML file hid a real toggle; and one occurrence of the word `source` anywhere in a
 # file disarmed the excluded-set pattern entirely. Each was the same shape as the bug the round-5
 # commit narrated catching elsewhere.
-blob="$(printf '%s' "${new_text:-}" | tr '\001' ' ' | tr '[:upper:]' '[:lower:]')"
-lines="$(printf '%s' "${new_text:-}" | tr '\001' '\n' | tr '[:upper:]' '[:lower:]')"
+# ONE FIXED STRING IS NEUTRALISED BEFORE ANY PATTERN RUNS, and the reason it is safe is that it
+# carries no tenure meaning at all.
+#
+# `text/plain` contains `plai`, and `Disallow` contains `allow`. So a robots.txt test puts an
+# "inclusion keyword" within eighty characters of a "social tenure" without either word being
+# present — measured 2026-08-25, when `RobotsResolverTest` tripped patterns 1 and 6 on nothing but
+# a media type beside a `Disallow` line. Every future robots test would do the same, and a tripwire
+# that fires on correct work is one people learn to wave through.
+#
+# **This is not the whole-blob suppression shape round 6 deleted.** Those skipped a CHECK outright
+# when an innocent word appeared anywhere in the file — one `source` disarmed the excluded-set
+# pattern for the entire write. This removes one IANA media type, which cannot express a relaxation,
+# and every pattern still runs over everything else. `tests/test-tenure-guard.sh` pins both halves:
+# the media type stays silent, and a real `PLAI` relaxation sitting on the same line still fires —
+# including the camelCase `$allowPlaiListings` form that a `\b` word-boundary fix would have lost.
+_gs_neutral="s|text/plain|text/PLACEHOLDER|g"
+blob="$(printf '%s' "${new_text:-}" | tr '\001' ' ' | tr '[:upper:]' '[:lower:]' | sed "$_gs_neutral")"
+lines="$(printf '%s' "${new_text:-}" | tr '\001' '\n' | tr '[:upper:]' '[:lower:]' | sed "$_gs_neutral")"
 [[ -z "$blob" ]] && exit 0
 
 hits=()

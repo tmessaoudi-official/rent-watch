@@ -2702,6 +2702,18 @@ run_sabotage "an uncompilable email pattern is accepted and never matches anythi
   src/php/Config/ConfigLoader.php \
   "s%, '') === false) {%, '') === false \&\& false) {%"
 
+# THE FAIL-CLOSED POSTURE DEFEATED BY A 200. An SPA catch-all answers /robots.txt with its app
+# shell; parsed as robots that yields zero directives, which reads as allow-everything. Measured on
+# al-in.fr [2026-08-25]: Angular shell, Content-Type text/html, HTTP 200. Both signals get a case,
+# because either alone is insufficient -- some catch-alls are labelled text/plain.
+run_sabotage "a robots.txt answering html is parsed as permission" \
+  src/php/Adapters/Http/RobotsResolver.php \
+  "s%'text/html', 'application/xhtml+xml', 'application/json', 'application/xml', 'text/xml'%'x-none/x-none'%"
+
+run_sabotage "a robots body starting with a markup character is trusted" \
+  src/php/Adapters/Http/RobotsResolver.php \
+  "s%if (\$firstByte === '<' || \$firstByte === '{') {%if (false) {%"
+
 # THE TALLY LIVES HERE, BELOW EVERY CASE, and that position is load-bearing rather than tidy.
 # It sat mid-file twice: once on 2026-08-20 (295 printed for 303 cases) and again from 2026-08-23,
 # when 21 schema-v7 / digest / reclassify cases were appended past it and the headline read 354 for

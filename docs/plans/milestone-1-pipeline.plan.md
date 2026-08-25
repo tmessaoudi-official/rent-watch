@@ -1857,3 +1857,33 @@ That is the guard behaving exactly as designed — but a contaminated ledger can
 by case, because the contention was not confined to the case that reported it. It was killed, the
 worktree removed, a fresh one pinned at `fd8f3b5`, and the machine left quiet. **A ledger run owns
 the machine for its duration**; the cost of forgetting that is the whole ~5 h, not one case.
+
+- [2026-08-25 15:40] AGREED (robots posture, amending the 2026-08-21 status table): **a 2xx parses
+  only if it LOOKS like a robots file.** A single-page application serves its `index.html` for every
+  unmatched path, so `/robots.txt` answers `200 text/html` with an app shell — which parses to zero
+  directives and therefore read as *allow everything*. The whole fail-closed posture was defeated by
+  a 200. Measured on `al-in.fr` [2026-08-25]: Angular shell, `Content-Type: text/html;charset=UTF-8`,
+  HTTP 200; that host is the one remaining route to the Action Logement stock, so it is not a
+  hypothetical. Two independent signals, because neither is sufficient alone — a markup **content
+  type** (compared on the type alone, before the `;`, so `text/plain; charset=utf-8` still parses),
+  and a **first byte** of `<` or `{`, which no robots.txt can begin with and which an app shell and
+  a JSON error handler both do. **An absent `Content-Type` still parses** (absence is not evidence,
+  and the body sniff covers the markup case) and **an empty body still parses** (a zero-length
+  robots.txt is legitimate and means nothing is restricted). It lands on the *unreachable* side
+  rather than the *absent* side because a 404 is knowledge — we asked and established no file exists
+  — while a 200 of markup establishes nothing. **Stated cost:** a site with genuinely no robots.txt
+  behind an SPA or JSON catch-all now fails closed where RFC 9309 §2.3.1.3 would permit access. That
+  is recoverable by one person reading the reason, which `Robots::refusal()` surfaces in `doctor`;
+  the reverse — polling a site whose real rules we never read — is not. Verified against the four
+  live sources first: In'li, CDC Habitat, Cityloger and Logirep all serve `text/plain`, so nothing
+  in production changes.
+- [2026-08-25 15:55] AGREED: `.claude/hooks/tenure-guard.sh` neutralises the literal `text/plain`
+  before its patterns run. `plai` is a substring of `text/plain` and `allow` is a substring of
+  `Disallow`, so ANY robots.txt test puts an "inclusion keyword" within eighty characters of a
+  "social tenure" with neither word present — `RobotsResolverTest` tripped patterns 1 and 6 on
+  nothing else. This is NOT the whole-blob suppression shape round 6 deleted: those skipped a check
+  outright when an innocent word appeared anywhere in the file; this removes one IANA media type
+  that cannot express a relaxation, and every pattern still runs over everything else. Two
+  alternatives were measured and rejected — `\b` word boundaries pass 66/66 but lose the camelCase
+  `$allowPlaiListings` form, and `plai([^n]|$)` broke two real detections outright.
+  `tests/test-tenure-guard.sh` pins both halves at 70 cases.

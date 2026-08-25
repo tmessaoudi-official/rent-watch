@@ -105,6 +105,25 @@ final readonly class RobotsResolver
         }
 
         if ($response->isSuccess()) {
+            // **A 200 CARRYING MARKUP IS "THERE IS NO ROBOTS.TXT", NOT "THERE ARE NO RULES".**
+            //
+            // Single-page applications serve their `index.html` for every unmatched path, so
+            // `/robots.txt` answers `200 text/html` with an app shell. Parsed as robots that yields
+            // ZERO directives — which reads as *allow everything*, and the entire fail-closed
+            // posture is defeated by a 200. Measured on `al-in.fr` [2026-08-25]: the Angular shell,
+            // `Content-Type: text/html;charset=UTF-8`, HTTP 200. That host is the one remaining
+            // route to the Action Logement stock, so it is not a hypothetical.
+            //
+            // It belongs on the *unreachable* side of the table, not the *absent* side. A 404 is
+            // knowledge — we asked and established no file exists. A 200 of markup establishes
+            // nothing: the server answered something, and a catch-all is indistinguishable from a
+            // real robots.txt served through a broken rewrite.
+            $problem = self::notARobotsFile($response);
+
+            if ($problem !== null) {
+                return Robots::unavailable($problem . ' sur ' . $url);
+            }
+
             return Robots::parse($response->body, $this->userAgent);
         }
 
@@ -115,6 +134,46 @@ final readonly class RobotsResolver
         }
 
         return Robots::unavailable('HTTP ' . $response->status . ' sur ' . $url);
+    }
+
+    /**
+     * Why this 200 is not a `robots.txt`, or `null` when nothing says it isn't.
+     *
+     * Two independent signals, because neither is sufficient alone:
+     *
+     * - **The declared media type.** RFC 9309 §2.3 requires `text/plain`; a markup type is
+     *   positive evidence of a catch-all. Compared on the type ALONE, before the `;` — a real file
+     *   is routinely served as `text/plain; charset=utf-8`, and a check against the whole header
+     *   would fail every honest host. An ABSENT `Content-Type` is NOT evidence and parses normally:
+     *   servers omit it, and the body sniff already covers the case where the body is markup.
+     * - **The first byte of the body.** Plenty of SPA servers label the catch-all `text/plain`, or
+     *   serve everything through one static handler. A `robots.txt` can begin with a comment (`#`)
+     *   or a field name and nothing else, so `<` and `{` are both impossible — and they are exactly
+     *   what an app shell and a JSON error handler begin with. An EMPTY body has no first byte and
+     *   is left alone: a zero-length robots.txt is legitimate and common, and means nothing is
+     *   restricted.
+     */
+    private static function notARobotsFile(HttpResponse $response): ?string
+    {
+        $contentType = $response->header('content-type');
+
+        if ($contentType !== null) {
+            $type = strtolower(trim(explode(';', $contentType, 2)[0]));
+
+            if (in_array($type, ['text/html', 'application/xhtml+xml', 'application/json', 'application/xml', 'text/xml'], true)) {
+                return 'robots.txt a répondu ' . $type . ' au lieu de text/plain — probablement une '
+                    . 'route attrape-tout (SPA), donc le site n\'a peut-être aucun robots.txt';
+            }
+        }
+
+        $firstByte = substr(ltrim($response->body), 0, 1);
+
+        if ($firstByte === '<' || $firstByte === '{') {
+            return 'robots.txt a répondu un corps commençant par « ' . $firstByte . " », qui n'est "
+                . 'pas une syntaxe robots.txt — probablement une route attrape-tout';
+        }
+
+        return null;
     }
 
     /** `https://host:port` for a url, or `null` when it carries no usable host. */

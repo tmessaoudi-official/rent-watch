@@ -229,6 +229,26 @@ expect_silence "the fail-closed floor at its correct value" \
   'private const int FLOOR_BP = 60;'
 expect_silence "a confidence ceiling, which is not the floor" \
   'private const int CEILING_BP = 99;'
+# THE MEDIA TYPE `text/plain` CONTAINS `plai`, and `Disallow` contains `allow` — so a robots.txt
+# test puts an "inclusion keyword" within eighty characters of a "social tenure" without either
+# word being present. Measured 2026-08-25: RobotsResolverTest tripped patterns 1 and 6 on nothing
+# but that, and EVERY future robots test would too, which is how a tripwire gets learned-to-ignore.
+#
+# Neutralised in the blob construction rather than in any tenure pattern — `text/plain` is an IANA
+# media type and cannot express a relaxation, so removing it cannot hide one. That is a different
+# thing from the whole-blob SUPPRESSIONS round 6 deleted: those skipped a check outright when an
+# innocent word appeared anywhere in the file. This removes one fixed string that carries no tenure
+# meaning, and every pattern still runs over everything else.
+expect_silence "a robots.txt media type, whose name contains the PLAI substring" \
+  "new HttpResponse(200, \"User-agent: *\\nDisallow: /private/\\n\", ['content-type' => 'text/plain'])"
+expect_silence "a parameterised media type next to a robots rule" \
+  "\$table = ['content-type' => 'text/plain; charset=utf-8']; // Disallow: /x/"
+# The counterweight, and it is the half that matters: neutralising the media type must not have
+# neutralised the acronym. A real PLAI relaxation in the SAME file still fires.
+expect_fire "a real PLAI relaxation sitting beside a media type" \
+  "['content-type' => 'text/plain']; // allow PLAI listings through, they are in scope now"
+expect_fire "a camelCase PLAI relaxation, which word boundaries would have missed" \
+  '$allowPlaiListings = true;'
 expect_silence "isExcluded returning true, which is the rule working" \
   'if ($result->tenure->isExcluded()) { return Outcome::REJECT; }'
 expect_silence "routing UNKNOWN to the digest, which is the rule" \
