@@ -2702,6 +2702,14 @@ run_sabotage "an uncompilable email pattern is accepted and never matches anythi
   src/php/Config/ConfigLoader.php \
   "s%, '') === false) {%, '') === false \&\& false) {%"
 
+# THE NOTIFICATION LINKED TO THE SAVED SEARCH, NOT THE FLAT. Taking the FIRST qualifying link in a
+# card reads whatever furniture the portal put above it -- measured on a live five-card alert, that
+# is alert management on card one, a third-party advert on card two and the photo on card three. The
+# link is the one thing a push exists to deliver, and a wrong one is not visibly wrong.
+run_sabotage "the card links to the portal's furniture instead of the flat" \
+  src/php/Adapters/EmailAlertSource.php \
+  's%foreach (array_reverse(self::linksIn($segment)) as $candidate) {%foreach (self::linksIn($segment) as $candidate) {%'
+
 # "RECENT" READ AS THE TAIL OF THE FOLDER. Measured 2026-08-25 on a 1436-message Gmail label:
 # SEARCH SINCE matched 124 messages at sequence numbers starting at 6, so the last 50 by sequence
 # held NONE of the day's alerts. The source read 0 listings against a 7-day mean of 9 while the

@@ -400,3 +400,44 @@ stopped at the first hit, so one implausible figure hid a readable rent three li
 - [2026-08-25 20:15] AGREED: the IMAP search is scoped by the source's own `params.from`, because one mailbox serving many portals makes a single fetch window a shared budget that a busy portal silently exhausts.
 - [2026-08-25 20:20] AGREED: the mechanism behind Gmail's label ordering is NOT written down, because it was not measured — only the disagreement was.
 - [2026-08-25 20:25] AGREED: a rent is a periodic amount; a figure with no period marker ranks below one that has it, and every match of a pattern is examined rather than only the first.
+
+## THE PUSH LINKED TO THE SAVED SEARCH, NOT THE FLAT — 2026-08-25
+
+Reported by the developer within hours of the source going live: clicking a SeLoger notification
+opened **the alert they had created on SeLoger**, not the listing. The one thing a push exists to
+deliver, and it was wrong.
+
+`cardListing()` took the FIRST link in a segment that passed the noise filter. On a real message that
+is never the flat. Measured across a live five-card alert:
+
+| Card | First link | Last link |
+|---|---|---|
+| 1 | *"mettre en pause les envois"* — alert management | `Voir l'annonce` |
+| 2 | *"Estimez le prix de votre déménagement"* — a third-party advert | `Voir l'annonce` |
+| 3 | the photo | `Voir l'annonce` |
+
+One of three reached the flat, by luck. **The last link reaches it structurally**: `card_separator`
+IS the call to action, and a URL precedes its own anchor text in this rendering, so a segment ENDS
+with the CTA's link whatever furniture the portal puts above it.
+
+**Established without following a single redirect.** The message's HTML part names each anchor, so
+the mapping is readable offline: price, title, details, location and `Voir l'annonce` all address the
+listing; the header does not. Following one to check would have manufactured an engagement signal
+from a click nobody made, on a token tied to the subscriber — the ruling that put the unresolved link
+in the notification in the first place.
+
+Reversal applies to the SEGMENTED path only. Without a separator every link IS its own listing, and
+reversing there would pick a different FLAT rather than a different link on the same flat.
+
+**Verified** [2026-08-25]: over all 74 live cards, the chosen url is the last link of its own card
+**74/74**, is the first link **0/74**, and the 70 stored listings hold 70 distinct urls.
+
+> **The frozen fixtures could prove this and nearly did not.** `tools/scrub-eml.php` replaces each
+> tracking token with a sequential `FIXTURE###`, which preserves ORDER — so the assertion can be
+> about position (`FIXTURE007` is the CTA, `FIXTURE001` the header) even though the real tokens are
+> opaque. A scrubber that randomised them would have made this class of defect untestable offline.
+
+## Decisions Log (continued)
+
+- [2026-08-25 21:05] AGREED: on a segmented email source the listing link is the LAST qualifying link in the card, because the separator is the call to action and its own url precedes its anchor text; the first link is portal furniture and differs per card.
+- [2026-08-25 21:10] AGREED: link identity for a card was established from the message's HTML part, never by following a redirect — the per-subscriber token makes a verification click an engagement signal nobody made.

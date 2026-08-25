@@ -340,8 +340,26 @@ final readonly class EmailAlertSource implements Source
             return null;
         }
 
+        // THE LAST LINK, NOT THE FIRST — and the difference is the whole value of the notification.
+        //
+        // Reported by the developer 2026-08-25: clicking a SeLoger push opened THE SAVED SEARCH they
+        // had created, not the flat. Taking the first qualifying link reads whatever furniture the
+        // portal put above the card. Measured on a live five-card alert: card one's first link is
+        // "mettre en pause les envois" (alert management), card two's is a third-party advert
+        // ("Estimez le prix de votre déménagement"), card three's is the photo. One of three reached
+        // the flat, by luck.
+        //
+        // The last one reaches it structurally: `card_separator` IS the call to action, and a URL
+        // precedes its own anchor text in this rendering, so a segment ENDS with the CTA's link
+        // whatever sits above it. Verified against the message's HTML part, which names each anchor
+        // — price, title, details, location and `Voir l'annonce` all address the listing, the header
+        // does not. No redirect was followed to establish it: the tokens are per-subscriber, and
+        // following one manufactures an engagement signal from a click nobody made.
+        //
+        // Only on the SEGMENTED path. Without a separator every link IS a listing, and reversing
+        // there would pick a different flat rather than a different link on the same flat.
         $link = null;
-        foreach (self::linksIn($segment) as $candidate) {
+        foreach (array_reverse(self::linksIn($segment)) as $candidate) {
             if ($this->looksLikeAListing($candidate)) {
                 $link = $candidate;
 

@@ -100,6 +100,43 @@ final class SelogerFixtureTest extends TestCase
     }
 
     /**
+     * The link in a notification is the CARD'S OWN, and it is the LAST one in the card.
+     *
+     * Reported by the developer 2026-08-25: clicking a SeLoger notification opened *the saved search
+     * they had created*, not the flat. The reader took the FIRST qualifying link in the segment, and
+     * on a real message that is never the listing — measured across a live five-card alert, the
+     * first link is *"mettre en pause les envois"* (alert management) on card one, a third-party
+     * advert (*"Estimez le prix de votre déménagement"*) on card two, and the photo on card three.
+     * One of the three happened to reach the flat.
+     *
+     * The last one always does, and structurally rather than by luck: `card_separator` IS the
+     * `Voir l'annonce` call to action, and in this rendering a URL precedes its own anchor text — so
+     * the final link of a segment is the CTA's, whatever the portal puts above it. Confirmed against
+     * the message's HTML part, which names each anchor: price, title, details, location and
+     * `Voir l'annonce` all point at the listing, and the header does not. No redirect was followed
+     * to establish this — the tokens are per-subscriber and following one manufactures a click
+     * nobody made.
+     *
+     * The tokens are the scrubber's sequential `FIXTURE###`, so their ORDER is preserved and the
+     * assertion is about position, which is exactly what regressed.
+     */
+    public function testTheNotificationLinksToTheFlatAndNotToTheSavedSearch(): void
+    {
+        $listings = $this->listings();
+
+        self::assertStringEndsWith('FIXTURE007', (string) $listings['78700']?->url, 'the Voir l\'annonce CTA');
+        self::assertStringEndsWith('FIXTURE010', (string) $listings['91410']?->url);
+
+        foreach ($listings as $listing) {
+            self::assertStringNotContainsString(
+                'FIXTURE001',
+                (string) $listing->url,
+                'the first link in a card is the portal\'s own furniture, never the flat',
+            );
+        }
+    }
+
+    /**
      * The card names its town, and the two frozen fixtures are the two shapes the template has.
      *
      * SeLoger prints the location as a *quartier* line, then the commune on its own line, then the
