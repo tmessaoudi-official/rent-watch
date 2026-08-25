@@ -43,6 +43,7 @@
   "_exclude_title_patterns": "Matched against the TITLE ONLY, and that is the point. `parking`, `box`, `garage`, `cave` and `bureau` are property types in a title and ordinary amenities in a description — 'T4 avec parking' is wanted, 'Parking en sous-sol' is not. Matching these against the description would drop every flat that has a parking space; not matching them at all would let a parking ad through, because a parking ad states no rooms and no surface and an unknown measurement is never a disqualification. Most are anchored at the start of the title, which is where a property type sits — but not all, and that is deliberate. While EVERY pattern was anchored, the title-only scope protected nothing a sabotage could disprove: a `^` with no `m` flag cannot match inside an appended description either way, so widening the scope was a semantic no-op and the guarantee was untestable. The unanchored entries are phrases unambiguous wherever they sit in a title (`loue parking`, `emplacement de stationnement`) and ordinary in a description ('emplacement de stationnement inclus'), which gives the scope something real to protect.",
   "exclude_title_patterns": [
     "^\\s*(?:location\\s+)?(?:de\\s+)?(?:parking|box|garage|cave|cellier|local|bureau|bureaux|entrepot|terrain|hangar|emplacement)\\b",
+    "^\\s*chambre\\b",
     "\\b(?:loue|a\\s+louer|location)\\s+(?:de\\s+)?(?:parking|box|garage|emplacement)\\b",
     "\\bemplacement\\s+de\\s+stationnement\\b"
   ],

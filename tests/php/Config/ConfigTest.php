@@ -853,6 +853,48 @@ final class ConfigTest extends TestCase
             false,
             'parking, box and cave are amenities here, not the property type',
         ];
+        // ── coliving rooms, captured from a live SeLoger alert on 2026-08-25 ──────────────────────
+        //
+        // **THE ROOMS AND SURFACE BELONG TO THE FLAT; THE RENT BELONGS TO ONE BEDROOM.** SeLoger
+        // markets a room in a shared flat as `Chambre à <quartier>, <rue>` with the WHOLE
+        // apartment's figures beside it, so the criteria engine reads `4 pièces . 90 m² . 1 195 €`
+        // and sees an extraordinary family flat. Four of nine real listings in the first live pass
+        // were these, and all four scored as matches.
+        //
+        // `exclude_patterns` already carries `\bcolocation\b` and `\bcoloc\b` — and **neither word
+        // appears anywhere in these listings** [Verified 2026-08-25: `coloc? False` against the
+        // stored evidence of both]. The spec's `colocation` case arrived in a vocabulary the
+        // pattern could not see.
+        //
+        // It belongs in the TITLE list, anchored, for exactly the reason that list exists: a
+        // description saying "3 chambres" describes a family flat and is precisely what the user
+        // wants, while a title *beginning* `Chambre` is the property type. Stated cost: a
+        // whole-flat listing whose title starts with the word `Chambre` would be rejected.
+        yield 'a coliving room is excluded, though it quotes the flat as 4 pieces' => [
+            'Chambre à Picpus, rue de Picpus',
+            '1 195 €/mois charges comprises. 4 pièces . 90 m². Nation-Picpus, Paris 12ème.',
+            true,
+            'the rent is for one bedroom while the rooms and surface are the whole flat',
+        ];
+        yield 'a second coliving room, with no coloc vocabulary anywhere' => [
+            'Chambre à Saint Lambert, rue Olier',
+            "Vous souhaitez investir dans l'immobilier locatif ? 1 070 €/mois charges comprises. 3 pièces . 80 m².",
+            true,
+            'the existing colocation patterns cannot fire — the word is simply not there',
+        ];
+        yield 'a flat with three bedrooms is wanted' => [
+            'Appartement 4 pièces Sartrouville',
+            'Séjour double et 3 chambres, dont une chambre parentale avec dressing.',
+            false,
+            'the counterweight: `chambre` in a DESCRIPTION is what a family flat is made of',
+        ];
+        yield 'a flat whose title counts its bedrooms is wanted' => [
+            'T4 avec 3 chambres, Houilles',
+            'Lumineux, proche RER.',
+            false,
+            'and in a title too, when it is a count rather than the property type at the front',
+        ];
+
         yield 'a parking space for rent is excluded' => [
             'Parking en sous-sol - Bezons',
             'Emplacement sécurisé.',

@@ -2714,6 +2714,15 @@ run_sabotage "a robots body starting with a markup character is trusted" \
   src/php/Adapters/Http/RobotsResolver.php \
   "s%if (\$firstByte === '<' || \$firstByte === '{') {%if (false) {%"
 
+# COLIVING ROOMS ADVERTISED WITH THE WHOLE FLAT'S FIGURES. SeLoger markets a bedroom in a shared
+# flat as `Chambre a <quartier>` beside `4 pieces . 90 m2`, and quotes the rent for the ROOM -- so
+# the criteria engine reads an extraordinary family flat. Four of nine real listings in the first
+# live pass were these, and all four matched. The existing colocation patterns cannot fire:
+# neither `coloc` nor `colocation` appears anywhere in them [measured 2026-08-25].
+run_sabotage "the coliving-room title pattern is dropped from the criteria" \
+  config/criteria.json \
+  "s%^    .\\^..s\\*chambre..b.,$%%"
+
 # THE TALLY LIVES HERE, BELOW EVERY CASE, and that position is load-bearing rather than tidy.
 # It sat mid-file twice: once on 2026-08-20 (295 printed for 303 cases) and again from 2026-08-23,
 # when 21 schema-v7 / digest / reclassify cases were appended past it and the headline read 354 for
