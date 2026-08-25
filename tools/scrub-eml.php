@@ -21,6 +21,7 @@ declare(strict_types=1);
  * | `List-Unsubscribe*`                | a one-click token that unsubscribes without asking |
  * | `DKIM-Signature`, `ARC-*`          | signatures over headers this rewrites — kept would be a lie |
  * | every `qs=` value                  | the click-tracking token, tied to the subscriber |
+ * | every JWT-shaped token             | the subscriber's address, base64url-encoded in the payload |
  * | the address in the body            | stated in the CNIL footer of every alert |
  *
  * Usage: `php tools/scrub-eml.php <in.eml> <out.eml> [address-to-mask]`
@@ -28,7 +29,53 @@ declare(strict_types=1);
  * It VERIFIES its own work: the address, the ESP list ids and every original `qs=` token must be
  * absent from the output, or it refuses to write. A scrubber that half-works is worse than none,
  * because its output looks scrubbed.
+ *
+ * **ABSENT IS THE WRONG TEST — the address must not be RECOVERABLE**, and Bien'ici defeated the old
+ * one with no effort at all. Every link in its alerts carries `signedRecipient=eyJhbGciOi…`, a JWT
+ * whose payload base64url-decodes to `{"email":"<the subscriber>","iat":…}`. Measured 2026-08-25 on
+ * a real capture: the literal address is absent from the decoded body, and one `base64 -d` recovers
+ * it in full. This wrote that file and reported `scrubbed`.
+ *
+ * So the verification decodes before it looks — every long base64url run, and the quoted-printable
+ * form — and refuses when the address surfaces in any of them. That is stated as a general rule
+ * rather than as a Bien'ici special case on purpose: the next portal's encoding is not known, and a
+ * check that only understands the encodings already seen is the same defect with a later date.
  */
+
+/**
+ * Every form the message could be READ BACK in, beyond its own literal text.
+ *
+ * A token is only opaque until somebody decodes it, so this performs the decode the verification is
+ * meant to defeat: each long base64url run, plus the quoted-printable form of the whole message.
+ * An undecodable run is skipped rather than guessed at — it carries nothing readable either way.
+ *
+ * @return list<string>
+ */
+function recoverableForms(string $message): array
+{
+    $unfolded = quoted_printable_decode($message);
+    $forms = [$unfolded];
+
+    // Runs are taken from the UNFOLDED text as well as the raw: quoted-printable breaks a line
+    // every 76 columns with a trailing `=`, straight through the middle of a token, so a run
+    // scanned on the raw message is two short fragments that decode to nothing while the whole
+    // token decodes to the address. Scanning only the raw text is how this check would pass on
+    // most alert mail there is.
+    foreach ([$message, $unfolded] as $text) {
+        preg_match_all('~[A-Za-z0-9_\-]{16,}~', $text, $runs);
+
+        foreach ($runs[0] as $run) {
+            $padded = $run . str_repeat('=', (4 - strlen($run) % 4) % 4);
+            $decoded = base64_decode(strtr($padded, '-_', '+/'), true);
+
+            if ($decoded !== false && $decoded !== '') {
+                $forms[] = $decoded;
+            }
+        }
+    }
+
+    return $forms;
+}
 
 $argvLocal = $_SERVER['argv'] ?? [];
 
@@ -103,6 +150,50 @@ $message = preg_replace_callback(
     $message,
 ) ?? $message;
 
+// JWT-shaped tokens: same rule as `qs=`, different encoding. The VALUE goes and the three-segment
+// SHAPE stays, because a fixture whose links carry no token at all would not exercise the link
+// handling it was captured to exercise. The replacement announces itself in plain text so that
+// tests/php/Repo/FixtureSecretsTest.php — which refuses a committed JWT — reads it as a placeholder
+// rather than as the live credential it is shaped like.
+//
+// THE PATTERN IS QUOTED-PRINTABLE-AWARE, and it has to be. Most alert mail is QP-encoded, and QP
+// folds every line at 76 columns with a trailing `=` soft break — straight through the middle of a
+// token. A pattern that only understands unbroken tokens matches nothing on such a capture and
+// leaves the address in place. Bien'ici's subscription confirmation is exactly that message: the
+// verification below caught it and refused the write, which is the guard working and the tool not.
+$jwtSeq = 0;
+$softBreak = '(?:=\r?\n)';
+$b64 = '(?:[A-Za-z0-9_\-]|' . $softBreak . ')';
+
+// The left anchor has TWO branches, and the second one is not decoration. A JWT sits in a query
+// parameter, so it is preceded by `=` — which quoted-printable escapes to `=3D`. A plain `\b` or a
+// "not a base64 character" lookbehind then sees the `D` and refuses to start, so the pattern
+// matched nothing at all on QP mail and left every address in place. That is how the first version
+// of this passed its own unit test (an unencoded fixture) and failed on all three real captures.
+$startsToken = '(?:(?<![A-Za-z0-9_\-])|(?<==3D))';
+$message = preg_replace_callback(
+    '~' . $startsToken . 'eyJ' . $b64 . '{6,}\.' . $b64 . '{6,}\.' . $b64 . '{6,}~',
+    static function (array $m) use (&$jwtSeq, $eol): string {
+        ++$jwtSeq;
+
+        $payload = rtrim(strtr(base64_encode(
+            '{"PLACEHOLDER":"FIXTURE' . str_pad((string) $jwtSeq, 3, '0', STR_PAD_LEFT) . '"}',
+        ), '+/', '-_'), '=');
+
+        // The header decodes to {"alg":"none","typ":"JWT"} — true structure, no claim.
+        $token = 'eyJhbGciOiJub25lIiwidHlwIjoiSldUIn0.' . $payload . '.PLACEHOLDER0SIGNATURE0FIXTURE';
+
+        // Re-fold if the original was folded. Emitting one long line instead would leave a
+        // non-conformant QP line where a conformant one stood, and the structure of the capture is
+        // the part this whole tool exists to preserve.
+        return str_contains($m[0], '=')
+            && preg_match('~=\r?\n~', $m[0]) === 1
+            ? rtrim(chunk_split($token, 60, '=' . $eol), '=' . $eol)
+            : $token;
+    },
+    $message,
+) ?? $message;
+
 if ($address !== null && $address !== '') {
     $message = str_replace($address, 'alertes@example.invalid', $message);
     // The local part alone appears in some ESP ids.
@@ -120,6 +211,34 @@ $leaks = [];
 
 if ($address !== null && $address !== '' && stripos($message, $address) !== false) {
     $leaks[] = 'the address is still present';
+}
+
+if ($address !== null && $address !== '') {
+    foreach (recoverableForms($message) as $form) {
+        if (stripos($form, $address) !== false) {
+            $leaks[] = 'the address is RECOVERABLE from the output — it survives ENCODED (base64url '
+                . 'or quoted-printable) inside a token this scrubber does not know how to strip. '
+                . 'Teach it that token, or drop the parameter; do not relax this check.';
+
+            break;
+        }
+    }
+
+    // The local part alone is enough to identify the subscriber, and it is what ESP ids embed. Only
+    // checked when it is long enough to be distinctive: a short local part matched against decoded
+    // binary would fire on noise, and a guard that cries wolf gets weakened and then deleted.
+    $local = explode('@', $address)[0];
+
+    if (strlen($local) >= 6) {
+        foreach (recoverableForms($message) as $form) {
+            if (stripos($form, $local) !== false) {
+                $leaks[] = 'the local part of the address is RECOVERABLE from the output — it '
+                    . 'survives ENCODED inside a token this scrubber does not know how to strip.';
+
+                break;
+            }
+        }
+    }
 }
 
 foreach (['510006', '510008'] as $listId) {
@@ -148,9 +267,10 @@ if (file_put_contents($out, $message) === false) {
 }
 
 fwrite(STDOUT, sprintf(
-    "scrubbed %s -> %s (%d bytes, %d tracking tokens replaced)\n",
+    "scrubbed %s -> %s (%d bytes, %d tracking tokens and %d signed tokens replaced)\n",
     basename($in),
     $out,
     strlen($message),
     $tokenSeq,
+    $jwtSeq,
 ));

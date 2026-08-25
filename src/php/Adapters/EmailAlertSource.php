@@ -334,12 +334,6 @@ final readonly class EmailAlertSource implements Source
         $surface = self::surfaceIn($segment);
         $residence = $this->matchParam('residence_pattern', $segment);
 
-        $id = $this->identityFor($commune, $postcode, $rooms, $surface, $residence);
-
-        if ($id === null) {
-            return null;
-        }
-
         // THE LAST LINK, NOT THE FIRST — and the difference is the whole value of the notification.
         //
         // Reported by the developer 2026-08-25: clicking a SeLoger push opened THE SAVED SEARCH they
@@ -365,6 +359,32 @@ final readonly class EmailAlertSource implements Source
 
                 break;
             }
+        }
+
+        // IDENTITY: the card's own link where the portal publishes one, content-addressing where it
+        // does not. Content-addressing was invented for SeLoger, which sends neither a listing URL
+        // nor a listing id — sixteen cards behind one opaque redirect. That is a property of that
+        // portal, not of email alerts: Bien'ici puts a real, stable id in the PATH, and a real id
+        // avoids both stated costs of the content key (two identical units in one residence sharing
+        // an identity, and a card that gains a surface changing identity and notifying twice).
+        //
+        // `id_from: content` still short-circuits, so SeLoger's identity is byte-identical to what
+        // it was before this existed. That matters more than it looks: nothing migrates a stored row
+        // from one key scheme to another, so a source that changes identity re-notifies its whole
+        // backlog. The scheme is chosen once, before the source is first enabled.
+        //
+        // A segment with no listing link is not a card, and that is what drops the alert's own
+        // HEADER — which carries the saved search's criteria (`1 200 € max - 3 pièces min - 45 m²
+        // min`) and so yields a plausible rent, room count and surface belonging to no flat.
+        if (!self::locatable($commune, $postcode, $rooms, $surface, $residence)) {
+            return null;
+        }
+
+        $id = $this->identityFor($commune, $postcode, $rooms, $surface, $residence)
+            ?? ($link === null ? null : self::stableId($link));
+
+        if ($id === null) {
+            return null;
         }
 
         return new RawListing(
@@ -409,6 +429,40 @@ final readonly class EmailAlertSource implements Source
      * card that gains a previously-missing surface in a later email changes identity once, and so
      * notifies once more.
      */
+    /**
+     * The no-information floor: something that LOCATES the flat, and something that DESCRIBES it.
+     *
+     * Either half alone is not enough to call a segment a card — every card in a message shares a
+     * commune often enough, and a bare `3 pièces` is shared by half a portal.
+     *
+     * **It guards the CARD, not the content key**, and that distinction was worth one regression to
+     * find. It used to live inside `identityFor()`, where the argument for it was the identity
+     * collapse: without it every card whose extraction failed hashes to `sha1('seloger|||||')` and
+     * they all land on that one id. Link identity does not collapse — each card has its own URL —
+     * so a floor living in the content path alone would silently stop applying the moment a portal
+     * published a real listing id, and cards that yielded nothing but a rent would be admitted.
+     *
+     * The other half of the argument does not depend on the key at all: a segment that yields a
+     * rent and nothing else is an EXTRACTION FAILURE, and admitting it as a listing hides the
+     * failure behind a row that is quietly rejected for having no location (Q32). Skipping costs
+     * nothing real and keeps the failure visible in the count.
+     */
+    private static function locatable(
+        ?string $commune,
+        ?string $postcode,
+        ?int $rooms,
+        ?float $surface,
+        ?string $residence,
+    ): bool {
+        $locating = $commune ?? $postcode;
+
+        if ($locating === null || $locating === '') {
+            return false;
+        }
+
+        return $rooms !== null || $surface !== null || ($residence !== null && $residence !== '');
+    }
+
     private function identityFor(
         ?string $commune,
         ?string $postcode,
@@ -417,16 +471,6 @@ final readonly class EmailAlertSource implements Source
         ?string $residence,
     ): ?string {
         if ($this->stringParam('id_from') !== 'content') {
-            return null;
-        }
-
-        // The floor: something that LOCATES the flat, and something that DESCRIBES it. Either half
-        // alone is not an identity — every card in a message shares a commune often enough, and a
-        // bare `3 pièces` is shared by half a portal.
-        $locating = $commune ?? $postcode;
-        $describing = $rooms !== null || $surface !== null || ($residence !== null && $residence !== '');
-
-        if ($locating === null || $locating === '' || !$describing) {
             return null;
         }
 

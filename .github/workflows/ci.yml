@@ -100,6 +100,14 @@ jobs:
       - name: .env is parsed, not executed (through the real CLI)
         run: bash tests/test-dotenv-cli.sh
 
+      # A fixture is a file this repo republishes, so the scrubber is a secrets gate and gets the
+      # same treatment as the others: a must-strip half, a must-refuse half and a must-stay-quiet
+      # half. It exists because "the address is absent" was the wrong test — every Bien'ici link
+      # carries a JWT whose payload base64url-decodes to the subscriber's address, so the old check
+      # passed while the address was one `base64 -d` away.
+      - name: Fixture scrubber refuses a recoverable address
+        run: bash tests/test-scrub-eml.sh
+
       # BEFORE the scan itself, deliberately. The scan is a gate, and a gate that has been silently
       # disabled reports clean — which is exactly how an earlier version of it printed a P0 and
       # still exited 0. Running the self-test first means a gutted check fails the build instead of

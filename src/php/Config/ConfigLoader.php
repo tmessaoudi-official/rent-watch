@@ -456,21 +456,30 @@ final class ConfigLoader
             );
         }
 
-        // Legal on paper, silently useless in practice. `identityFor()` answers only for `content`,
-        // so with the default `link` every card is dropped and the zero-cards guard then throws
-        // "le gabarit du portail a changé" — loud, which is right, and a WRONG DIAGNOSIS, which is
-        // not: the template is fine and the config is incoherent, and someone would go reading the
-        // portal's markup for a fault three lines away in JSON.
+        // A segmented source keyed on the LINK must say which links are listings.
         //
-        // Refused rather than silently promoted to `content`: `link` is a real answer for a portal
-        // whose alerts DO carry listing URLs, and promoting it would hand such a source
-        // content-addressed ids it never asked for, changing every identity it already holds.
+        // This replaces a blanket *"segmented needs id_from: content"*, which was true only while
+        // link identity meant the whole message's links. Now the segmented path keys on the CARD's
+        // own last qualifying link, so `link` is a real answer — and that old rule's own comment
+        // said as much: "`link` is a real answer for a portal whose alerts DO carry listing URLs".
+        // Bien'ici is one: `/annonce/laforet-immo-facile-22588736` is a real, stable id in the path.
+        //
+        // What is left to refuse is the shape whose failure is SILENT. With no `link_host` every
+        // link qualifies, so a card's identity becomes whatever link happens to sit last in it — an
+        // advert, a photo, a "manage my alerts". Two cards ending on the same one is caught loudly
+        // at fetch (two distinct cards, one identity). Two cards ending on DIFFERENT rotating advert
+        // links is not caught at all: every card gets a plausible unique id that changes with the
+        // next campaign, so the whole source re-notifies for ever and reads as a busy market.
         if (isset($params['card_separator']) && $params['card_separator'] !== ''
-            && ($params['id_from'] ?? 'link') !== 'content') {
+            && ($params['id_from'] ?? 'link') !== 'content'
+            && !isset($params['link_host'])) {
             throw ConfigError::at(
-                $where . '.params.id_from',
-                'une source segmentée par card_separator a besoin de `id_from: content` — '
-                    . 'l\'identité par lien ne distingue pas deux cartes du même message',
+                $where . '.params.link_host',
+                'une source segmentée et identifiée par lien doit dire quels liens sont des '
+                    . 'annonces — sans link_host, l\'identité d\'une carte est le dernier lien '
+                    . 'venu (publicité, photo, gestion d\'alerte), et une publicité qui tourne '
+                    . 'renotifie toute la source sans jamais le dire. Ajoutez link_host, ou '
+                    . 'passez à `id_from: content`',
             );
         }
 
@@ -514,7 +523,35 @@ final class ConfigLoader
                 if ($fixture === null) {
                     throw ConfigError::at($where . '.fixture', 'a fixture source must name its payload file');
                 }
-            } elseif ($type !== 'email_alert') {
+            } elseif ($type === 'email_alert') {
+                // ONE MAILBOX SERVES EVERY PORTAL — that is the point of a single `rent-watch`
+                // label — so `params.from` is not a nicety, it is the source's scope. Without it
+                // the source reads every message in the folder within the window and ingests other
+                // portals' alerts as its own, while `SourceHealth` records a plausible count
+                // throughout.
+                //
+                // It is also what scopes the IMAP query: `ImapMailbox` pushes `FROM` into `SEARCH`,
+                // so each source gets its own window rather than a slice of one shared one.
+                // Without it a busy portal starves a quiet one silently, and it worsens with every
+                // source added — measured 2026-08-25, when a year of another portal's archive
+                // relabelled into the folder took SeLoger from 9 listings to 0 and nothing but the
+                // health baseline noticed.
+                //
+                // At LOAD, because a source that can only fail once it is polling is a source that
+                // fails in production. A DISABLED block is left alone: a draft has not claimed to
+                // work yet.
+                $from = $params['from'] ?? null;
+
+                if (!\is_string($from) || trim($from) === '') {
+                    throw ConfigError::at(
+                        $where . '.params.from',
+                        'an enabled email_alert source must name the sender it reads. One mailbox '
+                            . 'serves every portal, so without this the source ingests other '
+                            . 'portals\' alerts as its own and reports a plausible count while '
+                            . 'doing it',
+                    );
+                }
+            } else {
                 if ($url === null) {
                     throw ConfigError::at($where . '.url', 'an enabled ' . $type . ' source needs a url');
                 }

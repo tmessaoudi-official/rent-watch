@@ -1280,8 +1280,11 @@ final class ConfigTest extends TestCase
         // `seloger` joined 2026-08-25 — the fifth source, and the first that is not a landlord. It
         // is an `email_alert`, so it makes no outbound web request at all: the cost of enabling it
         // is one IMAP session per pass, not a crawl.
+        // `bienici` joined the same day, the second portal on that route. Same cost, and it shares
+        // seloger's IMAP session budget rather than adding one: each email source scopes its own
+        // `SEARCH … FROM`, which is why `params.from` is now refused at load when it is missing.
         self::assertSame(
-            ['inli', 'cdc_habitat', 'cityloger', 'seloger', 'logirep'],
+            ['inli', 'cdc_habitat', 'cityloger', 'seloger', 'bienici', 'logirep'],
             $enabled,
             'the set of enabled network sources changed',
         );
@@ -1489,6 +1492,113 @@ final class ConfigTest extends TestCase
                 'id_from' => 'content',
                 'commune_pattern' => '~^([unclosed~m',
             ],
+            'map' => ['ref' => 'url', 'charges_included' => true],
+        ]]]);
+    }
+
+    /**
+     * An ENABLED `email_alert` source must name the sender it reads.
+     *
+     * One mailbox serves every portal — that is the whole point of a single `rent-watch` label —
+     * so `params.from` is not a nicety, it is the source's scope. Without it the source reads every
+     * message in the folder within the window and ingests other portals' alerts as its own, while
+     * `SourceHealth` records a plausible count throughout.
+     *
+     * It is also what scopes the IMAP query. `ImapMailbox` pushes `FROM` into `SEARCH`, so each
+     * source gets its own window rather than a slice of one shared one; without it a busy portal
+     * starves a quiet one silently, and it worsens with every source added. Measured 2026-08-25:
+     * SeLoger went from 9 listings to 0 when a year of another portal's archive was relabelled into
+     * the same folder, and nothing but the health baseline noticed.
+     *
+     * Refused at LOAD rather than at fetch, because a source that can only fail once it is polling
+     * is a source that fails in production. A DISABLED source is left alone: a block being drafted
+     * has not claimed to work yet.
+     */
+    public function testAnEnabledEmailAlertSourceMustNameItsSender(): void
+    {
+        $this->expectException(ConfigError::class);
+        $this->expectExceptionMessageMatches('/params\.from/');
+
+        ConfigLoader::sourcesFromArray(['sources' => ['x' => [
+            'enabled' => true,
+            'family' => 'private',
+            'type' => 'email_alert',
+            'mixed_tenure' => false,
+            'params' => ['card_separator' => "Voir l'annonce", 'id_from' => 'content'],
+            'map' => ['ref' => 'url', 'charges_included' => true],
+        ]]]);
+    }
+
+    /** A block still being drafted has not claimed to work yet, so it is left alone. */
+    public function testADisabledEmailAlertSourceNeedNotNameItsSenderYet(): void
+    {
+        $definitions = ConfigLoader::sourcesFromArray(['sources' => ['x' => [
+            'enabled' => false,
+            'family' => 'private',
+            'type' => 'email_alert',
+            'mixed_tenure' => false,
+            'params' => ['card_separator' => "Voir l'annonce", 'id_from' => 'content'],
+            'map' => ['ref' => 'url', 'charges_included' => true],
+        ]]]);
+
+        self::assertCount(1, $definitions);
+    }
+
+    /**
+     * A segmented source keyed on the LINK must say which links are listings.
+     *
+     * This replaces a blanket *"segmented needs `id_from: content`"*, which was true only while
+     * link identity meant the whole message's links — SeLoger's sixteen cards behind one opaque
+     * redirect. The segmented path now keys on the card's own last qualifying link, so `link` is a
+     * real answer for a portal that publishes listing URLs.
+     *
+     * What is left to refuse is the shape whose failure is SILENT. Two cards ending on the SAME
+     * stray link is caught loudly at fetch. Two cards ending on DIFFERENT rotating advert links is
+     * caught by nothing: every card gets a plausible unique id that changes with the next campaign,
+     * so the source re-notifies for ever and reads as a busy market.
+     */
+    public function testASegmentedSourceKeyedOnItsLinksMustSayWhichLinksAreListings(): void
+    {
+        $this->expectException(ConfigError::class);
+        $this->expectExceptionMessageMatches('/link_host/');
+
+        ConfigLoader::sourcesFromArray(['sources' => ['x' => [
+            'enabled' => false,
+            'family' => 'private',
+            'type' => 'email_alert',
+            'mixed_tenure' => false,
+            'params' => ['card_separator' => "\nPhoto\n"],
+            'map' => ['ref' => 'url', 'charges_included' => true],
+        ]]]);
+    }
+
+    /** With `link_host` named, link identity on a segmented source is accepted — Bien'ici's shape. */
+    public function testASegmentedSourceKeyedOnNamedListingLinksIsAccepted(): void
+    {
+        $definitions = ConfigLoader::sourcesFromArray(['sources' => ['x' => [
+            'enabled' => false,
+            'family' => 'private',
+            'type' => 'email_alert',
+            'mixed_tenure' => false,
+            'params' => ['card_separator' => "\nPhoto\n", 'link_host' => 'example.test/annonce/'],
+            'map' => ['ref' => 'url', 'charges_included' => true],
+        ]]]);
+
+        self::assertCount(1, $definitions);
+    }
+
+    /** An empty string is not a sender — the same refusal, reached by a different mistake. */
+    public function testAnEmptySenderIsRefusedLikeAMissingOne(): void
+    {
+        $this->expectException(ConfigError::class);
+        $this->expectExceptionMessageMatches('/params\.from/');
+
+        ConfigLoader::sourcesFromArray(['sources' => ['x' => [
+            'enabled' => true,
+            'family' => 'private',
+            'type' => 'email_alert',
+            'mixed_tenure' => false,
+            'params' => ['from' => '   ', 'card_separator' => "Voir l'annonce", 'id_from' => 'content'],
             'map' => ['ref' => 'url', 'charges_included' => true],
         ]]]);
     }

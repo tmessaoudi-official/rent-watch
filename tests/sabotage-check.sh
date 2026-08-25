@@ -2663,12 +2663,12 @@ run_sabotage "the rent separator admits newlines again" \
 # the store's "nothing collapses onto a shared key" guarantee violated where the store cannot see it.
 run_sabotage "the content identity is minted with no locating evidence" \
   src/php/Adapters/EmailAlertSource.php \
-  's%        if ($locating === null || $locating === .. || !$describing) {%        if (false) {%'
+  's%        if ($locating === null || $locating === ..) {%        if (false) {%'
 
 # Rent back in the identity, which turns every price drop into a brand-new listing with no history.
 run_sabotage "the rent joins the content identity, so a price cut mints a new flat" \
   src/php/Adapters/EmailAlertSource.php \
-  "s%\\\$surface, \\\$residence);%\\\$surface, \\\$residence . '|' . \\\$rent);%"
+  "s%identityFor(\\\$commune, \\\$postcode, \\\$rooms, \\\$surface, \\\$residence)%identityFor(\\\$commune, \\\$postcode, \\\$rooms, \\\$surface, \\\$residence . '|' . \\\$rent)%"
 
 # Two DISTINCT cards sharing an identity is an extraction failure; swallowing it loses a flat for ever.
 run_sabotage "duplicate identities within one message are swallowed" \
@@ -2687,13 +2687,20 @@ run_sabotage "a segmented mixed-tenure source is allowed to load" \
   src/php/Config/ConfigLoader.php \
   "s%if (isset(\\\$params\['card_separator'\]) && \\\$params\['card_separator'\] !== '' && \\\$mixedTenure) {%if (false) {%"
 
-# A combination that is legal on paper and useless in practice: with the default `link`,
-# identityFor() answers for no card, every card is dropped, and the zero-cards guard then reports
-# that the PORTAL'S TEMPLATE changed. Loud with the wrong diagnosis is its own failure mode -- it
-# sends the reader to the markup for a fault three lines away in JSON.
-run_sabotage "a segmented source loads without content identity, so it blames the portal" \
-  src/php/Config/ConfigLoader.php \
-  "s%?? 'link') !== 'content') {%?? 'link') !== 'content' \&\& false) {%"
+# RETIRED 2026-08-25, and retired rather than repaired because the GUARANTEE changed.
+#
+# This case used to sabotage a blanket rule: "a source segmented by card_separator needs
+# `id_from: content`". That rule was true only while link identity meant the whole MESSAGE's links
+# -- SeLoger's sixteen cards behind one opaque redirect. The segmented path now keys on the card's
+# own last qualifying link, so `link` is a real answer for a portal that publishes listing URLs,
+# and Bien'ici is one. Its own comment had said so: "`link` is a real answer for a portal whose
+# alerts DO carry listing URLs".
+#
+# What replaced it is narrower and guards the shape whose failure is SILENT rather than loud, and
+# it has its own case below: "a segmented link-keyed source may ship without a link host". The
+# expression is deleted rather than left rotting, because a sabotage that matches nothing reports
+# coverage it does not have -- which is what tests/test-sabotage-applies.sh exists to catch, and
+# what it caught here.
 
 # matchParam() reads these with @preg_match, so a pattern that does not compile never warns and
 # never throws -- it returns false and the field is null for ever. On residence_pattern that
@@ -2778,6 +2785,54 @@ run_sabotage "a robots body starting with a markup character is trusted" \
 run_sabotage "the coliving-room title pattern is dropped from the criteria" \
   config/criteria.json \
   "s%^    .\\^..s\\*chambre..b.,$%%"
+
+# ── Bien'ici: the second email portal, and the first keyed on a real listing id ──────────────────
+#
+# THE SEPARATOR. Splitting on the call to action -- which is what SeLoger does -- puts the alert's
+# own criteria line (`1 200 EUR max - 3 pieces min - 45 m2 min`) inside segment 0, so the first card
+# of every message reports 45 m2. Under min_surface_m2 that is a silent rejection of a real match.
+# Measured over four live messages: 3 of 13 surfaces and 1 of 13 room counts wrong, every one of
+# them under-reported, which is the direction nothing ever notices.
+run_sabotage "the Bien'ici card separator becomes the call to action" \
+  config/sources.json \
+  's%"card_separator": "\\nPhoto\\n"%"card_separator": "Voir l\xe2\x80\x99annonce"%'
+
+# The identity falls back to the card's own link ONLY on the segmented path. Remove the fallback and
+# every Bien'ici card is refused an identity, the zero-cards guard fires, and the source reports a
+# template change that has not happened.
+run_sabotage "a segmented card can no longer be identified by its own link" \
+  src/php/Adapters/EmailAlertSource.php \
+  's%?? (\$link === null ? null : self::stableId(\$link))%?? null%'
+
+# The no-information floor moved OUT of identityFor so it guards the card rather than the content
+# key. Link identity does not collapse, so a floor living only in the content path would stop
+# applying the moment a portal published a real id -- and a segment yielding a rent and nothing else
+# is an extraction failure, whatever key it would have got.
+run_sabotage "the no-information floor stops guarding the card" \
+  src/php/Adapters/EmailAlertSource.php \
+  's%if (!self::locatable(\$commune, \$postcode, \$rooms, \$surface, \$residence)) {%if (false) {%'
+
+# THE HEADER MUST NOT BECOME A LISTING. It carries a rent, a room count and a surface belonging to
+# no flat; what it lacks is a listing link. Widen link_host to the bare domain and `/mon-alerte/`
+# qualifies again -- which is also how the notification went back to opening the saved search.
+run_sabotage "Bien'ici's link host widens from the listing path to the domain" \
+  config/sources.json \
+  's%"link_host": "bienici.com/annonce/"%"link_host": "bienici.com"%'
+
+# One mailbox serves every portal, so `from` is the source's scope and not a nicety. Without the
+# refusal an enabled email source reads every message in the label within the window and ingests
+# other portals' alerts as its own, reporting a plausible count throughout.
+run_sabotage "an enabled email source may ship without naming its sender" \
+  src/php/Config/ConfigLoader.php \
+  's%\$from = \$params\[.from.\] ?? null;%\$from = \$params["from"] ?? "sabotage";%'
+
+# A segmented source keyed on its links must say WHICH links are listings. Two cards ending on the
+# same stray link is caught loudly at fetch; two cards ending on different ROTATING advert links is
+# caught by nothing -- plausible unique ids that change with the next campaign, so the whole source
+# renotifies for ever and reads as a busy market.
+run_sabotage "a segmented link-keyed source may ship without a link host" \
+  src/php/Config/ConfigLoader.php \
+  's%&& !isset(\$params\[.link_host.\])) {%\&\& false) {%'
 
 # THE TALLY LIVES HERE, BELOW EVERY CASE, and that position is load-bearing rather than tidy.
 # It sat mid-file twice: once on 2026-08-20 (295 printed for 303 cases) and again from 2026-08-23,

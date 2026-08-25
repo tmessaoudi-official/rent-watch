@@ -150,6 +150,29 @@ final class EmailAlertSegmentationTest extends TestCase
     }
 
     /**
+     * The floor has TWO halves, and this exercises the half the test above cannot.
+     *
+     * *Nothing at all* is refused by either half, so a card carrying nothing proves only that one
+     * of them fired. This card DESCRIBES a flat in full — three rooms, 52 m², a rent — and does not
+     * LOCATE it, which is the case where only the locating half stands between the card and an
+     * identity.
+     *
+     * Found by sabotage, not by design: neutering the locating half alone left the suite green,
+     * because every card the suite had was missing both. A rule with an untested half is a rule
+     * that can be deleted silently.
+     */
+    public function testDescribingAFlatIsNotLocatingIt(): void
+    {
+        $listings = $this->source(self::body([
+            self::card('980', 'Appartement Conflans', '3 pièces . 44,71 m²', 'Romagne', 'Conflans-Sainte-Honorine', '78700'),
+            "\n<L>\n1 100 €/mois charges comprises\n<L>\nAppartement Sans Adresse\n<L>\n3 pièces . 52,37 m²\n<L>\nVoir l'annonce\n",
+        ]))->fetch();
+
+        self::assertCount(1, $listings, 'rooms and a surface are not a location (Q32)');
+        self::assertStringContainsString('Conflans', (string) $listings[0]->commune);
+    }
+
+    /**
      * A message that HAS cards but yields none is a broken parser, and it must be loud.
      *
      * This is hard rule 2's shape: extraction that silently returns nothing is indistinguishable
@@ -350,6 +373,130 @@ final class EmailAlertSegmentationTest extends TestCase
         self::assertSame('Dourdan', $listings[0]->commune ?? null, 'found by the ranked vocabulary');
     }
 
+    // ------------------------------------------------------------ identity on the segmented path
+
+    /**
+     * A segmented source with no `id_from` keys on the CARD'S OWN LINK.
+     *
+     * Content-addressing exists because SeLoger sends no listing id — every link is one opaque
+     * redirect, so stripping the query collapses sixteen cards onto one identity. That is a defect
+     * of one portal, not a property of email alerts: Bien'ici puts a real, stable listing id in the
+     * PATH (`/annonce/laforet-immo-facile-22588736`), which `stableId()` keeps.
+     *
+     * Where a real id exists it is the honest identity, and it avoids both stated costs of the
+     * content key: two identical units in one residence no longer share an id, and a card that
+     * gains a previously-missing surface no longer changes identity and notifies twice.
+     *
+     * Before this, `identityFor()` answered `null` unless `id_from` said `content`, so a card on a
+     * segmented source could not acquire an identity at all: `cardsIn()` then threw *"the portal's
+     * template has changed"*, and link identity was unreachable for any segmented source.
+     */
+    public function testASegmentedSourceWithoutContentIdentityKeysOnTheCardsOwnLink(): void
+    {
+        $listings = $this->source(
+            self::photoBody([
+                self::photoCard('agency-111', '1 170', 'Appartement 3 pièces 65 m²', 'Choisy-le-Roi', '94600'),
+                self::photoCard('agency-222', '1 095', 'Appartement 3 pièces 67 m²', 'Plaisir', '78370'),
+            ]),
+            self::photoParams(),
+        )->fetch();
+
+        self::assertCount(2, $listings, 'two cards, two listings — and the header is not a third');
+
+        self::assertSame(
+            'https://www.example-portal.test/annonce/agency-111',
+            $listings[0]->externalId,
+            'the identity is the listing link with its tracking query stripped',
+        );
+        self::assertSame(
+            'https://www.example-portal.test/annonce/agency-222',
+            $listings[1]->externalId,
+        );
+
+        // The URL keeps its query: what the portal sent is what the human clicks. Only the IDENTITY
+        // is canonicalised.
+        self::assertStringContainsString('fromSavedSearchId=', (string) $listings[0]->url);
+    }
+
+    /**
+     * The identity is picked ONCE, and it is picked before the source is ever enabled.
+     *
+     * Nothing migrates a stored row from one key scheme to another, so flipping content→link on a
+     * live source makes every row look new and re-notifies the whole backlog. `id_from: content`
+     * therefore still short-circuits — SeLoger's identity must be byte-identical to what it was
+     * before link identity existed.
+     */
+    public function testTheContentIdentityStillWinsWhereItIsConfigured(): void
+    {
+        $listings = $this->source(self::body([
+            self::card('980', 'Appartement Conflans', '3 pièces . 44,71 m²', 'Romagne', 'Conflans-Sainte-Honorine', '78700'),
+        ]))->fetch();
+
+        self::assertMatchesRegularExpression(
+            '~^[0-9a-f]{40}$~',
+            $listings[0]->externalId,
+            'a content identity is a sha1 of the dwelling facts, not a URL',
+        );
+    }
+
+    /**
+     * The alert's own HEADER is a segment, and it must not become a phantom listing.
+     *
+     * It carries the saved search's criteria — `1 200 € max - 3 pièces min - 45 m² min` — so it
+     * yields a plausible rent, a room count and a surface, which is everything a card needs. What
+     * it does not carry is a link to a listing, and that is structural rather than lucky: a listing
+     * link only ever appears inside a card.
+     */
+    public function testTheAlertsOwnHeaderIsNotAListing(): void
+    {
+        $listings = $this->source(
+            self::photoBody([
+                self::photoCard('agency-111', '1 170', 'Appartement 3 pièces 65 m²', 'Choisy-le-Roi', '94600'),
+            ]),
+            self::photoParams(),
+        )->fetch();
+
+        self::assertCount(1, $listings);
+        self::assertSame(65.0, $listings[0]->surfaceM2, 'the criteria line says 45 m² min — the card says 65');
+        self::assertSame(1170, $listings[0]->rentCc, 'the criteria line says 1 200 € max — the card says 1 170');
+    }
+
+    /**
+     * The no-information floor applies to the LINK key too, and this is the twin of the content
+     * test above rather than a copy of it.
+     *
+     * The floor's first argument is about identity collapse — every card whose extraction failed
+     * hashes to the same content key — and link identity is immune to that, so a floor living only
+     * in the content path would stop applying the moment a portal published a real listing id. The
+     * argument that does not depend on the key: a segment yielding a rent and nothing else is an
+     * EXTRACTION FAILURE, and admitting it hides that failure behind a row quietly rejected for
+     * having no location.
+     *
+     * Found by regression, not by design: moving identity to the link made an existing floor test
+     * go red, and the fix was to move the floor rather than to relax it.
+     */
+    public function testTheInformationFloorAppliesToTheLinkKeyAsWell(): void
+    {
+        $body = self::photoBody([
+            self::photoCard('agency-111', '1 170', 'Appartement 3 pièces 65 m²', 'Choisy-le-Roi', '94600'),
+        ]);
+
+        // A second card carrying a rent and a real listing link — and no location, no rooms, no
+        // surface. Its link would give it a perfectly good identity; it is still not a card.
+        $bare = "\nPhoto\nhttps://www.example-portal.test/annonce/agency-999?fromSavedSearchId=abc\n"
+            . "850 €par mois charges comprises\n"
+            . "https://www.example-portal.test/annonce/agency-999?fromSavedSearchId=abc\n"
+            . "Voir l’annonce\n";
+
+        $listings = $this->source(
+            str_replace("\nÀ bientôt.", $bare . "\nÀ bientôt.", $body),
+            self::photoParams(),
+        )->fetch();
+
+        self::assertCount(1, $listings, 'the card with a link but no locating evidence is refused');
+        self::assertSame('https://www.example-portal.test/annonce/agency-111', $listings[0]->externalId);
+    }
+
     // ------------------------------------------------------------------ helpers
 
     /** @param array<string,mixed> $params */
@@ -409,6 +556,72 @@ final class EmailAlertSegmentationTest extends TestCase
             'residence_pattern' => '~^\s*([^\n,]{2,60}),\s*$~m',
             'title_pattern' => '~^\s*((?:Appartement|Maison|Studio)[^\n]*)$~m',
             'commune_pattern' => $shipped->params['commune_pattern'] ?? '',
+        ];
+    }
+
+    /**
+     * A Bien'ici-shaped card: the separator is the line each card STARTS with, not its CTA.
+     *
+     * The tail-of-segment shape SeLoger uses cannot work here, and the frozen payloads say so
+     * rather than the design. Split on the CTA and segment 0 is the alert's header plus card one,
+     * so the saved search's own `45 m² min` is read as the flat's surface; every later segment
+     * begins with the PRECEDING card's `RÉFÉRENCE : Cocon_Loc_T4`, which the `T4` branch of the room
+     * pattern reads as a room count. Measured 2026-08-25 over four real messages: 3 of 13 surfaces
+     * and 1 of 13 room counts wrong, all of them in the under-reporting direction, which under
+     * `min_surface_m2` rejects a real match and looks like nothing at all.
+     */
+    private static function photoCard(
+        string $id,
+        string $rent,
+        string $title,
+        string $commune,
+        string $postcode,
+    ): string {
+        $link = "https://www.example-portal.test/annonce/{$id}?fromSavedSearchId=abc123";
+
+        return "\nPhoto\n"
+            . "https://file.example-portal.test/photo/{$id}.jpg\n"
+            . "{$link}\n{$title}\n"
+            . "{$link}\n{$postcode} {$commune}\n"
+            . "{$link}\n{$rent} €par mois charges comprises\n"
+            . "{$link}\nVoir l’annonce\n"
+            . "{$link}\nRÉFÉRENCE : Cocon_Loc_T4\n";
+    }
+
+    /**
+     * The alert's header, carrying the saved search's criteria — a rent, a room count and a surface
+     * that belong to no flat.
+     *
+     * @param list<string> $cards
+     */
+    private static function photoBody(array $cards): string
+    {
+        $header = "Bonne nouvelle, 2 nouvelles annonces\ncorrespondent à votre alerte !\n"
+            . "https://www.example-portal.test/mon-alerte/abc\n"
+            . "Louer région Île-de-France - Maison, appartement - 1 200 € max - 3 pièces min - 45 m² min\n"
+            . "+Ajouter ou modifier des critères\n"
+            . "https://www.example-portal.test/mes-alertes?timedToken=xyz\n";
+
+        return $header . implode('', $cards) . "\nÀ bientôt.\nL’équipe du portail\n";
+    }
+
+    /**
+     * Bien'ici's shape: a start-of-card separator, a link host narrowed to the listing PATH, and no
+     * `id_from` — so identity falls to the card's own link.
+     *
+     * @return array<string,mixed>
+     */
+    private static function photoParams(): array
+    {
+        return [
+            'from' => 'example-portal.test',
+            // Narrowed to the listing path on purpose: the alert's own furniture (`/mon-alerte/`,
+            // `/mes-alertes`) and the photo CDN all sit on the same domain, and a host-only match
+            // would let the header qualify as a card.
+            'link_host' => 'example-portal.test/annonce/',
+            'card_separator' => "\nPhoto\n",
+            'title_pattern' => '~^\h*((?:Appartement|Maison|Studio|Duplex)[^\n]*?)\h*$~m',
+            'commune_pattern' => '~^\h*\d{5}\h+([^\n]{2,60}?)\h*$~mu',
         ];
     }
 

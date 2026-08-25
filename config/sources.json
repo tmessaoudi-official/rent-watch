@@ -141,6 +141,28 @@
         "charges_included": true
       }
     },
+    "bienici": {
+      "_comment": "B1b. The second portal on the email-alert route, and much the easier of the two. Private market, so LIBRE — in scope since the Q4 answer. type is email_alert for the same reason as seloger: direct scraping of a private portal is opt-in, disabled by default and refuses to run without an explicit flag (hard rule 4), while the alert route is within ToS, defeats anti-bot because there is no bot, and fires on publication.",
+      "_verified_at": "2026-08-25",
+      "_source": "Three real messages captured from a live subscription within ninety minutes of creating the alert and frozen at tests/fixtures/bienici/: a five-listing alert, a one-listing alert that also carries a `Cette annonce peut également vous intéresser` suggestion card, and the subscription confirmation, which carries no cards at all and must not throw. Scrubbed by tools/scrub-eml.php — 72 signed tokens replaced across the three, which is the point: EVERY link carries `signedRecipient=<JWT>` whose payload base64url-decodes to the subscriber's address, so the scrubber's old literal-address check passed while the address was one `base64 -d` away. The quoted-printable folding is KEPT, because it is what defeated the first fix.",
+      "_why": "IT PUBLISHES A REAL LISTING ID, which is what SeLoger does not. `/annonce/laforet-immo-facile-22588736` survives `stableId()` stripping the query, so identity is the LINK and none of the content-addressing machinery is needed — nor wanted: a real id has neither of the content key's stated costs (two identical units in one residence sharing an identity; a card that gains a surface changing identity and notifying twice). Chosen BEFORE the first enabled pass, deliberately: nothing migrates a stored row from one key scheme to another, so a source that changes identity re-notifies its whole backlog. THE SEPARATOR IS THE LINE EACH CARD STARTS WITH, not its call to action, and that was measured rather than reasoned: splitting on the CTA puts the alert's own criteria line (`1 200 € max - 3 pièces min - 45 m² min`) inside segment 0 and the PRECEDING card's `RÉFÉRENCE : Cocon_Loc_T4` at the head of every later one, which cost 3 of 13 surfaces and 1 of 13 room counts, all under-reported, all rejected silently by min_surface_m2. commune_pattern anchors on the postcode BEFORE the name (`94600 Choisy-le-Roi`) — the inverse of SeLoger's, whose postcode sits parenthesised on the line below; the anchor is the portal's template, which is why this is per-source config. title_pattern anchors on the STRUCTURE (`<type> N pièces M m²`) rather than on a list of dwelling types, so a `Chambre` can match it and exclude_title_patterns can fire on coliving. mixed_tenure false carries the same §1 residual as seloger: an explicit PLS/PLUS/PLAI label anywhere in a card is still caught at 0.90 by the tier-2 label rules, which never consult the flag, but a card stating no tenure takes the LIBRE default. Reversed by one line.",
+      "enabled": true,
+      "family": "private",
+      "type": "email_alert",
+      "default_tenure": "LIBRE",
+      "mixed_tenure": false,
+      "params": {
+        "from": "no_reply@bienici.com",
+        "link_host": "bienici.com/annonce/",
+        "card_separator": "\nPhoto\n",
+        "title_pattern": "~^\\h*([^\\n\\d]{3,40}\\d+\\h*pi[eè]ces?[^\\n]{0,40})\\h*$~mu",
+        "commune_pattern": "~^\\h*\\d{5}\\h+([^\\n]{2,60}?)\\h*$~mu"
+      },
+      "map": {
+        "ref": "url",
+        "charges_included": true
+      }
+    },
     "leboncoin": {
       "_comment": "B2. Where non-agency private landlords actually post. 403s a plain client, so email alert is the only route regardless of preference.",
       "enabled": false,
