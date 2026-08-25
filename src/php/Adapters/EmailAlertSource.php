@@ -40,11 +40,23 @@ final readonly class EmailAlertSource implements Source
      *
      * Accent-folded input is NOT assumed here — this reads the raw message text, before folding,
      * because the folded surface is the classifier's and this is extraction.
+     *
+     * **THE SEPARATOR IS `\h`, NEVER `\s`, AND THE DIFFERENCE IS A WRONG RENT.** French rents are
+     * written `1 450 €` with a narrow no-break space, so the digit class has to admit whitespace as
+     * a thousands separator — and it did that with `\s`, which also matches `\n`. A line ending in
+     * a digit therefore glues itself to the price below it, and `Payload::int` truncates at the
+     * newline, so the rent becomes whatever sat on the previous line: `ref 850` above
+     * `1 450 EUR charges comprises` extracts **850** [Verified 2026-08-25], six hundred euros below
+     * reality, inside the plausibility band, clearing a ceiling the real rent does not.
+     *
+     * `\h` under `/u` already covers U+00A0 and U+202F, which is what the explicit escapes were
+     * for. The trailing `\s*` before the currency marker stays `\h*` for the same reason — a figure
+     * and a currency sign on two different lines are not one price.
      */
     private const array RENT_PATTERNS = [
-        '~(\d[\d\s\x{202F}\x{00A0}.,]{2,})\s*(?:€|EUR|euros?)\s*(?:/\s*mois|par mois|mensuel)?\s*(?:CC|charges comprises)~iu',
-        '~(?:loyer|prix)\s*(?:CC|charges comprises)?\s*:?\s*(\d[\d\s\x{202F}\x{00A0}.,]{2,})\s*(?:€|EUR|euros?)~iu',
-        '~(\d[\d\s\x{202F}\x{00A0}.,]{2,})\s*(?:€|EUR|euros?)~iu',
+        '~(\d[\d\h.,]{2,})\h*(?:€|EUR|euros?)\h*(?:/\h*mois|par mois|mensuel)?\h*(?:CC|charges comprises)~iu',
+        '~(?:loyer|prix)\h*(?:CC|charges comprises)?\h*:?\h*(\d[\d\h.,]{2,})\h*(?:€|EUR|euros?)~iu',
+        '~(\d[\d\h.,]{2,})\h*(?:€|EUR|euros?)~iu',
     ];
 
     private const string SURFACE_PATTERN = '~(\d{1,4}(?:[.,]\d{1,2})?)\s*(?:m²|m2|m\^2)~iu';

@@ -647,6 +647,105 @@ final class NetworkAdaptersTest extends TestCase
         }
     }
 
+    /**
+     * A rent may not be assembled across a LINE BREAK, and a real alert is what proved it can be.
+     *
+     * French rents are written `1 450 €` with a narrow no-break space, so the digit class admits
+     * whitespace as a thousands separator — and it did that with `\s`, which matches `\n`. A stray
+     * figure on the line above therefore glues itself to the price: measured on the first real
+     * SeLoger alert, `1 nouvelle annonce\n980 €/mois charges comprises` captured `"1\n980 "` and
+     * parsed to **1**.
+     *
+     * **The glued value is TRUNCATED at the newline, not concatenated** — `Payload::int` stops
+     * there — so the extracted rent is whatever sat on the line above. A first draft of this
+     * docblock said `2\n980` reads as 2980; it reads as **2**. The mechanism matters because it
+     * decides which failures are possible:
+     *
+     * - a short leading run yields a silly number the 200–20000 band rejects, so the rent is `null`
+     *   — *unknown* under hard rule 9, and the listing is notified with `loyer non communiqué`
+     *   while the alert stated it plainly [Verified: `réf 2` above `980 EUR` yields 2, out of band];
+     * - a leading run of three or four digits is far worse, because it lands INSIDE the band and
+     *   nothing reports it: `ref 850` above `1 450 EUR charges comprises` extracts **850**
+     *   [Verified], a rent 600 € below reality that clears the ceiling and notifies a flat which
+     *   does not.
+     *
+     * The separator is horizontal whitespace, `\h` — which under `/u` already covers U+00A0 and
+     * U+202F, the two the explicit escapes were there for.
+     *
+     */
+    public function testARentIsNotAssembledAcrossALineBreak(): void
+    {
+        $dir = sys_get_temp_dir() . '/rentwatch-mailbox-' . bin2hex(random_bytes(6));
+        mkdir($dir);
+
+        file_put_contents($dir . '/wrap.eml',
+            "From: alertes@wrap-portal.test\r\n"
+            . "Subject: 1 nouvelle annonce\r\n"
+            . "Content-Type: text/plain; charset=UTF-8\r\n"
+            . "\r\n"
+            // The digit must be adjacent to the newline for the glue to happen — a line ending in
+            // one, not merely containing one. In a real alert that is a tracking URL ending in a
+            // digit, immediately above the price. A first draft of this test put the `1` at the
+            // START of the line, and passed while the defect was fully present.
+            . "Votre recherche : réf 2\r\n"
+            . "980 EUR/mois charges comprises\r\n"
+            . "https://wrap-portal.test/annonce/4242\r\n");
+
+        try {
+            $definition = new SourceDefinition(
+                name: 'wrap_portal',
+                enabled: true,
+                family: 'private',
+                type: 'email_alert',
+                mixedTenure: true,
+                params: ['from' => 'wrap-portal.test', 'link_host' => 'wrap-portal.test'],
+                map: new FieldMap(ref: ['url'], chargesIncluded: true),
+            );
+
+            $listings = (new EmailAlertSource($definition, $this->store(), new FileMailbox($dir)))->fetch();
+
+            self::assertCount(1, $listings);
+            self::assertSame(980, $listings[0]->rentCc, 'the 1 on the line above is not part of the rent');
+        } finally {
+            @unlink($dir . '/wrap.eml');
+            @rmdir($dir);
+        }
+    }
+
+    /** The narrow no-break space French rents actually use still reads as a thousands separator. */
+    public function testANarrowNoBreakSpaceIsStillAThousandsSeparator(): void
+    {
+        $dir = sys_get_temp_dir() . '/rentwatch-mailbox-' . bin2hex(random_bytes(6));
+        mkdir($dir);
+
+        file_put_contents($dir . '/nnbsp.eml',
+            "From: alertes@wrap-portal.test\r\n"
+            . "Subject: annonce\r\n"
+            . "Content-Type: text/plain; charset=UTF-8\r\n"
+            . "\r\n"
+            . "Loyer : 1\u{202F}450\u{00A0}EUR charges comprises\r\n"
+            . "https://wrap-portal.test/annonce/7\r\n");
+
+        try {
+            $definition = new SourceDefinition(
+                name: 'wrap_portal',
+                enabled: true,
+                family: 'private',
+                type: 'email_alert',
+                mixedTenure: true,
+                params: ['from' => 'wrap-portal.test', 'link_host' => 'wrap-portal.test'],
+                map: new FieldMap(ref: ['url'], chargesIncluded: true),
+            );
+
+            $listings = (new EmailAlertSource($definition, $this->store(), new FileMailbox($dir)))->fetch();
+
+            self::assertSame(1450, $listings[0]->rentCc);
+        } finally {
+            @unlink($dir . '/nnbsp.eml');
+            @rmdir($dir);
+        }
+    }
+
     public function testAMissingMailboxDirectoryIsALoudFailure(): void
     {
         $this->expectException(MailboxError::class);
