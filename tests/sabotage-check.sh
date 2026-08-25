@@ -2033,6 +2033,20 @@ run_sabotage "the floor loses its schedule to the closure boundary (dies on the 
   src/php/Cli/Scout.php \
   's%$heartbeat, $digestSchedule, $digestZone, $watched%$heartbeat, $watched%'
 
+# A snapshot-less row is a LIVE SOURCE FAULT — a listing whose payload could not be JSON-encoded, not
+# an old row (the query filters on `outcome`, a v7 column that is not backfilled, so a pre-v7 row is
+# never returned at all). Draining it silently loses the one signal that says a source is emitting
+# payloads nothing can encode.
+run_sabotage "the floor drains snapshot-less rows without naming the source fault" \
+  src/php/Cli/Scout.php \
+  's%if ($batch->withoutSnapshot > 0) {%if (false) {%'
+
+# `doctor` promising a daily floor to a cron-driven `--once` deployment is the hard-rule-2 shape that
+# line has already been rewritten twice to stop repeating, one scope narrower.
+run_sabotage "doctor stops saying the floor is --watch only (an --once deployment reads a promise)" \
+  src/php/Cli/Scout.php \
+  's%h en `--watch` (Q34) %h (Q34) %'
+
 # ── region mode (2026-08-22) ─────────────────────────────────────────────────────────────────────
 # `communes: []` means "the postcode prefixes are the whole location filter". It is the first
 # LOOSENING this config has taken, so all four cases below are about the two directions it can fail

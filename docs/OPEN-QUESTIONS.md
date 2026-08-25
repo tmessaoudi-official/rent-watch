@@ -1006,14 +1006,42 @@ pass — which is the difference that matters, since the pipeline re-offers an u
 while the ad is still published. Entries are marked only after the channel confirms, and an unsent
 digest is retried.
 
-**The DAILY FLOOR is not built.** `digest_hour` is parsed into `NotifyPolicy`, printed by `doctor`,
-and read by nothing else: there is no scheduler and no comparison against a clock. On a day with
-nothing new, no rollup is emitted. `doctor` said *"digest à 8h"* until 2026-08-24, which promised a
-cadence that never ran — found by a review panel. It now states what actually runs and names the
-gap. **To close it:** `WatchLoop` already owns a clock and a marker-file pattern (`Core/Heartbeat`,
-`state/heartbeat.txt`) that solves exactly this shape — a due-check that is cold-start-safe and
-survives the container being replaced. The floor is worth having for the same reason the heartbeat
-is: silence should be distinguishable from a stopped process.
+**THE DAILY FLOOR IS BUILT [2026-08-26, `8c24cb2`], and Q34 is now closed in all three paths.**
+`Core/DigestSchedule` is the policy — pure, clock injected, mirroring `Core/Heartbeat` — and
+`state/digest.txt` on Q8's mounted volume is the marker, written ONLY after the channel confirms.
+The window is the most recent local `digest_hour` at or before now, so a container down at 08:00 and
+back at 11:00 emits LATE rather than skipping the day. Marker absent, unreadable, or dated in the
+future are all due: the inherited bias is one emission too many, never one suppressed.
+
+**It emits NOTHING on a day when the bin is empty, and writes no marker in that case** (developer
+ruling, 2026-08-26). `Core/Heartbeat` post-dates the sentence above and already sends a daily
+liveness beat, so an unconditional floor would be a SECOND scheduled push carrying nothing the beat
+did not — and a channel that speaks daily with nothing to say is one its reader learns to swipe
+away. Not writing the marker is the half that is easy to miss: it leaves the window open, which is
+what makes this ruling's own *"an unsent digest is retried"* work — a send that failed at 08:05 is
+retried on the next pass rather than tomorrow. **To reverse:** emit unconditionally instead of
+returning early on an empty bin.
+
+**SCOPE: the floor runs under `scout run --watch` only.** It lives in the watch loop, beside the
+heartbeat, so a cron-driven `--once` deployment gets the two event-driven paths and no floor.
+`doctor` says `en --watch` for that reason. **To widen:** a due-check in the `--once` path too.
+
+**The zone is resolved explicitly, and the reason first recorded for that was WRONG.** It said PHP
+does not consult `TZ`, so the default zone would fire the floor at 10:00 Paris in summer. The
+measurement is real — `php -r` in the deployed container reports `UTC` with `TZ=Europe/Paris` set —
+and the conclusion does not follow, because `bin/scout:44` already calls `date_default_timezone_set()`
+from `TZ` before `Scout` exists. A true number attached to an invented cause, from measuring the
+runtime and never reading the entrypoint. What the explicit zone actually buys, both measured: an
+unusable `TZ` becomes a LOUD startup refusal, where `date_default_timezone_set('Europe/Pariss')`
+returns `false`, emits a Notice and leaves UTC standing — a compose typo moving the floor two hours
+all summer with only a log line to show for it; and the schedule stops depending on process-wide
+mutable state.
+
+The drain itself is SHARED with `scout digest` (`Cli/DigestBatch` plus one collector), because two
+implementations of §1's only landing zone is how one drifts into announcing what the other would
+withhold. The collector never throws and never prints: the floor runs inside the loop's `finally`,
+where a throw would be counted as a failed pass and one damaged row would report every source
+broken.
 
 ### Ⓐ Q35 — a stored verdict must be revisable, not merely auditable
 

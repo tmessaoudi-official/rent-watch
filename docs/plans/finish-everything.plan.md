@@ -296,6 +296,9 @@ Counter reset to zero. All fixed and pushed in five commits (`feb416d`, `299b817
   `doctor`, and read by no scheduler, so on a day with nothing new no rollup is emitted. `doctor`
   claimed `digest à 8h`; it now states the cadence that runs and names the gap. Route to closing it
   recorded in Q35's neighbour.
+  **CLOSED [2026-08-26, `8c24cb2`]** — the daily floor is built and `doctor` states it as running.
+  Full reasoning, the silent-empty-day ruling and the corrected zone story:
+  `docs/plans/q34-digest-daily-floor.plan.md` and `docs/OPEN-QUESTIONS.md` § Q34.
 - [2026-08-24] **The offline tripwire missed `NtfyChannel`**, which drives libcurl directly. Moved
   to `Core\Offline` so one implementation serves both paths. Loopback stays allowed, with its own
   test and sabotage case.

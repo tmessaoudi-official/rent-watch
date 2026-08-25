@@ -361,6 +361,20 @@ asked for. Building the fixture-path form is recorded as outstanding in
 having: the pipeline already re-offers an undelivered digest entry next run, but only while the ad
 is still published, so an entry whose listing is delisted in between is lost with nothing saying so.
 
+There are **three** emission paths for that rollup, and the third landed 2026-08-26. The pipeline
+emits at the end of any pass that produced NEW entries; `scout digest` emits on demand; and
+`scout run --watch` carries a **daily floor** at `digest_hour` local, which drains whatever is still
+pending. The floor is what reaches a backlog that failed to send, or one the batch cap left behind,
+on a day that produced nothing new — before it existed, such a backlog sat in the bin until somebody
+thought to look, and that bin is where every listing the classifier could not resolve lands.
+
+**On a day with nothing pending the floor says nothing at all**, and records no window as served.
+The heartbeat already proves the watcher is alive every 24 h, so a daily "rien à vérifier" push
+would carry no new information and would train you to swipe the channel away; and leaving the window
+open means a send that failed at 08:05 is retried on the next pass rather than tomorrow. It runs
+under `--watch` only — a cron-driven `--once` deployment gets the two event-driven paths and no
+floor — and `scout doctor` prints the hour, the resolved local zone and that scope.
+
 `scout reclassify` re-runs the classifier AND the criteria engine over stored `UNKNOWN` verdicts,
 using the schema-v7 snapshot of the listing the verdict was formed from. A row stored before v7 has
 no snapshot and is **skipped, not judged on whatever text remains** — re-judging on less evidence

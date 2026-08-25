@@ -94,6 +94,35 @@ final class ScoutDigestFloorTest extends TestCase
         self::assertFileExists($root . '/state/digest.txt', 'a delivered emission records its window as served');
     }
 
+    public function testASnapshotLessRowIsAnnouncedAndTheFaultIsVOICED(): void
+    {
+        // The row is ANNOUNCED, never skipped — it has a verdict, an outcome and a title, and
+        // announcing a stored DIGEST from stored columns cannot promote anything into a match.
+        //
+        // But the COUNT must be said out loud, and the floor did not say it until a review round
+        // asked. It does not mean "an old row": `pendingDigest()` filters on `outcome`, itself a v7
+        // column that is not backfilled, so a pre-v7 row has `outcome = NULL` and is never returned
+        // here at all. The only reachable cause is a listing whose own payload could not be
+        // JSON-encoded — a LIVE SOURCE FAULT. A floor that drained those rows silently would lose
+        // the one signal that says a source is emitting payloads nothing can encode.
+        $root = $this->tempRoot();
+        $key = $this->seedDigestRow($root, 'SANS-INSTANTANE');
+
+        $pdo = new \PDO('sqlite:' . $root . '/state/rent-watch.sqlite3');
+        $pdo->setAttribute(\PDO::ATTR_ERRMODE, \PDO::ERRMODE_EXCEPTION);
+        $pdo->prepare('UPDATE listings SET evidence_json = NULL WHERE dedup_key = :key')
+            ->execute(['key' => $key]);
+
+        $r = $this->watch($root);
+
+        self::assertStringContainsString('récapitulatif quotidien', $r['out'], 'the row is announced, not skipped');
+        self::assertStringContainsString(
+            'sans instantané',
+            $r['out'] . $r['err'],
+            'and the source fault it indicates is named — draining it silently loses that signal',
+        );
+    }
+
     // ── the floor stays silent ───────────────────────────────────────────────────────────────────
 
     public function testAnEmptyBinEmitsNothingAndLeavesTheWindowOpen(): void

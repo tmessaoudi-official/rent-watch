@@ -264,8 +264,13 @@ final readonly class Scout
         }
 
         $this->line('  fuseau  : PHP=' . date_default_timezone_get() . ' · récapitulatif=' . $zoneNote);
+        // `en --watch` is not a detail. The floor lives in the watch loop, so a cron-driven `--once`
+        // deployment gets the two event-driven paths and no floor — and a line promising a daily
+        // rollup to an operator who runs `--once` repeats the hard-rule-2 shape this line was
+        // rewritten to stop repeating, one scope narrower.
         $this->line('  digest  : à la fin de toute passe produisant du nouveau, sur demande (`scout digest`), '
-            . 'et en plancher quotidien à ' . $criteria->notify->digestHour . 'h (Q34) — silencieux si rien n\'est en attente');
+            . 'et en plancher quotidien à ' . $criteria->notify->digestHour . 'h en `--watch` (Q34) '
+            . '— silencieux si rien n\'est en attente');
         $this->line('');
 
         if ($sources === []) {
@@ -1658,6 +1663,19 @@ final readonly class Scout
 
         foreach ($batch->warnings as $warning) {
             $this->warn($warning);
+        }
+
+        if ($batch->withoutSnapshot > 0) {
+            // Voiced here too, not only by `scout digest`. This count does not mean "old rows": the
+            // query filters on `outcome`, a v7 column that is not backfilled, so a pre-v7 row is
+            // never returned at all. The only reachable cause is a listing whose own payload could
+            // not be JSON-encoded — a LIVE SOURCE FAULT. A floor that announced those rows silently
+            // would drain the bin while losing the one signal that says a source is emitting
+            // payloads nothing can encode.
+            $this->warn(sprintf(
+                '%d annonce(s) sans instantané (charge utile non encodable) — annoncées depuis les colonnes conservées.',
+                $batch->withoutSnapshot,
+            ));
         }
 
         $notification = (new Formatter())->digest($batch->entries);

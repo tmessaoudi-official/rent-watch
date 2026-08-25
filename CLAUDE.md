@@ -27,7 +27,34 @@ corpus at `tests/fixtures/tenure/corpus.json`, the seen-set / price-history / ru
 PHPUnit suite. `scout run --once` is demonstrable end to end today against a frozen payload.
 
 `scout doctor`, `scout dump`, `scout run --once/--seed`, `scout test-notify`, `scout digest` and
-`scout reclassify` all work end to end today. The last two closed 2026-08-23 and both carry a rule
+`scout reclassify` all work end to end today.
+
+**Q34 IS CLOSED IN ALL THREE PATHS as of 2026-08-26** — the daily floor was the last one, and it had
+been ruled, configured and unbuilt: `digest_hour` was parsed into `NotifyPolicy`, printed by
+`doctor`, and read by nothing at all. `Core/DigestSchedule` is the policy (pure, clock injected,
+mirroring `Core/Heartbeat`) and `state/digest.txt` on the mounted volume is the marker, written only
+after the channel confirms. Three rules travel with it. **It is SILENT on a day with nothing
+pending, and records no window as served** — the heartbeat already carries daily liveness, so an
+unconditional rollup would be a second scheduled push saying nothing new, and leaving the window
+open is what makes *"an unsent digest is retried"* work. **It runs under `--watch` only**, so a
+cron-driven `--once` deployment has the two event-driven paths and no floor; `doctor` says so.
+And **the drain is SHARED with `scout digest`** (`Cli/DigestBatch` + one collector that never throws
+and never prints), because two implementations of §1's only landing zone is how one drifts into
+announcing what the other would withhold.
+
+> **Its zone justification was WRONG when first written, and the correction is the part worth
+> keeping.** It said PHP does not consult `TZ`, so computing the floor from the default zone would
+> fire it at 10:00 Paris in summer. The measurement is real — `php -r` in the deployed container
+> reports `UTC` with `TZ=Europe/Paris` set — and the conclusion does not follow, because
+> `bin/scout:44` already calls `date_default_timezone_set()` from `TZ` before `Scout` is
+> constructed. **A true number attached to an invented cause**, produced by measuring the runtime and
+> never reading the entrypoint; `compose.yaml`'s TZ comment was accused of the same error, is
+> likewise correct, and was left alone. What the explicit zone actually buys, both measured: an
+> unusable `TZ` becomes a loud startup refusal (`date_default_timezone_set('Europe/Pariss')` returns
+> `false`, emits a *Notice*, and leaves UTC standing), and the schedule stops depending on
+> process-wide mutable state.
+
+`digest` and `reclassify` closed 2026-08-23 and both carry a rule
 worth knowing before touching either, because they look symmetrical and are not: **`digest`
 announces an evidence-less row, `reclassify` skips one.** `digest` reads the store rather than the
 pass — the pipeline re-offers an undelivered entry only while the ad is still published, so an entry

@@ -361,6 +361,12 @@ final class ScoutTest extends TestCase
             $r['out'],
             'and the ruled empty-day behaviour is stated, so an operator does not read silence as a fault',
         );
+        self::assertStringContainsString(
+            '--watch',
+            $r['out'],
+            'the floor runs in the watch loop ONLY — promising it to a cron-driven --once deployment '
+            . 'is the same shape as the promise this line was rewritten to stop making',
+        );
         self::assertStringNotContainsString(
             'AUCUN planificateur',
             $r['out'],
