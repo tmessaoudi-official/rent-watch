@@ -230,7 +230,7 @@ alert, pointed at a dedicated mailbox; `email_alert` ingests over IMAP.
 
 | # | Portal | Domain | HTTP | Notes |
 |---|---|---|---|---|
-| **B1** | **SeLoger** | `www.seloger.com` | **200** | **BUILT AND PROVEN OFFLINE, 2026-08-25** — the first Tier B portal, and the first email source of any kind. Largest IDF inventory. AVIV group. Two real alerts frozen at `tests/fixtures/seloger/`; `enabled: false` pending IMAP credentials. See the block below. |
+| **B1** | **SeLoger** | `www.seloger.com` | **403** | **BUILT AND PROVEN OFFLINE, 2026-08-25** — the first Tier B portal, and the first email source of any kind. Largest IDF inventory. AVIV group. Two real alerts frozen at `tests/fixtures/seloger/`; `enabled: false` pending IMAP credentials. See the block below. |
 | **B2** | **Leboncoin** | `www.leboncoin.fr` | **403** | Where non-agency private landlords actually post. Email alert only. |
 | **B3** | **PAP** | `www.pap.fr` | **403** | *Particulier à particulier* — no agency fees. Email alert only. |
 | **B4** | **Bien'ici** | `www.bienici.com` | **200** | Map-first, agency consortium. |
@@ -242,6 +242,29 @@ alert, pointed at a dedicated mailbox; `email_alert` ingests over IMAP.
 | **B10** | **Flatlooker** | `www.flatlooker.com` | **200** | Online agency, remote-viewing. Small inventory, low duplication with the majors. |
 | **B11** | **Gens de Confiance** | `www.gensdeconfiance.com` | **403** | Closed community, needs an account. Email alert only. |
 ### B1 SeLoger — what onboarding an EMAIL source cost, and what it teaches the other ten
+
+**Direct polling is CLOSED, and it took two measurements to say why correctly.** A first pass read
+`robots.txt` and concluded *"every route we would need is Disallow-ed"*. That was **too strong**: the
+66 rules target query-string search (`/classified-search?`, `/list.htm`, `*/?page=*`) and the OLD
+`detail.htm` format, and a denylist leaves everything else open — tested with this project's own
+`Robots` parser, `/annonces/locations/appartement/<commune>/<id>.htm`, `/immobilier/locations/immo-<commune>-<dept>/`
+and `/sitemap.xml` are all **ALLOWED** [Verified 2026-08-25].
+
+**The site refuses them anyway.** Every one of those paths returns **HTTP 403** with a DataDome
+challenge body (`dd={'rt':'c',…}`), and so does the bare homepage, and so does a request carrying an
+ordinary Chrome User-Agent — the block is not UA-based [Verified 2026-08-25]. This row said `200`
+until that measurement; it was stale, and a stale `200` is exactly what sent the A2 ICF Habitat
+assessment down a three-level crawl for a feed that did not exist.
+
+So the conclusion holds and the reasoning changed: SeLoger is not closed by `robots.txt`, it is
+closed by **anti-bot**. That matters, because it decides what a browser adapter would be FOR. The
+allowed pages are not JS-rendered-but-reachable; they are *blocked*. Driving headless Chrome at them
+adds exactly one thing over `curl` — defeating the challenge — which is the whole of hard rule 5 and
+`spec/PROJECT_BRIEF.md` §6b (*"Do not build CAPTCHA-solving or fingerprint-evasion machinery"*).
+Using a logged-in human profile is the same act with better cover.
+
+Worth noting even in the counterfactual: `?page=` IS disallowed, so a permitted crawl of the SEO
+landing pages would reach page 1 only.
 
 **Two alerts, ONE format.** `1 nouvelle annonce : Ile-de-France` (campaign `SLG-…-ALI-RELAXED`) and
 `Consilium vous adresse ses dernières exclusivités` (`SLG-…-ALI-EXCLUSIVE`) look like two products
