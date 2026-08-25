@@ -202,6 +202,67 @@ final class EmailAlertSegmentationTest extends TestCase
         }
     }
 
+    // ------------------------------------------------------------------ commune
+
+    /**
+     * The quartier line above the commune is OPTIONAL, and both shapes must read.
+     *
+     * The two frozen fixtures both carry one, so a fixture-only assertion would prove the shape
+     * that has a quartier and say nothing about the shape that does not — the generalisation from
+     * n=1 this repo has already paid for twice. Measured against the live mailbox on 2026-08-25:
+     * of nine cards, three (`Mormant`, `Garches`, `Moret-Loing-et-Orvanne`) sit directly above
+     * their postcode with no quartier at all. That is why the pattern anchors on the parenthesised
+     * postcode BELOW the name and not on the comma above it.
+     */
+    public function testTheCommuneIsReadWithOrWithoutAQuartierLine(): void
+    {
+        $listings = $this->source(self::body([
+            self::card('980', 'Appartement Conflans', '3 pièces . 44,71 m²', 'Romagne', 'Conflans-Sainte-Honorine', '78700'),
+            self::cardWithoutQuartier('860', 'Appartement Mormant', '3 pièces . 80 m²', 'Mormant', '77720'),
+        ]), self::shippedParams())->fetch();
+
+        $communes = [];
+        foreach ($listings as $listing) {
+            $communes[(string) $listing->postcode] = $listing->commune;
+        }
+
+        self::assertSame('Conflans-Sainte-Honorine', $communes['78700'] ?? null, 'with a quartier');
+        self::assertSame('Mormant', $communes['77720'] ?? null, 'without a quartier');
+    }
+
+    /**
+     * The configured pattern beats the vocabulary scan, and this is the case that shows why.
+     *
+     * The vocabulary is a substring search over the whole card, so a card in Mormant whose copy
+     * says *"proche Dourdan"* returns Dourdan — the prototype's over-matching defect, which
+     * `CLAUDE.md` records as *"a Paris listing mentioning 'proche Chatou' passes the commune
+     * filter"*. The pattern reads the field the portal laid out, so it is not fooled by prose. The
+     * ranked names are deliberately supplied here so the fallback COULD fire and is proven not to.
+     */
+    public function testTheLaidOutCommuneBeatsATownMerelyMentionedInTheCopy(): void
+    {
+        $listings = $this->source(self::body([
+            self::cardWithoutQuartier('860', 'Appartement proche Dourdan', '3 pièces . 80 m²', 'Mormant', '77720'),
+        ]), self::shippedParams())->fetch();
+
+        self::assertSame('Mormant', $listings[0]->commune ?? null);
+    }
+
+    /**
+     * With no `commune_pattern` configured, the vocabulary scan is exactly what it always was.
+     *
+     * The blast radius of this change on every other email source is meant to be zero, and an
+     * unconfigured key is how that is guaranteed rather than hoped for.
+     */
+    public function testWithoutTheKeyTheVocabularyScanStillAnswers(): void
+    {
+        $listings = $this->source(self::body([
+            self::cardWithoutQuartier('915', 'Appartement À Louer', '3 pièces . 52,37 m²', 'Dourdan', '91410'),
+        ]))->fetch();
+
+        self::assertSame('Dourdan', $listings[0]->commune ?? null, 'found by the ranked vocabulary');
+    }
+
     // ------------------------------------------------------------------ helpers
 
     /** @param array<string,mixed> $params */
@@ -237,6 +298,46 @@ final class EmailAlertSegmentationTest extends TestCase
             new FileMailbox($this->dir),
             ['conflans-sainte-honorine' => 'Conflans-Sainte-Honorine', 'dourdan' => 'Dourdan'],
         );
+    }
+
+    /**
+     * The synthetic params, but with the SHIPPED `commune_pattern` rather than a copy of it.
+     *
+     * A copy would pass while the real one rotted — the fixture-leakage rule. The rest stays
+     * synthetic because the host and the separator are what make this a self-contained test.
+     *
+     * @return array<string,mixed>
+     */
+    private static function shippedParams(): array
+    {
+        $shipped = \RentWatch\Config\ConfigLoader::loadSources(
+            dirname(__DIR__, 3) . '/config/sources.json',
+        )['seloger'];
+
+        return [
+            'from' => 'example-portal.test',
+            'link_host' => 'example-portal.test',
+            'card_separator' => "Voir l'annonce",
+            'id_from' => 'content',
+            'residence_pattern' => '~^\s*([^\n,]{2,60}),\s*$~m',
+            'title_pattern' => '~^\s*((?:Appartement|Maison|Studio)[^\n]*)$~m',
+            'commune_pattern' => $shipped->params['commune_pattern'] ?? '',
+        ];
+    }
+
+    /** A card whose location block is the commune alone — three of nine live cards, 2026-08-25. */
+    private static function cardWithoutQuartier(
+        string $rent,
+        string $title,
+        string $roomsAndSurface,
+        string $commune,
+        string $postcode,
+    ): string {
+        return "\n<L>\n{$rent} €/mois charges comprises\n"
+            . "<L>\n{$title}\n"
+            . "<L>\n{$roomsAndSurface}\n"
+            . "<L>\n {$commune}\n ({$postcode})\n"
+            . "<L>\nVoir l'annonce\n";
     }
 
     private static function card(

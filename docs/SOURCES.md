@@ -230,7 +230,7 @@ alert, pointed at a dedicated mailbox; `email_alert` ingests over IMAP.
 
 | # | Portal | Domain | HTTP | Notes |
 |---|---|---|---|---|
-| **B1** | **SeLoger** | `www.seloger.com` | **403** | **BUILT AND PROVEN OFFLINE, 2026-08-25** — the first Tier B portal, and the first email source of any kind. Largest IDF inventory. AVIV group. Two real alerts frozen at `tests/fixtures/seloger/`; `enabled: false` pending IMAP credentials. See the block below. |
+| **B1** | **SeLoger** | `www.seloger.com` | **403** | ✅ **LIVE 2026-08-25 — source #5, and the first that is not a landlord.** The first Tier B portal and the first email source of any kind; largest IDF inventory, AVIV group. Direct polling stays CLOSED (DataDome, 403 on every route incl. the bare homepage) — the route in is the ALERT MAILBOX, hard rule 4's primary path. `scout doctor --source=seloger`: **9 annonces, `ok`, ~19 s**. Two real alerts frozen at `tests/fixtures/seloger/`; offline proof is `MAILBOX_DIR=tests/fixtures/seloger`. See the block below. |
 | **B2** | **Leboncoin** | `www.leboncoin.fr` | **403** | Where non-agency private landlords actually post. Email alert only. |
 | **B3** | **PAP** | `www.pap.fr` | **403** | *Particulier à particulier* — no agency fees. Email alert only. |
 | **B4** | **Bien'ici** | `www.bienici.com` | **200** | Map-first, agency consortium. |
@@ -310,6 +310,34 @@ delete the evidence.
 **Measured yield, 2026-08-25:** a seeded run over the two fixtures gives **1 match** (Dourdan 91410,
 3 pièces, 52,37 m², 915 € CC) and **1 rejection** (Conflans-Sainte-Honorine 78700, 44,71 m², under
 the 50 m² floor). Two listings is not a yield estimate — it is proof the path runs end to end.
+
+**What the LIVE mailbox then found that no fixture could, and both are rules for the other ten.**
+
+- **A portal's own numeric fields do not distinguish a flat from a bedroom in one.** Four of the
+  first nine live matches were **coliving rooms**, each advertised with the whole flat's room count
+  and surface — so `min_rooms`, `min_surface_m2` and `max_rent_cc` all passed, and a 10 m² bedroom
+  presented as an 80 m² T4. The discriminator is the TITLE and only the title, anchored:
+  `^\s*chambre\b`. Not a description match — `3 chambres` in a description is exactly the family
+  flat the criteria want. Expect this on every private portal; institutional landlords do not
+  publish coliving.
+- **Read the commune from the portal's LAYOUT, never from a vocabulary of names you happen to
+  know.** Every live listing arrived with `commune = null` while its postcode parsed fine, because
+  the only reader was a substring scan over `Criteria::communeLabels` — which in region mode holds
+  the RANKED communes and nothing else. A watch covering all of Île-de-France therefore knew a
+  handful of town names and none of the rest, and the failure is invisible: the listing still
+  matches on its postcode, so the push simply cannot name the town. `commune_pattern` is the
+  per-source fix; the vocabulary scan stays underneath as the fallback.
+- **Anchor that pattern on the part of the block that is always there.** SeLoger prints an optional
+  *quartier* line above the commune and the postcode alone in parentheses below it. **Three of the
+  nine live cards have no quartier** — and **both frozen fixtures have one**, so anchoring on the
+  comma above would have read six cards, missed a third of the source, and passed every
+  fixture-based test. Anchor below, on the postcode.
+- **The From filter is load-bearing, not hygiene.** This mailbox is the developer's personal
+  address: 50 messages, 3 alerts. Twelve are SeLoger *contact receipts* from a different subdomain
+  whose unfilled template carries `870,00 €cc /mois. · m² · pièces · chambres` beside the commune
+  *Saint-Germain-de-Tallevend-la-Lande* (Calvados) and the postcode `75015` — a plausible rent, a
+  valid IdF postcode and a town 250 km away. Pin `params.from` to the alert subdomain, and keep the
+  no-information floor as the second layer.
 
 
 ### Agency networks — deliberately NOT separate sources

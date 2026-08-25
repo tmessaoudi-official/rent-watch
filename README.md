@@ -21,15 +21,24 @@ Single language, single user, single machine. CLI plus push notifications — **
 > `.env.example`'s own header carries the ruling: a stale *"this is only a sketch"* notice on a live
 > thing is worse than no notice at all.
 
-`scout run --watch` polls **In'li, CDC Habitat, Cityloger and Logirep** on the Q37 cadence, hydrates
-detail pages behind a novelty gate, classifies every listing by tenure, scores it, and pushes what
-matches. `doctor`, `dump`, `run --once/--seed/--watch`, `test-notify`, `digest` and `reclassify` all
-work end to end. The store is at schema v8.
+`scout run --watch` polls **In'li, CDC Habitat, Cityloger, Logirep and SeLoger** on the Q37 cadence,
+hydrates detail pages behind a novelty gate, classifies every listing by tenure, scores it, and
+pushes what matches. `doctor`, `dump`, `run --once/--seed/--watch`, `test-notify`, `digest` and
+`reclassify` all work end to end. The store is at schema v8.
 
-**SeLoger is built and proven offline** — the first Tier B portal, ingesting alert emails rather than
-scraping (hard rule 4). It ships `enabled: false` because the IMAP credentials are the one thing
-missing; `MAILBOX_DIR=tests/fixtures/seloger scout doctor --source=seloger` runs it against two real
-frozen alerts.
+**SeLoger went live on 2026-08-25** — the first Tier B portal and the first source that is not a
+landlord. It ingests alert emails over IMAP rather than scraping, which is hard rule 4's primary
+path and not a workaround: SeLoger answers **403 with a DataDome challenge on every route**, the
+bare homepage included. `scout doctor --source=seloger` returns 9 annonces against the live mailbox;
+`MAILBOX_DIR=tests/fixtures/seloger scout doctor --source=seloger` runs the same path against two
+real frozen alerts with no credentials at all.
+
+> Pointing it at a real mailbox found two defects that 1 900 green tests had not. Four of the first
+> nine matches were **coliving rooms** advertised with the whole flat's rooms and surface, so every
+> numeric filter passed; and every listing arrived with **no commune name** while its postcode parsed
+> fine, because the only reader was a scan over the *ranked* communes — a region-wide watch knows
+> almost none of them. Both are fixed, and both are recorded in `docs/SOURCES.md` § B1 as rules for
+> the next portal rather than as one source's bugs.
 
 **What is genuinely absent:** the transit/geo enrichment layer (`src/php/Enrich/`, no code at all),
 AL'in (needs an authenticated capture), classifier tier 4 (needs the `plafonds` figures), and

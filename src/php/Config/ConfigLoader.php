@@ -478,7 +478,11 @@ final class ConfigLoader
         // warns and never throws: it returns false, and the field is null for ever. On
         // `residence_pattern` that silently narrows the identity floor, since the residence is one
         // of the three facts it accepts.
-        foreach (['title_pattern', 'residence_pattern'] as $patternKey) {
+        // On `commune_pattern` it is worse still, because the failure has a plausible explanation
+        // sitting next to it: the commune falls back to the ranked-vocabulary scan, which on a
+        // region-mode config knows almost no names, so `null` reads as "this town is not one of the
+        // ranked ones" rather than as "the pattern is broken".
+        foreach (['title_pattern', 'residence_pattern', 'commune_pattern'] as $patternKey) {
             $pattern = $params[$patternKey] ?? null;
 
             if ($pattern === null || $pattern === '') {

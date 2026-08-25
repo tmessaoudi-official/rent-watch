@@ -465,11 +465,60 @@ writing can ever remove it. A first version of the fixture test asserted the wor
 from a card — unachievable, and wrong in kind: the guarantee is the classifier's verdict, not the
 absence of a common French adverb.
 
-`seloger` ships **`enabled: false`**: the adapter and the fixtures are proven, the IMAP credentials
-are not there. Prove a change with
-`MAILBOX_DIR=tests/fixtures/seloger scout doctor --source=seloger`, which force-runs it. A seeded
-run over the two fixtures yields one match (Dourdan, 3p, 52,37 m², 915 € CC) and one rejection
-(Conflans, 44,71 m² under the 50 m² floor).
+**`seloger` IS LIVE as of 2026-08-25 — source #5, and the first that is not a landlord.** The IMAP
+credentials arrived, and `scout doctor --source=seloger` against the real mailbox returns **9
+annonces, `ok`, ~19 s**. Prove a change without touching the network with
+`MAILBOX_DIR=tests/fixtures/seloger scout doctor --source=seloger`; a seeded run over the two
+fixtures yields one match (Dourdan, 3p, 52,37 m², 915 € CC) and one rejection (Conflans, 44,71 m²
+under the 50 m² floor).
+
+Two defects were found by pointing it at the real mailbox, and neither was findable any other way.
+**Four of the first nine matches were COLIVING ROOMS** — a bedroom advertised with the whole flat's
+room count and surface, so every numeric filter passed. Excluded by an ANCHORED title pattern
+(`^\s*chambre\b`), never by a description match: `3 chambres` in a description is exactly the family
+flat the criteria are looking for. And **every listing came back with `commune = null`** while its
+postcode parsed correctly: `communeIn()` scanned only `Criteria::communeLabels`, which in region mode
+is built from the RANKED communes, so a watch covering all of Île-de-France knew the names of a
+handful of towns and no others. Nothing about that looks like a fault from outside — the listing
+still matches on its postcode, so the push simply could not say where the flat was, `Dedup` got a
+weaker key, and the S1 score could not fire.
+
+The fix is **`commune_pattern`**, a per-source `params` regex read exactly as `title_pattern` and
+`residence_pattern` are, with the vocabulary scan kept underneath as the fallback so a source that
+configures no pattern is bit-for-bit unchanged. Three rules travel with it:
+
+- **The anchor is the parenthesised postcode BELOW the name, not the quartier comma above it.**
+  Measured across all 50 messages in the live mailbox: three of the nine cards (`Mormant`, `Garches`,
+  `Moret-Loing-et-Orvanne`) carry no quartier line at all. **Both frozen fixtures do**, so a
+  fixture-only test would have proven the wrong shape confidently — the n=1 generalisation this repo
+  has already paid for twice. The no-quartier shape has its own test.
+- **The pattern beats the vocabulary, deliberately.** The scan is a substring search over the whole
+  card, so a card in Mormant whose copy says *"proche Dourdan"* returns Dourdan — the prototype's
+  documented over-matching defect. The pattern reads the field the portal laid out.
+- **It is compile-checked at load**, alongside the other two, because its failure has an alibi: a
+  broken pattern falls back to the scan and reads as *"a listing in an unranked town"* rather than as
+  a fault. `matchParam()` uses `@preg_match`, which neither warns nor throws.
+
+> **A §1 RESIDUAL, stated rather than left to be discovered.** `seloger` is `mixed_tenure: false`,
+> which this file already rules defensible for a private-market portal — but going live is what
+> makes the flag act. What holds and is asserted: an explicit `PLS`/`PLUS`/`PLAI`/`conventionné`
+> anywhere in a card is caught at 0.90 by the tier-2 label rules, which **never consult
+> `mixed_tenure`**, and a real frozen card with one injected must REJECT. What does not: a card
+> stating no tenure at all takes the source default `LIBRE` and matches — which is every live card,
+> and the notification says so in its own reason line. It matters because the mailbox proves
+> **In'li and CDC Habitat both advertise on SeLoger**, and In'li was itself proven not pure LLI. The
+> flag is not armed because SeLoger cards state no tenure at all, so `true` would digest **100% of
+> the source** — the In'li lesson of 2026-08-23, *"not §1 satisfied, it is the tool switched off"*.
+> PLAI and PLUS are allocated by commission and are not advertised on commercial portals; **PLS
+> occasionally is, and that is the residual.** Reversed by one line — `mixed_tenure: true` — and
+> `docs/plans/seloger-email-alert.plan.md` records what that costs.
+
+> **The mailbox is the developer's personal one, and the `from` filter is doing real work.** Of 50
+> messages only 3 are SeLoger alerts. Twelve come from `seloger@s.seloger.com` — *contact receipts*,
+> whose unfilled template reads `En avant-première870,00 €cc /mois. · m² · pièces · chambres` beside
+> the commune *Saint-Germain-de-Tallevend-la-Lande* (Calvados) and the postcode `75015`: a rent in
+> the plausible band, a valid IdF postcode, and a town 250 km away. They are excluded by
+> `params.from`, and would be refused again by the no-information floor. Both layers earn their keep.
 
 `src/phorj/` is **ON INDEFINITE HOLD** (developer ruling, 2026-08-19) — not blocked, deprioritised.
 Do not start it; `docs/PHORJ-REQUIREMENTS.md` remains the record of what it would need.
@@ -591,9 +640,22 @@ supply them: the DevTools cURL captures for the first sources (hard rule 1 forbi
 endpoint from memory), IMAP credentials for the alert mailbox, one real portal alert email to shape
 the parser against, and the `plafonds de ressources` figures for classifier tier 4.
 
-**The alert email arrived on 2026-08-25, and it cost four defects — see § "The email-alert path".**
-What is still missing on that track is only the IMAP credentials; the parser is shaped, the fixtures
-are frozen and `seloger` is configured. The `plafonds` figures were reassigned the same day: hard
+**The alert email arrived on 2026-08-25 and the IMAP credentials with it, so that whole track is
+CLOSED** — `seloger` is live (§ "The email-alert path"), and pointing the adapter at a real mailbox
+cost six defects in one day: four in the MIME parser, one rent reading 600 € low, and four coliving
+rooms scored as family flats. **A real payload is the input; a green suite is not a substitute for
+one**, and 1 900 of them said nothing about any of the six.
+
+**Two portals remain, and both are asks rather than builds.** Bien'ici has fired a real alert into
+this mailbox before (`1 nouvelle annonce pour "Louer à Sartrouville"`) and it is a MUCH easier source
+than SeLoger — it publishes a real listing URL carrying a real listing id
+(`bienici.com/annonce/ag782085-400302759`), so link-identity works and none of the content-addressing
+machinery is needed. But that message is from **October 2023** and the alert is dormant, and it was
+scoped to one commune while the criteria now cover all of Île-de-France. PAP and leboncoin show
+account-creation mail only — no search alert has ever fired from either. So the ask on all three is
+*create the alert with the current criteria*, not *send a file*.
+
+The `plafonds` figures were reassigned the same day: hard
 rule 1 forbids writing a ceiling *from memory*, not verifying one against a live authoritative
 source, which is the same thing the rule demands for endpoints. They are to be fetched from a dated
 official publication and committed with their URL and year, exactly as the four landlord payloads

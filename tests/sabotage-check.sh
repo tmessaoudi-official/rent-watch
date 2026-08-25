@@ -2702,6 +2702,20 @@ run_sabotage "an uncompilable email pattern is accepted and never matches anythi
   src/php/Config/ConfigLoader.php \
   "s%, '') === false) {%, '') === false \&\& false) {%"
 
+# THE COMMUNE READ FROM THE PORTAL'S LAYOUT. Dropping this branch falls back to the ranked-vocabulary
+# scan, which on a region-mode config knows almost no commune names -- so every SeLoger listing loses
+# its town while its postcode still parses, and the notification cannot say where the flat is. It is
+# the shape of failure that has an alibi: `null` reads as "an unranked town", not as "broken".
+run_sabotage "the laid-out commune is ignored in favour of the vocabulary scan" \
+  src/php/Adapters/EmailAlertSource.php \
+  "s%        \$configured = \$this->matchParam('commune_pattern', \$body);%        \$configured = null;%"
+
+# The other direction: the vocabulary fallback deleted. A source with no commune_pattern -- every
+# email source that existed before this one -- silently stops naming any commune at all.
+run_sabotage "the vocabulary fallback is dropped, so an unconfigured source names no commune" \
+  src/php/Adapters/EmailAlertSource.php \
+  "s%            if (\$key !== '' \&\& str_contains(\$folded, \$key)) {%            if (false) {%"
+
 # THE FAIL-CLOSED POSTURE DEFEATED BY A 200. An SPA catch-all answers /robots.txt with its app
 # shell; parsed as robots that yields zero directives, which reads as allow-everything. Measured on
 # al-in.fr [2026-08-25]: Angular shell, Content-Type text/html, HTTP 200. Both signals get a case,

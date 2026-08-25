@@ -99,6 +99,27 @@ final class SelogerFixtureTest extends TestCase
         self::assertStringStartsWith('Appartement', (string) $listing->title);
     }
 
+    /**
+     * The card names its town, and the two frozen fixtures are the two shapes the template has.
+     *
+     * SeLoger prints the location as a *quartier* line, then the commune on its own line, then the
+     * postcode alone in parentheses — and the quartier line is OPTIONAL. Both fixtures carry it;
+     * three of the nine cards measured live on 2026-08-25 do not (`Mormant`, `Garches`,
+     * `Moret-Loing-et-Orvanne` sit directly above their postcode), which is why the pattern anchors
+     * on the parenthesised postcode BELOW the name rather than on the comma above it.
+     *
+     * Without this the commune was `null` on every SeLoger listing while the postcode parsed fine:
+     * the notification could not say where the flat was, `Dedup` got a weaker key, and the S1
+     * commune score could not fire — none of which looks like a fault from the outside.
+     */
+    public function testTheCardNamesItsCommune(): void
+    {
+        $listings = $this->listings();
+
+        self::assertSame('Conflans-Sainte-Honorine', $listings['78700']?->commune);
+        self::assertSame('Dourdan', $listings['91410']?->commune);
+    }
+
     /** The exclusivity's card. Same selectors, different template framing — one format, not two. */
     public function testTheExclusivityCardIsReadCorrectly(): void
     {

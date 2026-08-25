@@ -1277,8 +1277,11 @@ final class ConfigTest extends TestCase
 
         // Named rather than counted: the day a second source is enabled, this line is the one that
         // makes someone confirm it was a decision.
+        // `seloger` joined 2026-08-25 — the fifth source, and the first that is not a landlord. It
+        // is an `email_alert`, so it makes no outbound web request at all: the cost of enabling it
+        // is one IMAP session per pass, not a crawl.
         self::assertSame(
-            ['inli', 'cdc_habitat', 'cityloger', 'logirep'],
+            ['inli', 'cdc_habitat', 'cityloger', 'seloger', 'logirep'],
             $enabled,
             'the set of enabled network sources changed',
         );
@@ -1456,11 +1459,38 @@ final class ConfigTest extends TestCase
     {
         $seloger = ConfigLoader::loadSources(self::ROOT . '/config/sources.json')['seloger'];
 
-        foreach (['title_pattern', 'residence_pattern'] as $key) {
+        foreach (['title_pattern', 'residence_pattern', 'commune_pattern'] as $key) {
             $pattern = $seloger->params[$key] ?? null;
             self::assertIsString($pattern, "seloger lost its {$key}");
             self::assertNotFalse(@preg_match($pattern, 'Appartement Test,'), "{$key} does not compile");
         }
+    }
+
+    /**
+     * An uncompilable `commune_pattern` is refused too, and it is the one with an alibi.
+     *
+     * The other two fail visibly — a listing with no title, an identity floor that turns cards
+     * away. This one falls back to the ranked-vocabulary scan, and on a region-mode config that
+     * scan knows almost no commune names, so a broken pattern is indistinguishable from a listing
+     * in an unranked town. It has to be refused at load or it is never noticed at all.
+     */
+    public function testAnUncompilableCommunePatternIsRefused(): void
+    {
+        $this->expectException(ConfigError::class);
+        $this->expectExceptionMessageMatches('/commune_pattern/');
+
+        ConfigLoader::sourcesFromArray(['sources' => ['x' => [
+            'enabled' => false,
+            'family' => 'private',
+            'type' => 'email_alert',
+            'mixed_tenure' => false,
+            'params' => [
+                'card_separator' => "Voir l'annonce",
+                'id_from' => 'content',
+                'commune_pattern' => '~^([unclosed~m',
+            ],
+            'map' => ['ref' => 'url', 'charges_included' => true],
+        ]]]);
     }
 
     /**

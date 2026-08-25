@@ -470,8 +470,41 @@ final readonly class EmailAlertSource implements Source
         return $scheme . '://' . $host . $path;
     }
 
+    /**
+     * The commune this card is in — read from the portal's own layout first, the ranked vocabulary
+     * second.
+     *
+     * **The vocabulary alone is not a reader, and on a region-mode config it reads nothing.**
+     * `communeLabels` is built from the RANKED communes, which are a preference and not a filter
+     * (Q1, 2026-08-22): a watch covering all of Île-de-France ranks a handful of towns and knows the
+     * names of no others. Every SeLoger listing therefore came back with a commune of `null` while
+     * its postcode parsed correctly — measured 2026-08-25 against the live mailbox, 9 cards, 9
+     * nulls. Nothing about that looks like a fault from outside: the listing still matches on its
+     * postcode, so the operator sees a notification that cannot say where the flat is, a weaker
+     * `Dedup` key, and an S1 commune score that never fires.
+     *
+     * `commune_pattern` is the fix and it is CONFIG, per portal, because the anchor is the portal's
+     * template rather than anything general about French addresses. SeLoger's is the parenthesised
+     * postcode on the line BELOW the name — chosen over the *quartier* comma on the line above
+     * because that line is optional: three of the nine live cards have no quartier at all.
+     *
+     * ORDER MATTERS, and the pattern wins. It is structural — it reads the field the portal laid
+     * out — while the vocabulary is a substring scan that will happily return a ranked commune the
+     * copy merely mentions (*"proche Chatou"*), which is the prototype's over-matching defect this
+     * repo already documents. The scan stays as the fallback so a source with no `commune_pattern`
+     * behaves exactly as it did before this existed.
+     *
+     * A pattern that matches nothing returns `null` rather than a guess (hard rule 9): unknown, not
+     * elsewhere.
+     */
     private function communeIn(string $body): ?string
     {
+        $configured = $this->matchParam('commune_pattern', $body);
+
+        if ($configured !== null) {
+            return $configured;
+        }
+
         $folded = \RentWatch\Core\Text::fold($body);
 
         foreach ($this->communeLabels as $key => $label) {

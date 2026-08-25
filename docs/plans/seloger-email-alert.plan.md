@@ -219,3 +219,119 @@ Nothing, for SeLoger. Credentials are in place and verified; the commune gap is 
 
 - [2026-08-25 18:05] AGREED: a coliving room advertised with the whole flat's rooms and surface is excluded by an ANCHORED TITLE pattern, never by a description match — `3 chambres` in a description is the family flat the user wants.
 - [2026-08-25 18:20] AGREED: `seloger` stays `enabled: false` until a listing's commune NAME is extracted; a notification that cannot name the town is not finished work.
+
+## COMMUNE EXTRACTION — CLOSED 2026-08-25
+
+Option (a) built: **`commune_pattern` in `params`**, read through the same `matchParam()` helper as
+`title_pattern` and `residence_pattern`, compiled at load by the refusal added in `2d810e2`.
+
+**The anchor is the parenthesised postcode BELOW the name, not the quartier comma above it.** That
+choice is measured, not stylistic. All 50 messages were pulled from the live mailbox on 2026-08-25;
+three carry the `alertes.seloger.com` From and between them hold the nine cards `doctor` reports.
+The location block has two shapes:
+
+```
+ Nation-Picpus,          <- quartier, OPTIONAL
+                         <- blank
+ Paris 12ème arrondissement
+ (75012)
+```
+
+and, on `Mormant` (77720), `Garches` (92100) and `Moret-Loing-et-Orvanne` (77250), the commune sits
+directly above its postcode with no quartier at all. **Three of nine.** Anchoring on the comma would
+have read six cards and silently missed a third of the source — and both frozen fixtures happen to
+carry a quartier, so a fixture-only test would have proven the wrong shape and said so confidently.
+That is the n=1 generalisation this repo has already paid for twice (the In'li lift claim, the
+"live yield is 0" claim), so the no-quartier shape gets its own test rather than a fixture.
+
+**Result** [Verified 2026-08-25: 11/11 — the 9 live cards plus both frozen fixtures]. The pattern
+also refuses the price line that sits above the location block, because a commune name starts with a
+letter and `[^\W\d_]` says so; and it does not fire on SeLoger's *contact receipt* template
+(`seloger@s.seloger.com`, 12 of the 50 messages), whose postcode sits on the same line as its text.
+
+**Ordering: the pattern beats the vocabulary, and the vocabulary stays as the fallback.** The scan
+is a substring search over the whole card, so a card in Mormant whose copy reads *"proche Dourdan"*
+returns Dourdan — the prototype's documented over-matching defect. The pattern reads the field the
+portal laid out. Keeping the scan underneath means a source with no `commune_pattern` behaves
+exactly as it did before this existed, which is how the blast radius is zero rather than believed
+to be.
+
+### Two things found while measuring, both worth more than the fix
+
+- **The mailbox is the developer's personal one, not a dedicated alert address.** 50 messages, of
+  which 3 are SeLoger alerts. The `from: alertes.seloger.com` filter is what isolates them, and it
+  is doing real work: 12 messages come from `seloger@s.seloger.com` (contact receipts) carrying
+  `En avant-première870,00 €cc /mois. · m² · pièces · chambres` and the commune
+  *Saint-Germain-de-Tallevend-la-Lande* (Calvados) beside the postcode `75015` — SeLoger's own
+  unfilled template defaults. A rent in the plausible band, a valid IdF postcode, and a commune 250
+  km away. They are excluded by the From filter, and would ALSO be refused by the no-information
+  floor (no rooms, no surface, no residence), which is the belt-and-braces working as designed.
+- **A real Bien'ici alert is already in that mailbox** — `1 nouvelle annonce pour "Louer à
+  Sartrouville"`, from `no_reply@bienici.com`. So the next portal needs no new input from the
+  developer either, only a scrub into a fixture. PAP and leboncoin show account-creation mail only;
+  no alert has fired from either, so the ask there is *finish creating the alert*, not *send a file*.
+
+### DEPLOYMENT ORDERING — config is mounted, code is baked
+
+`compose.yaml` mounts `./config`; `src/` comes from the image. `params` is a free-form string map
+with no allowlist, so **old code reading new config ignores `commune_pattern` silently** — no
+error, no warning, just `commune = null` again. A container restarted without a rebuild would
+therefore look enabled and push nameless notifications, which is precisely what the 18:20 ruling
+forbade. *"Lands"* in that ruling means **deployed**, not committed.
+
+Post-redeploy verification, in this order:
+1. `docker image inspect rent-watch:local --format '{{.Created}}'` — newer than this commit.
+2. `docker compose run --rm scout doctor --source=seloger` — inside the deployed image, which also
+   proves `IMAP_*` reaches the container environment. If compose does not pass `.env` through,
+   seloger looks enabled and never polls: this repo's signature silent failure.
+
+The first production pass will notify the current matches at once. The seen-set holds 666 rows
+across four sources and no `seloger` rows at all [Verified 2026-08-25: `select source, count(*)`],
+so Q36 does not fire and nothing is re-notified — those pushes are the product working, not a flood.
+
+## Decisions Log (continued)
+
+- [2026-08-25 19:10] AGREED: a portal's commune is read from a per-source `commune_pattern` anchored on the portal's own layout, and the ranked-vocabulary scan stays underneath as the fallback so an unconfigured source is unchanged.
+- [2026-08-25 19:15] AGREED: the SeLoger anchor is the parenthesised postcode below the name, because the quartier line above it is absent on three of nine live cards and present on both frozen fixtures — the shape a fixture-only test would have got wrong.
+- [2026-08-25 19:20] AGREED: `commune_pattern` joins the loader's compile-check list, because its failure mode has an alibi — a broken pattern is indistinguishable from a listing in an unranked town.
+- [2026-08-25 19:25] AGREED: `seloger` is `enabled: true`; the ruling of 18:20 is satisfied, and "lands" is read as DEPLOYED, so the redeploy check is part of the same change.
+
+## A §1 RESIDUAL, STATED RATHER THAN DISCOVERED LATER
+
+`seloger` is `mixed_tenure: false`, which `CLAUDE.md` already rules defensible for a private-market
+portal. Going live is what makes that flag act on real listings, so here is exactly what it does and
+does not buy.
+
+**What holds, and is asserted.** An explicit excluded label — `PLS`, `PLUS`, `PLAI`, `conventionné`
+— anywhere in a card is caught at 0.90 by the tier-2 label rules, which **never consult
+`mixed_tenure`**. `SelogerFixtureTest::testAnExplicitExcludedLabelInACardIsStillRefused` injects one
+into a real frozen card and requires a REJECT, so the flag cannot quietly become the thing standing
+between a social listing and a push.
+
+**What does not.** A card stating NO tenure at all takes the source default `LIBRE` at
+deliberately-sub-threshold confidence and MATCHES. Every one of the nine live cards is in that
+state — the notification says so in its own reason line (*"aucun signal dans l'annonce — défaut de
+la source"*).
+
+**Why that is worth writing down rather than shrugging at.** The mailbox proves **In'li and CDC
+Habitat both advertise on SeLoger** — 4 of the 12 contact receipts name them — and In'li was itself
+proven NOT pure LLI on 2026-08-23, by two live listings stating `PLS` only on their detail page. So
+an institutional listing whose regime is unstated *can* reach a SeLoger alert. (The nine live cards
+are all agency stock; the `3F` tokens an initial scan flagged were base64 noise inside tracking
+links, not Immobilière 3F.)
+
+**Why the flag is NOT flipped.** SeLoger alert cards state no tenure at all, so `mixed_tenure: true`
+would send **100% of the source** to the *à vérifier* digest. That is the In'li lesson of 2026-08-23
+in its pure form: *"not §1 satisfied, it is the tool switched off."* The mitigation is the label
+rules above, plus the domain fact that PLAI and PLUS stock is allocated by commission through the
+SNE and is not advertised on commercial portals at all. **PLS occasionally is, and that is the
+residual.**
+
+**The one line that reverses it:** `"mixed_tenure": false` → `true` in the `seloger` block. Do that
+if a social-financed listing is ever observed in a SeLoger alert, and expect the whole source to go
+to the digest until a detail-page tenure signal exists for it — which for an email source means
+following the tracking redirect, itself refused on hard-rule-5 grounds.
+
+## Decisions Log (continued)
+
+- [2026-08-25 19:40] AGREED: `seloger` keeps `mixed_tenure: false` on going live — the tier-2 label rules catch an explicit exclusion regardless of the flag, and arming it would digest 100% of a source that states no tenure at all; the residual (an unstated PLS listing from an institutional landlord advertising on the portal) is recorded with the one line that reverses it.
