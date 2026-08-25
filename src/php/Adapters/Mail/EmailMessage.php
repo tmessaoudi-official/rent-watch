@@ -111,6 +111,16 @@ final readonly class EmailMessage
     /** RFC 2047 encoded words — `=?UTF-8?Q?Nouvelle_annonce?=`, which every French subject uses. */
     private static function decodeHeader(string $value): string
     {
+        // RFC 2047 §6.2: linear whitespace BETWEEN two adjacent encoded words is not displayed, so
+        // it is collapsed away FIRST — before decoding, which is the only moment a `?= =?` sequence
+        // still exists to match. The collapse used to run last, after `preg_replace_callback` had
+        // already turned both words into plain text, and was therefore dead from the line it was
+        // written on: a real SeLoger subject folded mid-word decoded to `exclusivit és`.
+        //
+        // That is not cosmetic. The subject becomes a listing's `title`, which
+        // `exclude_title_patterns` filters on and which the tenure classifier reads as prose.
+        $joined = preg_replace('~\?=\s+=\?~', '?==?', $value) ?? $value;
+
         $decoded = preg_replace_callback(
             '~=\?([^?]+)\?([BbQq])\?([^?]*)\?=~',
             static function (array $m): string {
@@ -120,11 +130,10 @@ final readonly class EmailMessage
 
                 return self::toUtf8($text, $m[1]);
             },
-            $value,
+            $joined,
         );
 
-        // Adjacent encoded words are separated by whitespace that the RFC says to drop.
-        return trim(preg_replace('~\?=\s+=\?~', '?==?', $decoded ?? $value) ?? $value);
+        return trim($decoded ?? $joined);
     }
 
     /** @param array<string,string> $headers */
@@ -152,6 +161,18 @@ final readonly class EmailMessage
      * attribute gets lost. When only HTML exists it is stripped, and the classifier sees the
      * result; `Text` deliberately does NOT decode entities, so a broken strip stays visible rather
      * than being silently papered over.
+     *
+     * **AN EMPTY PART IS NOT AN ANSWER, and index 0 is not a part.** Both halves of that sentence
+     * were defects, and together they made every real multipart alert parse to nothing.
+     *
+     * RFC 2046 §5.1.1 defines everything between the headers and the FIRST boundary as the
+     * *preamble* — `This is a multi-part message in MIME format.`, which nearly every real mailer
+     * emits for pre-MIME clients. `explode()` hands it back as index 0. Read as a part it carries no
+     * `Content-Type`, so it defaulted to `text/plain`, split to an empty body, and ran
+     * `$plain ??= ''` — and `??=` assigns only on `null`, so the REAL text part that followed could
+     * never overwrite it. Measured on a live SeLoger alert: `body len: 0`, `links: 0`, zero
+     * listings, no exception. Hard rule 3's exact shape, reached without a single `catch`; the
+     * committed `email_demo` fixtures happen to omit a preamble, which is why the suite was green.
      */
     private static function preferredPart(string $body, string $boundary): string
     {
@@ -159,7 +180,13 @@ final readonly class EmailMessage
         $plain = null;
         $html = null;
 
-        foreach ($parts as $part) {
+        foreach ($parts as $index => $part) {
+            // The preamble, structurally. Not "text that looked empty" — everything before the
+            // first boundary, whatever it contains.
+            if ($index === 0) {
+                continue;
+            }
+
             $part = ltrim($part, "\n");
             if ($part === '' || str_starts_with($part, '--')) {
                 continue;
@@ -174,7 +201,9 @@ final readonly class EmailMessage
             if (stripos($type, 'multipart/') !== false
                 && preg_match('~boundary="?([^";]+)"?~i', $type, $m) === 1) {
                 $nested = self::preferredPart($partBody, $m[1]);
-                $plain ??= $nested;
+                if ($plain === null && $nested !== '') {
+                    $plain = $nested;
+                }
 
                 continue;
             }
@@ -183,10 +212,20 @@ final readonly class EmailMessage
             $charset = preg_match('~charset="?([^";]+)"?~i', $type, $c) === 1 ? $c[1] : 'UTF-8';
             $text = self::toUtf8($decoded, $charset);
 
+            // `!== ''` rather than `??=`, in all three places. A blank `text/plain` alternative is
+            // a real thing some mailers ship, and letting it claim the answer is the same
+            // `''`-is-not-`null` mistake wearing different clothes: the HTML alternative carrying
+            // the whole listing would never be reached.
             if (stripos($type, 'text/plain') !== false) {
-                $plain ??= $text;
+                $trimmed = trim($text);
+                if ($plain === null && $trimmed !== '') {
+                    $plain = $text;
+                }
             } elseif (stripos($type, 'text/html') !== false) {
-                $html ??= self::stripHtml($text);
+                $stripped = self::stripHtml($text);
+                if ($html === null && $stripped !== '') {
+                    $html = $stripped;
+                }
             }
         }
 
