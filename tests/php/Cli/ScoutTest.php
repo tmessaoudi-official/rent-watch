@@ -738,6 +738,36 @@ final class ScoutTest extends TestCase
         self::assertStringContainsString('REMPLACER', $r['err']);
     }
 
+    /**
+     * Same lesson, second instance: a force-run email source must still name its sender.
+     *
+     * The loader refuses a `from`-less `email_alert` only when it is `enabled: true` — and
+     * `--source=<name>` force-runs a disabled one, which is precisely the gap the REMPLACER refusal
+     * above was moved into `buildSource()` to close. A drafted block force-run without a sender
+     * reads EVERY message in the shared label within the window and ingests other portals' alerts
+     * as its own, under its own `default_tenure`.
+     *
+     * Nothing is exposed today — leboncoin is stopped by its REMPLACER ref and `email_demo` names a
+     * sender — which is exactly the state the REMPLACER guard was in on the day it was found.
+     */
+    public function testAnExplicitlyNamedEmailSourceStillNeedsItsSender(): void
+    {
+        $root = $this->tempRoot(sources: ['demo' => [
+            'enabled' => false,
+            'family' => 'private',
+            'type' => 'email_alert',
+            'mixed_tenure' => false,
+            'default_tenure' => 'LIBRE',
+            'params' => ['link_host' => 'example.test/annonce/'],
+            'map' => ['ref' => 'url', 'charges_included' => true],
+        ]]);
+
+        $r = $this->scoutIn($root, ['doctor', '--source=demo']);
+
+        self::assertNotSame(0, $r['code'], 'a named source that cannot run must FAIL, never report a clean empty pass');
+        self::assertStringContainsString('from', $r['err']);
+    }
+
     public function testAnExplicitlyNamedPrivatePortalStillNeedsTheLegalRiskFlag(): void
     {
         // Ordering, asserted because it is load-bearing: the enabled check sits ABOVE the scraping

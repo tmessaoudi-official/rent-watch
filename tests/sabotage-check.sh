@@ -2832,7 +2832,21 @@ run_sabotage "an enabled email source may ship without naming its sender" \
 # renotifies for ever and reads as a busy market.
 run_sabotage "a segmented link-keyed source may ship without a link host" \
   src/php/Config/ConfigLoader.php \
-  's%&& !isset(\$params\[.link_host.\])) {%\&\& false) {%'
+  's%&& (!\\is_string(\$linkHost) || trim(\$linkHost) === ..)) {%\&\& false) {%'
+
+# THE SAME RULE ON THE FORCE-RUN PATH. The loader refuses a `from`-less email_alert only when it is
+# `enabled: true`, and `--source=<name>` force-runs a disabled one -- the exact gap that sent hard
+# rule 1's REMPLACER refusal into buildSource(). A drafted block force-run without a sender reads
+# EVERY message in the shared label and ingests other portals' alerts as its own.
+run_sabotage "a force-run email source may skip naming its sender" \
+  src/php/Cli/Scout.php \
+  's%\$from = \$definition->params\[.from.\] ?? null;%\$from = \$definition->params["from"] ?? "sabotage";%'
+
+# An empty link_host satisfies an isset() check and then makes EVERY link qualify -- stringParam()
+# treats '' as unset. The silent shape the refusal describes, reached by a different mistake.
+run_sabotage "an empty link host passes for a named one" \
+  src/php/Config/ConfigLoader.php \
+  's%(!\\is_string(\$linkHost) || trim(\$linkHost) === ..)%(!isset(\$params["link_host"]))%'
 
 # THE TALLY LIVES HERE, BELOW EVERY CASE, and that position is load-bearing rather than tidy.
 # It sat mid-file twice: once on 2026-08-20 (295 printed for 303 cases) and again from 2026-08-23,

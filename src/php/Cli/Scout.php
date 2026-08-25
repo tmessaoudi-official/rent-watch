@@ -1777,6 +1777,26 @@ final readonly class Scout
      */
     private function buildEmailSource(SourceDefinition $definition, Store $store): ?Source
     {
+        // THE SENDER, re-checked here for the same reason the REMPLACER refusal moved into this
+        // funnel. The loader refuses a `from`-less `email_alert` only when it is `enabled: true`,
+        // and `--source=<name>` force-runs a disabled one — so a drafted block would read EVERY
+        // message in the shared label within the window and ingest other portals' alerts as its
+        // own, under its own `default_tenure`.
+        //
+        // Above the mailbox check on purpose: this is a fault in the config, not in the
+        // environment, and reporting it as *"no mailbox configured"* would send the reader to
+        // `.env` for a fault in JSON.
+        $from = $definition->params['from'] ?? null;
+
+        if (!\is_string($from) || trim($from) === '') {
+            throw ConfigError::at(
+                'sources.' . $definition->name . '.params.from',
+                'an email_alert source must name the sender it reads. One mailbox serves every '
+                    . 'portal, so without this it ingests other portals\' alerts as its own and '
+                    . 'reports a plausible count while doing it',
+            );
+        }
+
         $mailbox = $this->buildMailbox($definition);
 
         if ($mailbox === null) {

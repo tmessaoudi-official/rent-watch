@@ -1572,6 +1572,28 @@ final class ConfigTest extends TestCase
         ]]]);
     }
 
+    /**
+     * An empty `link_host` is refused like a missing one.
+     *
+     * `looksLikeAListing()` reads it through `stringParam()`, which treats `''` as unset — so an
+     * empty string would satisfy an `isset` check and then make every link qualify, which is the
+     * silent failure the refusal exists to prevent, reached by a different mistake.
+     */
+    public function testAnEmptyLinkHostIsRefusedLikeAMissingOne(): void
+    {
+        $this->expectException(ConfigError::class);
+        $this->expectExceptionMessageMatches('/link_host/');
+
+        ConfigLoader::sourcesFromArray(['sources' => ['x' => [
+            'enabled' => false,
+            'family' => 'private',
+            'type' => 'email_alert',
+            'mixed_tenure' => false,
+            'params' => ['card_separator' => "\nPhoto\n", 'link_host' => '  '],
+            'map' => ['ref' => 'url', 'charges_included' => true],
+        ]]]);
+    }
+
     /** With `link_host` named, link identity on a segmented source is accepted — Bien'ici's shape. */
     public function testASegmentedSourceKeyedOnNamedListingLinksIsAccepted(): void
     {

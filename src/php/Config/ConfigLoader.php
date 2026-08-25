@@ -470,9 +470,15 @@ final class ConfigLoader
         // at fetch (two distinct cards, one identity). Two cards ending on DIFFERENT rotating advert
         // links is not caught at all: every card gets a plausible unique id that changes with the
         // next campaign, so the whole source re-notifies for ever and reads as a busy market.
+        // `trim() === ''` rather than `isset()`: `looksLikeAListing()` reads the value with
+        // `stringParam()`, which treats an empty string as unset, so `"link_host": ""` passes an
+        // `isset` check and then makes every link qualify — the exact silent shape the message
+        // below describes, reached by a different mistake.
+        $linkHost = $params['link_host'] ?? null;
+
         if (isset($params['card_separator']) && $params['card_separator'] !== ''
             && ($params['id_from'] ?? 'link') !== 'content'
-            && !isset($params['link_host'])) {
+            && (!\is_string($linkHost) || trim($linkHost) === '')) {
             throw ConfigError::at(
                 $where . '.params.link_host',
                 'une source segmentée et identifiée par lien doit dire quels liens sont des '
