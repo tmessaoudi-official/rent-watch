@@ -233,7 +233,7 @@ alert, pointed at a dedicated mailbox; `email_alert` ingests over IMAP.
 | **B1** | **SeLoger** | `www.seloger.com` | **403** | ✅ **LIVE 2026-08-25 — source #5, and the first that is not a landlord.** The first Tier B portal and the first email source of any kind; largest IDF inventory, AVIV group. Direct polling stays CLOSED (DataDome, 403 on every route incl. the bare homepage) — the route in is the ALERT MAILBOX, hard rule 4's primary path. `scout doctor --source=seloger`: **9 annonces, `ok`, ~19 s**. Two real alerts frozen at `tests/fixtures/seloger/`; offline proof is `MAILBOX_DIR=tests/fixtures/seloger`. See the block below. |
 | **B2** | **Leboncoin** | `www.leboncoin.fr` | **403** | Where non-agency private landlords actually post. Email alert only. |
 | **B3** | **PAP** | `www.pap.fr` | **403** | *Particulier à particulier* — no agency fees. Email alert only. |
-| **B4** | **Bien'ici** | `www.bienici.com` | **200** | Map-first, agency consortium. |
+| **B4** | **Bien'ici** | `www.bienici.com` | **200** | ✅ **LIVE 2026-08-25 — source #6, and much the EASIER of the two email portals.** Map-first, agency consortium. `scout doctor --source=bienici`: **13 annonces, `ok`, 731 ms** — and a seeded pass matched **10 of 13**, by far the best hit rate in the tree, because the portal's own alert criteria mirror `criteria.json` closely. It publishes a REAL LISTING ID in the URL path (`/annonce/laforet-immo-facile-22588736`), so identity is the link and none of SeLoger's content-addressing is needed. Three real messages frozen at `tests/fixtures/bienici/`; offline proof is `MAILBOX_DIR=tests/fixtures/bienici`. See the block below. |
 | **B5** | **Logic-Immo** | `www.logic-immo.com` | **403** | ⚠️ **Same group as SeLoger (AVIV)** — expect heavy duplicate overlap with B1. The cross-portal dedup case in the brief is mostly this pair. |
 | **B6** | **A Vendre A Louer** | `www.avendrealouer.fr` | **403** | Email alert only. |
 | **B7** | **Figaro Immo** | `immobilier.lefigaro.fr` | **200** | Smaller IDF rental inventory. |
@@ -339,6 +339,58 @@ the 50 m² floor). Two listings is not a yield estimate — it is proof the path
   valid IdF postcode and a town 250 km away. Pin `params.from` to the alert subdomain, and keep the
   no-information floor as the second layer.
 
+### B4 Bien'ici — the same route, and almost none of the same problems
+
+Onboarded 2026-08-25, hours after B1. Worth reading beside it, because the two portals take the
+identical route in and differ on nearly every decision it forces.
+
+**It publishes a real listing id**, which is the whole difference. `/annonce/laforet-immo-facile-
+22588736` survives `stableId()` stripping the query, so identity is the LINK and none of SeLoger's
+content-addressing is needed — nor wanted: a real id has neither of the content key's stated costs.
+The adapter gained a link-identity path for the segmented case to make that possible; `id_from:
+content` still short-circuits, so SeLoger's identity is byte-identical.
+
+**Pick the identity scheme BEFORE enabling the source.** Nothing migrates a stored row from one key
+to another, so switching content→link on a live source makes every row look new and re-notifies the
+whole backlog. *Ship config-only today and improve it later* is a trap here, not the safe option.
+
+**THE SEPARATOR IS THE LINE EACH CARD STARTS WITH, and copying SeLoger's would have been wrong.**
+Splitting on the call to action puts the alert's own criteria line — `Louer région Île-de-France -
+Maison, appartement - 1 200 € max - 3 pièces min - 45 m² min` — inside segment 0, and starts every
+later segment with the PRECEDING card's `RÉFÉRENCE : Cocon_Loc_T4`. Measured over four live
+messages: **3 of 13 surfaces read 45 m² and 1 of 13 room counts read 4**, every error in the
+under-reporting direction, so `min_surface_m2` rejects a real match and nothing says why. The rule
+that generalises: **a card separator must be measured against a real payload, both candidates run,
+and the extracted values compared against what the card's own title states.**
+
+**`commune_pattern` anchors on the postcode BEFORE the name** (`94600 Choisy-le-Roi`) — the exact
+inverse of SeLoger's, whose postcode sits parenthesised on the line below. Two portals, two
+anchors, which is why this is per-source config rather than a general reader of French addresses.
+
+**`title_pattern` anchors on the STRUCTURE, not on a list of dwelling types.** Every title here is
+`<type> N pièces M m²`, so the pattern keys on `pièces`. That matters for §1-adjacent filtering
+rather than for tidiness: a listing whose title does not match falls back to the message SUBJECT,
+and `exclude_title_patterns` — which is what catches coliving rooms — then has nothing to fire on.
+
+**The scrubber had to be fixed before a single fixture could be committed**, and the defect it
+exposed is general. Every Bien'ici link carries `signedRecipient=eyJ…`, a JWT whose payload
+base64url-decodes to `{"email":"<the subscriber>"}`. `tools/scrub-eml.php` verified that the address
+was ABSENT, which it was, and wrote the file. **Absent is the wrong test; the right one is not
+RECOVERABLE.** It now decodes every long base64url run and the quoted-printable form before it
+looks, and refuses when the address surfaces in any of them. The first fix still stripped nothing
+from all three real captures: the tokens are quoted-printable, so a JWT reads `=3DeyJ…` and a `\b`
+anchor sees the `D` of `=3D`.
+
+**Its live yield is the best in the tree, and that is not luck**: a seeded pass matched **10 of 13**.
+The portal applies the saved search's own criteria before sending, and those criteria were set to
+mirror `criteria.json`. The three rejections were 44 m² (a suggestion card), a `meublé`, and 1208 €
+against a 1200 € ceiling. Contrast Cityloger, whose 51 listings yield 0. **A portal that filters for
+you is worth more than a landlord with a bigger catalogue**, which is the argument for the remaining
+Tier B rows.
+
+**A suggestion card is ingested like any other.** *"Cette annonce peut également vous intéresser"*
+appends a real listing the saved search did not match, so the message carries one more card than its
+subject announces. Over-inclusion costs a row the criteria reject; under-inclusion costs a flat.
 
 ### Agency networks — deliberately NOT separate sources
 

@@ -14,14 +14,14 @@ Single language, single user, single machine. CLI plus push notifications — **
 
 ## Status
 
-**It runs. Four institutional sources are live in production, and the first private portal is built.**
+**It runs. Six sources are live: four institutional landlords and two private portals.**
 
 > That paragraph replaced one saying *"the pure core and the store are built, nothing else is —
 > there is no adapter, no notification channel and no CLI yet"*, which had been false for weeks.
 > `.env.example`'s own header carries the ruling: a stale *"this is only a sketch"* notice on a live
 > thing is worse than no notice at all.
 
-`scout run --watch` polls **In'li, CDC Habitat, Cityloger, Logirep and SeLoger** on the Q37 cadence,
+`scout run --watch` polls **In'li, CDC Habitat, Cityloger, Logirep, SeLoger and Bien'ici** on the Q37 cadence,
 hydrates detail pages behind a novelty gate, classifies every listing by tenure, scores it, and
 pushes what matches. `doctor`, `dump`, `run --once/--seed/--watch`, `test-notify`, `digest` and
 `reclassify` all work end to end. The store is at schema v8.
@@ -39,6 +39,19 @@ real frozen alerts with no credentials at all.
 > fine, because the only reader was a scan over the *ranked* communes — a region-wide watch knows
 > almost none of them. Both are fixed, and both are recorded in `docs/SOURCES.md` § B1 as rules for
 > the next portal rather than as one source's bugs.
+
+**Bien'ici followed hours later**, and it is much the easier of the two: it publishes a real listing
+id in the URL path, so identity is the link and none of SeLoger's content-addressing is needed.
+`scout doctor --source=bienici` returns **13 annonces in 731 ms**, and a seeded pass matches **10 of
+13** — by far the best hit rate in the tree, because the portal applies the saved search's criteria
+before sending and those criteria mirror `criteria.json`.
+
+> It also cost a P0 in `tools/scrub-eml.php`, and the lesson is general: **"the address is absent"
+> is the wrong test — the right one is "the address is not RECOVERABLE".** Every Bien'ici link
+> carries a JWT whose payload base64url-decodes to the subscriber's address, so the scrubber
+> verified an absence that was true and wrote a file from which the address was one `base64 -d`
+> away. It now decodes before it looks. `tests/test-scrub-eml.sh` is the must-strip / must-refuse /
+> must-stay-quiet proof.
 
 **What is genuinely absent:** the transit/geo enrichment layer (`src/php/Enrich/`, no code at all),
 AL'in (needs an authenticated capture), classifier tier 4 (needs the `plafonds` figures), and
@@ -311,7 +324,7 @@ is blocked on a mailbox, an endpoint capture or a phorj module that does not exi
 
 1. **Core skeleton** — models ✅, SQLite store ✅ (seen-set, price history, run log, source health),
    config loading, CLI, one notification channel. Proven end-to-end with a fake source.
-2. **Tenure classifier + tests.** ✅ **Done in PHP**, against a 122-case corpus (115 synthetic, 7 captured) — spec §4's
+2. **Tenure classifier + tests.** ✅ **Done in PHP**, against a 123-case corpus (115 synthetic, 8 captured) — spec §4's
    *real* listing texts are still outstanding and are blocked on capturing a payload. The phorj port
    waits on `Core.Imap`, an HTML parser and `sleep` (see `docs/PHORJ-REQUIREMENTS.md`). Before any
    real source; everything depends on it.

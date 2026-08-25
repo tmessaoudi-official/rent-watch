@@ -465,6 +465,63 @@ writing can ever remove it. A first version of the fixture test asserted the wor
 from a card — unachievable, and wrong in kind: the guarantee is the classifier's verdict, not the
 absence of a common French adverb.
 
+### Bien'ici — source #6, and it disagrees with SeLoger on almost every decision (2026-08-25)
+
+Three real alerts landed within ninety minutes of the subscription being created, and the source was
+live the same evening: `scout doctor --source=bienici` returns **13 annonces, `ok`, 731 ms**, and a
+seeded pass matches **10 of 13** — the best hit rate in the tree by a wide margin, because the
+portal applies the saved search's own criteria before sending and those criteria mirror
+`criteria.json`. Prove a change offline with
+`MAILBOX_DIR=tests/fixtures/bienici scout doctor --source=bienici`. Four things carry forward:
+
+- **IT PUBLISHES A REAL LISTING ID, so identity is the LINK.** `/annonce/laforet-immo-facile-
+  22588736` survives `stableId()` stripping the query. Content-addressing was invented for SeLoger,
+  which sends sixteen cards behind one opaque redirect; that is a property of THAT portal, not of
+  email alerts, and a real id has neither of the content key's stated costs. `cardListing()` gained
+  a link-identity path for the segmented case; `id_from: content` still short-circuits, so SeLoger
+  is byte-identical. **Pick the scheme BEFORE the source is first enabled** — nothing migrates a
+  stored row from one key to another, so switching later re-notifies the whole backlog. *Ship
+  config-only today and improve it later* is the trap here, not the safe option.
+- **THE CARD SEPARATOR WAS MEASURED, AND COPYING SELOGER'S WOULD HAVE BEEN WRONG.** Splitting on the
+  terminal call to action puts the alert's own criteria line — `1 200 € max - 3 pièces min - 45 m²
+  min` — inside segment 0, and starts every later segment with the PRECEDING card's `RÉFÉRENCE :
+  Cocon_Loc_T4`, whose `T4` the room reader takes. Over four live messages that is **3 of 13
+  surfaces reading 45 and 1 of 13 room counts reading 4**, all under-reported, so `min_surface_m2`
+  rejects a real match and nothing says why. `\nPhoto\n` — the line each card STARTS with — makes
+  every segment exactly one card and leaves the header a segment of its own, which then drops for
+  having no listing link. The four wrong values are asserted against the frozen payloads, so the
+  separator cannot be "tidied" back to symmetry.
+- **The no-information floor now guards the CARD, not the content key**, and that was found by
+  regression rather than by design. Its first argument is identity collapse, to which link identity
+  is immune — so a floor living in the content path alone stops applying the moment a portal
+  publishes a real id. Its second argument does not depend on the key at all: a segment yielding a
+  rent and nothing else is an extraction failure, and admitting it hides that failure behind a row
+  quietly rejected for having no location. Retargeting the sabotage case then exposed a real hole —
+  no test exercised *describes a flat but does not locate it*, so half the floor could be deleted in
+  silence.
+- **`params.from` is refused at load for an enabled `email_alert`**, the promise recorded as due
+  *"with the next portal"*. One mailbox serves every portal, so it is the source's scope and what
+  scopes the IMAP `SEARCH … FROM`. The blanket *"segmented needs `id_from: content`"* rule is
+  replaced by the narrower one that survives: a segmented source keyed on its links must name
+  `link_host`, because two cards ending on the same stray link is caught loudly at fetch while two
+  cards ending on DIFFERENT rotating advert links is caught by nothing.
+
+> **"THE ADDRESS IS ABSENT" IS THE WRONG TEST, AND `tools/scrub-eml.php` had been running it.** Every
+> Bien'ici link carries `signedRecipient=eyJ…`, a JWT whose payload base64url-decodes to
+> `{"email":"<the subscriber>"}`. Measured on a real capture: the literal address is absent from the
+> decoded body, and one `base64 -d` recovers it in full — so the scrubber verified a true absence
+> and wrote the file, reporting `scrubbed`. The right test is **not RECOVERABLE**: it now decodes
+> every long base64url run and the quoted-printable form before it looks, and refuses when the
+> address surfaces in any of them. Stated generally rather than as a Bien'ici special case, because
+> the next portal's encoding is unknown. **The first fix still stripped nothing from all three real
+> captures**: the tokens are quoted-printable, so a JWT reads `=3DeyJ…` and a `\b` anchor sees the
+> `D` of `=3D` and refuses to start — the unit test passed on an unencoded fixture while the tool
+> failed on every real one. `tests/test-scrub-eml.sh` now carries the QP case.
+>
+> `tests/php/Repo/FixtureSecretsTest.php` would have refused the committed fixture (it already
+> matches JWTs). It would not have caught the scrubber reporting success, which is the half that
+> matters: a tool nobody doubts is a tool nobody checks.
+
 **`seloger` IS LIVE as of 2026-08-25 — source #5, and the first that is not a landlord.** The IMAP
 credentials arrived, and `scout doctor --source=seloger` against the real mailbox returns **9
 annonces, `ok`, ~19 s**. Prove a change without touching the network with
@@ -671,14 +728,21 @@ cost six defects in one day: four in the MIME parser, one rent reading 600 € l
 rooms scored as family flats. **A real payload is the input; a green suite is not a substitute for
 one**, and 1 900 of them said nothing about any of the six.
 
-**Two portals remain, and both are asks rather than builds.** Bien'ici has fired a real alert into
-this mailbox before (`1 nouvelle annonce pour "Louer à Sartrouville"`) and it is a MUCH easier source
-than SeLoger — it publishes a real listing URL carrying a real listing id
-(`bienici.com/annonce/ag782085-400302759`), so link-identity works and none of the content-addressing
-machinery is needed. But that message is from **October 2023** and the alert is dormant, and it was
-scoped to one commune while the criteria now cover all of Île-de-France. PAP and leboncoin show
-account-creation mail only — no search alert has ever fired from either. So the ask on all three is
-*create the alert with the current criteria*, not *send a file*.
+**Bien'ici was the third of those, and it CLOSED the same evening** — the developer recreated the
+alert with the current criteria, three messages landed within ninety minutes, and the source was
+live. See § "Bien'ici" above. It confirmed the prediction that had been recorded here (a real
+listing URL carrying a real listing id, so link identity works) and disproved the assumption
+travelling with it: link identity was *unreachable* on a segmented source, because `identityFor()`
+answered only for `id_from: content`. **A prediction about a payload is not a prediction about the
+code that would read it.**
+
+**Two portals remain, and both are asks rather than builds.** PAP and leboncoin show account
+mail only — PAP has sent two *Création de votre alerte* receipts and one *Suppression*, leboncoin
+only a new-device notice, and no search alert has ever fired from either. So the ask on both is
+*create (or repair) the alert with the current criteria*, not *send a file*. Jinka has sent a
+newsletter and no alert; it is an AGGREGATOR rather than a portal, so it needs its own §1
+evaluation before it is treated as a source — a truncated description can lose a `PLS` label that
+the original listing carried.
 
 The `plafonds` figures were reassigned the same day: hard
 rule 1 forbids writing a ceiling *from memory*, not verifying one against a live authoritative
@@ -1019,6 +1083,9 @@ bash tests/test-sabotage-applies.sh     # proves every sabotage EXPRESSION still
                                         #   an expression that matches nothing reports coverage it
                                         #   does not have, and each is checked ON ITS OWN
 bash tests/test-dotenv-cli.sh           # proves the .env loader the CLI actually uses
+bash tests/test-scrub-eml.sh            # proves the scrubber refuses a RECOVERABLE address —
+                                        #   it decodes base64url runs and quoted-printable before
+                                        #   it looks, because "absent" is not "unrecoverable"
 bash tests/test-sabotage-baseline.sh    # proves the LEDGER is judged in a green scratch tree —
                                         #   it was not, from 2026-08-22 to 2026-08-24, so every one
                                         #   of its ~375 cases reported `ok` while proving nothing
@@ -1151,14 +1218,19 @@ tests/fixtures/tenure/      corpus.json — the language-neutral classifier corp
 tests/fixtures/<source>/    Frozen payloads, one dir per source
 tests/fixtures/seloger/     The first REAL portal alerts, scrubbed. Their AWKWARD structure is
                             the point — preamble, `=_?:` boundary, 2047 subject split mid-word
+tests/fixtures/bienici/     The second portal's alerts. A five-card alert, a one-card alert whose
+                            suggestion card makes it two, and a message with NO cards at all
 tools/scrub-eml.php         Turns a captured .eml into a committable fixture; REFUSES to write
-                            while the address, an ESP list id or a live tracking token survives
+                            while the address is RECOVERABLE — decoding base64url runs and
+                            quoted-printable before it looks, not merely grepping for it
 tests/sabotage-check.sh     Proves the classifier suite detects a regression
 tests/test-tenure-guard.sh  Proves the §1 tripwire fires, and stays quiet on ordinary PHP
 tests/test-fetch-phpunit.sh Proves the runner fetch refuses a bad signature
 tests/test-drift-scan.sh    Proves drift-scan's S8 still fires — a gate nobody has seen red is untested
 tests/test-sabotage-applies.sh   Proves no sabotage expression has rotted into matching nothing
 tests/test-dotenv-cli.sh         Proves the .env loader behind every CLI verb
+tests/test-scrub-eml.sh          Proves the scrubber refuses a RECOVERABLE address — the
+                                 must-strip, must-refuse and must-stay-quiet halves
 tests/test-sabotage-baseline.sh  Proves the sabotage ledger judges its cases in a GREEN scratch tree
 tests/test-ci-workflow.sh   Proves ci.yml still wires every step this file claims CI runs
 tools/fetch-phpunit.sh      Fetches the runner; pinned SHA-256, refuses to install on a mismatch
@@ -1307,6 +1379,10 @@ tests/test-sabotage-applies.sh     Proves every sabotage expression still matche
                                    syntax, not a split on `;`: this ledger's patterns contain
                                    semicolons
 tests/test-dotenv-cli.sh          Proves the .env loader every CLI verb reads
+tests/test-scrub-eml.sh           Sabotage test FOR the fixture scrubber. "The address is
+                                  absent" is the wrong test: every Bien'ici link carries a
+                                  JWT whose payload decodes to it, so the old check passed
+                                  on a file the address was one `base64 -d` away from
 tests/test-sabotage-baseline.sh    Sabotage test for the LEDGER's own scratch-baseline guard. The
                                    ledger copies an explicit file list into a throwaway tree and
                                    judges every case there; `.env.example` was missing from that
