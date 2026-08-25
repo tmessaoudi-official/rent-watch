@@ -433,6 +433,40 @@ final class ConfigLoader
 
         $r->done();
 
+        // Deliberately OUTSIDE the `enabled` branch, both of them. `--source=<name>` force-runs a
+        // disabled source — that is the documented onboarding path, `/add-source` step 5 — so a
+        // guard that fires only on enabled sources is a guard the intended workflow walks straight
+        // past.
+        if (isset($params['card_separator']) && $params['card_separator'] !== '' && $mixedTenure) {
+            // Segmenting makes each listing's description its own CARD rather than the whole
+            // message. That is the Cityloger ruling — a map addresses the listing, never the page —
+            // and it costs one signal: a batch-level `logement conventionné` stated once for a
+            // whole digest stops being visible to any individual card's classifier.
+            //
+            // On a pure-LIBRE portal that costs nothing, and every segmented source today is one.
+            // On a mixed-stock source it is a §1 decision nobody has made against a real payload,
+            // so it is refused here rather than answered by a batch-veto mechanism written blind.
+            // Same shape as `detail_budget_per_pass: 0`.
+            throw ConfigError::at(
+                $where . '.params.card_separator',
+                'segmenter un message en cartes retire au classifieur toute mention de régime '
+                    . 'énoncée une seule fois pour le lot entier, ce qui sur une source '
+                    . 'mixed_tenure est une décision §1 que personne n\'a prise face à un vrai '
+                    . 'message. Retirez mixed_tenure, ou retirez card_separator',
+            );
+        }
+
+        $idFrom = $params['id_from'] ?? null;
+        if ($idFrom !== null && $idFrom !== '' && !in_array($idFrom, ['link', 'content'], true)) {
+            // Ignoring an unknown value would fall back to link-identity — which on a portal whose
+            // links are all tracking redirects means every card in a message shares one id. That is
+            // the exact collapse `content` exists to prevent, reached through a typo.
+            throw ConfigError::at(
+                $where . '.params.id_from',
+                'valeur inconnue « ' . $idFrom . ' » — attendu `link` (défaut) ou `content`',
+            );
+        }
+
         if ($enabled) {
             if ($type === 'fixture') {
                 if ($fixture === null) {

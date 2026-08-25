@@ -1290,6 +1290,92 @@ final class ConfigTest extends TestCase
         ConfigLoader::sourcesFromArray(['sources' => ['x' => self::htmlSourceWithDetailMap(['detail_budget_per_pass' => 0])]]);
     }
 
+    /**
+     * **`card_separator` on a `mixed_tenure` source is REFUSED, and the refusal is the §1 answer.**
+     *
+     * Segmenting an alert means each listing's description is its own CARD rather than the whole
+     * message. That is more correct — the Cityloger ruling is that a map must address the listing,
+     * never the page, and a mail trailer is furniture by construction — but it costs a signal:
+     * a batch-level `logement conventionné` stated once for a whole digest is no longer visible to
+     * any card's classifier.
+     *
+     * On a pure-`LIBRE` portal that costs nothing. On a source that mixes social and intermediate
+     * stock it is a §1 decision, and nobody has made it against a real payload, because no such
+     * source exists yet: seloger and leboncoin are `LIBRE`, and `email_demo` is mixed and
+     * unsegmented. Refusing the combination at load forces whoever onboards the first mixed
+     * segmented portal to decide it with a real message in front of them, instead of inheriting a
+     * silent answer from today. Same shape as `detail_budget_per_pass: 0`.
+     *
+     * Deliberately OUTSIDE the `enabled` branch: `--source=<name>` force-runs a disabled source, so
+     * a guard that only fires on enabled ones is a guard the documented onboarding path walks past.
+     */
+    public function testASegmentedMixedTenureSourceIsRefused(): void
+    {
+        $this->expectException(ConfigError::class);
+        $this->expectExceptionMessageMatches('/mixed_tenure/');
+
+        ConfigLoader::sourcesFromArray(['sources' => ['x' => [
+            'enabled' => false,
+            'family' => 'private',
+            'type' => 'email_alert',
+            'mixed_tenure' => true,
+            'params' => ['card_separator' => "Voir l'annonce"],
+            'map' => ['ref' => 'url', 'charges_included' => true],
+        ]]]);
+    }
+
+    /** The same source without segmentation loads — the refusal is about the combination. */
+    public function testAMixedTenureEmailSourceWithoutSegmentationLoads(): void
+    {
+        $sources = ConfigLoader::sourcesFromArray(['sources' => ['x' => [
+            'enabled' => false,
+            'family' => 'private',
+            'type' => 'email_alert',
+            'mixed_tenure' => true,
+            'map' => ['ref' => 'url', 'charges_included' => true],
+        ]]]);
+
+        self::assertTrue($sources['x']->mixedTenure);
+    }
+
+    /** And a segmented source that is NOT mixed loads, which is the shape SeLoger ships in. */
+    public function testASegmentedPureTenureSourceLoads(): void
+    {
+        $sources = ConfigLoader::sourcesFromArray(['sources' => ['x' => [
+            'enabled' => false,
+            'family' => 'private',
+            'type' => 'email_alert',
+            'mixed_tenure' => false,
+            'default_tenure' => 'LIBRE',
+            'params' => ['card_separator' => "Voir l'annonce", 'id_from' => 'content'],
+            'map' => ['ref' => 'url', 'charges_included' => true],
+        ]]]);
+
+        self::assertSame("Voir l'annonce", $sources['x']->params['card_separator']);
+    }
+
+    /**
+     * An `id_from` this adapter does not implement is refused rather than ignored.
+     *
+     * Silently falling back to link-identity is the dangerous direction: on a portal whose links
+     * are all tracking redirects that means every card in a message shares one id, which is the
+     * exact collapse `id_from: content` exists to prevent — arrived at through a typo.
+     */
+    public function testAnUnknownIdFromIsRefused(): void
+    {
+        $this->expectException(ConfigError::class);
+        $this->expectExceptionMessageMatches('/id_from/');
+
+        ConfigLoader::sourcesFromArray(['sources' => ['x' => [
+            'enabled' => false,
+            'family' => 'private',
+            'type' => 'email_alert',
+            'mixed_tenure' => false,
+            'params' => ['id_from' => 'contnet'],
+            'map' => ['ref' => 'url', 'charges_included' => true],
+        ]]]);
+    }
+
     public function testAnOmittedBudgetDefaultsRatherThanRefusing(): void
     {
         $sources = ConfigLoader::sourcesFromArray(['sources' => ['x' => self::htmlSourceWithDetailMap()]]);

@@ -1,0 +1,293 @@
+<?php
+
+declare(strict_types=1);
+
+namespace RentWatch\Tests\Adapters;
+
+use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\TestCase;
+use RentWatch\Adapters\EmailAlertSource;
+use RentWatch\Adapters\Mail\FileMailbox;
+use RentWatch\Adapters\SourceError;
+use RentWatch\Config\FieldMap;
+use RentWatch\Config\SourceDefinition;
+use RentWatch\Core\Tenure;
+use RentWatch\Store\Store;
+
+/**
+ * Card segmentation and content-addressed identity, shaped by the first real portal alert.
+ *
+ * **The defect this closes is an identity collapse, not a parsing one.** SeLoger sends no listing
+ * URL and no listing id: every link in an alert is `click.by.seloger.com/?qs=<opaque token>`, and
+ * `EmailAlertSource` keys on the link with its query stripped — so all sixteen links in a real
+ * message resolve to the single id `https://click.by.seloger.com/`. Sixteen cards, one identity.
+ *
+ * The redirect is deliberately never followed to recover the real URL: it is a third-party request
+ * per listing, the token carries the subscriber's identity, and following it manufactures an
+ * engagement signal from a click nobody made. Hard rule 5 one step out.
+ */
+#[CoversClass(EmailAlertSource::class)]
+final class EmailAlertSegmentationTest extends TestCase
+{
+    private string $dir = '';
+
+    private string $dbPath = '';
+
+    protected function tearDown(): void
+    {
+        if ($this->dir !== '' && is_dir($this->dir)) {
+            foreach (glob($this->dir . '/*') ?: [] as $f) {
+                @unlink($f);
+            }
+            @rmdir($this->dir);
+        }
+        if ($this->dbPath !== '') {
+            @unlink($this->dbPath);
+        }
+    }
+
+    // ------------------------------------------------------------------ segmentation
+
+    public function testEachCardBecomesItsOwnListing(): void
+    {
+        $listings = $this->source(self::body([
+            self::card('980', 'Appartement Conflans', '3 pièces . 44,71 m²', 'Romagne', 'Conflans-Sainte-Honorine', '78700'),
+            self::card('915', 'Appartement À Louer', '3 pièces . 52,37 m²', 'Le Parterre', 'Dourdan', '91410'),
+        ]))->fetch();
+
+        self::assertCount(2, $listings, 'two cards, two listings');
+
+        $ids = array_map(static fn ($l) => $l->externalId, $listings);
+        self::assertCount(2, array_unique($ids), 'a card is not the same flat as the card above it');
+    }
+
+    /**
+     * The footer is a segment too, and it is not a card.
+     *
+     * A trailer carrying the CNIL notice, the postal address and a campaign code follows the last
+     * CTA in every real alert. It yields no rent, so it is not a listing.
+     */
+    public function testTheFooterIsNotAListing(): void
+    {
+        $listings = $this->source(self::body([
+            self::card('980', 'Appartement Conflans', '3 pièces . 44,71 m²', 'Romagne', 'Conflans-Sainte-Honorine', '78700'),
+        ]))->fetch();
+
+        self::assertCount(1, $listings);
+    }
+
+    /**
+     * The card is the description, not the message.
+     *
+     * This is the Cityloger ruling on a new surface: a map must address the LISTING, never the page.
+     * Whole-body description is the furniture failure class that sent 14 of 16 correctly-badged CDC
+     * listings to the digest, and an alert's trailer is furniture by construction.
+     */
+    public function testTheDescriptionIsTheCardNotTheWholeMessage(): void
+    {
+        $listings = $this->source(self::body([
+            self::card('980', 'Appartement Conflans', '3 pièces . 44,71 m²', 'Romagne', 'Conflans-Sainte-Honorine', '78700'),
+            self::card('915', 'Appartement Dourdan', '3 pièces . 52,37 m²', 'Le Parterre', 'Dourdan', '91410'),
+        ]))->fetch();
+
+        self::assertStringNotContainsString('Dourdan', $listings[0]->description, 'card 1 must not carry card 2');
+        self::assertStringNotContainsString('Conformément à la loi', $listings[0]->description, 'nor the trailer');
+    }
+
+    // ------------------------------------------------------------------ identity
+
+    /**
+     * **Rent is NOT in the identity, and that is the whole point of excluding it.**
+     *
+     * A price drop is an event this project exists to detect. A rent in the key turns every drop
+     * into a brand-new listing — notified as new, with no price history and no "en baisse" reason —
+     * which is the silent opposite of what the store's price-history table is for.
+     */
+    public function testAPriceChangeDoesNotChangeTheIdentity(): void
+    {
+        $before = $this->source(self::body([
+            self::card('980', 'Appartement Conflans', '3 pièces . 44,71 m²', 'Romagne', 'Conflans-Sainte-Honorine', '78700'),
+        ]))->fetch();
+
+        $after = $this->source(self::body([
+            self::card('940', 'Appartement Conflans', '3 pièces . 44,71 m²', 'Romagne', 'Conflans-Sainte-Honorine', '78700'),
+        ]))->fetch();
+
+        self::assertSame($before[0]->externalId, $after[0]->externalId, 'same flat, lower rent');
+        self::assertSame(980, $before[0]->rentCc);
+        self::assertSame(940, $after[0]->rentCc);
+    }
+
+    /** A different flat is a different identity — the guard against under-notifying. */
+    public function testADifferentFlatIsADifferentIdentity(): void
+    {
+        $listings = $this->source(self::body([
+            self::card('980', 'Appartement A', '3 pièces . 44,71 m²', 'Romagne', 'Conflans-Sainte-Honorine', '78700'),
+            self::card('980', 'Appartement B', '3 pièces . 61,20 m²', 'Romagne', 'Conflans-Sainte-Honorine', '78700'),
+        ]))->fetch();
+
+        self::assertNotSame($listings[0]->externalId, $listings[1]->externalId, 'a different surface is a different flat');
+    }
+
+    /**
+     * **The no-information floor.** A card whose extraction fails across the board would hash to
+     * `sha1("seloger|||||")` — and EVERY such card collapses onto that one id, which is the store's
+     * own "nothing collapses onto a shared key" identity guarantee violated one layer up.
+     *
+     * Skipping costs nothing real: a card with no location can never match anyway (Q32 — no
+     * location evidence is a rejection), so the alternative to skipping is a listing that is
+     * rejected AND poisons an identity.
+     */
+    public function testACardWithNoLocatingEvidenceIsNotGivenAnIdentity(): void
+    {
+        $listings = $this->source(self::body([
+            self::card('980', 'Appartement Conflans', '3 pièces . 44,71 m²', 'Romagne', 'Conflans-Sainte-Honorine', '78700'),
+            "\n<L>\n1 100 €/mois charges comprises\n<L>\nVoir l'annonce\n",
+        ]))->fetch();
+
+        self::assertCount(1, $listings, 'the card with no commune, postcode, rooms or surface is refused');
+        self::assertStringContainsString('Conflans', (string) $listings[0]->commune);
+    }
+
+    /**
+     * A message that HAS cards but yields none is a broken parser, and it must be loud.
+     *
+     * This is hard rule 2's shape: extraction that silently returns nothing is indistinguishable
+     * from a market that went quiet, and the alert literally says how many listings it carries.
+     */
+    public function testAMessageWhoseCardsAllFailIsALoudFailure(): void
+    {
+        $this->expectException(SourceError::class);
+        $this->expectExceptionMessageMatches('~aucune annonce~i');
+
+        $this->source(self::body([
+            "\n<L>\nRien d'exploitable ici\n<L>\nVoir l'annonce\n",
+        ]))->fetch();
+    }
+
+    /**
+     * Two DISTINCT cards resolving to one id is an extraction failure, not a re-send.
+     *
+     * Scoped to the message on purpose: across messages the same id IS a legitimate re-send, which
+     * is the behaviour content-addressing exists to give. Within one message it means the fields
+     * that distinguish two flats were not read.
+     */
+    public function testTwoCardsInOneMessageSharingAnIdentityIsALoudFailure(): void
+    {
+        $this->expectException(SourceError::class);
+        $this->expectExceptionMessageMatches('~identité~i');
+
+        $this->source(self::body([
+            self::card('980', 'Appartement A', '3 pièces . 44,71 m²', 'Romagne', 'Conflans-Sainte-Honorine', '78700'),
+            self::card('1 400', 'Appartement B', '3 pièces . 44,71 m²', 'Romagne', 'Conflans-Sainte-Honorine', '78700'),
+        ]))->fetch();
+    }
+
+    // ------------------------------------------------------------------ backwards compatibility
+
+    /**
+     * With no `card_separator` the source behaves exactly as it did — one listing per link, whole
+     * body as the description. `email_demo` and its two committed fixtures depend on it.
+     */
+    public function testWithoutASeparatorTheOldBehaviourIsUnchanged(): void
+    {
+        $body = self::body([
+            self::card('980', 'Appartement Conflans', '3 pièces . 44,71 m²', 'Romagne', 'Conflans-Sainte-Honorine', '78700'),
+        ]);
+
+        $listings = $this->source($body, params: ['link_host' => 'example-portal.test'])->fetch();
+
+        foreach ($listings as $listing) {
+            self::assertStringStartsWith('https://example-portal.test/', $listing->externalId);
+        }
+    }
+
+    // ------------------------------------------------------------------ helpers
+
+    /** @param array<string,mixed> $params */
+    private function source(string $body, ?array $params = null): EmailAlertSource
+    {
+        $this->dir = sys_get_temp_dir() . '/rentwatch-seg-' . bin2hex(random_bytes(8));
+        mkdir($this->dir, 0o700, true);
+        file_put_contents($this->dir . '/alert.eml', self::message($body));
+
+        $this->dbPath = sys_get_temp_dir() . '/rentwatch-seg-' . bin2hex(random_bytes(8)) . '.sqlite3';
+
+        $definition = new SourceDefinition(
+            name: 'seloger',
+            enabled: true,
+            family: 'private',
+            type: 'email_alert',
+            mixedTenure: false,
+            defaultTenure: Tenure::LIBRE,
+            params: $params ?? [
+                'from' => 'example-portal.test',
+                'link_host' => 'example-portal.test',
+                'card_separator' => "Voir l'annonce",
+                'id_from' => 'content',
+                'residence_pattern' => '~^\s*([^\n,]{2,60}),\s*$~m',
+                'title_pattern' => '~^\s*((?:Appartement|Maison|Studio)[^\n]*)$~m',
+            ],
+            map: new FieldMap(ref: ['url'], chargesIncluded: true),
+        );
+
+        return new EmailAlertSource(
+            $definition,
+            Store::open($this->dbPath),
+            new FileMailbox($this->dir),
+            ['conflans-sainte-honorine' => 'Conflans-Sainte-Honorine', 'dourdan' => 'Dourdan'],
+        );
+    }
+
+    private static function card(
+        string $rent,
+        string $title,
+        string $roomsAndSurface,
+        string $residence,
+        string $commune,
+        string $postcode,
+    ): string {
+        return "\n<L>\n{$rent} €/mois charges comprises\n"
+            . "<L>\n{$title}\n"
+            . "<L>\n{$roomsAndSurface}\n"
+            . "<L>\n {$residence}, \n\n {$commune}\n ({$postcode})\n"
+            . "<L>\nVoir l'annonce\n";
+    }
+
+    /** @param list<string> $cards */
+    private static function body(array $cards): string
+    {
+        $trailer = "\nConformément à la loi Informatique et Libertés, vous pouvez accéder aux données"
+            . " vous concernant.\nSeLoger • \n<L>\nSLG-202501-ALI-RELAXED\n";
+
+        return "1 nouvelle annonce : Ile-de-France\n" . implode('', $cards) . $trailer;
+    }
+
+    private static function message(string $body): string
+    {
+        // Links are written as `<L>` in the card helpers and expanded here, so a card reads as the
+        // shape a human sees in the mail rather than as a wall of tokens.
+        static $n = 0;
+        $body = preg_replace_callback(
+            '~<L>~',
+            static function () use (&$n): string {
+                ++$n;
+
+                return 'https://example-portal.test/r/?qs=tok' . $n;
+            },
+            $body,
+        ) ?? $body;
+
+        return "From: \"Portail\" <alertes@example-portal.test>\n"
+            . "Subject: 1 nouvelle annonce : Ile-de-France\n"
+            . "Content-Type: multipart/alternative; boundary=\"B\"\n"
+            . "\n"
+            . "This is a multi-part message in MIME format.\n"
+            . "\n"
+            . "--B\n"
+            . "Content-Type: text/plain; charset=\"utf-8\"\n"
+            . "\n"
+            . $body
+            . "\n--B--\n";
+    }
+}

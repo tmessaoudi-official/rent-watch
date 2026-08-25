@@ -12,6 +12,7 @@ use RentWatch\Core\RawListing;
 use RentWatch\Core\SourceHealth;
 use RentWatch\Core\SourceProfile;
 use RentWatch\Core\Tenure;
+use RentWatch\Core\Text;
 use RentWatch\Store\Store;
 
 /**
@@ -173,10 +174,26 @@ final readonly class EmailAlertSource implements Source
      * would make every listing new forever, which is precisely the failure `ListingMapper` refuses
      * a synthetic id for.
      *
+     * **Both halves of that paragraph fail on a real SeLoger alert, which is why `card_separator`
+     * exists.** Every link in one is `click.by.seloger.com/?qs=<opaque token>`; strip the query and
+     * all sixteen collapse to `https://click.by.seloger.com/`. Sixteen cards, one identity. And
+     * "the surrounding text" is the whole message, so each of the sixteen would take the FIRST rent
+     * and the FIRST surface in it — one flat's facts, sixteen times.
+     *
+     * With a separator configured, the body is cut into cards and each is read on its own. Without
+     * one, the behaviour above is unchanged: `email_demo` and every portal whose alerts do carry a
+     * real listing URL keep working exactly as before.
+     *
      * @return list<RawListing>
      */
     private function listingsIn(EmailMessage $message): array
     {
+        $separator = $this->stringParam('card_separator');
+
+        if ($separator !== null) {
+            return $this->cardsIn($message, $separator);
+        }
+
         $body = $message->body;
         $out = [];
 
@@ -209,6 +226,225 @@ final readonly class EmailAlertSource implements Source
         }
 
         return $out;
+    }
+
+    /**
+     * The message cut into cards, one listing each.
+     *
+     * The separator is the card's terminal call to action — *Voir l'annonce* — which is the one
+     * element every portal's card template ends with. Splitting on it makes each card the TAIL of
+     * its segment: segment 0 carries the message header plus card 1, segment 1 carries card 2, and
+     * the final segment is the trailer, which yields no rent and is therefore not a card.
+     *
+     * **The description is the CARD, not the message**, and that is the Cityloger ruling applied to
+     * a new surface: a map must address the listing, never the page. Whole-body description is the
+     * furniture failure class that sent 14 of 16 correctly-badged CDC listings to the digest, and
+     * an alert's CNIL trailer, campaign code and "gérer mes alertes" block are furniture by
+     * construction. The subject travels with each card because it is the listing's title when the
+     * card carries none.
+     *
+     * @return list<RawListing>
+     */
+    private function cardsIn(EmailMessage $message, string $separator): array
+    {
+        $segments = explode($separator, $message->body);
+        $out = [];
+        $seenIds = [];
+
+        foreach ($segments as $segment) {
+            $listing = $this->cardListing($message, $segment);
+
+            if ($listing === null) {
+                continue;
+            }
+
+            // Two DISTINCT cards resolving to one identity is an extraction failure, not a re-send.
+            // Scoped to the message on purpose: ACROSS messages the same id is exactly the
+            // legitimate re-send that content-addressing exists to recognise, so the guard cannot
+            // live in the store. Within one message it means the fields that tell two flats apart
+            // were not read, and the second flat would be silently swallowed for ever.
+            if (isset($seenIds[$listing->externalId])) {
+                throw new SourceError(
+                    $this->name(),
+                    'deux annonces distinctes du même message partagent une identité ('
+                        . $listing->externalId . ') — les champs qui les distinguent n\'ont pas été lus',
+                );
+            }
+
+            $seenIds[$listing->externalId] = true;
+            $out[] = $listing;
+        }
+
+        // Hard rule 2's shape. A message that plainly contains cards — it carries the separator —
+        // and yields none is a broken parser, and a broken parser here is indistinguishable from a
+        // market that went quiet. The alert itself usually says how many listings it carries.
+        if ($out === [] && count($segments) > 1) {
+            throw new SourceError(
+                $this->name(),
+                'le message contient ' . (count($segments) - 1) . ' séparateur(s) de carte mais '
+                    . 'aucune annonce n\'a pu en être extraite — le gabarit du portail a changé',
+            );
+        }
+
+        return $out;
+    }
+
+    /**
+     * One card, or `null` when the segment is not one.
+     *
+     * A segment qualifies only if it yields a rent AND enough to locate the flat. The rent gate is
+     * what drops the trailer; the locating gate is the **no-information floor**, and it is the part
+     * that would otherwise have shipped as a defect.
+     *
+     * Without it a card whose extraction failed across the board hashes to `sha1('seloger|||||')`
+     * — and EVERY such card collapses onto that one id. That is the store's own *"nothing collapses
+     * onto a shared key"* identity guarantee violated one layer up, where the store cannot see it.
+     * Refusing costs nothing real: a listing with no commune, no postcode, no rooms and no surface
+     * can never match anyway (Q32 — no location evidence is a rejection), so the alternative to
+     * skipping it is a listing that is rejected AND poisons an identity every other broken card
+     * would share.
+     */
+    private function cardListing(EmailMessage $message, string $segment): ?RawListing
+    {
+        $rent = self::rentIn($segment);
+
+        if ($rent === null) {
+            return null;
+        }
+
+        $commune = $this->communeIn($segment);
+        $postcode = self::postcodeIn($segment);
+        $rooms = self::roomsIn($segment);
+        $surface = self::surfaceIn($segment);
+        $residence = $this->matchParam('residence_pattern', $segment);
+
+        $id = $this->identityFor($commune, $postcode, $rooms, $surface, $residence);
+
+        if ($id === null) {
+            return null;
+        }
+
+        $link = null;
+        foreach (self::linksIn($segment) as $candidate) {
+            if ($this->looksLikeAListing($candidate)) {
+                $link = $candidate;
+
+                break;
+            }
+        }
+
+        return new RawListing(
+            sourceName: $this->name(),
+            externalId: $id,
+            title: $this->matchParam('title_pattern', $segment) ?? $message->subject(),
+            description: trim($message->subject() . "\n" . $segment),
+            fields: [
+                'email.from' => $message->from(),
+                'email.subject' => $message->subject(),
+            ],
+            // The tracking redirect goes in UNRESOLVED, and that is a ruling. Following it here
+            // would be one third-party request per listing, on a token tied to the subscriber's
+            // identity, manufacturing an engagement signal from a click nobody made — hard rule 5's
+            // "identify honestly" one step further out. The link is clicked by the human who wanted
+            // to see the ad, which is what it is for.
+            url: $link,
+            commune: $commune,
+            postcode: $postcode,
+            rentCc: $this->definition->map->chargesIncluded === true ? $rent : null,
+            rentHc: $this->definition->map->chargesIncluded === false ? $rent : null,
+            surfaceM2: $surface,
+            rooms: $rooms,
+        );
+    }
+
+    /**
+     * A content-addressed identity, or `null` below the no-information floor.
+     *
+     * **Rent is deliberately absent from the key.** A price drop is an event this project exists to
+     * detect; a rent in the identity turns every drop into a brand-new listing — notified as new,
+     * with no price history and no *en baisse* reason — which is the silent opposite of what the
+     * store's price-history table is for.
+     *
+     * What IS in the key are the dwelling's structural facts, which is why this does not fall foul
+     * of `ListingMapper`'s refusal of synthetic ids. That refusal is about a hash of the ad's TEXT:
+     * it changes whenever the copy is touched, so the listing is new on every run and notifies for
+     * ever. Commune, postcode, rooms, surface and residence do not move when the prose is rewritten.
+     *
+     * **Stated cost, twice.** Two units in one residence with identical rooms and surface share an
+     * identity, so the second is treated as already seen — a miss, in the §1-safe direction. And a
+     * card that gains a previously-missing surface in a later email changes identity once, and so
+     * notifies once more.
+     */
+    private function identityFor(
+        ?string $commune,
+        ?string $postcode,
+        ?int $rooms,
+        ?float $surface,
+        ?string $residence,
+    ): ?string {
+        if ($this->stringParam('id_from') !== 'content') {
+            return null;
+        }
+
+        // The floor: something that LOCATES the flat, and something that DESCRIBES it. Either half
+        // alone is not an identity — every card in a message shares a commune often enough, and a
+        // bare `3 pièces` is shared by half a portal.
+        $locating = $commune ?? $postcode;
+        $describing = $rooms !== null || $surface !== null || ($residence !== null && $residence !== '');
+
+        if ($locating === null || $locating === '' || !$describing) {
+            return null;
+        }
+
+        $key = implode('|', [
+            $this->name(),
+            Text::fold($commune ?? ''),
+            $postcode ?? '',
+            $rooms === null ? '' : (string) $rooms,
+            // Two decimals: a portal that reports 44.71 one week and 44.7 the next must not mint a
+            // second identity for one flat.
+            $surface === null ? '' : number_format($surface, 2, '.', ''),
+            Text::fold($residence ?? ''),
+        ]);
+
+        return sha1($key);
+    }
+
+    /** @return list<string> */
+    private static function linksIn(string $text): array
+    {
+        preg_match_all('~https?://[^\s<>"\'\)\]]+~i', $text, $matches);
+
+        return array_values(array_unique(array_map(
+            static fn (string $l): string => rtrim($l, '.,;:'),
+            $matches[0],
+        )));
+    }
+
+    /** A configured `params` entry, when it is a non-empty string. */
+    private function stringParam(string $key): ?string
+    {
+        $value = $this->definition->params[$key] ?? null;
+
+        return \is_string($value) && $value !== '' ? $value : null;
+    }
+
+    /** First capture of a configured regex, or `null` when the key is unset or matches nothing. */
+    private function matchParam(string $key, string $subject): ?string
+    {
+        $pattern = $this->stringParam($key);
+
+        if ($pattern === null) {
+            return null;
+        }
+
+        if (@preg_match($pattern, $subject, $m) !== 1) {
+            return null;
+        }
+
+        $captured = trim($m[1] ?? '');
+
+        return $captured === '' ? null : $captured;
     }
 
     /** A listing link, not an unsubscribe or a tracking pixel. */
