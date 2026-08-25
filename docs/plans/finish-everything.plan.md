@@ -232,6 +232,28 @@ to file-transport email AS their remote channel, so any correct fix broke them.
   the second time in two rounds, so the rule is now explicit: **count new and retargeted cases from
   `git diff` of the ledger file, never from memory.**
 
+### A4 IS CLOSED — developer ruling, 2026-08-25, with the residual stated
+
+**Asked at the eighth reset, and the answer was `Redeploy and stop certifying`.** MAXIMAL wants two
+consecutive fully-clean rounds; it got eight rounds, eight resets, zero clean. The data put to the
+developer, and the reason the ruling is sound rather than fatigue:
+
+- **The P0s changed KIND.** Round 4's were §1 breaches — social housing reaching a notification.
+  Rounds 7 and 8 were delivery accounting, and both were in code written during this session:
+  round 8's P0 was CREATED by round 7's fix, one door along from the hole it closed.
+- **The reviewed surface is now mostly session-generated churn**, not the milestone work the round
+  was convened for. Each round reviews the previous round's repairs, so the loop was not converging
+  on the code — it was converging on itself.
+
+**THE RESIDUAL, stated plainly rather than buried:** the round-8 fix is UNREVIEWED. It is the
+largest single change of the sequence — a new method on `Channel` and on `MailTransport` implemented
+across eight classes, a new `Notifier` seam in `Scout`'s constructor, sixteen CLI tests moved onto an
+injected double, and a structural rewrite of `Prose::elevator()`. It is covered by 1879 green tests
+and 6/6 targeted sabotage detections, and by nothing adversarial. **If a future session wants one
+more round, that commit — `f6dfa43` — is the thing to point it at.**
+
+Bucket A continues. What is NOT closed by this ruling: the deploy, and the two Bucket B inputs.
+
 ## A4 — the MAXIMAL round
 
 **Round 1 (2026-08-24, frozen at `e41240c`): FINDINGS — 15 across three lenses, 3 of them P0.**
