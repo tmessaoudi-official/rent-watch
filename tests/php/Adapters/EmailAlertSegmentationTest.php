@@ -240,6 +240,55 @@ final class EmailAlertSegmentationTest extends TestCase
         self::assertSame('Pontault-Combault', $listings[0]->commune);
     }
 
+    /**
+     * The two rules above are INDEPENDENT, and this pair is what proves it.
+     *
+     * The captured card cannot: a 100 € reduction is below the plausibility floor, so scanning
+     * every match rescues it even with no periodic pattern, and the periodic pattern rescues it even
+     * scanning only the first. Each fix alone makes that test pass — so it asserts "at least one of
+     * these works", which is not what its docblock claims. The sabotage ledger said so: both cases
+     * came back UNDETECTED while the suite was green.
+     *
+     * Here the reduction is **300 €** — the hypothetical the fix was argued from, made executable.
+     * It sits inside the plausibility band, so scanning every match does NOT save it: only knowing
+     * that a rent carries a period does. Six hundred euros wrong, and it would clear a ceiling the
+     * flat comes nowhere near.
+     */
+    public function testAPlausibleReductionIsNotMistakenForTheRent(): void
+    {
+        $listings = $this->source(self::body([
+            "\n<L>\n Le prix a baissé de 300 €\n"
+                . "<L>\n1 100 €/mois \n"
+                . "<L>\nAppartement 3 pièces\n"
+                . "<L>\n3 pièces . 66,57 m² \n"
+                . "<L>\n Pontault-Combault\n (77340)\n"
+                . "<L>\nVoir l'annonce\n",
+        ]), self::shippedParams())->fetch();
+
+        self::assertSame(1100, $listings[0]->rentCc ?? null, 'the periodic figure, not the plausible discount');
+    }
+
+    /**
+     * And the converse: no periodic marker anywhere, so only scanning every match can find the rent.
+     *
+     * A card quoting a fee before a bare rent. The first figure is implausible, and stopping there
+     * — which is what `preg_match` does — drops a listing that states its rent perfectly clearly
+     * two lines down. Silent: the card simply never becomes a listing.
+     */
+    public function testAnImplausibleFigureDoesNotHideABareRentBelowIt(): void
+    {
+        $listings = $this->source(self::body([
+            "\n<L>\nFrais de dossier 50 €\n"
+                . "<L>\n980 €\n"
+                . "<L>\nAppartement 3 pièces\n"
+                . "<L>\n3 pièces . 66,57 m² \n"
+                . "<L>\n Pontault-Combault\n (77340)\n"
+                . "<L>\nVoir l'annonce\n",
+        ]), self::shippedParams())->fetch();
+
+        self::assertSame(980, $listings[0]->rentCc ?? null, 'the fee is not the rent, and it does not hide it');
+    }
+
     // ------------------------------------------------------------------ commune
 
     /**
