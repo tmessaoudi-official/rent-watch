@@ -171,3 +171,51 @@ email.
 - [2026-08-25 12:20] AGREED: the rent separator is `\h`, never `\s`; a figure and a currency sign on two different lines are not one price.
 - [2026-08-25 12:40] AGREED: a §1 test asserts the classifier's verdict, never the absence of a French word from real text; every such test carries a counterweight proving the classifier still refuses an explicit label on the same fixture.
 - [2026-08-25 13:10] AGREED: `seloger` ships `enabled: false` — the adapter and fixtures are proven, the IMAP credentials are not present; `MAILBOX_DIR` + `--source=seloger` is the documented proof path.
+
+## LIVE MAILBOX VERIFIED — 2026-08-25
+
+`.env` was already correct (`imap.gmail.com`, 993, label `rent-watch`, app password).
+`scout doctor --source=seloger` against the real mailbox: **9 annonces, `ok`, ~19 s.**
+
+**The first live pass matched 8 of 9, and four of those were COLIVING ROOMS.** Fixed in `daf0f87`
+(`^\s*chambre\b` in `exclude_title_patterns`); the same pass now gives **4 matches**, all genuine
+3-pièces at 810–1060 € (77720, 77250, 94420, 95110). See that commit for the full reasoning.
+
+### OUTSTANDING — the one thing between here and `enabled: true`
+
+**Every live listing came back with `commune = null`.** The postcode is extracted; the name is not.
+
+*Cause* [Verified 2026-08-25, by reading `EmailAlertSource::communeIn()` and the live evidence
+snapshots]: `communeIn()` scans the body for a member of `Criteria::communeLabels`, which in region
+mode is built from the RANKED communes only. None of the live hits (Paris 12e, Le Plessis-Trévise,
+Ermont, Chelles…) is a ranked Boucle-de-Seine commune, so the scan finds nothing.
+
+*Why it is not cosmetic.* Matching is unaffected — the postcode carries location in region mode —
+but three things degrade, all quietly:
+- the notification cannot name the town (`— 77720 · T3 78 m² · 810 € CC`), which is the single most
+  useful word in the push;
+- `Dedup` gets a weaker key, so the cross-portal `group_key` is likelier to under-merge;
+- the S1 commune score cannot fire, which is correct here but indistinguishable from a bug.
+
+*Shape of the fix, NOT yet decided.* The card carries the commune as plain text next to the
+postcode (`Nation-Picpus, Paris 12ème arrondissement (75012)`, `Le Plessis Trevise`), so the
+information is present and only the reader is wrong. Options, cheapest first: (a) a
+`commune_pattern` in `params`, read the same way `residence_pattern` is — config-only, per-portal,
+and consistent with the adapter's existing shape; (b) derive the commune from the postcode via a
+lookup, which needs a data file this repo does not have and would be wrong for multi-commune
+postcodes; (c) widen `communeLabels` to every IdF commune, which needs the same data file.
+**(a) is the recommendation** — it uses evidence the payload already carries rather than importing a
+dataset, and hard rule 9 keeps `null` safe when the pattern misses.
+
+*Do NOT flip `enabled: true` before this lands.* A source that pushes nameless notifications is a
+source the operator learns to distrust, and the whole point of the notification is that it is
+readable on a phone in ten seconds.
+
+### What is NOT needed from the developer
+
+Nothing, for SeLoger. Credentials are in place and verified; the commune gap is a code change.
+
+## Decisions Log (continued)
+
+- [2026-08-25 18:05] AGREED: a coliving room advertised with the whole flat's rooms and surface is excluded by an ANCHORED TITLE pattern, never by a description match — `3 chambres` in a description is the family flat the user wants.
+- [2026-08-25 18:20] AGREED: `seloger` stays `enabled: false` until a listing's commune NAME is extracted; a notification that cannot name the town is not finished work.
