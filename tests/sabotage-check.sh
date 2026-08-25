@@ -2702,6 +2702,40 @@ run_sabotage "an uncompilable email pattern is accepted and never matches anythi
   src/php/Config/ConfigLoader.php \
   "s%, '') === false) {%, '') === false \&\& false) {%"
 
+# "RECENT" READ AS THE TAIL OF THE FOLDER. Measured 2026-08-25 on a 1436-message Gmail label:
+# SEARCH SINCE matched 124 messages at sequence numbers starting at 6, so the last 50 by sequence
+# held NONE of the day's alerts. The source read 0 listings against a 7-day mean of 9 while the
+# portal published normally -- a silent outage with a plausible explanation sitting next to it.
+run_sabotage "the IMAP window stops being a date query" \
+  src/php/Adapters/Mail/ImapMailbox.php \
+  "s%'SEARCH SINCE ' . \$since%'SEARCH ALL'%"
+
+# One mailbox serves every email source, so an unscoped window is a shared budget -- and it already
+# held 124 messages against a limit of 50. Drop the per-source sender and a busy portal starves a
+# quiet one, silently, worsening with every source added.
+run_sabotage "the IMAP search stops being scoped to the source's sender" \
+  src/php/Adapters/Mail/ImapMailbox.php \
+  "s%\$command .= ' FROM ' . self::quote(\$fromFilter);%\$command .= '';%"
+
+# A zero-day window matches nothing and reads as a quiet market for ever.
+run_sabotage "a non-positive IMAP window is obeyed rather than clamped" \
+  src/php/Adapters/Mail/ImapMailbox.php \
+  's%\$days = max(1, \$sinceDays);%$days = $sinceDays;%'
+
+# THE PRICE-DROP CARD. It quotes the reduction, then the rent, then the old price; only the rent
+# carries a period. Without that pattern the reader returned the DISCOUNT -- 100 EUR here, which is
+# below the plausibility floor so the card was merely dropped, but a 300 EUR reduction would have
+# been returned as a rent that clears a ceiling the flat comes nowhere near.
+run_sabotage "a periodic rent no longer outranks a bare figure (the discount wins)" \
+  src/php/Adapters/EmailAlertSource.php \
+  "s%'~(\\\\d\[\\\\d\\\\h.,\]{2,})\\\\h\*(?:€|EUR|euros?)\\\\h\*(?:/\\\\h\*mois|par mois|mensuel)~iu',%%"
+
+# And the other half: preg_match stops at the first hit, so one implausible figure hid a perfectly
+# readable rent three lines below it.
+run_sabotage "only the first rent-shaped figure in a card is considered" \
+  src/php/Adapters/EmailAlertSource.php \
+  's%foreach ($matches\[1\] ?? \[\] as $candidate) {%foreach (array_slice($matches[1] ?? [], 0, 1) as $candidate) {%'
+
 # THE COMMUNE READ FROM THE PORTAL'S LAYOUT. Dropping this branch falls back to the ranked-vocabulary
 # scan, which on a region-mode config knows almost no commune names -- so every SeLoger listing loses
 # its town while its postcode still parses, and the notification cannot say where the flat is. It is

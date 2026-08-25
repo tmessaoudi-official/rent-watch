@@ -335,3 +335,68 @@ following the tracking redirect, itself refused on hard-rule-5 grounds.
 ## Decisions Log (continued)
 
 - [2026-08-25 19:40] AGREED: `seloger` keeps `mixed_tenure: false` on going live — the tier-2 label rules catch an explicit exclusion regardless of the flag, and arming it would digest 100% of a source that states no tenure at all; the residual (an unstated PLS listing from an institutional landlord advertising on the portal) is recorded with the one line that reverses it.
+
+## THE SHARED MAILBOX BROKE THE SOURCE — 2026-08-25, same day it went live
+
+The developer widened their Gmail filter to catch five portals (SeLoger, Bien'ici, PAP, leboncoin,
+Jinka) and re-labelled a year of archived alert mail into the same label. **SeLoger went from 9
+listings to 0 within the hour**, and the only thing that said so was `SourceHealth`:
+`warn_drop — 0 annonces contre une moyenne de 9.0 sur 7 jours`. Hard rule 2 paying for itself.
+
+**Measured, not theorised** [2026-08-25, live mailbox]: the folder held **1436 messages**;
+`SEARCH SINCE 24-Aug-2026` matched **124** of them, at sequence numbers beginning **6, 7, 8, 9, 10**.
+`fetchRecent(50)` read sequences 1387–1436 — the tail — which contained none of the day's alerts.
+
+**The mechanism by which a Gmail label orders its messages is deliberately NOT recorded**, here or
+in the code. A first draft explained it as re-labelling assigning fresh high UIDs; that story does
+not survive its own evidence, since the genuinely-recent messages sit at the LOW end. What is
+recorded is what was measured: sequence order disagrees with date order, and `INTERNALDATE` survives
+whatever re-labelling does (124 ≠ 1436 proves the server filtered on something re-labelling left
+alone). This repo has a named failure — *"a true number attached to an invented cause"* — and a
+plausible protocol story is exactly that risk.
+
+### Two fixes, and the second is what makes it survive the five-portal plan
+
+- **`SEARCH SINCE`** — what counts as recent is the server's answer about dates, not this client's
+  assumption about ordering. `IMAP_SINCE_DAYS`, default 7 to match the health mean. A window of 0 is
+  clamped to 1: a query matching nothing is indistinguishable from a quiet market.
+- **`FROM <the source's own sender>`, pushed into the QUERY.** One mailbox serves every email
+  source, so a single window is a shared BUDGET — and the `SINCE` window alone held 124 messages
+  against a limit of 50, five portals' alerts plus the watcher's own notification emails, which land
+  in the same inbox. Unscoped, a busy portal starves a quiet one silently and it worsens with every
+  source added. `Scout::buildMailbox()` therefore takes the `SourceDefinition`. The post-fetch
+  `from` check in `EmailAlertSource` is unchanged: this makes the fetch correct, it is not the
+  security boundary.
+
+**Result** [Verified 2026-08-25]: `scout doctor --source=seloger` → **74 annonces, `ok`** — from 0,
+and from the 9 that one day's window had held.
+
+### The wider window immediately found a defect the three-message window could not
+
+A live **`Baisse de prix`** alert (Pontault-Combault 77340) quotes three amounts in one card: the
+reduction `baissé de 100 €`, the new rent `1 100 €/mois`, and the struck-through old one
+`1 200 € ↘ 8%`. The reader took the first figure it saw and returned **100** — below the
+plausibility floor, so the card was refused and the source reported `broken` on a template that had
+not changed at all.
+
+That is the benign direction, and it is luck. **A 300 € reduction would have been returned as the
+rent**: inside the plausibility band, six hundred euros wrong, clearing a ceiling the flat comes
+nowhere near — the `ref 850` defect of the same morning, in a different template.
+
+Two rules, one card as the evidence for both. **A rent is a PERIODIC amount** — `/mois` is what
+tells the new rent apart from a discount and from an old price, neither of which carries a period —
+so a periodic figure now outranks a bare one, with the bare figure still last for cards that state
+nothing else. And **every match of a pattern is examined, first plausible one wins**: `preg_match`
+stopped at the first hit, so one implausible figure hid a readable rent three lines below it.
+
+> **The price-drop template is also a confirmation, not just a defect.** Content identity
+> deliberately excludes the rent so that a price cut stays a price EVENT rather than minting a new
+> listing. That flat seen at 1 200 € and again at 1 100 € keeps one identity, and the store records
+> the drop. The design worked; only the reader was wrong.
+
+## Decisions Log (continued)
+
+- [2026-08-25 20:10] AGREED: "recent" is a server-side `SEARCH SINCE` query, never the tail of the folder — sequence order and date order were measured to disagree, and the disagreement silently zeroed a live source.
+- [2026-08-25 20:15] AGREED: the IMAP search is scoped by the source's own `params.from`, because one mailbox serving many portals makes a single fetch window a shared budget that a busy portal silently exhausts.
+- [2026-08-25 20:20] AGREED: the mechanism behind Gmail's label ordering is NOT written down, because it was not measured — only the disagreement was.
+- [2026-08-25 20:25] AGREED: a rent is a periodic amount; a figure with no period marker ranks below one that has it, and every match of a pattern is examined rather than only the first.

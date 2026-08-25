@@ -513,6 +513,31 @@ configures no pattern is bit-for-bit unchanged. Three rules travel with it:
 > occasionally is, and that is the residual.** Reversed by one line — `mixed_tenure: true` — and
 > `docs/plans/seloger-email-alert.plan.md` records what that costs.
 
+> **ONE MAILBOX SERVING MANY PORTALS IS A SHARED BUDGET, and it zeroed a live source hours after it
+> went live (2026-08-25).** The developer widened their Gmail filter to catch five portals and
+> re-labelled a year of archive into the same label; SeLoger went **9 listings → 0**, and the only
+> thing that said so was `SourceHealth` (`warn_drop`, 0 against a 7-day mean of 9). Measured: the
+> folder held **1436** messages, `SEARCH SINCE` matched **124**, and their sequence numbers began at
+> **6** — so `fetchRecent`'s tail-of-folder read contained none of the day's alerts. **The mechanism
+> behind that ordering is deliberately NOT written down**: a first draft explained it as re-labelling
+> minting fresh high UIDs, which its own evidence contradicts, and *a true number attached to an
+> invented cause* is this repo's named failure. What is measured is that sequence order disagrees
+> with date order. Two fixes: **`SEARCH SINCE`**, so what counts as recent is the SERVER's answer
+> about dates (`IMAP_SINCE_DAYS`, default 7, a window of 0 clamped to 1); and **`FROM <the source's
+> own sender>` pushed into the query**, so each source gets its own window rather than a slice of
+> one — without it a busy portal starves a quiet one silently, and it worsens with every source
+> added. `scout doctor --source=seloger` → **74 annonces**, from 0.
+
+> **A rent is a PERIODIC amount, and a wider window is what proved it.** A live `Baisse de prix`
+> card quotes three figures — the reduction `baissé de 100 €`, the new rent `1 100 €/mois`, the old
+> `1 200 € ↘ 8%` — and only the rent carries a period. The reader took the first and returned 100,
+> below the plausibility floor, so the card was refused and the source reported `broken` on an
+> unchanged template. **That is luck, not a guard: a 300 € reduction would have been returned as a
+> rent**, inside the band and clearing a ceiling the flat comes nowhere near. So a periodic figure
+> outranks a bare one, and every match of a pattern is examined rather than only the first —
+> `preg_match` stopping at the first hit is what let one implausible figure hide a readable rent
+> three lines below it.
+
 > **The mailbox is the developer's personal one, and the `from` filter is doing real work.** Of 50
 > messages only 3 are SeLoger alerts. Twelve come from `seloger@s.seloger.com` — *contact receipts*,
 > whose unfilled template reads `En avant-première870,00 €cc /mois. · m² · pièces · chambres` beside

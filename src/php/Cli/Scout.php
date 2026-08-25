@@ -1777,7 +1777,7 @@ final readonly class Scout
      */
     private function buildEmailSource(SourceDefinition $definition, Store $store): ?Source
     {
-        $mailbox = $this->buildMailbox();
+        $mailbox = $this->buildMailbox($definition);
 
         if ($mailbox === null) {
             $this->warn('source ' . $definition->name . ' ignorée : ni MAILBOX_DIR ni IMAP_HOST ne sont '
@@ -1794,7 +1794,16 @@ final readonly class Scout
         );
     }
 
-    private function buildMailbox(): ?Mailbox
+    /**
+     * The mailbox a source reads from — scoped to that source, not to the deployment.
+     *
+     * The definition is a parameter because `params.from` is pushed INTO the IMAP query. One
+     * mailbox serves every email source, so a single shared fetch window is a shared budget: the
+     * day the developer pointed five portals at one Gmail label, SeLoger's alerts stopped fitting
+     * in it and the source read zero listings while publishing normally. A per-source `FROM` gives
+     * each one its own window. See {@see ImapMailbox::searchCommand()}.
+     */
+    private function buildMailbox(SourceDefinition $definition): ?Mailbox
     {
         $directory = (string) (getenv('MAILBOX_DIR') ?: '');
         if ($directory !== '') {
@@ -1806,12 +1815,16 @@ final readonly class Scout
             return null;
         }
 
+        $from = $definition->params['from'] ?? null;
+
         return new ImapMailbox(
             host: $host,
             user: (string) (getenv('IMAP_USER') ?: ''),
             password: (string) (getenv('IMAP_PASSWORD') ?: ''),
             folder: (string) (getenv('IMAP_MAILBOX') ?: 'INBOX'),
             port: (int) (getenv('IMAP_PORT') ?: 993),
+            fromFilter: \is_string($from) && $from !== '' ? $from : null,
+            sinceDays: (int) (getenv('IMAP_SINCE_DAYS') ?: 7),
         );
     }
 

@@ -202,6 +202,44 @@ final class EmailAlertSegmentationTest extends TestCase
         }
     }
 
+    // ------------------------------------------------------------------ rent
+
+    /**
+     * A PRICE-DROP alert quotes three amounts, and only one of them is the rent.
+     *
+     * Captured from a live SeLoger message on 2026-08-25 (*"Baisse de prix"*, Pontault-Combault
+     * 77340). It states the DISCOUNT first (`baissé de 100 €`), then the new rent (`1 100 €/mois`),
+     * then the old one (`1 200 € ↘ 8%`) — and the reader took the first figure it saw.
+     *
+     * **100 € is below the plausibility floor, so the card was dropped entirely** and the source
+     * reported `broken` on a message whose template had not changed at all. That is the benign
+     * direction. Had the reduction been 300 € the reader would have returned **300** — inside the
+     * band, wildly wrong, and clearing a rent ceiling the flat comes nowhere near. Same shape as the
+     * `ref 850` defect of the same day: a plausible wrong rent is worse than none.
+     *
+     * Two rules come out of it, and this one card is the evidence for both. **A rent is a PERIODIC
+     * amount**: `/mois` is what tells the new rent apart from a discount and from a struck-through
+     * old price, neither of which carries a period. And **a pattern is scanned for ALL its matches,
+     * first plausible one wins**, because the bare figure fallback would otherwise still take the
+     * discount on a card that states no period at all.
+     */
+    public function testAPriceDropCardReadsTheRentAndNotTheReduction(): void
+    {
+        $listings = $this->source(self::body([
+            "\n<L>\n Le prix d'un bien correspondant à votre recherche a baissé de 100 €\n"
+                . "<L>\n1 100 €/mois \n"
+                . "<L>\n1 200 € ↘ 8%\n"
+                . "<L>\nAppartement 3 pièces\n"
+                . "<L>\n3 pièces . 66,57 m² \n"
+                . "<L>\n Mairie Rouxel-Sud Est, \n\n Pontault-Combault\n (77340)\n"
+                . "<L>\nVoir l'annonce\n",
+        ]), self::shippedParams())->fetch();
+
+        self::assertCount(1, $listings, 'the card is readable — 100 € is a reduction, not a rent');
+        self::assertSame(1100, $listings[0]->rentCc, 'the periodic amount, not the discount and not the old price');
+        self::assertSame('Pontault-Combault', $listings[0]->commune);
+    }
+
     // ------------------------------------------------------------------ commune
 
     /**

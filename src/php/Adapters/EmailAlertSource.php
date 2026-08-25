@@ -54,9 +54,25 @@ final readonly class EmailAlertSource implements Source
      * for. The trailing `\s*` before the currency marker stays `\h*` for the same reason — a figure
      * and a currency sign on two different lines are not one price.
      */
+    /**
+     * Most specific first — the first pattern to yield a PLAUSIBLE figure wins.
+     *
+     * The third entry is the reason the order matters, and it was added on 2026-08-25 after a live
+     * *"Baisse de prix"* alert. That template quotes three amounts: the reduction
+     * (`baissé de 100 €`), the new rent (`1 100 €/mois`) and the struck-through old one
+     * (`1 200 € ↘ 8%`). Only one of the three carries a PERIOD, and it is the only one that is a
+     * rent — so a periodic amount without `charges comprises` outranks a bare figure, and the bare
+     * figure stays last for cards that state nothing else.
+     *
+     * Without it the reader returned the DISCOUNT. Here that was 100 €, below the plausibility
+     * floor, so the card was refused and the source reported `broken` on an unchanged template —
+     * the benign direction. A 300 € reduction would have been returned as the rent: inside the
+     * band, six hundred euros wrong, clearing a ceiling the flat comes nowhere near.
+     */
     private const array RENT_PATTERNS = [
         '~(\d[\d\h.,]{2,})\h*(?:€|EUR|euros?)\h*(?:/\h*mois|par mois|mensuel)?\h*(?:CC|charges comprises)~iu',
         '~(?:loyer|prix)\h*(?:CC|charges comprises)?\h*:?\h*(\d[\d\h.,]{2,})\h*(?:€|EUR|euros?)~iu',
+        '~(\d[\d\h.,]{2,})\h*(?:€|EUR|euros?)\h*(?:/\h*mois|par mois|mensuel)~iu',
         '~(\d[\d\h.,]{2,})\h*(?:€|EUR|euros?)~iu',
     ];
 
@@ -524,11 +540,25 @@ final readonly class EmailAlertSource implements Source
         return preg_match('~\b((?:78|95|92|91|93|94|77|75)\d{3})\b~', $body, $m) === 1 ? $m[1] : null;
     }
 
+    /**
+     * The rent in a card, or `null` when no figure in it is credible as one.
+     *
+     * **Every match of a pattern is examined, not just the first**, and that is the other half of
+     * the price-drop fix. `preg_match` stops at the first hit, so on a card reading
+     * `baissé de 100 €` … `1 100 €/mois` the bare-figure pattern returned 100 and the reader gave
+     * up — one implausible figure hiding a perfectly readable rent three lines below it. Scanning
+     * all matches and taking the first PLAUSIBLE one costs nothing and removes a whole class of
+     * "the first number that looks like money" failures.
+     */
     private static function rentIn(string $body): ?int
     {
         foreach (self::RENT_PATTERNS as $pattern) {
-            if (preg_match($pattern, $body, $m) === 1) {
-                $value = Payload::int(['v' => $m[1]], ['v']);
+            if (preg_match_all($pattern, $body, $matches, PREG_PATTERN_ORDER) === false) {
+                continue;
+            }
+
+            foreach ($matches[1] ?? [] as $candidate) {
+                $value = Payload::int(['v' => $candidate], ['v']);
 
                 // A plausibility band. Without it, `2024` from a date and `95240` from a postcode
                 // both parse as rents — and a rent of 2024 € would pass nothing while a rent of 95

@@ -20,6 +20,22 @@ use RentWatch\Core\MutableByDesign;
  * refuses any modification; nothing here can flag, move or delete a message. The mailbox is the
  * developer's, it is where the alerts land, and a parser bug must not be able to cost them.
  *
+ * **"RECENT" IS A QUERY, NOT THE END OF THE FOLDER — and getting that wrong cost a live source.**
+ * `fetchRecent()` used to read the highest `$limit` sequence numbers. On 2026-08-25 the developer
+ * widened their Gmail filter to catch five portals and re-labelled a year of archived alert mail
+ * into the same label; SeLoger immediately went from **9 listings to 0**, and the only thing that
+ * said so was `SourceHealth` (`warn_drop`, 0 against a 7-day mean of 9). Measured on that mailbox:
+ * 1436 messages in the folder, of which `SEARCH SINCE` matched 124 — **at sequence numbers 6, 7, 8,
+ * 9, 10 and up**, so the tail of the folder contained none of them.
+ *
+ * Two consequences are baked in below and neither is optional:
+ *
+ * - the window is chosen by `SEARCH SINCE`, so what counts as recent is the SERVER's answer about
+ *   dates rather than this client's assumption about ordering;
+ * - the query carries the source's own `FROM`, because one mailbox now serves many portals and a
+ *   shared window is a shared budget — without it a busy portal starves a quiet one silently, and
+ *   the more sources are added the worse it gets. See {@see searchCommand()}.
+ *
  * `docs/PHORJ-REQUIREMENTS.md` asks phorj for a `Core.Imap` with the same shape. This is the PHP
  * half of that, and the two will read the same `.eml` fixtures.
  */
@@ -45,6 +61,13 @@ final class ImapMailbox implements Mailbox, MutableByDesign
 
     private int $tag = 0;
 
+    /**
+     * @param string|null $fromFilter the source's own `params.from`, pushed INTO the IMAP query.
+     *                                See {@see searchCommand()} for why it is not merely a
+     *                                post-fetch filter.
+     * @param int         $sinceDays  how far back to look. Seven, matching the source-health rolling
+     *                                mean, so the two speak the same unit.
+     */
     public function __construct(
         private readonly string $host,
         private readonly string $user,
@@ -52,6 +75,9 @@ final class ImapMailbox implements Mailbox, MutableByDesign
         private readonly string $folder = 'INBOX',
         private readonly int $port = 993,
         private readonly int $timeoutSeconds = 20,
+        private readonly ?string $fromFilter = null,
+        private readonly int $sinceDays = 7,
+        private readonly ?\DateTimeImmutable $now = null,
     ) {}
 
     public function describe(): string
@@ -86,10 +112,22 @@ final class ImapMailbox implements Mailbox, MutableByDesign
                 return [];
             }
 
-            $first = max(1, $total - $limit + 1);
+            // ASK THE SERVER WHICH MESSAGES ARE RECENT. Reading the tail of the folder instead was
+            // the defect of 2026-08-25 — see the class docblock.
+            $sequences = self::sequencesIn(
+                $this->command(self::searchCommand($this->fromFilter, $this->sinceDays, $this->now ?? new \DateTimeImmutable())),
+                $limit,
+            );
+
+            if ($sequences === []) {
+                // Nothing in the window. Legitimate for the same reason an empty folder is, and
+                // reachable only because SEARCH SUCCEEDED — a failing SEARCH throws in `command()`.
+                return [];
+            }
+
             $messages = [];
 
-            for ($sequence = $total; $sequence >= $first; --$sequence) {
+            foreach ($sequences as $sequence) {
                 $messages[] = $this->fetchMessage($sequence);
             }
 
@@ -97,6 +135,83 @@ final class ImapMailbox implements Mailbox, MutableByDesign
         } finally {
             $this->disconnect();
         }
+    }
+
+    /**
+     * The IMAP query that decides which messages this pass even looks at.
+     *
+     * **`SINCE` is here because the tail of a folder is not "recent".** Measured on the live mailbox
+     * 2026-08-25: the folder held 1436 messages, `SEARCH SINCE` two days back matched 124 of them,
+     * and their sequence numbers began at **6, 7, 8, 9, 10** — the low end. Fetching the last 50 by
+     * sequence therefore returned **zero** of the day's SeLoger alerts, against a seven-day mean of
+     * nine, and `SourceHealth` reported `warn_drop` on a source that was publishing normally. The
+     * mechanism by which a Gmail label orders its messages is NOT recorded here, because it was not
+     * measured — what was measured is that ordering by sequence disagrees with ordering by date, and
+     * that INTERNALDATE survives whatever re-labelling does (124 ≠ 1436 proves the server is
+     * filtering on something the relabelling did not touch).
+     *
+     * **`FROM` is here because one mailbox now serves many portals**, and a shared window is a
+     * shared budget. The `SINCE` window alone held 124 messages against a limit of 50 — five
+     * portals' alerts plus the watcher's own notification emails, which land in the same inbox. So
+     * a busy portal starves a quiet one, silently, and it gets worse with every source added. Push
+     * the source's own `params.from` into the QUERY and each source gets its own window instead of a
+     * slice of one. The post-fetch `from` check in {@see \RentWatch\Adapters\EmailAlertSource} stays
+     * as it was: this makes the fetch cheap and correct, it is not the security boundary.
+     *
+     * The date is formatted with `date()`'s English month abbreviations, which RFC 3501 requires
+     * (`d-Mon-yyyy`) and which are locale-independent by construction. A locale-aware formatter
+     * would emit `Aoû` here and the server would either reject the command or, worse, match nothing.
+     */
+    public static function searchCommand(?string $fromFilter, int $sinceDays, \DateTimeImmutable $now): string
+    {
+        // At least one day. A zero or negative window would match nothing and read as a quiet
+        // market for ever — the failure this whole class of guard exists to refuse.
+        $days = max(1, $sinceDays);
+        $since = $now->sub(new \DateInterval('P' . $days . 'D'))->format('d-M-Y');
+
+        $command = 'SEARCH SINCE ' . $since;
+
+        if ($fromFilter !== null && $fromFilter !== '') {
+            // Through `quote()`, so the CRLF refusal applies: this value reaches the command line.
+            $command .= ' FROM ' . self::quote($fromFilter);
+        }
+
+        return $command;
+    }
+
+    /**
+     * The sequence numbers in a `SEARCH` response, highest first, capped at `$limit`.
+     *
+     * Highest first because the caller's contract is *newest first*, and within a window already
+     * narrowed by date and sender that is the best available ordering — the alternative is fetching
+     * every match to read its `Date`, which is the cost this query exists to avoid.
+     *
+     * An untagged `* SEARCH` reply MAY be split across several lines, and a server is free to send
+     * one with no numbers at all; both shapes are read here rather than assumed away.
+     *
+     * @param list<string> $lines the response lines from {@see command()}
+     *
+     * @return list<int>
+     */
+    public static function sequencesIn(array $lines, int $limit): array
+    {
+        $sequences = [];
+
+        foreach ($lines as $line) {
+            if (preg_match('~^\*\s+SEARCH\b(.*)$~i', $line, $m) !== 1) {
+                continue;
+            }
+
+            foreach (preg_split('~\s+~', trim($m[1])) ?: [] as $token) {
+                if ($token !== '' && ctype_digit($token)) {
+                    $sequences[] = (int) $token;
+                }
+            }
+        }
+
+        rsort($sequences);
+
+        return array_slice(array_values(array_unique($sequences)), 0, max(0, $limit));
     }
 
     private function connect(): void

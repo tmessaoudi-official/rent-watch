@@ -770,6 +770,77 @@ final class NetworkAdaptersTest extends TestCase
         (new EmailAlertSource($definition, $this->store(), new FileMailbox('/nonexistent')))->fetch();
     }
 
+    /**
+     * "Recent" is asked of the SERVER, and it is asked per source.
+     *
+     * The tail of a folder is not the recent end of it. Measured on the live mailbox 2026-08-25:
+     * 1436 messages, of which `SEARCH SINCE` matched 124 — at sequence numbers starting at **6** —
+     * so reading the last 50 by sequence returned NONE of the day's SeLoger alerts. The source
+     * reported `warn_drop`, 0 against a seven-day mean of 9, while the portal published normally.
+     *
+     * `FROM` is the half that keeps it fixed as sources are added: one mailbox serves every email
+     * source, so a single window is a shared budget, and the window already held 124 messages
+     * against a limit of 50. Without a per-source query a busy portal starves a quiet one silently.
+     */
+    public function testTheImapSearchIsScopedByDateAndBySender(): void
+    {
+        $now = new \DateTimeImmutable('2026-08-25 18:00:00');
+
+        $command = ImapMailbox::searchCommand('alertes.seloger.com', 7, $now);
+
+        self::assertSame('SEARCH SINCE 18-Aug-2026 FROM "alertes.seloger.com"', $command);
+
+        // RFC 3501 wants `dd-Mon-yyyy` with ENGLISH month abbreviations. A locale-aware formatter
+        // would emit `Aoû` here and the server would reject the command or, far worse, match
+        // nothing at all — a quiet market that is really a broken query.
+        self::assertStringContainsString('-Aug-', $command);
+
+        // No `from` configured: the date window still applies. A source without a sender to scope
+        // by is not a source that should read the whole folder.
+        self::assertSame('SEARCH SINCE 18-Aug-2026', ImapMailbox::searchCommand(null, 7, $now));
+    }
+
+    /**
+     * A window of zero days would match nothing and read as a quiet market for ever.
+     *
+     * Same asymmetry as `HEARTBEAT_HOURS`: the safe direction is one day too many.
+     */
+    public function testANonPositiveImapWindowIsClampedRatherThanObeyed(): void
+    {
+        $now = new \DateTimeImmutable('2026-08-25 18:00:00');
+
+        self::assertSame('SEARCH SINCE 24-Aug-2026', ImapMailbox::searchCommand(null, 0, $now));
+        self::assertSame('SEARCH SINCE 24-Aug-2026', ImapMailbox::searchCommand(null, -30, $now));
+    }
+
+    /** The sender reaches the command line, so the CRLF refusal has to cover it. */
+    public function testAnImapFromFilterCarryingCrlfIsRefused(): void
+    {
+        $this->expectException(MailboxError::class);
+
+        ImapMailbox::searchCommand("alertes.seloger.com\r\nA002 DELETE", 7, new \DateTimeImmutable());
+    }
+
+    /**
+     * An untagged `* SEARCH` reply may be split across lines, and may carry no numbers at all.
+     *
+     * Highest first, because the caller's contract is newest first and within a window already
+     * narrowed by date and sender that is the best ordering available without fetching every match
+     * to read its `Date` — which is the cost the query exists to avoid.
+     */
+    public function testTheSearchResponseIsReadAcrossLinesAndCapped(): void
+    {
+        $lines = ['* SEARCH 6 7 8', '* SEARCH 52 53 8', '* OK unrelated', 'A003 OK SEARCH completed'];
+
+        self::assertSame([53, 52, 8], ImapMailbox::sequencesIn($lines, 3));
+        self::assertSame([53, 52, 8, 7, 6], ImapMailbox::sequencesIn($lines, 50), 'deduplicated, highest first');
+
+        // No match is a legitimate answer — nothing arrived in the window. It is distinguishable
+        // from a failure because a failing SEARCH throws before this is ever reached.
+        self::assertSame([], ImapMailbox::sequencesIn(['* SEARCH', 'A003 OK'], 50));
+        self::assertSame([], ImapMailbox::sequencesIn(['A003 OK SEARCH completed'], 50));
+    }
+
     public function testTheImapMailboxIsBehindTheOfflineTripwire(): void
     {
         // THE EGRESS POINT THAT MATTERS MOST, and it was not covered. `Core\Offline` was introduced
