@@ -46,6 +46,32 @@ final class EmailMessageTest extends TestCase
     }
 
     /**
+     * A preamble containing a BLANK LINE is where skipping index 0 stops being belt-and-braces.
+     *
+     * The `!== ''` guard alone handles the ordinary preamble, because a single line with no colon
+     * parses to no headers and no body. But `Preamble\n\nmore words` splits at the blank line, so
+     * "more words" becomes a body, the missing `Content-Type` defaults to `text/plain`, and the
+     * segment claims the answer with real garbage in it — a body that is not empty and is not the
+     * message.
+     *
+     * RFC 2046 §5.1.1 is unambiguous that everything before the first boundary is the preamble
+     * whatever it contains, which is why the skip is structural rather than a check on emptiness.
+     */
+    public function testAPreambleWithABlankLineIsStillNotAPart(): void
+    {
+        $raw = self::multipart(
+            preamble: "Ceci est un message multi-parties.\n\nSi vous voyez ce texte, votre client est ancien.",
+            plain: '980 €/mois charges comprises à Chatou',
+            html: '<p>x</p>',
+        );
+
+        $body = EmailMessage::parse($raw)->body;
+
+        self::assertStringContainsString('Chatou', $body);
+        self::assertStringNotContainsString('votre client est ancien', $body, 'the preamble is not the body');
+    }
+
+    /**
      * The same bug one layer down: a nested `multipart/*` that resolves to nothing must not claim
      * the answer either. `multipart/mixed` wrapping `multipart/alternative` is the ordinary shape
      * for an alert carrying an attachment or a tracking image.
@@ -154,6 +180,58 @@ final class EmailMessageTest extends TestCase
             . "--8PaVqvzMwU9R=_?:--\n";
 
         self::assertStringContainsString('44,71', EmailMessage::parse($raw)->body);
+    }
+
+    /**
+     * **HTML entities are decoded, including in the `text/plain` part, and §1 is why.**
+     *
+     * A portal's plain alternative is generated FROM its HTML, and SeLoger's does not decode
+     * entities on the way — its real alerts carry `&rarr;` in the plain part. `Text::fold()`
+     * refuses text containing entities outright, with a message that says exactly whose job this
+     * is: *"an entity inside a label deletes that label while leaving others intact, which has
+     * already turned an explicitly social listing into an eligible one."*
+     *
+     * That is the §1 failure in one sentence. `logement conventionn&eacute;` folds to
+     * `logement conventionn` if the entity is left alone — the label is destroyed and the listing
+     * looks unlabelled, which on a mixed source is the difference between a digest entry and a
+     * notification.
+     *
+     * Decoding is the SAFE direction. It can only ever restore a label, never invent one: no HTML
+     * entity expands to `PLAI`, `PLUS`, `PLS` or `intermédiaire`.
+     */
+    public function testHtmlEntitiesAreDecodedInThePlainPart(): void
+    {
+        $raw = self::multipart(
+            preamble: 'This is a multi-part message in MIME format.',
+            plain: "Se désabonner &rarr;\nLogement conventionn&eacute; &agrave; Chatou",
+            html: '<p>ignored</p>',
+        );
+
+        $body = EmailMessage::parse($raw)->body;
+
+        self::assertStringContainsString('conventionné', $body, 'the label survives, entity and all');
+        self::assertStringNotContainsString('&eacute;', $body);
+        self::assertStringNotContainsString('&rarr;', $body);
+    }
+
+    /** An `&amp;` inside a link must decode too, or every query parameter after it is lost. */
+    public function testEntitiesInLinksAreDecoded(): void
+    {
+        $raw = self::multipart(
+            preamble: '',
+            plain: 'https://portail.test/a?x=1&amp;y=2',
+            html: '<p>x</p>',
+        );
+
+        self::assertSame(['https://portail.test/a?x=1&y=2'], EmailMessage::parse($raw)->links);
+    }
+
+    /** A bare ampersand in ordinary prose is not an entity and is left exactly as written. */
+    public function testABareAmpersandIsUntouched(): void
+    {
+        $raw = self::multipart(preamble: '', plain: 'Agence Dupont & Fils', html: '<p>x</p>');
+
+        self::assertStringContainsString('Dupont & Fils', EmailMessage::parse($raw)->body);
     }
 
     private static function multipart(string $preamble, string $plain, string $html): string

@@ -2620,6 +2620,73 @@ run_sabotage "a new listing field reaches no matrix surface and nothing says so"
   src/php/Core/RawListing.php \
   "s%        public string \$description = '',%        public string \$description = '', public ?string \$agencyBlurb = null,%"
 
+
+# ---------------------------------------------------------------- the email-alert path (2026-08-25)
+#
+# Every case below was written after the FIRST REAL portal alert was run through the parser and
+# returned `body len: 0, links: 0`. Zero listings, no exception -- hard rule 3's shape reached
+# without a catch, and 1886 green tests said nothing, because the committed email_demo fixtures
+# happen to omit every structure a real mailer emits.
+
+# The `''`-is-not-an-answer guard. A blank text/plain alternative claiming the answer means the HTML
+# alternative carrying the whole listing is never reached, and the source reports a quiet market.
+run_sabotage "an empty MIME part claims the answer again" \
+  src/php/Adapters/Mail/EmailMessage.php \
+  's%if ($plain === null && $trimmed [^)]*) {%if ($plain === null) {%'
+
+# The structural half. A preamble with a blank line in it parses to a real body -- not empty, not
+# the message -- so the skip is RFC 2046, not a check on emptiness.
+run_sabotage "the MIME preamble is read as a body part again" \
+  src/php/Adapters/Mail/EmailMessage.php \
+  's%            if ($index === 0) {%            if (false) {%'
+
+# RFC 2047 §6.2. Collapsing AFTER the decode is collapsing nothing: no `?= =?` sequence survives it.
+# The subject becomes a listing's title, which exclude_title_patterns filters on.
+run_sabotage "adjacent encoded words are joined after decoding, which is never" \
+  src/php/Adapters/Mail/EmailMessage.php \
+  's%            $joined,%            $value,%'
+
+# §1 THROUGH A TEXT ENCODING. `logement conventionn&eacute;` folds to `logement conventionn` -- the
+# label destroyed, the listing apparently unlabelled. Text::fold refuses entities precisely so this
+# cannot pass silently, and the adapter is what must decode them.
+run_sabotage "html entities reach the classifier undecoded" \
+  src/php/Adapters/Mail/EmailMessage.php \
+  's%        return html_entity_decode($text, ENT_QUOTES | ENT_HTML5, .UTF-8.);%        return $text;%'
+
+# A rent assembled across a line break reads whatever sat above it. `ref 850` over `1 450 EUR` gives
+# 850: inside the plausibility band, six hundred euros low, clearing a ceiling the real rent does not.
+run_sabotage "the rent separator admits newlines again" \
+  src/php/Adapters/EmailAlertSource.php \
+  "s%(\\\\d\[\\\\d\\\\h.,\]{2,})%(\\\\d[\\\\d\\\\s.,]{2,})%g"
+
+# THE NO-INFORMATION FLOOR. Without it every card whose extraction failed hashes to the same key --
+# the store's "nothing collapses onto a shared key" guarantee violated where the store cannot see it.
+run_sabotage "the content identity is minted with no locating evidence" \
+  src/php/Adapters/EmailAlertSource.php \
+  's%        if ($locating === null || $locating === .. || !$describing) {%        if (false) {%'
+
+# Rent back in the identity, which turns every price drop into a brand-new listing with no history.
+run_sabotage "the rent joins the content identity, so a price cut mints a new flat" \
+  src/php/Adapters/EmailAlertSource.php \
+  "s%\\\$surface, \\\$residence);%\\\$surface, \\\$residence . '|' . \\\$rent);%"
+
+# Two DISTINCT cards sharing an identity is an extraction failure; swallowing it loses a flat for ever.
+run_sabotage "duplicate identities within one message are swallowed" \
+  src/php/Adapters/EmailAlertSource.php \
+  's%            if (isset($seenIds\[$listing->externalId\])) {%            if (false) {%'
+
+# Hard rule 2. A message that plainly carries cards and yields none is a changed template, and it is
+# indistinguishable from a quiet market unless it is loud.
+run_sabotage "a message full of cards that yields none returns quietly" \
+  src/php/Adapters/EmailAlertSource.php \
+  's%        if ($out === \[\] && count($segments) > 1) {%        if (false) {%'
+
+# §1 AT LOAD. Segmenting removes a batch-level regime mention from every card; on a mixed-tenure
+# source that is a decision nobody has made against a real payload.
+run_sabotage "a segmented mixed-tenure source is allowed to load" \
+  src/php/Config/ConfigLoader.php \
+  "s%if (isset(\\\$params\['card_separator'\]) && \\\$params\['card_separator'\] !== '' && \\\$mixedTenure) {%if (false) {%"
+
 # THE TALLY LIVES HERE, BELOW EVERY CASE, and that position is load-bearing rather than tidy.
 # It sat mid-file twice: once on 2026-08-20 (295 printed for 303 cases) and again from 2026-08-23,
 # when 21 schema-v7 / digest / reclassify cases were appended past it and the headline read 354 for

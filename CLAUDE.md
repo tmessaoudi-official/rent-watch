@@ -19,7 +19,7 @@ Status: **milestone 1 is functionally complete against a frozen payload.** The p
 (schema v8), the config layer, the adapter contract, the criteria engine, dedup, the notification
 layer and the `scout` CLI all exist. What is missing is a NETWORK adapter, and that is blocked on an
 input rather than a decision. As of 2026-08-07 there is a PHP 8.5
-implementation of `models` + `tenure` under `src/php/Core/`, a 122-case language-neutral classifier
+implementation of `models` + `tenure` under `src/php/Core/`, a 123-case language-neutral classifier
 corpus at `tests/fixtures/tenure/corpus.json`, the seen-set / price-history / run-log store under
 `src/php/Store/` with `SourceHealth` + `SourceStatus` in `Core/`, a strict JSON config layer under
 `src/php/Config/` with both files committed, the `Source` contract plus `Payload` / `ListingMapper` /
@@ -48,9 +48,12 @@ evidence (the pipeline already rewrites the snapshot post-merge every pass) whil
 verdict depend on mapper code that has since changed. `--since` is refused, not implemented, because
 its ruled mechanism is a classifier-version column that does not exist. The network adapters exist too — `HttpJsonSource` + `Robots`, `EmailAlertSource` +
 `ImapMailbox`/`FileMailbox`, `SmtpTransport`/`FileTransport` — all tested offline against fakes,
-with `.env` swapping the real thing in. **What is missing is not code but two INPUTS**: a DevTools
-cURL capture to replace a `REMPLACER` URL in `config/sources.json` (hard rule 1 forbids writing one
-from memory), and the `plafonds` figures for classifier tier 4. CI now exists
+with `.env` swapping the real thing in — and the email half was written BLIND, which cost four
+defects the day a real alert first reached it (§ "The email-alert path"). **What is missing is not
+code but INPUTS**: a DevTools cURL capture for AL'in (hard rule 1 forbids writing an endpoint from
+memory), IMAP credentials for the alert mailbox, and the `plafonds` figures for classifier tier 4 —
+those last to be FETCHED from a dated official publication rather than supplied, since verifying a
+figure against a live source is what hard rule 1 asks for, not what it forbids. CI now exists
 (`.github/workflows/ci.yml`): the fast job runs the PHPUnit suite, the tenure tripwire,
 runner-fetch and ci-workflow self-tests, the drift scan and shell syntax on every push and
 PR; the sabotage ledger runs nightly and on demand. **A red nightly opens a GitHub issue, and a
@@ -382,8 +385,8 @@ Two smaller things landed with it, both hard rule 9: `Payload::floor()` reads fl
 they are (`RDC` is **0**, not unknown; and the generic number reader would return the ROOM COUNT from
 `3 pièces - 4ème étage - 82m²`), and `Payload::bool()` accepts the amenity noun `ascenseur`, which
 can only ever yield `true` or `null` and so cannot manufacture the explicit `false` the high-floor
-penalty needs. **`tests/fixtures/tenure/corpus.json` now has CAPTURED cases** (122
-total, 115 synthetic + 7 captured): two CDC cards — including the `au plus près` one, which is what
+penalty needs. **`tests/fixtures/tenure/corpus.json` now has CAPTURED cases** (123
+total, 115 synthetic + 8 captured): two CDC cards — including the `au plus près` one, which is what
 stops that classifier fix from being quietly undone — two Cityloger detail pages, and two Logirep
 captures added 2026-08-22, one an ordinary card that states no tenure at all and one the site's own
 FILTER FACET STRIP, which contains `PLAI` inside `Plain-pied`, `LLI` inside `Ce·lli·er` and `PLUS`
@@ -394,6 +397,79 @@ avoid: a UI label, not prose.
 publishes a directory of *résidences* with zero rents, zero surfaces and zero occurrences of
 `disponib`. It was ranked second on portfolio value, not on a verified feed — a `200` had been read
 as a feed. See `docs/SOURCES.md`, whose A2 and A3 rows were both corrected.
+
+### The email-alert path — four defects, all found by one real message (2026-08-25)
+
+**`EmailAlertSource`, `EmailMessage`, `FileMailbox` and `ImapMailbox` were written BLIND**, and the
+class docblock said so: *"No real portal alert has been seen yet… It is built to be SHAPED by a real
+message."* Two SeLoger alerts arrived on 2026-08-25 and running them through the parser returned
+**`body len: 0`, `links: 0`** — zero listings, no exception, a source that would look like a quiet
+market for ever. Hard rule 3's exact shape, reached without a single `catch`, behind 1886 green
+tests.
+
+Four defects, and the ordering of them is the lesson: none was findable without a real payload, and
+each hid the next.
+
+1. **An empty MIME part claimed the answer.** RFC 2046 puts a *preamble* before the first boundary
+   and nearly every real mailer writes one; read as a part it has no `Content-Type`, defaults to
+   `text/plain`, splits to an empty body, and runs `$plain ??= ''` — which `??=` never overwrites.
+   Three instances, all fixed as *an empty string is not an answer*, plus the structural half: index
+   0 is never a part. The committed `email_demo` fixtures happen to have no preamble.
+2. **The RFC 2047 whitespace collapse ran after the decode**, where no `?= =?` sequence survives to
+   match — dead from the line it was written on. A folded French subject decoded to
+   `exclusivit és`, and the subject becomes a listing's `title`.
+3. **A rent could be assembled across a line break.** `\s` in the thousands-separator class matches
+   `\n`, and `Payload::int` truncates there, so the rent became whatever sat on the line above:
+   `ref 850` over `1 450 EUR charges comprises` extracts **850** — inside the plausibility band, six
+   hundred euros low, clearing a ceiling the real rent does not. The separator is `\h` now.
+4. **HTML entities reached the classifier undecoded, and that one is §1.** A portal's `text/plain`
+   alternative is generated from its HTML, and SeLoger's does not decode entities on the way.
+   `Text::fold()` refuses such text outright, naming whose job it is: *an entity inside a label
+   deletes that label while leaving others intact*. `logement conventionn&eacute;` folds to
+   `logement conventionn` — the label destroyed, the listing apparently unlabelled. Decoding is the
+   safe direction and can only ever restore a label: no entity expands to `PLAI` or `PLUS`.
+
+**SeLoger sends no listing URL and no listing id**, which is the design problem the source poses.
+Every link is `click.by.seloger.com/?qs=<opaque per-recipient token>`; strip the query, as
+link-identity does, and all sixteen links in one alert collapse to a single id — sixteen cards, one
+identity, each carrying the FIRST rent and FIRST surface in the whole message. Hence
+`params.card_separator`, which cuts the body on the card's terminal CTA, and `params.id_from:
+content`, which keys on the dwelling's structural facts.
+
+Three rules travel with that identity, each closing what another opens:
+
+- **The rent is deliberately not in the key.** A price drop is an event this project exists to
+  detect; in the key it becomes a brand-new listing with no history and no *en baisse* reason.
+- **A no-information floor.** Without it every card whose extraction failed hashes to
+  `sha1('seloger|||||')` and they all collapse onto that one id — the store's own *"nothing
+  collapses onto a shared key"* guarantee violated one layer up, where the store cannot see it.
+  Refusing costs nothing: a listing with no location can never match anyway (Q32).
+- **Duplicate ids WITHIN one message are a `SourceError`**, across messages they are the legitimate
+  re-send content-addressing exists to recognise. Scope is the whole distinction.
+
+**The redirect is never followed at ingest** — one third-party request per listing, on a token tied
+to the subscriber, manufacturing an engagement signal from a click nobody made. Hard rule 5's
+*identify honestly* one step out. The unresolved link goes in the notification, where a human clicks
+it. **Stated cost:** the link expires with the email, and a listing that later gains a
+previously-missing surface changes identity once and so notifies once more.
+
+`card_separator` with `mixed_tenure: true` is **refused at load** rather than answered with a
+batch-veto mechanism: segmenting removes a regime stated once for a whole digest from every card,
+which on a mixed source is a §1 decision nobody has made against a real payload. Outside the
+`enabled` branch, because `--source=` force-runs disabled sources.
+
+The corpus gained its **first captured case from an email**, and it is the `plus` class a fourth
+time: SeLoger's own CTA button reads **`En savoir plus →`**. Unlike CDC's tooltip or Cityloger's
+prose this belongs to the portal's template rather than to anyone's listing copy, so no careful
+writing can ever remove it. A first version of the fixture test asserted the word `plus` was absent
+from a card — unachievable, and wrong in kind: the guarantee is the classifier's verdict, not the
+absence of a common French adverb.
+
+`seloger` ships **`enabled: false`**: the adapter and the fixtures are proven, the IMAP credentials
+are not there. Prove a change with
+`MAILBOX_DIR=tests/fixtures/seloger scout doctor --source=seloger`, which force-runs it. A seeded
+run over the two fixtures yields one match (Dourdan, 3p, 52,37 m², 915 € CC) and one rejection
+(Conflans, 44,71 m² under the 50 m² floor).
 
 `src/phorj/` is **ON INDEFINITE HOLD** (developer ruling, 2026-08-19) — not blocked, deprioritised.
 Do not start it; `docs/PHORJ-REQUIREMENTS.md` remains the record of what it would need.
@@ -515,6 +591,15 @@ supply them: the DevTools cURL captures for the first sources (hard rule 1 forbi
 endpoint from memory), IMAP credentials for the alert mailbox, one real portal alert email to shape
 the parser against, and the `plafonds de ressources` figures for classifier tier 4.
 
+**The alert email arrived on 2026-08-25, and it cost four defects — see § "The email-alert path".**
+What is still missing on that track is only the IMAP credentials; the parser is shaped, the fixtures
+are frozen and `seloger` is configured. The `plafonds` figures were reassigned the same day: hard
+rule 1 forbids writing a ceiling *from memory*, not verifying one against a live authoritative
+source, which is the same thing the rule demands for endpoints. They are to be fetched from a dated
+official publication and committed with their URL and year, exactly as the four landlord payloads
+were frozen — and if a figure cannot be traced to a dated official page, it goes back to being an
+input.
+
 ---
 
 ## ⛔ The one non-negotiable rule
@@ -630,7 +715,7 @@ impossible by design rather than by omission (`docs/PHORJ-REQUIREMENTS.md`).
 | Adapters | `src/php/Adapters/` | `base` (the `Source` interface), `http_json`, `html`, `email_alert` (IMAP), `browser` (Playwright, opt-in), `sites/` for per-site overrides |
 | Enrich | `src/php/Enrich/` | `transit` (IDFM / PRIM door-to-door commute), `geo` (commune → INSEE code, coords) |
 | Config | `config/` | `criteria.json` (user criteria), `sources.json` (source definitions + field maps) — both committed. **JSON, not YAML** — ruled 2026-08-07 (Q22): no `ext-yaml` here and no way to install one. `_`-prefixed keys are comments; any other unknown key is a validation error. A gitignored `criteria.local.json` overrides field-by-field |
-| Fixtures | `tests/fixtures/<source>/` | Frozen HTML/JSON payloads. Parser tests run **offline**. No network in CI. |
+| Fixtures | `tests/fixtures/<source>/` | Frozen HTML/JSON payloads, and frozen `.eml` alerts for an `email_alert` source. Parser tests run **offline**. No network in CI. |
 | Classifier corpus | `tests/fixtures/tenure/corpus.json` | **Language-neutral.** Read by both implementations — that shared file is what makes the differential test mean anything. |
 
 PHP is **8.5**, no runtime dependencies, PSR-4 `RentWatch\` → `src/php/`. The test runner is
@@ -827,6 +912,7 @@ reads back. No repo copy of that hook exists: global-is-reference ruling, 2026-0
 ```bash
 composer install                        # generates the PSR-4 autoloader; zero runtime deps
 bash tools/fetch-phpunit.sh             # the runner — pinned SHA-256, refuses on mismatch
+php tools/scrub-eml.php in.eml out.eml me@example.com   # capture an alert as a fixture
 composer dump-autoload --dev            # if the corpus suite errors with "Class ... not found"
 php tools/phpunit.phar                  # the core suite — must stay green
 bash tests/sabotage-check.sh            # proves the suite would CATCH a broken classifier
@@ -882,9 +968,11 @@ Required coverage, per spec §11 — non-negotiable once `src/` exists:
   Offline. No network in CI. A parser test that reaches the network is a monitoring check, not a test.
 - **Classifier tests.** ≥30 hand-labelled listing texts covering pure-LLI In'li, mixed CDC Habitat,
   an explicit PLAI, an explicit PLS, and an ambiguous case. The suite must go red if the classifier
-  regresses. **Done** — `tests/fixtures/tenure/corpus.json`, 122 cases, and the suite asserts all five
-  shapes are present so "30 easy ones" cannot satisfy it. The corpus is **115 synthetic + 7 CAPTURED**
-  (2026-08-20 onward — CDC Habitat cards, Cityloger detail pages and Logirep card + filter facets;
+  regresses. **Done** — `tests/fixtures/tenure/corpus.json`, 123 cases, and the suite asserts all five
+  shapes are present so "30 easy ones" cannot satisfy it. The corpus is **115 synthetic + 8 CAPTURED**
+  (2026-08-20 onward — CDC Habitat cards, Cityloger detail pages, Logirep card + filter facets, and a
+  SeLoger alert CTA — the first captured from an EMAIL, and the first whose offending text belongs to
+  a portal's template rather than to anyone's listing copy;
   the spec asks for real texts and until a source was live there were none. Append as sources come
   online, never renumber captures). Every case declares its `provenance` and a test asserts the declared counts, so the gap
   is visible as data. Replace them with captured texts as sources come online — append, never
@@ -969,7 +1057,11 @@ src/php/Store/              SQLite seen-set, price history, run log, cross-porta
 src/phorj/                  phorj port of the same pure core                  [waits on phorj]
 tests/php/                  PHPUnit suites
 tests/fixtures/tenure/      corpus.json — the language-neutral classifier corpus
-tests/fixtures/<source>/    Frozen payloads, one dir per source               [not yet created]
+tests/fixtures/<source>/    Frozen payloads, one dir per source
+tests/fixtures/seloger/     The first REAL portal alerts, scrubbed. Their AWKWARD structure is
+                            the point — preamble, `=_?:` boundary, 2047 subject split mid-word
+tools/scrub-eml.php         Turns a captured .eml into a committable fixture; REFUSES to write
+                            while the address, an ESP list id or a live tracking token survives
 tests/sabotage-check.sh     Proves the classifier suite detects a regression
 tests/test-tenure-guard.sh  Proves the §1 tripwire fires, and stays quiet on ordinary PHP
 tests/test-fetch-phpunit.sh Proves the runner fetch refuses a bad signature

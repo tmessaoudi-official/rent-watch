@@ -28,7 +28,7 @@ adapter, no notification channel and no CLI yet.
 | [`docs/OPEN-QUESTIONS.md`](docs/OPEN-QUESTIONS.md) | **Start here.** Every filter enumerated, and the decisions still owed |
 | `src/php/Core/` | The tenure classifier, the models it works on, and the source-health verdict |
 | `src/php/Store/` | The SQLite seen-set, price history and run log. Deleting the database re-notifies the entire market on the next run, and the price history cannot be reconstructed — a listing only ever shows its *current* rent |
-| `tests/fixtures/tenure/corpus.json` | 122 hand-labelled listing texts — the classifier's ground truth, and language-neutral so the phorj port reads the same file. **115 synthetic + 7 captured**: `spec/PROJECT_BRIEF.md` §4 asks for *real* texts, and they arrived from 2026-08-20 with the live sources (CDC Habitat card text, Cityloger detail prose — including the corpus's first captured SOCIAL case — and Logirep, whose second capture is the site's own FILTER FACET STRIP, containing `PLAI` inside `Plain-pied`, `LLI` inside `Ce·lli·er` and `PLUS` inside `plusieurs`). Every case declares its `provenance` and a test asserts the counts, so the remaining gap is data rather than a promise |
+| `tests/fixtures/tenure/corpus.json` | 123 hand-labelled listing texts — the classifier's ground truth, and language-neutral so the phorj port reads the same file. **115 synthetic + 8 captured**: `spec/PROJECT_BRIEF.md` §4 asks for *real* texts, and they arrived from 2026-08-20 with the live sources (CDC Habitat card text, Cityloger detail prose — including the corpus's first captured SOCIAL case — and Logirep, whose second capture is the site's own FILTER FACET STRIP, containing `PLAI` inside `Plain-pied`, `LLI` inside `Ce·lli·er` and `PLUS` inside `plusieurs`). Every case declares its `provenance` and a test asserts the counts, so the remaining gap is data rather than a promise |
 | `prototype/` | A pre-existing single-file prototype, kept as reference. **Not** the shipping implementation — it has no tenure classifier at all |
 | [`CLAUDE.md`](CLAUDE.md) | How code gets delivered here: rules, gates, the eligibility boundary |
 | `.claude/` | Claude Code configuration ([details](CLAUDE.md#claude-config-in-this-repo)) |
@@ -358,6 +358,38 @@ Two rules that matter more than the mechanics:
   `REMPLACER` and their source stays `enabled: false`.
 - **`mixed_tenure: true` is the default.** Only a provably pure source (In'li) may be `false`. Getting
   it wrong disables the fail-closed rule for that source.
+
+### Adding an EMAIL source
+
+Same idea, different pre-checks — and an HTTP status tells you nothing here, because the route is a
+mailbox rather than a page. Subscribe a dedicated mailbox to the portal's own alert, save one
+message, and capture it:
+
+```bash
+php tools/scrub-eml.php captured.eml tests/fixtures/<portal>/alert.eml you@example.com
+MAILBOX_DIR=tests/fixtures/<portal> php bin/scout doctor --source=<portal>   # force-runs a disabled source
+```
+
+`tools/scrub-eml.php` removes the subscriber's identity — the address, the bounce and reply tokens,
+the ESP feedback ids, the one-click unsubscribe token, every `qs=` tracking value — and **refuses to
+write** while any of them survives. It deliberately keeps the message *ugly*: the MIME preamble, the
+awkward boundary, the folded headers and the RFC 2047 subject split mid-word are the ground truth,
+and three of them were live parser defects until a real alert exposed them.
+
+Then check four things, in this order, before writing a field map:
+
+1. **Does the alert carry a real listing URL?** SeLoger's does not — every link is a tracking
+   redirect with an opaque per-recipient token, and stripping the query collapses every listing in
+   the message onto one identity. That answer decides the whole block (`id_from: content` vs the
+   default `link`).
+2. **Does the `text/plain` part carry undecoded HTML entities?** If so the parser must decode them,
+   or `logement conventionn&eacute;` folds to `logement conventionn` and the label is destroyed.
+3. **Does each card end in a consistent call to action?** That string is `card_separator`. Without
+   one, every link becomes a listing carrying the first rent in the whole message.
+4. **Do not follow the tracking redirect to recover a URL.** It is a request per listing on a
+   subscriber-bound token, and it registers a click nobody made. Carry the link unresolved.
+
+Worked example with all four answered: `docs/SOURCES.md` § *B1 SeLoger*.
 
 ## Legal posture
 

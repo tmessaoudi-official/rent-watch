@@ -133,3 +133,41 @@ that is not a bug to fix.
 - [2026-08-25 10:24] AGREED: SeLoger identity is content-addressed from commune|postcode|rooms|surface|residence, with rent excluded so a price drop stays a price event.
 - [2026-08-25 10:26] AGREED: a card below the no-information floor is refused loudly; duplicate ids WITHIN one message are a SourceError.
 - [2026-08-25 10:28] AGREED: `card_separator` + `mixed_tenure: true` is refused at config load rather than answered with a batch-veto mechanism.
+
+## What actually happened — four defects, not two
+
+The plan predicted two `EmailMessage` defects. Running the fixtures through the whole pipeline found
+two more, and neither was reachable from the plan alone:
+
+3. **A rent could be assembled across a line break** (`src/php/Adapters/EmailAlertSource.php`).
+   `\s` in the thousands-separator class matches `\n`, and `Payload::int` truncates there, so the
+   rent became whatever sat on the previous line. A first draft of the test put the stray digit at
+   the START of the line and PASSED while the defect was fully present — the digit has to be
+   adjacent to the newline, which in a real alert is a tracking URL. Worse than it first looked:
+   `ref 850` above `1 450 EUR charges comprises` extracts **850** [Verified], inside the
+   plausibility band, clearing a ceiling the real rent does not. A first draft of the *docblock*
+   then claimed the mechanism was concatenation to 2980; it is truncation to 850. Both drafts were
+   the same error — a real finding with an invented mechanism — caught only by running it.
+4. **HTML entities reached the classifier undecoded, and that one is §1.** `Text::fold()` refuses
+   text carrying entities and names whose job it is; SeLoger's `text/plain` part carries `&rarr;`
+   because it is generated from the HTML. `logement conventionn&eacute;` folds to
+   `logement conventionn` — label destroyed, listing apparently unlabelled. Found because the
+   fixture test errored rather than failed.
+
+## And one test that was wrong in kind
+
+`testNoExcludedTenureVocabularyReachesACard` asserted the word `plus` never appears in a card. It is
+one of the commonest words in French and SeLoger's own CTA is `En savoir plus →`. Asserting the
+absence of a word is asserting something about French; the guarantee §1 states is about the
+CLASSIFIER'S VERDICT. Replaced with a verdict assertion plus a counterweight — an explicit `PLUS`
+label injected into the same real card must still REJECT — so the test cannot pass by the classifier
+having stopped looking at this source. The CTA is now corpus case
+`seloger-001-captured-cta-en-savoir-plus`, the fourth instance of that class and the first from an
+email.
+
+## Decisions Log (continued)
+
+- [2026-08-25 12:05] AGREED: HTML entities are decoded once at the `EmailMessage` funnel, for the plain part as much as the HTML one, because a portal's plain alternative is generated from its HTML — decoding can only ever restore a label, never invent one.
+- [2026-08-25 12:20] AGREED: the rent separator is `\h`, never `\s`; a figure and a currency sign on two different lines are not one price.
+- [2026-08-25 12:40] AGREED: a §1 test asserts the classifier's verdict, never the absence of a French word from real text; every such test carries a counterweight proving the classifier still refuses an explicit label on the same fixture.
+- [2026-08-25 13:10] AGREED: `seloger` ships `enabled: false` — the adapter and fixtures are proven, the IMAP credentials are not present; `MAILBOX_DIR` + `--source=seloger` is the documented proof path.

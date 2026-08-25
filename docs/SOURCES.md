@@ -230,7 +230,7 @@ alert, pointed at a dedicated mailbox; `email_alert` ingests over IMAP.
 
 | # | Portal | Domain | HTTP | Notes |
 |---|---|---|---|---|
-| **B1** | **SeLoger** | `www.seloger.com` | **200** | Largest IDF inventory. AVIV group. |
+| **B1** | **SeLoger** | `www.seloger.com` | **200** | **BUILT AND PROVEN OFFLINE, 2026-08-25** — the first Tier B portal, and the first email source of any kind. Largest IDF inventory. AVIV group. Two real alerts frozen at `tests/fixtures/seloger/`; `enabled: false` pending IMAP credentials. See the block below. |
 | **B2** | **Leboncoin** | `www.leboncoin.fr` | **403** | Where non-agency private landlords actually post. Email alert only. |
 | **B3** | **PAP** | `www.pap.fr` | **403** | *Particulier à particulier* — no agency fees. Email alert only. |
 | **B4** | **Bien'ici** | `www.bienici.com` | **200** | Map-first, agency consortium. |
@@ -241,6 +241,53 @@ alert, pointed at a dedicated mailbox; `email_alert` ingests over IMAP.
 | **B9** | **Locservice** | `www.locservice.fr` | **200** | Tenant-posts-criteria model rather than listing search — a different shape; may not fit the adapter contract cleanly. |
 | **B10** | **Flatlooker** | `www.flatlooker.com` | **200** | Online agency, remote-viewing. Small inventory, low duplication with the majors. |
 | **B11** | **Gens de Confiance** | `www.gensdeconfiance.com` | **403** | Closed community, needs an account. Email alert only. |
+### B1 SeLoger — what onboarding an EMAIL source cost, and what it teaches the other ten
+
+**Two alerts, ONE format.** `1 nouvelle annonce : Ile-de-France` (campaign `SLG-…-ALI-RELAXED`) and
+`Consilium vous adresse ses dernières exclusivités` (`SLG-…-ALI-EXCLUSIVE`) look like two products
+and share one card template: price → type → rooms · surface → residence, commune, (postcode) →
+*Voir l'annonce*. Do not build two field maps before checking whether the cards differ.
+
+**Neither is an exact-match alert.** SeLoger pads the feed with *offres alternatives* (the first
+carries a `Surface différente` badge) and partner exclusivities. They are NOT filtered at ingest:
+`CriteriaEngine` re-judges everything, so a listing the portal calls a near-miss that clears the
+real floors is a real match, and dropping it at the door is the silent over-rejection hard rule 8
+forbids.
+
+**The pre-check for an email source is not an HTTP status.** A Tier B row's `200`/`403` says nothing
+about whether the portal's alerts are parseable — B1 is `200` and its search is irrelevant, because
+the route is the mailbox. What to check instead, in order:
+
+1. **Does the alert carry a real listing URL?** SeLoger's does not: every link is
+   `click.by.seloger.com/?qs=<opaque per-recipient token>`, and there is no listing id anywhere in
+   the HTML — no `data-*`, no numeric ref. Strip the query, as link-identity does, and every link in
+   the message collapses to one id. That single fact decided the whole adapter design
+   (`id_from: content`). **Check this FIRST on every new portal**; it is a five-minute grep and it
+   is the difference between a config block and a feature.
+2. **Does the `text/plain` part carry undecoded HTML entities?** SeLoger's does (`&rarr;`). It is
+   generated from the HTML and nobody decoded it on the way. This is a §1 hazard, not a cosmetic
+   one — `logement conventionn&eacute;` folds to `logement conventionn`, label destroyed.
+3. **Does a card end in a consistent CTA?** That string is the `card_separator`. Without one, every
+   link in the message becomes a listing carrying the FIRST rent and FIRST surface in the whole body.
+4. **Is there a stray digit at the end of the line above a price?** A tracking URL usually ends in
+   one. It used to be glued to the rent.
+
+**Never follow the tracking redirect to recover a real URL.** One third-party request per listing,
+on a token tied to the subscriber, manufacturing an engagement signal from a click nobody made —
+hard rule 5's *identify honestly* one step out. Carry the link unresolved; the human clicks it.
+
+**Capture with `tools/scrub-eml.php`, and keep the message ugly.** It strips `Delivered-To`, `To`,
+`Received`, `Return-Path`, `Reply-To`, `Feedback-ID`, `List-Unsubscribe*`, the DKIM/ARC signatures
+it would otherwise invalidate, every `qs=` value and the address in the CNIL footer — and it
+REFUSES to write while any of those survive. What it deliberately does NOT touch is the structure:
+the MIME preamble, the `=_?:` boundary, the 8bit transfer encoding, the folded headers and the RFC
+2047 subject split mid-word. Three of those five were live parser defects; tidying the fixture would
+delete the evidence.
+
+**Measured yield, 2026-08-25:** a seeded run over the two fixtures gives **1 match** (Dourdan 91410,
+3 pièces, 52,37 m², 915 € CC) and **1 rejection** (Conflans-Sainte-Honorine 78700, 44,71 m², under
+the 50 m² floor). Two listings is not a yield estimate — it is proof the path runs end to end.
+
 
 ### Agency networks — deliberately NOT separate sources
 

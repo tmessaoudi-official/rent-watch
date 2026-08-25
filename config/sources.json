@@ -119,13 +119,24 @@
     },
     "seloger": {
       "_comment": "B1. Largest IDF inventory. Private market, so LIBRE — in scope since the Q4 answer. type is email_alert because direct scraping of a private portal is opt-in, disabled by default and refuses to run without an explicit flag (hard rule 4); the email-alert route is within ToS, defeats anti-bot because there is no bot, and fires on publication rather than on a poll.",
+      "_verified_at": "2026-08-25",
+      "_source": "Two real alerts captured from a live subscription and frozen at tests/fixtures/seloger/: an alert carrying an offre alternative badged `Surface différente` (campaign SLG-…-ALI-RELAXED) and an agency exclusivity routed through SeLoger (SLG-…-ALI-EXCLUSIVE). They are ONE format, not two — same card, same selectors. Scrubbed by tools/scrub-eml.php, which refuses to write if the address, the ESP list ids or any original qs= token survives; the awkward MIME boundary, the 8bit transfer encoding, the folded headers and the RFC 2047 subject split mid-word are KEPT deliberately, because each is a parser defect this project has already had and the structure is the ground truth.",
+      "_why": "NO LISTING URL AND NO LISTING ID. Every link is click.by.seloger.com/?qs=<opaque per-recipient token>; there is no SeLoger listing id in the HTML, no data-* attribute, nothing — the only per-listing stable string is a photo GUID, and that lives in the HTML part the parser does not prefer. Strip the query, as link-identity does, and all sixteen links in one message collapse to a single id. Hence id_from: content, keyed on the dwelling's structural facts, and the rent is deliberately NOT one of them: a reduction in price must stay a price event rather than mint a second listing. The redirect is NEVER followed at ingest: one third-party request per listing, on a token tied to the subscriber, manufacturing an engagement signal from a click nobody made — hard rule 5 one step out. The unresolved link goes in the notification, where a human clicks it. ENABLED: false — the adapter and the fixtures are proven, what is missing is IMAP credentials (Bucket B1). Prove a change with `scout doctor --source=seloger` and MAILBOX_DIR=tests/fixtures/seloger, which force-runs it.",
       "enabled": false,
       "family": "private",
       "type": "email_alert",
       "default_tenure": "LIBRE",
       "mixed_tenure": false,
+      "params": {
+        "from": "alertes.seloger.com",
+        "link_host": "click.by.seloger.com",
+        "card_separator": "Voir l'annonce",
+        "id_from": "content",
+        "title_pattern": "~^\\h*((?:Appartement|Maison|Studio|Duplex|Loft|Chambre)[^\\n]*?)\\h*$~m",
+        "residence_pattern": "~^\\h*([^\\n,]{2,60}),\\h*$~m"
+      },
       "map": {
-        "ref": "REMPLACER",
+        "ref": "url",
         "charges_included": true
       }
     },

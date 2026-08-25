@@ -141,6 +141,14 @@ final class TenureCorpusTest extends TestCase
                 'plus' => 'the adverb in CDC Habitat\'s own definition, "implante au plus pres des '
                     . 'bassins d\'emploi"',
             ],
+            // THE FIRST FROM AN EMAIL, and the first where the offending text belongs to nobody who
+            // could edit it. `En savoir plus →` is SeLoger's own call-to-action button, part of the
+            // alert template rather than the landlord's copy [captured 2026-08-25], so unlike a
+            // description this is a surface no careful writing can ever clean. `plus` ONLY: every
+            // other excluded token is still checked against this fixture.
+            'seloger-001-captured-cta-en-savoir-plus' => [
+                'plus' => 'the adverb in SeLoger\'s own CTA button, "En savoir plus"',
+            ],
             'trap-010-lowercase-plus-with-no-comparative' => [
                 'plus' => 'the LOWERCASE adverb in "plus un bureau" — the prose doubt floor is '
                     . 'case-sensitive, and this fixture is what stops it being widened',

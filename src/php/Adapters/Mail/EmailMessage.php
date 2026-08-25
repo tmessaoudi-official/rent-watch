@@ -64,7 +64,7 @@ final readonly class EmailMessage
         $bodyBlock = $split[1] ?? '';
 
         $headers = self::parseHeaders($headerBlock);
-        $body = self::decodeBody($headers, $bodyBlock);
+        $body = self::decodeEntities(self::decodeBody($headers, $bodyBlock));
 
         return new self($headers, $body, self::extractLinks($body));
     }
@@ -284,6 +284,30 @@ final readonly class EmailMessage
         }
 
         return $converted === false ? $text : $converted;
+    }
+
+    /**
+     * HTML entities, decoded once at the funnel — for the plain part as much as the HTML one.
+     *
+     * **This is a §1 obligation, not tidiness.** `Text::fold()` REFUSES text still carrying
+     * entities, and its refusal names whose job this is: *"an entity inside a label deletes that
+     * label while leaving others intact, which has already turned an explicitly social listing
+     * into an eligible one."* `logement conventionn&eacute;` folds to `logement conventionn` —
+     * the label destroyed, the listing apparently unlabelled, which on a mixed source is the
+     * difference between a digest entry and a notification.
+     *
+     * It applies to the PLAIN part because a portal's plain alternative is generated from its HTML
+     * and need not have been decoded on the way. SeLoger's real alerts carry `&rarr;` in theirs,
+     * which is what turned this from a hypothetical into a failing test.
+     *
+     * Decoding can only ever restore a label, never invent one: no HTML entity expands to `PLAI`,
+     * `PLUS`, `PLS` or `intermédiaire`, so the §1 risk runs one way and this is the safe end of it.
+     * `ENT_QUOTES | ENT_HTML5` so `&apos;` and the named arrows both resolve; a bare `&` in
+     * ordinary agency prose is not an entity and is left exactly as written.
+     */
+    private static function decodeEntities(string $text): string
+    {
+        return html_entity_decode($text, ENT_QUOTES | ENT_HTML5, 'UTF-8');
     }
 
     private static function stripHtml(string $html): string
