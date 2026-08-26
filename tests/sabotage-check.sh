@@ -3093,6 +3093,56 @@ run_sabotage "a non-segmented source takes the message subject as its title agai
   src/php/Adapters/EmailAlertSource.php \
   's%title: \$this->cardTitle(\$message, \$body),%title: \$message->subject(),%'
 
+# --- Commute enrichment (2026-08-26) ---------------------------------------------------------
+#
+# The heaviest component in the score (30, ahead of commune's 25). Every failure mode here is
+# SILENT: a commute read as far demotes a flat nobody then looks at, and one read as near promotes
+# one nobody should.
+
+# Past the ceiling the component decays to ZERO and stops -- it never goes negative. A negative
+# share PUNISHES a long commute instead of merely not rewarding it, which is a disqualifier wearing
+# a score's clothes: the developer's ruling forbids it in as many words ("keep showing even those
+# with more anyway"), and hard rule 8 keeps the two mechanisms apart.
+run_sabotage "a commute past the ceiling is punished rather than merely unrewarded" \
+  src/php/Core/CriteriaEngine.php \
+  's%: max(0.0, min(1.0, (2 \* \$ceiling - \$minutes) / \$ceiling));%: (\$minutes > \$ceiling ? -1.0 : 1.0);%'
+
+# UNKNOWN IS NOT NEAR. Scoring an absent commute as if it were zero minutes hands every listing the
+# full 30 points on the strength of an API that did not answer -- and it looks like a healthy score.
+run_sabotage "an unknown commute scores as if the flat were on the doorstep" \
+  src/php/Core/CriteriaEngine.php \
+  's%\$reasons\[\] = .trajet inconnu — hors score.;%\$earned += \$w->commute; \$reasons[] = "trajet inconnu";%'
+
+# THE CACHE IS READ. A commune resolves once and then costs no request ever again -- without that
+# the tree spends two requests per listing per pass against a 20 000/day quota, and the same commune
+# spelled two ways spends them twice over.
+run_sabotage "the commute cache is never read (every pass re-requests every commune)" \
+  src/php/Enrich/NavitiaCommute.php \
+  's%if (\$cached !== null) {%if (false) {%'
+
+# LONGITUDE FIRST. Reversed, the request still succeeds and returns a plausible journey between two
+# entirely different places -- there is no error to notice, only wrong minutes.
+run_sabotage "the journey coordinates are swapped to latitude first" \
+  src/php/Enrich/NavitiaCommute.php \
+  "s%'from' => \\\$from\[0\] . ';' . \\\$from\[1\],%'from' => \\\$from[1] . ';' . \\\$from[0],%"
+
+# SECONDS, not minutes. Verified against the live API: 2148 for a 35-minute trip.
+run_sabotage "the journey duration is read as minutes rather than seconds" \
+  src/php/Enrich/NavitiaCommute.php \
+  's%return \$best === null ? null : (int) round(\$best / 60);%return \$best;%'
+
+# A geocode is checked against the postcode it was asked for. Commune names repeat across
+# departements, and a wrong coordinate is cached for ever and mis-scores a whole town in silence.
+run_sabotage "a geocoded place is accepted without checking its postcode" \
+  src/php/Enrich/NavitiaCommute.php \
+  's%if (\$postcode !== null \&\& !\$this->matchesPostcode(\$candidate, \$postcode)) {%if (false) {%'
+
+# Enrichment must never void a pass that has already fetched real listings -- the blast-radius
+# mistake detail hydration made once already.
+run_sabotage "an unreachable commute API takes the whole pass down with it" \
+  src/php/Enrich/NavitiaCommute.php \
+  's%} catch (\\Throwable) {%} catch (\\JsonException) {%'
+
 # THE TALLY LIVES HERE, BELOW EVERY CASE, and that position is load-bearing rather than tidy.
 # It sat mid-file twice: once on 2026-08-20 (295 printed for 303 cases) and again from 2026-08-23,
 # when 21 schema-v7 / digest / reclassify cases were appended past it and the headline read 354 for

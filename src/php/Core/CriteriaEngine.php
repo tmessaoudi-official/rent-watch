@@ -263,11 +263,28 @@ final readonly class CriteriaEngine
                 // `rentHc` line that reports an unverifiable ceiling.
                 $reasons[] = 'trajet inconnu — hors score';
             } else {
-                // `max_minutes` is the ZERO POINT of a linear scale, not a gate. Clamped at both
-                // ends: a three-hour commute and a 76-minute one are equally unrewarded rather than
-                // progressively punished, so the component can never push a score negative and can
-                // never act as a back-door rejection.
-                $share = $ceiling <= 0 ? 0.0 : max(0.0, min(1.0, ($ceiling - $minutes) / $ceiling));
+                // `max_minutes` IS FULL MARKS, NOT ZERO — and that reading was chosen by
+                // measurement after the obvious one was built and found to be counterproductive.
+                //
+                // Treating the ceiling as the zero point of a scale starting at 0 minutes assumes
+                // commutes shorter than it are common. They are not: measured against the live API
+                // on 2026-08-26, the affordable communes run **68 to 131 minutes** to the configured
+                // destination (Sartrouville 68, Aulnay 88, Dammarie-les-Lys 112, Dourdan 131). Under
+                // that curve Sartrouville earned 3 points of 30 and everything else earned zero, so
+                // the component separated the whole set by THREE points while adding 30 to
+                // `positiveTotal()` — every score in the tree dropped by about a quarter and the
+                // ordering barely moved. It made the problem it was built for worse.
+                //
+                // So: at or under the ceiling is full marks (the plain meaning of "1h15 max"),
+                // decaying linearly to zero at twice it. On the same live data that spreads the set
+                // across 21 points instead of 3. The ties this creates below the ceiling are
+                // theoretical — nothing in the affordable set is under 68 minutes.
+                //
+                // Still clamped at both ends, so the component can never go negative and can never
+                // act as a back-door rejection.
+                $share = $ceiling <= 0
+                    ? 0.0
+                    : max(0.0, min(1.0, (2 * $ceiling - $minutes) / $ceiling));
                 $earned += (int) round($w->commute * $share);
                 $reasons[] = $minutes . ' min de trajet';
             }

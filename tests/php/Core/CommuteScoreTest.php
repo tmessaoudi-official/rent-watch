@@ -36,8 +36,11 @@ final class CommuteScoreTest extends TestCase
 
     public function testAShorterCommuteScoresHigherThanALongerOne(): void
     {
-        $near = $this->judge(15);
-        $far = $this->judge(65);
+        // BOTH ABOVE THE CEILING, deliberately. At or under `max_minutes` is full marks, so two
+        // short commutes tie — which is the plain meaning of "1h15 max" and is theoretical anyway:
+        // measured on the live API, nothing in the affordable set is under 68 minutes.
+        $near = $this->judge(80);
+        $far = $this->judge(140);
 
         self::assertGreaterThan(
             $far->score,
@@ -48,15 +51,15 @@ final class CommuteScoreTest extends TestCase
 
     public function testTheCeilingIsTheZeroPointAndNotAGate(): void
     {
-        // 90 minutes is past the configured 75. The developer asked to keep seeing those anyway, so
-        // it must still be a MATCH — it simply earns nothing from this component.
-        $over = $this->judge(90);
+        // 160 minutes is past twice the configured 75, so it earns nothing. The developer asked to
+        // keep seeing those anyway, so it must still be a MATCH.
+        $over = $this->judge(160);
 
         self::assertSame(Outcome::MATCH, $over->outcome, 'a long commute must never reject a listing');
 
         // And it is not scored NEGATIVELY either: the floor is zero, so a three-hour commute and a
         // 76-minute one are equally unrewarded rather than progressively punished.
-        self::assertSame($this->judge(200)->score, $over->score);
+        self::assertSame($this->judge(300)->score, $over->score);
     }
 
     public function testAnUnknownCommuteLosesTheComponentAndSaysSo(): void
@@ -67,7 +70,7 @@ final class CommuteScoreTest extends TestCase
         $unknown = $this->judge(null);
 
         self::assertSame(Outcome::MATCH, $unknown->outcome);
-        self::assertLessThan($this->judge(5)->score, $unknown->score);
+        self::assertLessThan($this->judge(60)->score, $unknown->score);
 
         self::assertNotSame(
             [],

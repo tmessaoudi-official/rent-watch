@@ -18,6 +18,7 @@ use RentWatch\Core\Tenure;
 use RentWatch\Core\TenureSignal;
 use RentWatch\Core\TenureClassifier;
 use RentWatch\Core\Verdict;
+use RentWatch\Enrich\CommutePlanner;
 use RentWatch\Store\Store;
 
 /**
@@ -44,7 +45,61 @@ final readonly class Pipeline
         private ?CriteriaEngine $engine = null,
         private Dedup $dedup = new Dedup(),
         private Formatter $formatter = new Formatter(),
+        /**
+         * Optional, and `null` is the shipped default — no key, no destination, no enrichment.
+         *
+         * Injected rather than constructed here so the pipeline never learns that the network
+         * exists, exactly as `PacedSource` keeps it from learning that time does. Every test in the
+         * tree therefore runs enrichment OFF unless it says otherwise.
+         */
+        private ?CommutePlanner $commute = null,
     ) {}
+
+    /**
+     * This listing plus its commute, or this listing unchanged.
+     *
+     * Never throws and never rejects: a planner is contractually required to answer `null` rather
+     * than raise, and `null` is UNKNOWN rather than far (hard rule 9). The `try` is belt-and-braces
+     * around a third-party implementation — one bad lookup must not void a pass that has already
+     * fetched real listings.
+     */
+    private function enrich(RawListing $listing): RawListing
+    {
+        if ($this->commute === null || $listing->commuteMinutes !== null) {
+            return $listing;
+        }
+
+        try {
+            $minutes = $this->commute->minutesFrom($listing->commune, $listing->postcode);
+        } catch (\Throwable) {
+            return $listing;
+        }
+
+        if ($minutes === null) {
+            return $listing;
+        }
+
+        return new RawListing(
+            sourceName: $listing->sourceName,
+            externalId: $listing->externalId,
+            title: $listing->title,
+            description: $listing->description,
+            fields: $listing->fields,
+            url: $listing->url,
+            commune: $listing->commune,
+            postcode: $listing->postcode,
+            rentCc: $listing->rentCc,
+            rentHc: $listing->rentHc,
+            charges: $listing->charges,
+            surfaceM2: $listing->surfaceM2,
+            rooms: $listing->rooms,
+            bedrooms: $listing->bedrooms,
+            floor: $listing->floor,
+            hasElevator: $listing->hasElevator,
+            detailRead: $listing->detailRead,
+            commuteMinutes: $minutes,
+        );
+    }
 
     /**
      * @param list<Source> $sources
@@ -98,6 +153,23 @@ final readonly class Pipeline
                 $this->store->recordRun($source->name(), 0, false, $wrapped->getMessage(), $nowIso, $durationMs);
             }
         }
+
+        // ENRICHMENT, BEFORE CLUSTERING AND THEREFORE BEFORE EVERYTHING.
+        //
+        // Placed here rather than beside `judge()` for two independent reasons, and either alone
+        // would decide it. **Hard rule 8:** a disqualifier applied before enrichment rejects on a
+        // field enrichment would have filled, and silent over-rejection is invisible because nothing
+        // arrives. **And the v7 snapshot** is written from the member exactly as the classifier
+        // consumed it, so a listing enriched after that point would be re-judged by
+        // `scout reclassify` without its commute and silently score lower the second time.
+        //
+        // Clustering is downstream of it because `$observed` is keyed on OBJECT IDENTITY: enriching
+        // afterwards would replace member objects that the survivor is a second reference to, and
+        // the cluster bookkeeping would quietly stop matching.
+        $harvested = array_map(
+            fn (array $row): array => ['listing' => $this->enrich($row['listing']), 'family' => $row['family']],
+            $harvested,
+        );
 
         $clustered = $this->dedup->cluster($harvested);
         $duplicates = count($harvested) - count($clustered);

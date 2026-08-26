@@ -43,6 +43,8 @@ use RentWatch\Core\Redact;
 use RentWatch\Core\SourceStatus;
 use RentWatch\Core\TenureClassifier;
 use RentWatch\Core\Verdict;
+use RentWatch\Enrich\CommutePlanner;
+use RentWatch\Enrich\NavitiaCommute;
 use RentWatch\Store\Store;
 
 /**
@@ -696,7 +698,12 @@ final readonly class Scout
          */
         ?int &$matchesOut = null,
     ): int {
-        $result = (new Pipeline($criteria, $store, $notifier))->runOnce($sources, $this->now(), $seed);
+        $result = (new Pipeline(
+            $criteria,
+            $store,
+            $notifier,
+            commute: $this->commutePlanner($criteria, $store),
+        ))->runOnce($sources, $this->now(), $seed);
 
         // `notified`, NOT `matches`. `matches` counts what the engine JUDGED, before the
         // already-announced gate and before the channel confirms — so in steady state, where
@@ -1442,6 +1449,54 @@ final readonly class Scout
     }
 
     // ── plumbing ──────────────────────────────────────────────────────────────────────────────────
+
+    /**
+     * The commute planner, or `null` — which is the shipped state and must stay cheap to be in.
+     *
+     * `null` whenever commute is switched off in config OR `IDFM_API_KEY` is absent, and the two are
+     * checked independently on purpose: a key with no destination is as useless as a destination
+     * with no key, and neither is an error worth refusing a start over. The score component simply
+     * does not run, `commuteMinutes` stays null, and the reasons say the trajet is unknown.
+     *
+     * **The reference departure is FIXED**, not "now". Cached durations must be measured against one
+     * timetable or they are not comparable, and this is the heaviest component in the score — a
+     * commune resolved at 02:00 against one resolved at 08:30 would reorder the whole list by the
+     * hour a pass happened to run. Next Monday 08:30 is representative of the journey the user
+     * actually cares about. Stated cost: it is a one-time sample of that timetable.
+     */
+    private function commutePlanner(Criteria $criteria, Store $store): ?CommutePlanner
+    {
+        if (!$criteria->commuteEnabled) {
+            return null;
+        }
+
+        $key = getenv('IDFM_API_KEY');
+
+        if (!is_string($key) || trim($key) === '') {
+            return null;
+        }
+
+        return new NavitiaCommute(
+            new CurlHttpClient(),
+            $store,
+            $criteria,
+            trim($key),
+            self::nextWeekdayAt('08:30'),
+            $this->now(),
+        );
+    }
+
+    /** The next weekday at `$time`, as Navitia's `YYYYMMDDTHHMMSS`. */
+    private static function nextWeekdayAt(string $time): string
+    {
+        $at = new \DateTimeImmutable('tomorrow ' . $time);
+
+        while (in_array($at->format('N'), ['6', '7'], true)) {
+            $at = $at->modify('+1 day');
+        }
+
+        return $at->format('Ymd\\THis');
+    }
 
     private function criteria(): Criteria
     {

@@ -707,6 +707,63 @@ applies and the figure lands in `rentHc`.
 > different commune, and adds the case the first lacked — a rent written `1.150 EUR / mois`, where
 > the dot is a **thousands separator** and *"the rightmost separator is the decimal point"* would
 > read it as 1 €. Both are frozen. Append a third; never renumber.
+### Transit enrichment — the last empty layer, and the curve that had to be measured (2026-08-26)
+
+`src/php/Enrich/` was the only spec layer with no code at all. It exists because **nothing in the
+score discriminated**: 83 live matches spread over all eight departements scored 16–48, so
+`high_priority_score: 70` could never fire and the `!!` marker was dead.
+
+`Enrich/CommutePlanner` is the interface, `Enrich/NavitiaCommute` the IDFM/PRIM implementation over
+the ordinary `HttpClient` seam — which is what makes `RENT_WATCH_OFFLINE=1` cover it structurally
+rather than by discipline. **Verified against the live API** (hard rule 1): base
+`prim.iledefrance-mobilites.fr/marketplace/v2/navitia`, an `apikey` HEADER, and
+`journeys?from=<lon>;<lat>` returning `duration` in **SECONDS**. Three details that are easy to get
+backwards and silent when wrong — a reversed coordinate pair returns a perfectly plausible journey
+between two other places. All three are sabotage cases.
+
+**THE OBVIOUS CURVE WAS BUILT, MEASURED, AND MADE THE PROBLEM WORSE.** Treating `max_minutes` as the
+zero point of a scale starting at 0 assumes short commutes are common; measured live, the affordable
+communes run **68–131 minutes** (Sartrouville 68, Aulnay 88, Dammarie-les-Lys 112, Dourdan 131).
+Under that curve Sartrouville earned 3 points of 30 and everything else earned zero — the component
+separated the whole set by **three points** while adding 30 to `positiveTotal()`, so every score in
+the tree dropped by about a quarter and the ordering barely moved. The shipped curve is **at or
+under `max_minutes` is FULL MARKS**, decaying to zero at twice it: same data, **21 points of spread**,
+and Sartrouville reaches 67 against the dead 70 threshold. Predicting this would have got it wrong;
+one probe of four communes settled it.
+
+- **A score component, never a disqualifier** — developer ruling, verbatim *"1 hour 15 max ! but keep
+  showing even those with more anyway"*, and hard rule 8 independently. Clamped at both ends, so it
+  can never go negative and can never act as a back-door rejection.
+- **`commuteMinutes` lives on `RawListing`**, not as a `judge()` argument, because `scout reclassify`
+  re-judges from the v7 snapshot — a value passed alongside would be absent on every re-judge and a
+  stored listing would silently score lower the second time. `floor` and `hasElevator` arrive by the
+  same route.
+- **Enrichment runs before CLUSTERING**, so it is upstream of the snapshot and of every disqualifier
+  (hard rule 8: a disqualifier applied before enrichment rejects on a field enrichment would have
+  filled). Upstream of clustering specifically because `$observed` is keyed on object identity.
+- **Cached per COMMUNE (schema v9 `commute_cache`), and a FAILURE is never cached** — caching one
+  would turn a bad afternoon at the API into a permanently missing component, with nothing to retry
+  it. The key is a NORMALISED commune plus postcode: the same commune arrives spelled two ways in one
+  response, and commune names repeat across departements.
+- **The reference departure is FIXED** (next weekday 08:30), not "now" — cached durations must share
+  one timetable or a commune resolved at 02:00 is incomparable with one resolved at 08:30, on the
+  heaviest component in the score. *Stated cost:* every duration is a one-time sample of that
+  departure, reflecting neither the hour a listing appeared nor a strike.
+- **Unknown is UNKNOWN, never far** (hard rule 9): the component goes unscored and the reasons say
+  `trajet inconnu — hors score`, because on a phone a missing line reads as a short commute.
+
+> **THE KEY WAS SHADOWED FOR ITS FIRST HOUR, and the cause was an instruction in this session.**
+> `.env` ended up with TWO `IDFM_API_KEY=` lines — the empty template default, and the value appended
+> after it by a `>> .env` one-liner. `Config\DotEnv` applies the FIRST occurrence and skips every
+> later one, and an empty string counts as set, so the real key could never be read. The API said so
+> plainly: `{"message":"No API key found in request"}`. **Never append a key that already has a
+> template line — edit the line in place.** `.env.example` now carries that warning where it happens.
+
+**Commute is OFF everywhere except the developer's machine.** The activation is a personal address
+and lives only in the gitignored `config/criteria.local.json`, and the loader's two-sided guard
+refuses `weights.commute` without `commute.enabled` — so CI, the fixtures and the sabotage ledger all
+run commute OFF, and the component is exercised by `tests/fixtures/criteria/commute.json`.
+
 
 **`seloger` IS LIVE as of 2026-08-25 — source #5, and the first that is not a landlord.** The IMAP
 credentials arrived, and `scout doctor --source=seloger` against the real mailbox returns **9

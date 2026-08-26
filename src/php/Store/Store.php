@@ -47,7 +47,7 @@ final readonly class Store
      * without complaint and then threw a raw `no such column` at the first sighting. That is the
      * whole argument for this constant existing, demonstrated against itself.
      */
-    public const int SCHEMA_VERSION = 8;
+    public const int SCHEMA_VERSION = 9;
 
     /**
      * How many undelivered digest rows one `scout digest` may carry.
@@ -137,6 +137,56 @@ final readonly class Store
      * `:memory:`, `delete` where WAL was refused. Anything but `wal` on a file database means two
      * processes will contend rather than share, so `scout doctor` prints it.
      */
+    /**
+     * The cached door-to-door commute for a COMMUNE, or `null` when nothing is cached.
+     *
+     * `null` means NOT LOOKED UP, never "unreachable" — {@see rememberCommute()} is only called on a
+     * successful resolution, deliberately. Caching a failure would turn one bad afternoon at the API
+     * into a permanently missing score component, and the component is the largest in the tree.
+     */
+    public function cachedCommuteMinutes(string $communeKey, string $postcode): ?int
+    {
+        $stmt = $this->pdo->prepare(
+            'SELECT minutes FROM commute_cache WHERE commune_key = :k AND postcode = :p',
+        );
+        $stmt->execute(['k' => $communeKey, 'p' => $postcode]);
+        $value = $stmt->fetchColumn();
+
+        return is_int($value) || (is_string($value) && $value !== '') ? (int) $value : null;
+    }
+
+    /**
+     * Record a resolved commune. Called ONLY on success — see {@see cachedCommuteMinutes()}.
+     *
+     * The coordinates are stored alongside the minutes even though nothing reads them back yet: they
+     * are what was actually resolved, so a wrong journey can be diagnosed without re-querying, and a
+     * future re-computation (a moved destination, a new timetable) does not need the geocode again.
+     */
+    public function rememberCommute(
+        string $communeKey,
+        string $postcode,
+        ?float $lat,
+        ?float $lon,
+        int $minutes,
+        string $nowIso,
+    ): void {
+        $stmt = $this->pdo->prepare(
+            'INSERT INTO commute_cache (commune_key, postcode, lat, lon, minutes, resolved_at)'
+            . ' VALUES (:k, :p, :lat, :lon, :m, :at)'
+            . ' ON CONFLICT (commune_key, postcode) DO UPDATE SET'
+            . ' lat = excluded.lat, lon = excluded.lon, minutes = excluded.minutes,'
+            . ' resolved_at = excluded.resolved_at',
+        );
+        $stmt->execute([
+            'k' => $communeKey,
+            'p' => $postcode,
+            'lat' => $lat,
+            'lon' => $lon,
+            'm' => $minutes,
+            'at' => $nowIso,
+        ]);
+    }
+
     public function journalMode(): string
     {
         return $this->journalModeInUse;
@@ -386,6 +436,24 @@ final readonly class Store
             -- which is a different fact from "read it and it said nothing" (fields_json '{}'). If
             -- those collapse, a detail page that 404s becomes a listing that merely has no floor,
             -- for ever, while the source's health stays green.
+            -- v9. One row per COMMUNE, not per listing: a commune's coordinates and its journey
+            -- to the configured destination are properties of the place, so 83 daily matches across
+            -- ~40 communes cost ~40 lookups once rather than 166 every pass.
+            --
+            -- Keyed on a NORMALISED commune plus its postcode. Normalised because the same commune
+            -- arrives spelled two ways in one response (`Les Clayes-sous-Bois` / `les clayes sous
+            -- bois`, observed on Logirep); postcode included because commune names repeat across
+            -- departements and a wrong coordinate would mis-score a whole town silently.
+            CREATE TABLE IF NOT EXISTS commute_cache (
+                commune_key TEXT NOT NULL,
+                postcode    TEXT NOT NULL,
+                lat         REAL,
+                lon         REAL,
+                minutes     INTEGER,
+                resolved_at TEXT,
+                PRIMARY KEY (commune_key, postcode)
+            );
+
             CREATE TABLE IF NOT EXISTS listing_detail (
                 source          TEXT NOT NULL,
                 external_id     TEXT NOT NULL,
@@ -601,6 +669,17 @@ final readonly class Store
                 if (!\in_array('notified_as', $existing, true)) {
                     $this->pdo->exec('ALTER TABLE listings ADD COLUMN notified_as TEXT');
                 }
+            }
+
+            if ($recorded < 9) {
+                // Additive and re-runnable, like every step above. Nothing to backfill: a commute
+                // is computed from live data, and an empty row would claim a lookup happened.
+                $this->pdo->exec(
+                    'CREATE TABLE IF NOT EXISTS commute_cache ('
+                    . ' commune_key TEXT NOT NULL, postcode TEXT NOT NULL,'
+                    . ' lat REAL, lon REAL, minutes INTEGER, resolved_at TEXT,'
+                    . ' PRIMARY KEY (commune_key, postcode))',
+                );
             }
 
             $stamp = $this->pdo->prepare("UPDATE schema_meta SET value = :value WHERE key = 'schema_version'");
