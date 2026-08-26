@@ -847,6 +847,64 @@ final class ConfigTest extends TestCase
             true,
             'a furnished let is genuinely out of scope',
         ];
+        // ── furnished lets whose title the keyword pattern could not reach ───────────────────────
+        //
+        // `exclude_patterns` carries `\b(?:location|louer|loue|appartement|logement|studio|bien|
+        // t[1-9])\s+meuble`, which requires the keyword to sit IMMEDIATELY before `meublé`.
+        // Measured over all 747 distinct stored titles on 2026-08-26: **29 contain `\bmeuble` and
+        // 15 of them escape**, and the dominant shape is the one the keyword can never reach —
+        // `<n> pièces meublé`, where the room count sits in between. `maison` and `duplex` were
+        // simply absent from the list, and one title leads with the bare word.
+        //
+        // The fix is a TITLE-ONLY `\bmeuble`, and it must be title-only: the very first case in
+        // this provider is a fitted kitchen in a DESCRIPTION, which is what a family flat has.
+        // Measured on the same 747 titles: zero carry `cuisine meublée`, zero carry a negation, and
+        // a bare `\bmeuble` produces zero false positives. **Stated cost:** a title advertising a
+        // fitted kitchen rather than a furnished let would now be rejected — none exists today.
+        yield 'a furnished let whose room count sits between the keyword and the word' => [
+            'À louer Grand 3 pièces meublé 66 m² Rénové à neuf',
+            'Proche gare.',
+            true,
+            'the keyword pattern needs `louer meuble` adjacent; the room count defeats it',
+        ];
+        yield 'a furnished let advertised as a house' => [
+            'Maison meublée 3 pièces 83 m²',
+            'Jardin clos.',
+            true,
+            '`maison` was never in the keyword list at all — captured live from Bien\'ici',
+        ];
+        yield 'a furnished let whose title leads with the bare word' => [
+            'MEUBLE - RUE WAGRAM',
+            'Beau volume.',
+            true,
+            'captured live from SeLoger: no keyword precedes it because nothing precedes it',
+        ];
+        yield 'a furnished let with the word parenthesised' => [
+            'CACHAN - 3 PIECES (meuble) - 50,35 m2',
+            'Proche RER B.',
+            true,
+            'captured live: punctuation between the room count and the word',
+        ];
+        yield 'a furnished let written as 3P' => [
+            'Beau 3P MEUBLE 59m2 lumineux et au calme',
+            'Calme et lumineux.',
+            true,
+            'captured live: `3P` is not `t[1-9]`, so the keyword list never saw this one',
+        ];
+        yield 'a flat explicitly NOT furnished is wanted' => [
+            'Grand 3 pieces non meuble, Houilles',
+            'Cuisine equipee.',
+            false,
+            'THE NEGATION: a bare \\bmeuble would reject the exact flat the criteria are looking for, '
+                . 'and a disqualifier rejects SILENTLY — nothing would ever say why it vanished',
+        ];
+        yield 'a title naming the building is wanted' => [
+            'Appartement 4 pieces dans immeuble recent',
+            'Au 3e etage avec ascenseur.',
+            false,
+            'THE WORD BOUNDARY: `immeuble` contains `meubl`, and it is in almost every description '
+                . 'in the store — an unanchored pattern would reject the entire tree',
+        ];
         yield 'a flat with a parking space is wanted' => [
             'T4 Chatou 82m2 avec parking',
             'Box en sous-sol inclus, cave et ascenseur.',
@@ -1104,7 +1162,13 @@ final class ConfigTest extends TestCase
         self::assertSame(50.0, $c->minSurfaceM2);
         self::assertSame(1200, $c->maxRentCc);
         self::assertFalse($c->commuteEnabled);
-        self::assertSame(70, $c->notify->highPriorityScore);
+        // 70 → 50, developer ruling 2026-08-26, and it is the FIRST calibration this threshold has
+        // ever had. `!!` needs score >= this AND tenure confidence >= 80/100, and measured across
+        // all 256 stored v7 snapshots those two are satisfied by DISJOINT sets: the top scorers are
+        // private-portal listings whose tenure is the source default at 50/100, while the listings
+        // that clear the confidence floor top out at 55. At any threshold >= 60 the marker is
+        // unreachable by construction. 50 marks 3 of the 47 confident listings.
+        self::assertSame(50, $c->notify->highPriorityScore);
         self::assertSame(['console'], $c->notify->channels);
     }
 

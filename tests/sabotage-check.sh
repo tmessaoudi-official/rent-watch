@@ -3193,6 +3193,26 @@ run_sabotage "the window is measured after the cap instead of before it" \
   src/php/Adapters/Mail/ImapMailbox.php \
   's%\$notice = self::truncationNotice(\\count(\$matched), \$limit, \$this->fromFilter);%\$notice = self::truncationNotice(\\count(\\array_slice(\$matched, 0, max(0, \$limit))), \$limit, \$this->fromFilter);%'
 
+# THE `!!` MARKER'S CONFIDENCE FLOOR. `high_priority_score` dropped 70 -> 50 on 2026-08-26, and the
+# floor is the whole reason that is a tightening rather than a loosening: `!!` needs a high score AND
+# a tenure verdict confident to 80/100. Deleting the second clause left the WHOLE SUITE GREEN until
+# `HighPriorityMarkerTest` was written, so a "drop what you're doing" marker could have started
+# appearing on listings whose regime was the source default -- exactly the private-portal cards that
+# score highest, and exactly the ones §1's residual lives in.
+run_sabotage "a guessed tenure is allowed to carry the high-priority marker" \
+  src/php/Core/CriteriaEngine.php \
+  's%&& \$classification->confidenceBp >= self::HIGH_PRIORITY_MIN_CONFIDENCE_BP;%;%'
+
+# And the withheld marker must SAY it was withheld. A demotion in silence is indistinguishable from
+# a scoring bug, and it is the one line that tells the reader the tenure -- not the flat -- is what
+# held it back.
+# The apostrophe in the PHP string is why this expression captures rather than rewrites: an earlier
+# draft spliced a quote in and produced a PARSE ERROR, which the ledger reported as proving nothing
+# either way — correctly. A mutation that does not compile tests nothing.
+run_sabotage "a marker withheld for low confidence is withheld in silence" \
+  src/php/Core/CriteriaEngine.php \
+  's%\$reasons\[\] = \(.priorité normale malgré\)%\$_unused = \1%'
+
 # THE TALLY LIVES HERE, BELOW EVERY CASE, and that position is load-bearing rather than tidy.
 # It sat mid-file twice: once on 2026-08-20 (295 printed for 303 cases) and again from 2026-08-23,
 # when 21 schema-v7 / digest / reclassify cases were appended past it and the headline read 354 for

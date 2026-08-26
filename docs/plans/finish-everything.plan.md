@@ -27,6 +27,11 @@ discovered one at a time.
 
 ### Bucket A — unblocked, no inputs required
 
+> **STATUS 2026-08-26: A1, A2 and A3 are BUILT and in production.** A4 — the final MAXIMAL
+> certification round — is the only row still open, and the standing conclusion at the foot of this
+> file is that it may not terminate while every round reviews the previous round's repairs. Reading
+> that conclusion is a prerequisite to running another round.
+
 | # | Item | Size | Where it is recorded |
 |---|---|---|---|
 | A1 | Classifier performance (~155 ms/listing) | S | `milestone-1-pipeline.plan.md` — the table's one explicitly unblocked row; the `src/` freeze that deferred it is lifted |
@@ -38,10 +43,10 @@ discovered one at a time.
 
 | # | Input needed | Unlocks | Size |
 |---|---|---|---|
-| B1 | IMAP credentials **and one real portal alert email** | The first `email_alert` portal, and with it all eleven Tier B portals — spec milestone 6 | M |
-| B2 | `plafonds de ressources` figures, **both halves** (LLI *and* PLAI/PLUS/PLS, per zone and household, with their year) | Classifier tier 4. The rung, the injectable table and a guard test are already wired; `PlafondBands` ships empty by policy | S |
-| B3 | IDFM/PRIM API key | `Enrich/transit` + `Enrich/geo` — the only spec layer with no code at all | M |
-| B4 | An authenticated DevTools cURL capture of AL'in | A4 AL'in, the ONLY route to the Action Logement ESH stock (A5, A6 and A8 all dead-end there) | M |
+| B1 | ~~IMAP credentials **and one real portal alert email**~~ | ✅ **CLOSED 2026-08-25.** Both arrived. Four portals live since: `seloger`, `bienici`, `leboncoin`, `pap` — spec milestone 6 done | M |
+| B2 | ~~`plafonds de ressources` figures, **both halves**~~ | ✅ **CLOSED 2026-08-26.** Fetched from BOFiP BOI-BAREME-000017 and the DRIHL 2026 grille, committed in `Core/PlafondBands` with their URLs. The figures REFUTED the rule everyone assumed — tier 4 concludes in one direction only | S |
+| B3 | ~~IDFM/PRIM API key~~ | ✅ **CLOSED 2026-08-26.** `Enrich/NavitiaCommute` live and verified against the API. The obvious curve was built, measured and made the problem worse; the shipped one gives 21 points of spread | M |
+| B4 | An authenticated DevTools cURL capture of AL'in | **STILL OPEN — the last input.** A4 AL'in, the ONLY route to the Action Logement ESH stock (A5, A6, A8 and now A14 all dead-end there) | M |
 
 **Hard rule 1 is why B2 and B4 are inputs rather than tasks.** An endpoint or a plafond figure
 written from memory is forbidden here, and a plausible invented number is worse than an absent tier

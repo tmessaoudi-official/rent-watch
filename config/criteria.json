@@ -46,7 +46,8 @@
     "^\\s*(?:location\\s+)?(?:de\\s+)?(?:parking|box|garage|cave|cellier|local|bureau|bureaux|entrepot|terrain|hangar|emplacement)\\b",
     "^\\s*chambre\\b",
     "\\b(?:loue|a\\s+louer|location)\\s+(?:de\\s+)?(?:parking|box|garage|emplacement)\\b",
-    "\\bemplacement\\s+de\\s+stationnement\\b"
+    "\\bemplacement\\s+de\\s+stationnement\\b",
+    "^(?!.*\\b(?:non|pas|sans)\\b[^\\n]{0,15}meuble).*\\bmeuble"
   ],
   "_commune_rank": "1 = most wanted. Drives score component S1 only; it never filters. In REGION MODE (empty `communes`) this is the only place the Boucle de Seine preference survives, which is why the loader stops requiring a rank to appear in `communes` when that list is empty — applied there, the check would reject every rank and force anyone widening to a departement to delete their ordering. With a NAMED commune list the check is back on: a rank for a commune that is filtered out is dead config.",
   "commune_rank": {
@@ -84,7 +85,7 @@
     "channels": [
       "console"
     ],
-    "high_priority_score": 70,
+    "high_priority_score": 50,
     "rent_drop_min_eur": 20,
     "rent_drop_min_pct": 2.0,
     "source_broken_cooldown_hours": 24,

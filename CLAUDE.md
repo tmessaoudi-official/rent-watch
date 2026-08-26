@@ -280,10 +280,25 @@ widening to all eight departements while dropping the surface floor to 50 m² an
 > the previous filter's matches**; `scout run --once --seed` on a throwaway `RENT_WATCH_DB` costs
 > one poll. Two live consequences worth knowing: nearly every match is OUTSIDE the ranked communes
 > (91/93/94 — Les Ulis, Aulnay, Pierrefitte, Vitry — with Dourdan and Dammarie-les-Lys scoring
-> highest), because there is nothing under 1200 € CC in the Boucle de Seine; and scores run
-> **16–48**, so `high_priority_score: 70` can never fire and the `!!` marker is currently dead.
-> Left alone on purpose — lowering the threshold to make the marker appear is tuning the instrument
-> to the reading.
+> highest), because there is nothing under 1200 € CC in the Boucle de Seine; and scores ran
+> **16–48**, so `high_priority_score: 70` could never fire and the `!!` marker was dead.
+>
+> > **BOTH HALVES OF THAT LAST CLAUSE WERE REFUTED ON 2026-08-26, and the second one had never been
+> > written down at all.** Re-judging all 256 stored v7 snapshots offline — no poll needed, schema
+> > v7 keeps the evidence — scores now run **0–70** (median 28, p90 40): commute lifted the ceiling
+> > that morning and one listing actually reaches 70, so 16–48 is a pre-commute figure. **And the
+> > marker STILL could not fire, for a structural reason nobody had stated:** `!!` needs
+> > `score >= high_priority_score` **AND** `confidenceBp >= 80`, and those two are satisfied by
+> > **disjoint sets of listings**. The top scorers are all `conf 50` — private-portal cards whose
+> > tenure is the source default — while the listings that clear the confidence floor top out at
+> > **55**. At any threshold ≥ 60 the marker is unreachable *by construction*, not by luck.
+> >
+> > So the threshold is **50** (developer ruling, 2026-08-26), marking 3 of the 47 confident
+> > listings. That is not the *"tuning the instrument to the reading"* this entry warned against:
+> > 70 predates commute and was never derived from anything, so this is the FIRST calibration it has
+> > had. **The confidence floor is deliberately untouched** — lowering the score bar while it stands
+> > tightens what `!!` means rather than loosening it, and `HighPriorityMarkerTest` plus two ledger
+> > cases now pin it, because deleting the floor used to leave the whole suite green.
 
 Three things to know before touching this. **Region mode is the first LOOSENING this config has taken**, so it is guarded from
 both sides — the loader REFUSES `communes` and `postcode_prefixes` both being empty (the one shape
@@ -320,8 +335,15 @@ postcode, so nothing would have looked broken. Ranked communes now feed that voc
 > as though it described Track 1. **A14 RIVP was measured 2026-08-26** and is NOT pollable and out of
 > scope by §1 — no lettings post type at all (`wp-json/wp/v2/types` settles it in one request), a
 > `residence` type that is the heritage map, and a *"Je cherche un logement **social**"* route to
-> `demande-logement-social.gouv.fr` stating `numéro unique` twice. **A15 Val d'Oise Habitat remains
-> genuinely unmeasured.** The exhaustive pass produced a THIRD kind
+> `demande-logement-social.gouv.fr` stating `numéro unique` twice. **A15 Val d'Oise Habitat was
+> measured 2026-08-26 and Track 1 is now genuinely measured out** — every catalogued row has a
+> verdict with a date. A15 is the FIRST row blocked by an active ANTI-BOT CHALLENGE rather than by
+> having no feed: every HTML request 302s to `/shield?u=…`, whose page solves a challenge in
+> JavaScript and sets a `shield` cookie. **Hard rule 5 refuses that outright** — obtaining an access
+> cookie by solving a bot-detection challenge is the same class as CAPTCHA solving, so this is a
+> RULING and not a capability limit. Do not revisit it with a headless browser. Its older tenure
+> blocker stands anyway (predominantly social, out of scope by §1 and Q4), and whether it offers an
+> email alert is unknowable from outside the shield.** The exhaustive pass produced a THIRD kind
 > of verdict, which the catalogue had no column for. **A11 Toit et Joie is `www.postehabitat.com`**
 > (301; the domain was stale, the third in three rows) and it is the delegation pattern a fourth
 > time: its availability search is real and returns **0 dwellings** — but that zero is only worth
@@ -731,6 +753,12 @@ applies and the figure lands in `rentHc`.
 `src/php/Enrich/` was the only spec layer with no code at all. It exists because **nothing in the
 score discriminated**: 83 live matches spread over all eight departements scored 16–48, so
 `high_priority_score: 70` could never fire and the `!!` marker was dead.
+
+> **COMMUTE DID NOT ON ITS OWN REVIVE THE MARKER, and reading this paragraph as though it had is
+> the trap.** It lifted the ceiling from 48 to **70** — measured the same day over all 256 stored
+> snapshots — and the marker stayed dead anyway, because `!!` also needs `confidenceBp >= 80` and
+> the listings that score highest are precisely the ones whose tenure is a source default at 50.
+> The threshold is `50` since 2026-08-26 for that reason. Full measurement in the Q2 block above.
 
 `Enrich/CommutePlanner` is the interface, `Enrich/NavitiaCommute` the IDFM/PRIM implementation over
 the ordinary `HttpClient` seam — which is what makes `RENT_WATCH_OFFLINE=1` cover it structurally
