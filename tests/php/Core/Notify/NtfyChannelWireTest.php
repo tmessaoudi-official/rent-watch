@@ -57,7 +57,14 @@ final class NtfyChannelWireTest extends TestCase
 
         self::assertStringContainsString('POST /secret-topic-1234 HTTP/1.1', $wire, 'the topic is the path');
         self::assertStringContainsString('Title: T4 a Chatou - 1450 EUR CC', $wire);
-        self::assertStringContainsString('Priority:', $wire);
+        // BY VALUE, not merely present. `Priority:` alone is true of every level, so hardcoding the
+        // wire literal — `'Priority: ' . $n->priority->ntfyLevel()` in NtfyChannel — to a 3 survived
+        // this assertion AND `PriorityRenderingTest`, which pins the enum rather than this call
+        // site. A correct rule covering one of its two surfaces, inside the test that names the
+        // failure class. ntfy's scale is 1–5 and only 4 and 5 break through a phone's quiet hours,
+        // which is the entire behavioural difference the `!!` marker buys — and the notification
+        // sent above is `Priority::HIGH`.
+        self::assertStringContainsString('Priority: 5', $wire, 'a HIGH push must actually go out as HIGH');
         self::assertStringContainsString('User-Agent: rent-watch', $wire, 'hard rule 5 holds on this path too');
         self::assertStringNotContainsStringIgnoringCase('mozilla', $wire);
         self::assertStringContainsString('https://example.test/annonce/1', $wire, 'the body carries the link');

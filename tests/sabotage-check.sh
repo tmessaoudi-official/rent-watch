@@ -3229,6 +3229,15 @@ run_sabotage "the high-priority push is demoted to an ordinary ntfy level" \
   src/php/Core/Notify/Priority.php \
   's%self::HIGH => 5,%self::HIGH => 3,%'
 
+# THE SAME GUARANTEE ON ITS OTHER SURFACE. The case above mutates the enum; this one leaves the enum
+# correct and hardcodes the CALL SITE, which is what actually reaches the phone. It survived both
+# `PriorityRenderingTest` (which pins the enum) and the wire test (which asserted only that a
+# `Priority:` header existed) until that assertion was strengthened to check the value — a correct
+# rule covering one of its two surfaces, found inside the test that names the failure class.
+run_sabotage "the ntfy wire hardcodes a level instead of sending the notification's own" \
+  src/php/Core/Notify/NtfyChannel.php \
+  "s%'Priority: ' \\. \\\$n->priority->ntfyLevel()%'Priority: 3'%"
+
 # THE TALLY LIVES HERE, BELOW EVERY CASE, and that position is load-bearing rather than tidy.
 # It sat mid-file twice: once on 2026-08-20 (295 printed for 303 cases) and again from 2026-08-23,
 # when 21 schema-v7 / digest / reclassify cases were appended past it and the headline read 354 for
