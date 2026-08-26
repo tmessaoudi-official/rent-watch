@@ -64,6 +64,16 @@ final readonly class TenureClassifier
     private const int CEILING_BP = 99;
     private const int BASEMENT_BP = 10;
 
+    /**
+     * An annual income ceiling is an ANNUAL INCOME, and the twin of the rent plausibility band.
+     *
+     * The lowest real figure in the committed tables is PLAI at 14 811 €, so 10 000 leaves headroom
+     * for a future revaluation downward while still refusing every rent, charge and surface a
+     * listing states. Without it a "loyer 1 250 €" near the anchor becomes an income ceiling below
+     * every threshold and the tier answers SOCIAL to noise.
+     */
+    private const int PLAFOND_PLAUSIBLE_MIN_EUR = 10000;
+
     /** Structured fields worth treating as tier 1. Compared as {@see Text::fieldKey()} output. */
     private const array TENURE_FIELDS = [
         // `tenureField` is not a name any landlord uses — it is the key `FieldMap::tenure_field`
@@ -228,7 +238,20 @@ final readonly class TenureClassifier
      */
     private const array NEGATED_BY_SANS = ["commission d'attribution", 'commission attribution'];
 
-    public function __construct(private PlafondBands $bands = new PlafondBands()) {}
+    private PlafondBands $bands;
+
+    /**
+     * Tier 4 is ARMED by default as of 2026-08-26 — it shipped inert for want of the figures.
+     *
+     * Resolved in the body rather than as a parameter default because a static factory call is not
+     * a constant expression; `readonly` permits the single assignment here. Passing an explicit
+     * `new PlafondBands()` still disarms the tier, which is what the surface-matrix and differential
+     * suites use to isolate the other tiers.
+     */
+    public function __construct(?PlafondBands $bands = null)
+    {
+        $this->bands = $bands ?? PlafondBands::ileDeFrance2026();
+    }
 
     public function classify(RawListing $listing, SourceProfile $source): Classification
     {
@@ -237,7 +260,7 @@ final readonly class TenureClassifier
                 1 => $this->structuredFieldSignals($listing),
                 2 => $this->labelSignals($listing),
                 3 => $this->proceduralSignals($listing),
-                4 => $this->plafondSignals(),
+                4 => $this->plafondSignals($listing),
             ];
         } catch (MalformedText $e) {
             // NOT swallowed into an empty result — that is the defect this replaces. The listing
@@ -1073,9 +1096,105 @@ final readonly class TenureClassifier
      *
      * @return list<TenureSignal>
      */
-    private function plafondSignals(): array
+    private function plafondSignals(RawListing $listing): array
     {
-        return [];
+        if ($this->bands->isEmpty()) {
+            return [];
+        }
+
+        $out = [];
+
+        foreach ($this->proceduralSurfaces($listing) as $folded) {
+            foreach ($this->quotedCeilingsIn($folded) as [$amount, $position, $evidence]) {
+                // The zone is IDF because nothing maps a commune to A bis / A / B1 yet, and IDF is
+                // the safest threshold across all three. The per-zone table arms itself for free
+                // the day such a map exists.
+                $tenure = $this->bands->classifyCeiling($amount, PlafondBands::IDF);
+
+                if ($tenure === null) {
+                    // Inside the measured overlap: the figure could belong to either regime, so
+                    // nothing is emitted. NOT a doubt — a tier-4 doubt would contradict a correct
+                    // tier-2 label into the digest, which is what `loyer plafonné` did to `lli-004`
+                    // and `lli-011` when it was tried as one.
+                    continue;
+                }
+
+                $out[] = new TenureSignal(
+                    tier: 4,
+                    tenure: $tenure,
+                    reason: 'plafond de ressources annoncé (' . $amount . ' €) sous tout plafond '
+                        . 'intermédiaire d\'Île-de-France — financement social',
+                    evidence: $evidence,
+                    position: $position,
+                );
+            }
+        }
+
+        return $out;
+    }
+
+    /**
+     * Annual income ceilings a listing states about itself.
+     *
+     * **EVERY guard here is a lesson this repo has already paid for**, and the extraction is where
+     * the dangerous false positive lives — not in the band comparison.
+     *
+     * - **Anchored on `plafond de ressources`, never on a bare `plafond`.** This classifier's own
+     *   vocabulary note records that `loyer plafonné` is *the primary target describing itself*: an
+     *   intermediate ad saying "loyer plafonné à 1 250 €" would hand a bare-`plafond` reader a
+     *   figure far below the threshold and get a real match rejected.
+     * - **Read the NEGATION first.** `sans plafond de ressources` is an advertisement for the
+     *   absence of the thing, and it is ordinary copy on private-market listings. Same rule as
+     *   `Prose`'s lift reader, and the same direction: a manufactured signal is worse than none.
+     * - **An annual-income magnitude floor.** Twin of the rent plausibility band. Without it a rent,
+     *   a charge or a surface sitting near the anchor becomes an "income ceiling" of 1 250 €, which
+     *   is below every threshold and therefore always reads SOCIAL.
+     * - **Every match is examined, not just the first.** `preg_match` stopping at the first hit is
+     *   what let one implausible figure hide a readable rent three lines below it on a SeLoger
+     *   *baisse de prix* card.
+     * - **`\h` for the thousands separator, never `\s`.** `\s` matches a newline, so a figure
+     *   assembles itself across a line break out of two unrelated numbers — the defect that read a
+     *   1 450 € rent as 850 €.
+     *
+     * @return list<array{int, int, string}> amount in euros, byte offset, matched evidence
+     */
+    private function quotedCeilingsIn(string $folded): array
+    {
+        // Folded text, so no accents and lower case: `plafond de ressources`, `plafonds de
+        // ressources`, and the elided `plafond de ressource`.
+        $anchor = 'plafonds?\h+(?:de\h+)?ressources?';
+
+        if (preg_match_all(
+            '/(?<neg>sans\h+|aucun\h+|pas\h+de\h+|hors\h+)?' . $anchor . '[^\d]{0,40}(?<amount>\d{1,3}(?:\h\d{3})+|\d{4,7})/u',
+            $folded,
+            $matches,
+            PREG_OFFSET_CAPTURE | PREG_SET_ORDER,
+        ) !== 1 && $matches === []) {
+            return [];
+        }
+
+        $out = [];
+
+        foreach ($matches as $match) {
+            if (($match['neg'][0] ?? '') !== '') {
+                // "sans plafond de ressources" states the ABSENCE of a ceiling. Reading the number
+                // that follows would invent a signal out of its own negation.
+                continue;
+            }
+
+            $amount = (int) str_replace(["\u{202f}", "\u{a0}", ' ', "\t"], '', $match['amount'][0]);
+
+            if ($amount < self::PLAFOND_PLAUSIBLE_MIN_EUR) {
+                // A rent, a charge, a surface or a reference number that happened to sit near the
+                // anchor. Every one of those is below every threshold, so admitting them would make
+                // the tier answer SOCIAL to noise.
+                continue;
+            }
+
+            $out[] = [$amount, $match[0][1], trim($match[0][0])];
+        }
+
+        return $out;
     }
 
     /** Exposed so the suite can assert the tier is still inert. */

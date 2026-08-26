@@ -83,8 +83,24 @@ final class TenureClassifierTest extends TestCase
 
         self::assertSame(['bands'], $names);
 
-        // And the excluded set survives a band table that tries to claim PLAI is fine.
-        $classifier = new TenureClassifier(new PlafondBands(['A' => ['max' => 999_999, 'tenure' => Tenure::LLI]]));
+        // A band table claiming an intermediate tenure is now REFUSED OUTRIGHT — strictly stronger
+        // than the previous guarantee, which merely survived one. Tier 4 answers SOCIAL or nothing:
+        // reading a NUMBER as proof that a listing is eligible is the §1-dangerous direction, and
+        // `PlafondBands`' own measurement shows such a reading would be wrong across a 73 451 €
+        // overlap. Refused at construction so it cannot be reintroduced by editing a table.
+        try {
+            new PlafondBands(['A' => ['max' => 999_999, 'tenure' => Tenure::LLI]]);
+            self::fail('a band asserting an intermediate tenure must be refused, not merely survived');
+        } catch (\InvalidArgumentException $e) {
+            self::assertStringContainsString('SOCIAL', $e->getMessage());
+        }
+
+        // And the excluded set survives the most permissive table that IS constructible: a social
+        // band with an absurd ceiling, which fires tier 4 on everything and still cannot promote
+        // anything — a lower-priority signal never overrides a higher one.
+        $classifier = new TenureClassifier(new PlafondBands([
+            PlafondBands::IDF => ['max' => 999_999, 'tenure' => Tenure::SOCIAL],
+        ]));
         $result = $classifier->classify($this->listing(fields: ['financement' => 'PLAI']), $this->source());
 
         self::assertSame(Tenure::PLAI, $result->tenure);
@@ -116,15 +132,85 @@ final class TenureClassifierTest extends TestCase
     }
 
     /**
-     * Tier 4 is still inert. When someone loads real ceiling figures, THIS test tells them the rung
-     * woke up and needs its own fixtures — see {@see PlafondBands}.
+     * Tier 4 is ARMED [2026-08-26]. This test used to assert it was inert, and its own docblock said
+     * that when someone loaded real figures the rung would wake up and need fixtures of its own —
+     * which is what happened, so the wake-up is the planned event rather than a weakened test. The
+     * fixtures it asked for are in {@see PlafondBandsTest} and in the corpus.
+     *
+     * What it asserts now is the property that must not silently reverse: the tier is loaded, its
+     * threshold is DERIVED from the committed table rather than written beside it, and it can only
+     * ever conclude SOCIAL.
      */
-    public function testPlafondTierIsInertUntilRealBandsAreSourced(): void
+    public function testPlafondTierIsArmedFromTheCommittedFigures(): void
     {
-        self::assertTrue(
-            (new TenureClassifier())->plafondBands()->isEmpty(),
-            'plafond bands are no longer empty: tier 4 now fires, and needs corpus coverage of its own',
+        $bands = (new TenureClassifier())->plafondBands();
+
+        self::assertFalse($bands->isEmpty(), 'tier 4 shipped inert for want of the figures; they are committed now');
+        self::assertSame(
+            min(array_map(min(...), PlafondBands::LLI_2026)),
+            $bands->bands[PlafondBands::IDF]['max'],
+            'the threshold must stay derived from the table, or the two drift at the next revaluation',
         );
+
+        foreach ($bands->bands as $zone => $band) {
+            self::assertSame(Tenure::SOCIAL, $band['tenure'], "zone {$zone}: tier 4 never asserts eligibility");
+        }
+    }
+
+    /**
+     * The extraction, which is where the dangerous false positive lives.
+     *
+     * The band comparison is arithmetic; deciding WHAT NUMBER to compare is the risky half. The
+     * third case here is load-bearing: this classifier's own vocabulary note records that
+     * `loyer plafonné` is *the primary target describing itself*, so an anchor on a bare `plafond`
+     * would hand the tier a rent, and every rent is below every threshold.
+     */
+    #[DataProvider('ceilingProse')]
+    public function testTheCeilingReaderOnlyFiresOnAStatedIncomeCeiling(string $text, bool $shouldFire, string $why): void
+    {
+        $result = (new TenureClassifier())->classify(
+            $this->listing(description: $text),
+            new SourceProfile(name: 'portal', mixedTenure: true),
+        );
+
+        $fired = str_contains(implode(' | ', $result->reasons()), 'plafond de ressources annoncé');
+
+        self::assertSame($shouldFire, $fired, $why);
+    }
+
+    /** @return iterable<string, array{string, bool, string}> */
+    public static function ceilingProse(): iterable
+    {
+        yield 'a stated ceiling below every intermediate one' => [
+            'Logement soumis à plafond de ressources : 26 920 € de revenu fiscal de référence.',
+            true,
+            'PLUS one-person, below every Ile-de-France intermediate ceiling',
+        ];
+        yield 'a stated ceiling inside the overlap' => [
+            'Plafond de ressources : 44 344 € pour une personne seule.',
+            false,
+            'an INTERMEDIATE ceiling — firing here is the false positive the tier exists to avoid',
+        ];
+        yield 'the rent cap, which is the primary target describing itself' => [
+            'Bel appartement, loyer plafonné à 1 250 € charges comprises.',
+            false,
+            'a bare `plafond` anchor would read the RENT as an income ceiling and reject a real match',
+        ];
+        yield 'the absence of a ceiling, advertised' => [
+            'Location libre, sans plafond de ressources, dossier simplifié.',
+            false,
+            'the negation must be read first — a signal manufactured from its own negation',
+        ];
+        yield 'a figure too small to be an annual income' => [
+            'Plafond de ressources mensuel indicatif : 1 450 €.',
+            false,
+            'the plausibility floor: a rent or charge near the anchor is below every threshold',
+        ];
+        yield 'no ceiling stated at all' => [
+            'Appartement T3 lumineux, proche des transports.',
+            false,
+            'nothing to read',
+        ];
     }
 
     /**

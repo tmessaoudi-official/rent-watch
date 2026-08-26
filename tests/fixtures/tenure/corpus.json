@@ -22,7 +22,7 @@
   ],
   "version": 1,
   "declared_counts": {
-    "synthetic": 115,
+    "synthetic": 120,
     "captured": 8
   },
   "sources": {
@@ -1847,6 +1847,73 @@
         "outcome": "MATCH"
       },
       "why": "THE `plus` CLASS A FOURTH TIME, AND THE FIRST FROM AN EMAIL. Captured from a real SeLoger alert frozen at tests/fixtures/seloger/2026-08-25-002-exclusive.eml. The card carries the call-to-action `En savoir plus →` -- an ordinary French adverb inside UI furniture, in the same position CDC's `au plus près` tooltip, Cityloger's `bailleur social` and Logirep's `Plain-pied` facet occupied. Read as an identifier it is the excluded financing regime PLUS and this private-market flat is vetoed; read as the prose it is, it is nothing. Kept because an email alert is a surface no listing copy controls: the CTA is the portal's template, not the landlord's description, so no amount of careful writing can remove it. A first version of the SeLoger fixture test asserted the word `plus` was absent from a card, which is unachievable -- this case asserts the verdict instead, which is what section 1 actually forbids."
+    },
+    {
+      "id": "plafond-001-stated-ceiling-below-every-intermediate-one",
+      "source": "cdc_habitat",
+      "provenance": "synthetic",
+      "title": "Appartement 3 pièces",
+      "description": "Logement soumis à plafond de ressources : 26 920 € de revenu fiscal de référence pour une personne seule.",
+      "fields": {},
+      "expect": {
+        "tenure": "SOCIAL",
+        "outcome": "REJECT"
+      },
+      "why": "TIER 4, THE ONLY DIRECTION THE REAL FIGURES SUPPORT. 26 920 EUR is the 2026 PLUS ceiling for one person, and it sits strictly below 36 144 EUR -- the LOWEST intermediate ceiling anywhere in Ile-de-France (zone B1, one person, BOFiP BOI-BAREME-000017). A figure below that cannot be an intermediate ceiling whatever the household size or zone, so the financing is social. This is the whole of tier 4: below the boundary it concludes, above it says nothing."
+    },
+    {
+      "id": "plafond-002-intermediate-ceiling-must-not-fire",
+      "source": "cdc_habitat",
+      "provenance": "synthetic",
+      "title": "Appartement 3 pièces",
+      "description": "Plafond de ressources : 44 344 € pour une personne seule. Résidence récente, proche RER.",
+      "fields": {},
+      "expect": {
+        "tenure": "UNKNOWN",
+        "outcome": "DIGEST"
+      },
+      "why": "THE FALSE POSITIVE TIER 4 EXISTS TO AVOID. 44 344 EUR is the INTERMEDIATE ceiling for one person in zones A bis and A -- an eligible listing quoting its own ceiling. It sits inside the measured overlap (36 144 .. 109 595 EUR), where a figure could belong to either regime, so tier 4 must stay silent and let the listing fall through to the digest on its own thin evidence. Firing here would reject a real match on the strength of a number that proves the opposite."
+    },
+    {
+      "id": "plafond-003-rent-cap-is-the-target-describing-itself",
+      "source": "example_pure_lli",
+      "provenance": "synthetic",
+      "title": "Appartement 3 pièces",
+      "description": "Bel appartement lumineux, loyer plafonné à 1 250 € charges comprises, résidence 2021.",
+      "fields": {},
+      "expect": {
+        "tenure": "LLI",
+        "outcome": "MATCH",
+        "max_confidence": 59
+      },
+      "why": "LOAD-BEARING, and it is the same lesson twice. This classifier's vocabulary note already records that `loyer plafonne` is THE PRIMARY TARGET DESCRIBING ITSELF -- intermediate housing is by definition capped rent -- and adding it as a doubt once digested lli-004, lli-011 and regress-030. The numeric tier can recreate that defect a second way: an extractor anchored on a bare `plafond` reads 1 250 EUR as an income ceiling, which is below every threshold, and concludes SOCIAL. On a pure-LLI source the contrast is at its sharpest -- this listing MATCHES today, and one careless anchor turns it into a REJECT. So the anchor is `plafond de ressources` and nothing else. Paired with lli-008, which is this listing without the rent-cap phrase."
+    },
+    {
+      "id": "plafond-004-a-ceiling-advertised-as-absent",
+      "source": "seloger",
+      "provenance": "synthetic",
+      "title": "Appartement 3 pièces",
+      "description": "Location libre, sans plafond de ressources : revenu minimum exigé 30 000 € par an. Dossier simplifié, disponible immédiatement.",
+      "fields": {},
+      "expect": {
+        "tenure": "LIBRE",
+        "outcome": "MATCH",
+        "max_confidence": 59
+      },
+      "why": "A SIGNAL MANUFACTURED FROM ITS OWN NEGATION, which is hard rule 9 read one more way. `sans plafond de ressources` advertises the ABSENCE of a ceiling and is ordinary private-market copy. THE FIGURE IS THE POINT: 30 000 EUR is an income FLOOR an agency demands of a tenant, and it sits below the 36 144 EUR threshold -- so a reader that skipped the negation would conclude SOCIAL and reject a private-market flat. The first version of this case carried no number at all, so the guard it claims to pin was never reached and a sabotage run showed the negation branch could be deleted with the suite staying green. Same rule as Prose's lift reader: read the negation before the fact."
+    },
+    {
+      "id": "plafond-005-a-rent-ceiling-is-not-an-income-ceiling",
+      "source": "cdc_habitat",
+      "provenance": "synthetic",
+      "title": "Appartement 3 pièces",
+      "description": "Logement intermédiaire. Plafond de loyer annuel : 15 000 € charges comprises. Résidence 2023.",
+      "fields": {},
+      "expect": {
+        "tenure": "LLI",
+        "outcome": "MATCH"
+      },
+      "why": "WHAT THE ANCHOR UNIQUELY PROTECTS, and it took a sabotage run to find a case that shows it. The obvious example -- `loyer plafonne a 1 250 EUR` -- is guarded twice over and so proves nothing: folded, `plafonne` is not `plafond`, and 1 250 is below the plausibility floor anyway. This one defeats both of those. `Plafond de loyer` is a real intermediate concept quoted as a real ANNUAL figure, so the number is plausible and the word is `plafond` exactly. Only the `de ressources` half of the anchor keeps a RENT ceiling from being read as an INCOME ceiling -- and 15 000 EUR sits below the 36 144 EUR threshold, so a loosened anchor concludes SOCIAL, contradicts this listing's own explicit intermediate label, and digests a flat the tool exists to find."
     }
   ]
 }

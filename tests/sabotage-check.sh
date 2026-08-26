@@ -2930,6 +2930,59 @@ run_sabotage "an empty link host passes for a named one" \
   src/php/Config/ConfigLoader.php \
   's%(!\\is_string(\$linkHost) || trim(\$linkHost) === ..)%(!isset(\$params["link_host"]))%'
 
+# ── tier 4: the income-ceiling band (2026-08-26) ──────────────────────────────
+# The tier answers SOCIAL or nothing, and every case here is silent. Over-firing rejects an eligible
+# flat and nothing arrives to say so; under-firing loses a social listing into the digest, which is
+# the safe direction but still a regression worth catching.
+
+# THE BOUNDARY IS STRICT because the boundary itself is an intermediate ceiling: 36 144 EUR is zone
+# B1's one-person figure, so `<=` socialises a genuine LLI listing quoting its own ceiling. The
+# scaffolding shipped with `<=`.
+run_sabotage "the ceiling boundary goes back to inclusive (an LLI ad quoting its own ceiling rejects)" \
+  src/php/Core/PlafondBands.php \
+  's%return $ceilingEur < $band\[.max.\]%return $ceilingEur <= $band["max"]%'
+
+# THE THRESHOLD IS DERIVED from the committed table. A literal drifts from the figures beside it at
+# the next January revaluation, and the tier keeps applying last year's boundary.
+run_sabotage "the unknown-zone threshold is written rather than derived from the table" \
+  src/php/Core/PlafondBands.php \
+  's%min(array_map(min(...), self::LLI_2026))%40000%'
+
+# §1: tier 4 may never assert eligibility from a number. The overlap means such a reading would be
+# wrong across a 73 451 EUR range, and it is the direction that puts a social listing in a push.
+run_sabotage "a band may assert an intermediate tenure again (eligibility manufactured from a number)" \
+  src/php/Core/PlafondBands.php \
+  's%if ($band\[.tenure.\] !== Tenure::SOCIAL) {%if (false) {%'
+
+# THE ANCHOR must keep `de ressources`. An intermediate ad quoting its own RENT ceiling as an annual
+# figure is the shape that defeats the other two guards: the word is `plafond` exactly, so folding
+# does not save it, and the figure is plausible, so the floor does not either. Only the anchor stops
+# a rent ceiling being read as an income ceiling -- and it lands below the threshold, so the tier
+# would contradict the listing's own intermediate label and digest a real match.
+run_sabotage "the ceiling reader drops the de-ressources half (a RENT ceiling reads as an income one)" \
+  src/php/Core/TenureClassifier.php \
+  's%\$anchor = .*;%\$anchor = "plafon[a-z]*";%'
+
+# THE NEGATION, read first -- `sans plafond de ressources` is ordinary private-market copy.
+run_sabotage "the ceiling reader ignores its own negation (a signal made from its absence)" \
+  src/php/Core/TenureClassifier.php \
+  "s%if ((\\\$match\['neg'\]\[0\] ?? '') !== '') {%if (false) {%"
+
+# THE PLAUSIBILITY FLOOR, twin of the rent band: a rent or charge near the anchor is below every
+# threshold, so without it the tier answers SOCIAL to noise.
+run_sabotage "the ceiling reader drops its plausibility floor (a rent becomes an income ceiling)" \
+  src/php/Core/TenureClassifier.php \
+  's%if ($amount < self::PLAFOND_PLAUSIBLE_MIN_EUR) {%if (false) {%'
+
+# THE TIER ITSELF.
+run_sabotage "tier 4 stops reading the listing (the rung goes inert again)" \
+  src/php/Core/TenureClassifier.php \
+  's%4 => $this->plafondSignals($listing),%4 => [],%'
+
+run_sabotage "the classifier ships with tier 4 disarmed again" \
+  src/php/Core/TenureClassifier.php \
+  's%$bands ?? PlafondBands::ileDeFrance2026()%$bands ?? new PlafondBands()%'
+
 # THE TALLY LIVES HERE, BELOW EVERY CASE, and that position is load-bearing rather than tidy.
 # It sat mid-file twice: once on 2026-08-20 (295 printed for 303 cases) and again from 2026-08-23,
 # when 21 schema-v7 / digest / reclassify cases were appended past it and the headline read 354 for

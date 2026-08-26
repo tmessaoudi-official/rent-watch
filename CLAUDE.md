@@ -19,7 +19,7 @@ Status: **milestone 1 is functionally complete against a frozen payload.** The p
 (schema v8), the config layer, the adapter contract, the criteria engine, dedup, the notification
 layer and the `scout` CLI all exist. What is missing is a NETWORK adapter, and that is blocked on an
 input rather than a decision. As of 2026-08-07 there is a PHP 8.5
-implementation of `models` + `tenure` under `src/php/Core/`, a 123-case language-neutral classifier
+implementation of `models` + `tenure` under `src/php/Core/`, a 128-case language-neutral classifier
 corpus at `tests/fixtures/tenure/corpus.json`, the seen-set / price-history / run-log store under
 `src/php/Store/` with `SourceHealth` + `SourceStatus` in `Core/`, a strict JSON config layer under
 `src/php/Config/` with both files committed, the `Source` contract plus `Payload` / `ListingMapper` /
@@ -78,9 +78,8 @@ its ruled mechanism is a classifier-version column that does not exist. The netw
 with `.env` swapping the real thing in — and the email half was written BLIND, which cost four
 defects the day a real alert first reached it (§ "The email-alert path"). **What is missing is not
 code but INPUTS**: a DevTools cURL capture for AL'in (hard rule 1 forbids writing an endpoint from
-memory), IMAP credentials for the alert mailbox, and the `plafonds` figures for classifier tier 4 —
-those last to be FETCHED from a dated official publication rather than supplied, since verifying a
-figure against a live source is what hard rule 1 asks for, not what it forbids. CI now exists
+memory) and IMAP credentials for the alert mailbox. The `plafonds` figures are no longer among them
+— fetched, committed and wired on 2026-08-26 (§ "Tier 4"). CI now exists
 (`.github/workflows/ci.yml`): the fast job runs the PHPUnit suite, the tenure tripwire,
 runner-fetch and ci-workflow self-tests, the drift scan and shell syntax on every push and
 PR; the sabotage ledger runs nightly and on demand. **A red nightly opens a GitHub issue, and a
@@ -412,8 +411,8 @@ Two smaller things landed with it, both hard rule 9: `Payload::floor()` reads fl
 they are (`RDC` is **0**, not unknown; and the generic number reader would return the ROOM COUNT from
 `3 pièces - 4ème étage - 82m²`), and `Payload::bool()` accepts the amenity noun `ascenseur`, which
 can only ever yield `true` or `null` and so cannot manufacture the explicit `false` the high-floor
-penalty needs. **`tests/fixtures/tenure/corpus.json` now has CAPTURED cases** (123
-total, 115 synthetic + 8 captured): two CDC cards — including the `au plus près` one, which is what
+penalty needs. **`tests/fixtures/tenure/corpus.json` now has CAPTURED cases** (128
+total, 120 synthetic + 8 captured): two CDC cards — including the `au plus près` one, which is what
 stops that classifier fix from being quietly undone — two Cityloger detail pages, and two Logirep
 captures added 2026-08-22, one an ordinary card that states no tenure at all and one the site's own
 FILTER FACET STRIP, which contains `PLAI` inside `Plain-pied`, `LLI` inside `Ce·lli·er` and `PLUS`
@@ -747,7 +746,9 @@ preference expressed: every entry names the one line that reverses it.
 Four things are still outstanding, and they are **inputs rather than decisions** — no default can
 supply them: the DevTools cURL captures for the first sources (hard rule 1 forbids writing an
 endpoint from memory), IMAP credentials for the alert mailbox, one real portal alert email to shape
-the parser against, and the `plafonds de ressources` figures for classifier tier 4.
+the parser against, and the `plafonds de ressources` figures for classifier tier 4. **Three of the
+four are now closed** — the alert email and the credentials arrived 2026-08-25, and the figures were
+fetched and committed 2026-08-26.
 
 **The alert email arrived on 2026-08-25 and the IMAP credentials with it, so that whole track is
 CLOSED** — `seloger` is live (§ "The email-alert path"), and pointing the adapter at a real mailbox
@@ -771,12 +772,51 @@ newsletter and no alert; it is an AGGREGATOR rather than a portal, so it needs i
 evaluation before it is treated as a source — a truncated description can lose a `PLS` label that
 the original listing carried.
 
-The `plafonds` figures were reassigned the same day: hard
-rule 1 forbids writing a ceiling *from memory*, not verifying one against a live authoritative
-source, which is the same thing the rule demands for endpoints. They are to be fetched from a dated
-official publication and committed with their URL and year, exactly as the four landlord payloads
-were frozen — and if a figure cannot be traced to a dated official page, it goes back to being an
-input.
+The `plafonds` figures were reassigned the same day — hard rule 1 forbids writing a ceiling *from
+memory*, not verifying one against a live authoritative source — and **they were fetched and
+committed on 2026-08-26**, from two dated official publications, each carried in
+`Core/PlafondBands` with its URL: the intermediate ceilings from BOFiP **BOI-BAREME-000017**
+(published 2026-03-10, CGI annexe III art. 2 terdecies H), the social ones from the DRIHL's
+*"Annexe 4 : grille des plafonds de ressources 2026"* (arrêté du 19 décembre 2025), both on the
+2024 revenu fiscal de référence.
+
+> **THE FIGURES REFUTED THE RULE EVERYONE ASSUMED WOULD BE BUILT, and that is the whole story of
+> tier 4.** The assumption — at or below the highest social ceiling means social, above it means
+> intermediate — fails twice against the real tables. **Even at the SAME household size**, zone B1's
+> intermediate ceilings sit BELOW the Paris PLS ceilings for every size from two upward (B1 couple
+> 48 268 € against PLS 52 303 €); only 13 of the 18 (zone, size) pairs separate at all. And a
+> listing quotes a bare figure with **no household size**, so the sizes must be collapsed — at which
+> point the bands overlap from 36 144 € to 109 595 €, a 73 451 € range. Under the assumed rule every
+> genuine intermediate ceiling reads SOCIAL: not a §1 breach, since over-rejecting is the safe
+> direction, but the tool switched off on the source producing most matches — and zone B1 is exactly
+> where the current matches are (Dourdan, Dammarie-les-Lys). It is the numeric echo of a lesson the
+> classifier already learned in words: `plafond de ressources` was rejected as a *text* signal
+> because LLI has income ceilings too.
+>
+> **So tier 4 concludes in ONE direction only:** strictly below the lowest intermediate ceiling in
+> Île-de-France (36 144 €, zone B1, one person) a figure cannot be an intermediate ceiling, so the
+> financing is social. Above that it emits **nothing** — never an intermediate verdict, because
+> manufacturing eligibility from a number is the §1-dangerous direction and `PlafondBands` refuses
+> such a band *at construction*; and never a doubt either, because a numeric doubt would contradict
+> a correct tier-2 label into the digest exactly as `loyer plafonné` once did to `lli-004` and
+> `lli-011`. The threshold is DERIVED from the committed table, not written beside it, so the two
+> cannot drift at the next January revaluation. **The boundary is strict**: 36 144 € IS an
+> intermediate ceiling, and the scaffolding shipped with `<=`.
+>
+> **Stated cost:** it catches social listings quoting small-household ceilings without naming their
+> scheme — PLAI at every size, PLUS for one to two people, PLS for one. It cannot catch a
+> large-household social ceiling, and that is a property of the French figures rather than of the
+> implementation.
+>
+> **The extraction is where the dangerous false positive lives**, not the arithmetic. It anchors on
+> `plafond de ressources` and never a bare `plafond`; reads the negation first (`sans plafond de
+> ressources` is ordinary private-market copy); applies an annual-income plausibility floor, twin of
+> the rent band; examines every match rather than the first; and uses `\h` for thousands separators
+> so a figure cannot assemble itself across a line break. A sabotage run showed the obvious
+> demonstration of the anchor proves nothing — folded, `plafonné` is not `plafond`, and a rent is
+> below the floor anyway — so corpus case `plafond-005` uses an intermediate ad quoting its own
+> **rent** ceiling as a plausible annual figure, which defeats both other guards and leaves only the
+> anchor standing.
 
 ---
 
@@ -1153,8 +1193,8 @@ Required coverage, per spec §11 — non-negotiable once `src/` exists:
   Offline. No network in CI. A parser test that reaches the network is a monitoring check, not a test.
 - **Classifier tests.** ≥30 hand-labelled listing texts covering pure-LLI In'li, mixed CDC Habitat,
   an explicit PLAI, an explicit PLS, and an ambiguous case. The suite must go red if the classifier
-  regresses. **Done** — `tests/fixtures/tenure/corpus.json`, 123 cases, and the suite asserts all five
-  shapes are present so "30 easy ones" cannot satisfy it. The corpus is **115 synthetic + 8 CAPTURED**
+  regresses. **Done** — `tests/fixtures/tenure/corpus.json`, 128 cases, and the suite asserts all five
+  shapes are present so "30 easy ones" cannot satisfy it. The corpus is **120 synthetic + 8 CAPTURED**
   (2026-08-20 onward — CDC Habitat cards, Cityloger detail pages, Logirep card + filter facets, and a
   SeLoger alert CTA — the first captured from an EMAIL, and the first whose offending text belongs to
   a portal's template rather than to anyone's listing copy;
