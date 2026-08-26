@@ -2052,6 +2052,12 @@ final readonly class Scout
             $store,
             $mailbox,
             $this->criteria()->communeLabels,
+            // Measured 2026-08-26: SeLoger matched 107 messages in the seven-day window against the
+            // default 50, so `IMAP_SINCE_DAYS=7` was buying that source about three days of
+            // catch-up. Raising this is not free — it is also the number of bodies fetched on every
+            // one of ~96 daily passes — which is why the knob ships beside a warning that says when
+            // it is biting rather than a larger default that hides it.
+            ImapMailbox::maxMessages(getenv('IMAP_MAX_MESSAGES') ?: null),
         );
     }
 
@@ -2086,6 +2092,10 @@ final readonly class Scout
             port: (int) (getenv('IMAP_PORT') ?: 993),
             fromFilter: \is_string($from) && $from !== '' ? $from : null,
             sinceDays: (int) (getenv('IMAP_SINCE_DAYS') ?: 7),
+            // The mailbox has no channel of its own — `fetchRecent()` returns messages and nothing
+            // else. Handing it `warn()` puts the line wherever the operator is already looking
+            // rather than inventing a second place to look.
+            warn: fn (string $message): mixed => $this->warn('source ' . $definition->name . ' : ' . $message),
         );
     }
 

@@ -56,6 +56,15 @@ final class ImapMailbox implements Mailbox, MutableByDesign
     /** A single message larger than this is not a listing alert. */
     private const int MAX_MESSAGE_BYTES = 4 * 1024 * 1024;
 
+    /**
+     * How many messages one pass reads per source, absent `IMAP_MAX_MESSAGES`.
+     *
+     * A cost ceiling, not a correctness one: it is also the number of bodies fetched every pass, and
+     * `--watch` runs about 96 passes a day. Raising it is not free — see {@see truncationNotice()},
+     * which is what makes the trade-off visible instead of leaving it to be discovered.
+     */
+    public const int DEFAULT_MAX_MESSAGES = 50;
+
     /** @var resource|null */
     private mixed $socket = null;
 
@@ -78,6 +87,15 @@ final class ImapMailbox implements Mailbox, MutableByDesign
         private readonly ?string $fromFilter = null,
         private readonly int $sinceDays = 7,
         private readonly ?\DateTimeImmutable $now = null,
+        /**
+         * Where a non-fatal remark about this fetch goes, or `null` to say nothing.
+         *
+         * A closure rather than a return value because {@see Mailbox::fetchRecent()} returns the
+         * messages and nothing else, and widening that contract for one diagnostic would make every
+         * implementation carry it. `Scout` passes its own `warn()`, so the line lands wherever the
+         * operator is already looking — `doctor`'s output, or the run banner.
+         */
+        private readonly ?\Closure $warn = null,
     ) {}
 
     public function describe(): string
@@ -114,10 +132,11 @@ final class ImapMailbox implements Mailbox, MutableByDesign
 
             // ASK THE SERVER WHICH MESSAGES ARE RECENT. Reading the tail of the folder instead was
             // the defect of 2026-08-25 — see the class docblock.
-            $sequences = self::sequencesIn(
+            $matched = self::allSequencesIn(
                 $this->command(self::searchCommand($this->fromFilter, $this->sinceDays, $this->now ?? new \DateTimeImmutable())),
-                $limit,
             );
+
+            $sequences = $this->capWithNotice($matched, $limit);
 
             if ($sequences === []) {
                 // Nothing in the window. Legitimate for the same reason an empty folder is, and
@@ -195,6 +214,23 @@ final class ImapMailbox implements Mailbox, MutableByDesign
      */
     public static function sequencesIn(array $lines, int $limit): array
     {
+        return array_slice(self::allSequencesIn($lines), 0, max(0, $limit));
+    }
+
+    /**
+     * The same sequences, UNCAPPED — the count the window actually matched.
+     *
+     * Split out from {@see sequencesIn()} so the cap can be counted against the window rather than
+     * silently applied to it. `SEARCH SINCE` decides what is recent and the cap decides how much of
+     * that is read; the two disagree the moment a portal gets busy, and until this existed nothing
+     * anywhere could observe the disagreement.
+     *
+     * @param list<string> $lines the response lines from {@see command()}
+     *
+     * @return list<int>
+     */
+    public static function allSequencesIn(array $lines): array
+    {
         $sequences = [];
 
         foreach ($lines as $line) {
@@ -211,7 +247,84 @@ final class ImapMailbox implements Mailbox, MutableByDesign
 
         rsort($sequences);
 
-        return array_slice(array_values(array_unique($sequences)), 0, max(0, $limit));
+        return array_values(array_unique($sequences));
+    }
+
+    /**
+     * Apply the cap, saying so when it bites.
+     *
+     * **Extracted from {@see fetchRecent()} so that it can be reached without a socket.** Inline it
+     * was three lines behind a live IMAP login, which no test in this tree can perform — and this
+     * repo has twice shipped a guarantee whose branch no test entered, in exactly that shape. The
+     * arithmetic is pure and covered by {@see truncationNotice()}; what this adds is proof that the
+     * notice is actually emitted and that the returned slice is the capped one.
+     *
+     * @param list<int> $matched every sequence the window held, uncapped
+     *
+     * @return list<int>
+     */
+    private function capWithNotice(array $matched, int $limit): array
+    {
+        $notice = self::truncationNotice(\count($matched), $limit, $this->fromFilter);
+
+        if ($notice !== null && $this->warn !== null) {
+            ($this->warn)($notice);
+        }
+
+        return \array_slice($matched, 0, max(0, $limit));
+    }
+
+    /**
+     * How many messages a pass may read, from `IMAP_MAX_MESSAGES` or the default.
+     *
+     * CLAMPED, never refused, and clamped the same way `IMAP_SINCE_DAYS` is — the two bound the same
+     * query, one by date and one by count, so a reader who has learnt that a nonsense value there
+     * means "at least one day" would be entitled to assume the same here. Zero is the case worth
+     * naming: it would read no messages at all, which is a source reporting a quiet market for ever.
+     *
+     * @param string|null $configured the raw env value, or `null` when it is unset
+     */
+    public static function maxMessages(?string $configured): int
+    {
+        if ($configured === null || trim($configured) === '' || !is_numeric(trim($configured))) {
+            return self::DEFAULT_MAX_MESSAGES;
+        }
+
+        return max(1, (int) trim($configured));
+    }
+
+    /**
+     * What to say when the window held more than the cap will read — or `null` when it fits.
+     *
+     * **This is not a day-to-day loss, which is exactly why it needed saying out loud.** Inside a
+     * date-filtered window the highest sequence numbers are the newest messages, so a busy source
+     * still reads today's alerts and reports a healthy count; what silently shrinks is the CATCH-UP
+     * window, the thing `IMAP_SINCE_DAYS` is set for. Measured on the live mailbox 2026-08-26:
+     * SeLoger matched 107 messages in a seven-day window against a cap of 50, so seven days of
+     * stated resilience was really about three and a quarter — and it gets worse as the portal gets
+     * busier, in a direction nothing reports.
+     *
+     * Silent at exactly the cap: 50 read out of 50 loses nothing, and a notice that fires on every
+     * busy-but-fine source is how a real one stops being read.
+     *
+     * @param string|null $from the source's own `params.from`, so the reader knows WHOSE window
+     *                          this is — one mailbox serves every portal and each has its own
+     */
+    public static function truncationNotice(int $matched, int $limit, ?string $from): ?string
+    {
+        if ($matched <= $limit) {
+            return null;
+        }
+
+        return sprintf(
+            'fenêtre IMAP tronquée : %d message(s) de %s dans la fenêtre, %d lus (les plus récents). '
+                . 'Les alertes du jour sont lues, mais le rattrapage promis par IMAP_SINCE_DAYS est '
+                . 'réduit d\'autant — augmenter IMAP_MAX_MESSAGES (défaut %d) ou réduire IMAP_SINCE_DAYS',
+            $matched,
+            $from ?? 'cette source',
+            $limit,
+            self::DEFAULT_MAX_MESSAGES,
+        );
     }
 
     private function connect(): void

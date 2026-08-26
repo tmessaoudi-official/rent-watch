@@ -841,6 +841,128 @@ final class NetworkAdaptersTest extends TestCase
         self::assertSame([], ImapMailbox::sequencesIn(['A003 OK SEARCH completed'], 50));
     }
 
+    /**
+     * The cap is counted AGAINST the window, not silently applied to it.
+     *
+     * `SEARCH SINCE` decides what is recent and the cap decides how much of that is read, so the
+     * two disagree the moment a portal gets busy — and the disagreement is invisible. Measured on
+     * the live mailbox 2026-08-26: SeLoger matched **104** messages in the seven-day window against
+     * a cap of 50, so `IMAP_SINCE_DAYS=7` was really buying about 3.4 days of catch-up for that
+     * source. Nothing was being missed day to day (highest sequences are the newest inside a
+     * date-filtered window), which is exactly why nothing said so.
+     */
+    public function testAWindowLargerThanTheCapSaysSo(): void
+    {
+        $notice = ImapMailbox::truncationNotice(104, 50, 'alertes.seloger.com');
+
+        self::assertIsString($notice);
+        self::assertStringContainsString('104', $notice);
+        self::assertStringContainsString('50', $notice);
+        // The knob is NAMED, because a warning that does not say what to turn is a complaint.
+        self::assertStringContainsString('IMAP_MAX_MESSAGES', $notice);
+        // WHOSE window it is. One mailbox serves every portal and each has its own `FROM`, so a
+        // notice that did not name the sender would send the reader to the wrong source.
+        self::assertStringContainsString('alertes.seloger.com', $notice);
+    }
+
+    /**
+     * Silent when nothing is dropped, INCLUDING at exactly the cap.
+     *
+     * The boundary is the whole point: 50 matches read under a cap of 50 lose nothing, and a notice
+     * there would fire on every busy-but-fine source until it was ignored — which is how a real one
+     * stops being read.
+     */
+    public function testAWindowThatFitsIsSilent(): void
+    {
+        self::assertNull(ImapMailbox::truncationNotice(9, 50, 'alertes.seloger.com'));
+        self::assertNull(ImapMailbox::truncationNotice(50, 50, 'alertes.seloger.com'));
+        self::assertIsString(ImapMailbox::truncationNotice(51, 50, 'alertes.seloger.com'));
+    }
+
+    /**
+     * The count the notice reports is the count BEFORE the cap — the only one that carries news.
+     */
+    public function testEverySequenceIsCountedBeforeTheCapIsApplied(): void
+    {
+        $lines = ['* SEARCH 6 7 8', '* SEARCH 52 53 8', 'A003 OK SEARCH completed'];
+
+        self::assertSame([53, 52, 8, 7, 6], ImapMailbox::allSequencesIn($lines), 'deduplicated, uncapped');
+        self::assertSame([53, 52], ImapMailbox::sequencesIn($lines, 2), 'the cap still caps');
+    }
+
+    /**
+     * `IMAP_MAX_MESSAGES` reads like its twin `IMAP_SINCE_DAYS`, deliberately.
+     *
+     * The two knobs bound the same query — one by date, one by count — so a reader who learns that
+     * a nonsense `IMAP_SINCE_DAYS` clamps to one day would be entitled to assume the same here.
+     * Making one clamp and the other refuse is a trap for no gain. Zero is the case that matters: it
+     * would read NO messages, which is a source reporting a quiet market for ever.
+     */
+    public function testTheMessageCapIsClampedNeverZero(): void
+    {
+        self::assertSame(120, ImapMailbox::maxMessages('120'));
+        self::assertSame(ImapMailbox::DEFAULT_MAX_MESSAGES, ImapMailbox::maxMessages(null));
+        self::assertSame(ImapMailbox::DEFAULT_MAX_MESSAGES, ImapMailbox::maxMessages(''));
+
+        // Not a number at all — a typo must not silently mean "read nothing".
+        self::assertSame(ImapMailbox::DEFAULT_MAX_MESSAGES, ImapMailbox::maxMessages('beaucoup'));
+
+        self::assertSame(1, ImapMailbox::maxMessages('0'), 'zero would be a permanently quiet source');
+        self::assertSame(1, ImapMailbox::maxMessages('-5'));
+    }
+
+    /**
+     * The notice is EMITTED, not merely computable — and the slice is the capped one.
+     *
+     * Verified against the live mailbox on 2026-08-26 (108 SeLoger messages, 50 read), but a live
+     * mailbox is not a test: the day that portal goes quiet the branch stops being entered and this
+     * becomes safety code nobody would notice deleting. That has happened twice in this repo, most
+     * recently to the SeLoger title fallback hours before this was written. So the branch is entered
+     * here on purpose, through the private method it was extracted into for the purpose.
+     */
+    public function testTheTruncationNoticeIsActuallyEmitted(): void
+    {
+        $said = [];
+
+        $mailbox = new ImapMailbox(
+            host: 'imap.invalid',
+            user: 'u',
+            password: 'p',
+            fromFilter: 'alertes.seloger.com',
+            warn: function (string $message) use (&$said): void { $said[] = $message; },
+        );
+
+        $cap = new \ReflectionMethod(ImapMailbox::class, 'capWithNotice');
+
+        // 6 matched, 4 read.
+        $kept = $cap->invoke($mailbox, [60, 59, 58, 57, 56, 55], 4);
+
+        self::assertSame([60, 59, 58, 57], $kept, 'the newest, capped');
+        self::assertCount(1, $said);
+        self::assertStringContainsString('alertes.seloger.com', $said[0]);
+        self::assertStringContainsString('IMAP_MAX_MESSAGES', $said[0]);
+
+        // ...and silent when it fits, which is what stops it becoming background noise.
+        $said = [];
+        self::assertSame([60, 59], $cap->invoke($mailbox, [60, 59], 4));
+        self::assertSame([], $said, 'a window that fits says nothing');
+    }
+
+    /**
+     * A mailbox given no `warn` must not crash when the cap bites.
+     *
+     * `FileMailbox` and every test that constructs an `ImapMailbox` directly pass none, so the null
+     * branch is the common one — and a diagnostic that can take down a fetch is worse than the
+     * silence it was added to fix.
+     */
+    public function testACappedFetchWithNoWarnChannelIsHarmless(): void
+    {
+        $mailbox = new ImapMailbox(host: 'imap.invalid', user: 'u', password: 'p');
+        $cap = new \ReflectionMethod(ImapMailbox::class, 'capWithNotice');
+
+        self::assertSame([9, 8], $cap->invoke($mailbox, [9, 8, 7], 2));
+    }
+
     public function testTheImapMailboxIsBehindTheOfflineTripwire(): void
     {
         // THE EGRESS POINT THAT MATTERS MOST, and it was not covered. `Core\Offline` was introduced

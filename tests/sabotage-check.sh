@@ -3154,6 +3154,35 @@ run_sabotage "the commute cache forgets which destination its minutes are to" \
   src/php/Enrich/NavitiaCommute.php \
   's%\$destinationKey = sha1(\$destination);%\$destinationKey = "any-destination";%'
 
+# ── The IMAP window cap ─────────────────────────────────────────────────────────────────────────
+#
+# The cap is a COST ceiling and `SEARCH SINCE` is a correctness one, so when the cap bites it is the
+# catch-up window that shrinks — silently, because the newest messages are still read and the count
+# still looks healthy. Measured live 2026-08-26: 108 SeLoger messages in the window, 50 read.
+
+# Deleting the notice entirely. This is the shape the defect actually had for a month.
+run_sabotage "a truncated IMAP window stops saying it was truncated" \
+  src/php/Adapters/Mail/ImapMailbox.php \
+  's%if (\$matched <= \$limit) {%if (true) {%'
+
+# Computed and never emitted — hard rule 2's exact wording, one layer down: an alert that is worked
+# out and then dropped is worse than one that was never computed, because it reads as covered.
+run_sabotage "the truncation notice is computed and then never sent" \
+  src/php/Adapters/Mail/ImapMailbox.php \
+  's%if (\$notice !== null && \$this->warn !== null) {%if (false) {%'
+
+# A zero or negative IMAP_MAX_MESSAGES reading as "read nothing" — a source that reports a quiet
+# market for ever, which is the failure the whole clamp exists to refuse.
+run_sabotage "a nonsense message cap is allowed to mean read nothing" \
+  src/php/Adapters/Mail/ImapMailbox.php \
+  's%return max(1, (int) trim(\$configured));%return (int) trim(\$configured);%'
+
+# The uncapped count is what carries the news; counting AFTER the slice can never exceed the limit,
+# so the notice could never fire again and every test above would still be reading real code.
+run_sabotage "the window is measured after the cap instead of before it" \
+  src/php/Adapters/Mail/ImapMailbox.php \
+  's%\$notice = self::truncationNotice(\\count(\$matched), \$limit, \$this->fromFilter);%\$notice = self::truncationNotice(\\count(\\array_slice(\$matched, 0, max(0, \$limit))), \$limit, \$this->fromFilter);%'
+
 # THE TALLY LIVES HERE, BELOW EVERY CASE, and that position is load-bearing rather than tidy.
 # It sat mid-file twice: once on 2026-08-20 (295 printed for 303 cases) and again from 2026-08-23,
 # when 21 schema-v7 / digest / reclassify cases were appended past it and the headline read 354 for
