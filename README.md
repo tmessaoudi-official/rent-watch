@@ -189,6 +189,52 @@ fight the 24-hour interval and report to a dashboard nobody is watching.
 **Back up `state/rent-watch.sqlite3`.** Deleting it re-notifies everything, and the price history
 cannot be reconstructed — a listing only ever shows its *current* rent.
 
+```bash
+tools/backup-state.sh                       # → state/backups/rent-watch.<stamp>.sqlite3
+0 4 * * *  cd /srv/rent-watch && tools/backup-state.sh   # a daily crontab line
+```
+
+**Do not use `cp`, and the reason is silent.** The watcher holds the database open in WAL mode, so a
+byte copy taken mid-transaction is torn — and a torn SQLite file **opens without complaint and
+reports a plausible row count**. You find out at restore, which is the one moment you cannot afford
+to. `tools/backup-state.sh` uses SQLite's own online-backup API, which is safe against a live writer
+and checkpoints the WAL, then **reads the copy back** (`integrity_check` plus a row count) before
+reporting success — a backup nobody opened is a file, not a backup. It keeps 7
+(`RENT_WATCH_BACKUP_KEEP`), pruning oldest-first, because an unbounded backup directory fills the
+VPS disk and takes the live seen-set down with it. Restoring is a move: stop the container, put the
+file at `state/rent-watch.sqlite3`, start it.
+
+### Moving the watcher to another host
+
+Three files carry the deployment, and only one of them is in git.
+
+| Carry across | Why |
+|---|---|
+| `state/rent-watch.sqlite3` | The seen-set. **Without it the new host re-notifies the entire market on its first pass** — hundreds of pushes for flats you have already read and dismissed. |
+| `.env` | Credentials: IMAP, the push channel, the IDFM key. Gitignored, so a `git clone` does not bring it. |
+| `config/criteria.local.json` | Gitignored too, and it is what turns commute scoring on — a clone without it silently scores every listing without the heaviest component in the tree. |
+
+```bash
+tools/backup-state.sh                                     # take a verified copy FIRST
+rsync -av state/backups/rent-watch.<stamp>.sqlite3 \
+          .env config/criteria.local.json  <host>:/srv/rent-watch/…
+ssh <host> 'cd /srv/rent-watch && docker compose build && docker compose run --rm scout doctor'
+```
+
+**`doctor` before `up -d`, always.** It is the one command that proves the new host can reach the
+sources *and* the notification channel before anything is scheduled — and `docker compose run --rm
+scout test-notify` proves the channel specifically, which `doctor` alone does not.
+
+**Do NOT re-run `--seed` on the new host if you carried the seen-set.** Seeding marks everything
+currently published as already seen, so a genuine new listing that appeared during the move would be
+swallowed silently. Seed only on a genuinely fresh start.
+
+> **One trap, paid for on 2026-08-26.** `Config\DotEnv` applies the **first** occurrence of a key and
+> skips every later one, and an empty string counts as set. Appending `IDFM_API_KEY=…` to a `.env`
+> that already carries the empty template line leaves the real key permanently unread, and the API
+> answers `{"message":"No API key found in request"}`. **Edit the line in place; never append a key
+> that already has a template line.**
+
 ## Notifications — turning a channel on
 
 Q9 rules every channel optional and `console` always available, so the stack starts and says what it

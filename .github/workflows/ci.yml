@@ -108,6 +108,14 @@ jobs:
       - name: Fixture scrubber refuses a recoverable address
         run: bash tests/test-scrub-eml.sh
 
+      # The seen-set is the one file this project calls UNRECOVERABLE, and the README told operators
+      # to back it up without saying how — so `cp` was the implied answer, and a byte copy of a live
+      # WAL database is torn while opening without complaint. This proves the tool reads its own copy
+      # back, refuses rather than writing an empty one, and that two runs in the same second do not
+      # overwrite each other (its own first draft did, and a weak assertion hid it).
+      - name: State backup produces a copy that reads back
+        run: bash tests/test-backup-state.sh
+
       # BEFORE the scan itself, deliberately. The scan is a gate, and a gate that has been silently
       # disabled reports clean — which is exactly how an earlier version of it printed a P0 and
       # still exited 0. Running the self-test first means a gutted check fails the build instead of

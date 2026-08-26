@@ -1428,6 +1428,10 @@ bash tests/test-sabotage-applies.sh     # proves every sabotage EXPRESSION still
                                         #   an expression that matches nothing reports coverage it
                                         #   does not have, and each is checked ON ITS OWN
 bash tests/test-dotenv-cli.sh           # proves the .env loader the CLI actually uses
+bash tests/test-backup-state.sh         # proves the seen-set backup produces a copy that READS
+                                        #   BACK — a torn WAL copy opens without complaint, so `cp`
+                                        #   is the wrong tool and its failure is found at restore
+tools/backup-state.sh                   # take one: state/backups/rent-watch.<stamp>.sqlite3
 bash tests/test-scrub-eml.sh            # proves the scrubber refuses a RECOVERABLE address —
                                         #   it decodes base64url runs and quoted-printable before
                                         #   it looks, because "absent" is not "unrecoverable"
@@ -1588,6 +1592,14 @@ tests/test-scrub-eml.sh          Proves the scrubber refuses a RECOVERABLE addre
                                  must-strip, must-refuse and must-stay-quiet halves
 tests/test-sabotage-baseline.sh  Proves the sabotage ledger judges its cases in a GREEN scratch tree
 tests/test-ci-workflow.sh   Proves ci.yml still wires every step this file claims CI runs
+tools/backup-state.sh       Backs up the seen-set — the one file this project calls
+                            UNRECOVERABLE. SQLite's ONLINE backup API, never `cp`: the watcher
+                            holds the db open in WAL, and a torn byte copy opens without
+                            complaint and reports a plausible row count. Reads the copy back
+                            before reporting success; keeps 7, oldest-first
+tests/test-backup-state.sh  Sabotage test FOR that tool. Its own first draft collided every
+                            backup onto one second-granularity filename and a `<= 7` assertion
+                            hid it — the exact count is asserted now
 tools/fetch-phpunit.sh      Fetches the runner; pinned SHA-256, refuses to install on a mismatch
 tools/phpunit.phar          Test runner (gitignored — see README § Getting started)
 var/claude/                 Reports, review outputs — gitignored scratch (handoffs are the
