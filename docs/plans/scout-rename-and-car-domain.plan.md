@@ -34,6 +34,7 @@ until a separate go. A ruling on what a thing will be called is not a ruling tha
 - [2026-08-26 20:40] AGREED (developer, `AskUserQuestion` result, same transcript): the repo is renamed to **`scout`** — GitHub name, local directory, PHP namespace `RentWatch\` → `Scout\`, env prefix `RENT_WATCH_*` → `SCOUT_*`. The recommendation was `scout` because **the name already exists in this codebase and is already domain-neutral**: the binary is `bin/scout`, the class is `Cli\Scout`, every verb is `scout run` / `scout doctor` / `scout digest`. Every alternative (`vigie`, `annonces`) would have introduced a *third* identity on top of repo ≠ CLI ≠ namespace; this one collapses them to a single word.
 - [2026-08-26 20:40] NOTED: the rename splits into three separable pieces, measured rather than estimated — **199 `rent-watch` literals across 51 files** (mostly prose; GitHub redirects the old URL so nothing breaks), **717 `RentWatch\` occurrences in 140 PHP files** (mechanical `sed` + `composer dump-autoload --dev` + full suite — it either compiles or it does not), and **101 `RENT_WATCH_*` occurrences that are only 4 distinct names**: `_DB`, `_OFFLINE`, `_MAX_PASSES`, `_BACKUP_KEEP`.
 - [2026-08-26 20:40] NOTED — **the env rename is the only piece that can hurt, and the guard already exists.** If `RENT_WATCH_DB` is renamed and the *deployed* `.env` on the host is not updated in the same breath, the default takes over, a brand-new empty database is created, and the watcher re-notifies the entire market. That is exactly what **Q36's flood guard** prevents: `scout run` refuses to notify while `isSeenSetEmpty()` is true, and since 2026-08-19 it reads the ROWS rather than the file, so an earlier `doctor` cannot disarm it. The failure mode is therefore a loud refusal, not 200 pushes. Recommended sequencing: the prose half whenever; **the namespace and env rename in the same change as the car-domain refactor**, which touches the tree anyway — one test run instead of two.
+- [2026-08-26 23:05] NOTED: item 1 (AL'in) parked — the developer has an `al-in.fr` account but no NUR/NUD, and obtaining one runs through `demande-logement-social.gouv.fr`, which hard rule 5 puts out of scope. Raises an UNMEASURED §1 question: a NUR requirement is the tier-3 procedural tell for social housing, so AL'in's gated stock may be out of scope rather than merely unreachable.
 
 ## What is still owed BY the developer
 
@@ -48,6 +49,23 @@ this file's job. Nothing in the car domain can start without items 2–4.
 | 2 | **A separate mailbox — or alias — for car alerts** | See § "The immediate hazard" below. This is not tidiness; without it a car alert is ingested by the *rent* source. Credentials go straight into `.env`, never pasted into chat |
 | 3 | **Saved searches created** on leboncoin, La Centrale and AutoScout24 with the real criteria | The alert cannot arrive until the search exists |
 | 4 | **One real alert email from each**, run through `php tools/scrub-eml.php` | **This is the gate.** The email parser was written blind here and cost four defects the day a real message first reached it, behind 1 886 green tests. Not repeating that |
+
+> **Item 1 is PARKED as of 2026-08-26, and the reason is itself a §1 question.** The developer has
+> an `al-in.fr` account but **no NUR/NUD** — the *numéro unique d'enregistrement* — and obtaining one
+> runs through `demande-logement-social.gouv.fr`, which hard rule 5 places **out of scope entirely**.
+> They will do it, but not now.
+>
+> **That gate is not incidental.** This repo's own glossary lists `numéro unique d'enregistrement`,
+> `SNE` and `commission d'attribution` as the **tier-3 procedural tell for SOCIAL housing**, and says
+> LLI is allocated *"directly by the landlord — no commission, no SNE number"*. So if a NUR is what
+> unlocks AL'in's listings, what sits behind it is precisely the commission-allocated stock §1
+> excludes, and the capture would buy little.
+>
+> **[Inferred, not measured.]** Nobody has checked whether AL'in shows anything without a NUR, or
+> whether its intermediate stock sits on a separate unauthenticated surface. **Measure that before
+> spending the procedure on it** — one logged-in look at what the existing account can already see,
+> and whether any of it is labelled *intermédiaire* / LLI. If the answer is "nothing without a NUR",
+> then A4 joins A5/A6/A8/A14 as a §1 dead end rather than a blocked input, and Track 1 closes.
 
 ### Open decisions — each has a proposed default, per the repo's open-questions convention
 
