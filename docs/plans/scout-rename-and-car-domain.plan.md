@@ -223,6 +223,37 @@ fetch; do not re-derive them.
 - **Alcopa Auction** — *"être alerté"* on matching vehicles [Inferred: third-party guides, not confirmed on the portal itself]
 - Autohero / Aramisauto / VPauto / Agorastore / BCAuto — UNMEASURED
 
+### Creating the alerts — the operational half, and it is where this goes wrong
+
+**Recommended starting set: leboncoin, La Centrale, AutoScout24 — in that order, all three
+email-only.** Together they cover the overwhelming majority of the French used-car market, private
+and professional, with **zero anti-bot exposure**. Two of the three refuse a polling client outright
+(La Centrale is DataDome, leboncoin 403s), so email is not a fallback here — it is the only route,
+which is hard rule 4 arriving at the same answer from the other side. **ParuVendu** and **Autohero**
+are the tier-2 additions once the shape is proven; do not start with five.
+
+Five rules for creating them, each of which silently breaks the pipeline if missed:
+
+1. **Create every alert on the WEB, never in the portal's mobile app.** An app alert delivers a PUSH
+   notification, which reaches the phone and never reaches the mailbox — so the watcher sees a quiet
+   market for ever while the developer sees alerts. Hard rule 2's shape, introduced by the operator
+   rather than by the code. If the app is the only way to reach the setting, verify the email
+   delivery box is ticked.
+2. **Set the alert frequency to the HIGHEST the portal offers** (AutoScout24 offers 1 h / 12 h /
+   24 h / 7 d — take 1 h). A daily digest costs a full day of latency on a market where an
+   underpriced car is gone in hours, and this project's whole premise is minutes.
+3. **Verify the `+car` address is ACCEPTED before relying on it** — see the routing section. If a
+   portal refuses `+`, the fallback is a Gmail filter on the SAVED SEARCH NAME in the subject; give
+   each search a distinctive name (`car-watch-lbc`, `car-watch-lc`, `car-watch-as24`) so that
+   fallback exists before it is needed. Do NOT fall back on the link: leboncoin's `/vi/<id>.htm` is
+   category-agnostic and cannot tell a car from a flat [Verified 2026-08-26].
+4. **Never delete an alert email.** Until the parser is built the mailbox IS the corpus, and the
+   awkward messages are the valuable ones — this repo's email parser cost four defects on the day a
+   real message first reached it, behind 1 886 green tests.
+5. **Take AutoScout24's price-drop alerts if offered separately.** A price drop is already a
+   first-class event here (`price_history`), and it is the single cheapest signal of a motivated
+   seller.
+
 ### Dead rows — dated, so nobody re-proposes them
 
 - **Reezocar** — ceased sales **4 November 2024**. Was the German/Belgian import route with the paperwork handled [Verified: multiple 2026 write-ups]
