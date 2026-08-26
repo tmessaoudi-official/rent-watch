@@ -7,20 +7,20 @@ namespace RentWatch\Core;
 /**
  * Signal tier 4 — income-ceiling bands, compared against the ceiling a listing quotes.
  *
- * THIS SHIPS EMPTY, AND THAT IS THE HONEST STATE, NOT AN OVERSIGHT.
+ * **ARMED 2026-08-26.** This shipped EMPTY for as long as the figures were missing, because
+ * `CLAUDE.md` hard rule 1 forbids writing them from memory and invented numbers would have been
+ * worse than an absent tier — it would have appeared to work while dropping eligible listings in
+ * silence. They are committed now, from two dated official publications, each carried beside the
+ * table it fills: see {@see LLI_2026} and {@see SOCIAL_2026}.
  *
- * The tier is real and named in `spec/PROJECT_BRIEF.md` §4: a quoted `plafond de ressources` does
- * discriminate LLI from PLUS/PLAI reliably, because the bands are far apart. What this repo does not
- * have is the figures. They vary by zone (A bis / A / B1) and by household size, they are revised
- * annually, and `CLAUDE.md` hard rule 1 forbids writing them from memory. Invented numbers would be
- * worse than an absent tier: the tier would appear to work, and would be wrong in the direction that
- * silently drops eligible listings.
+ * **The figures then refuted the rule this rung was expected to hold**, and the narrow shape of
+ * {@see classifyCeiling()} is the consequence rather than a simplification — read its docblock
+ * before widening anything here. In one line: the social and intermediate bands OVERLAP, so a bare
+ * quoted figure supports exactly one conclusion, in one direction, and the tier says nothing at all
+ * the rest of the time.
  *
- * So the ladder has the rung, the table is injectable, and with no bands loaded it emits nothing.
- * `TenureClassifierTest::testPlafondTierIsInertUntilRealBandsAreSourced()` asserts exactly that, so
- * the day someone loads real figures the test tells them the tier woke up.
- *
- * Sourcing them is tracked in `docs/OPEN-QUESTIONS.md`.
+ * The table stays injectable, and an empty one still disarms the tier completely — which is what the
+ * surface-matrix and differential suites use to isolate the other rungs.
  */
 final readonly class PlafondBands
 {
@@ -49,7 +49,7 @@ final readonly class PlafondBands
      * Social-housing income ceilings for Île-de-France, 2026.
      *
      * Source: DRIHL Île-de-France, *"Annexe 4 : grille des plafonds de ressources 2026"*, set by the
-     * arrêté du 19 décembre 2025 (JO 2026-12-24 ... published 24 décembre 2025), revenu fiscal 2024.
+     * arrêté du 19 décembre 2025, publié au Journal officiel le 24 décembre 2025 ; revenu fiscal 2024.
      * https://www.drihl.ile-de-france.developpement-durable.gouv.fr/IMG/pdf/annexe_4.pdf
      *
      * **Not read by {@see classifyCeiling()} — committed because it is what PROVES the threshold.**

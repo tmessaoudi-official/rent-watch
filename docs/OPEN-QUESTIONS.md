@@ -30,6 +30,10 @@ bundle integration raised on its own.
 >    sources (hard rule 1 forbids writing an endpoint from memory), IMAP credentials for the alert
 >    mailbox, one real portal alert email to shape the parser against, and the `plafonds` figures for
 >    Q19. Those are inputs, not decisions — they are listed in `docs/plans/milestone-1-pipeline.plan.md`.
+>    **Three of the four are now closed:** the alert email and the IMAP credentials arrived
+>    2026-08-25, and the `plafonds` figures were FETCHED and committed 2026-08-26 — hard rule 1
+>    forbids writing a ceiling from memory, not verifying one against a dated official source. Only
+>    the AL'in capture remains genuinely blocked on the developer.
 
 ---
 
@@ -703,10 +707,34 @@ the classifier, which is exactly the move this project forbids.
 - **Option 3 — exclude it outright.** Not recommended: it would drop genuinely eligible stock, and
   the reason to exclude a tenure here is ineligibility, which does not apply.
 
-### Ⓐ Q19 — ANSWERED 2026-08-07: tier 4 stays inert
+### Ⓐ Q19 — ANSWERED 2026-08-07: tier 4 stays inert. **SUPERSEDED 2026-08-26: it is ARMED.**
 
-**ANSWERED 2026-08-07.** `PlafondBands` ships empty and the test that asserts the tier stays inert
-stands. Writing the figures from memory is forbidden (hard rule 1) and inventing them would be worse
+**ARMED [2026-08-26, `8ddb8d0`].** The figures were fetched from two dated official publications and
+committed inside `Core/PlafondBands` with their URLs: the intermediate ceilings from BOFiP
+**BOI-BAREME-000017** (published 2026-03-10, CGI annexe III art. 2 terdecies H), the social ones from
+the DRIHL's *"Annexe 4 : grille des plafonds de ressources 2026"* (arrêté du 19 décembre 2025, JO
+24 décembre 2025), both on the 2024 revenu fiscal de référence.
+
+**And the figures REFUTED this question's own premise.** The text below says *"the bands are far
+apart, so it discriminates reliably — it is the best signal the project is not using."* Measured,
+they are not far apart at all. Even at the SAME household size, zone B1's intermediate ceilings sit
+BELOW the Paris PLS ceilings for every size from two upward (B1 couple 48 268 € against PLS
+52 303 €); only 13 of the 18 (zone, size) pairs separate. And a listing states a bare figure with no
+household size, so the sizes collapse and the bands overlap from 36 144 € to 109 595 € — a 73 451 €
+range, 0 of 18 separable. Social ceilings are unbounded upward besides, so *"above every social
+ceiling ⇒ intermediate"* has no derivable region at all.
+
+**What was built is therefore one direction only:** strictly below 36 144 € — the lowest intermediate
+ceiling anywhere in Île-de-France — a figure cannot be an intermediate ceiling, so the financing is
+social. Above that the tier emits nothing: never an intermediate verdict (`PlafondBands` refuses such
+a band at construction), and never a doubt (a numeric doubt contradicts a correct tier-2 label into
+the digest, as `loyer plafonné` did to `lli-004` and `lli-011`). Measured after arming, it fires on
+**0** of 165 live listings and 0 of the 20 captured In'li descriptions — the shape it catches is real
+and no live source currently emits it. Full reasoning: `docs/plans/plafonds-tier-4.plan.md`.
+
+**Everything below this line is the pre-2026-08-26 record**, kept because the refuted premise is the
+useful part. `PlafondBands` shipped empty and the test that asserted the tier stayed inert
+stood. Writing the figures from memory is forbidden (hard rule 1) and inventing them would be worse
 than the gap: the tier would appear to work while silently dropping eligible listings. Tiers 1–3 clear
 the floor on every corpus case, so this is an enhancement, not a hole. Source them from the annual
 arrêté when someone has the figures in hand.
@@ -720,9 +748,11 @@ What is missing is the figures. They vary by zone (A bis / A / B1) and by househ
 are revised annually. `CLAUDE.md` hard rule 1 forbids writing them from memory, and inventing them
 would be worse than the gap: the tier would appear to work while silently dropping eligible listings.
 
-**Current behaviour:** the rung exists in the ladder, `PlafondBands` ships empty, and
-`TenureClassifierTest::testPlafondTierIsInertUntilRealBandsAreSourced()` asserts it stays inert — so
-the day someone loads real figures, the suite says the tier woke up and needs its own fixtures.
+**Behaviour until 2026-08-26:** the rung existed in the ladder, `PlafondBands` shipped empty, and
+`TenureClassifierTest::testPlafondTierIsInertUntilRealBandsAreSourced()` asserted it stayed inert —
+so the day someone loaded real figures, the suite would say the tier had woken up and needed its own
+fixtures. That is exactly what happened; the test is now
+`testPlafondTierIsArmedFromTheCommittedFigures`.
 
 Sourcing them needs a decision on *where from*: the annual arrêté on Légifrance is authoritative but
 awkward to parse; ANIL and service-public.fr republish them in readable tables. Neither is a
@@ -1230,6 +1260,8 @@ Not blocking. Nothing in milestone 1 depends on the answer.
 - [2026-08-06] RAISED (Q19): **classifier tier 4 (plafonds bands) ships inert.** The rung exists; the
   figures do not, and hard rule 1 forbids writing them from memory. A test asserts it stays inert so
   loading real bands is a deliberate, visible act.
+  **CLOSED [2026-08-26, `8ddb8d0`]** — figures committed from two dated official sources, tier armed,
+  and the measurement refuted the question's own "the bands are far apart" premise. See Q19 above.
 - [2026-08-06] AGREED (tooling): **`tests/sabotage-check.sh` is part of the classifier's test
   contract.** Every failure mode in this module is silent, so a green suite is not evidence. The
   sabotage run breaks the classifier 15 ways and requires the suite to catch each one; it found three
