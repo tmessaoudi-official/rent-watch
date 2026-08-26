@@ -578,7 +578,22 @@ DECLARED_UNREAD = {
     'TELEGRAM_CHAT_ID': 'deliberately UNSUPPORTED under Q9 — commented so filling it cannot fail silently',
 }
 subst = set(re.findall(r'\$\{([A-Z_][A-Z0-9_]*)(?::-[^}]*)?\}', compose.read_text())) if compose.exists() else set()
-for key in sorted(set(declared) - read - subst - set(DECLARED_UNREAD)):
+# A SHELL SCRIPT IS A READER TOO, and until `tools/backup-state.sh` arrived every reader in this
+# project was PHP. Scanned for the (d) direction ONLY, and that asymmetry is deliberate: used in the
+# (b) direction it would report `PATH`, `HOME` and every ordinary shell local as an undeclared
+# setting, and a gate that fires on things the repo has already reasoned about gets ignored within a
+# week. Here it can only ever SUPPRESS a false "nothing reads this", never invent a finding.
+shell_read = set()
+# `tools/` ONLY. A key read solely by a test is a SEAM, not a deployment setting, so it has no
+# business silencing "nothing reads this" — and keeping the scan's reach identical to what
+# `tests/test-drift-scan.sh` can safely materialise is what stops the two drifting apart. That test
+# cannot link `tests/` into its scratch tree: doing so made a later case write through the link into
+# the real classifier corpus.
+for path in pathlib.Path('tools').glob('*.sh'):
+    if path.exists():
+        shell_read |= set(re.findall(r'\$\{([A-Z_][A-Z0-9_]*)(?::[-=?+][^}]*)?\}', path.read_text()))
+
+for key in sorted(set(declared) - read - shell_read - subst - set(DECLARED_UNREAD)):
     print(f"P2  .env.example declares {key} and no code reads it — stale, or ahead of its feature. "
           f"If deliberate, name it in DECLARED_UNREAD here with the reason.")
 PY

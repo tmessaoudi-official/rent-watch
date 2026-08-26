@@ -3213,6 +3213,22 @@ run_sabotage "a marker withheld for low confidence is withheld in silence" \
   src/php/Core/CriteriaEngine.php \
   's%\$reasons\[\] = \(.priorité normale malgré\)%\$_unused = \1%'
 
+# THE `!!` GLYPH ITSELF. Every other link in that chain had a test — the engine producing
+# `highPriority`, and `Formatter` mapping it to `Priority::HIGH` — and the RENDERING, the only part
+# the developer ever sees, had none. A marker that prints like an ordinary match is worse than one
+# switched off: it reports a discrimination it is not making, and the listing that most deserved
+# attention arrives looking like the other sixty that day.
+run_sabotage "the high-priority marker renders like an ordinary match" \
+  src/php/Core/Notify/ConsoleChannel.php \
+  "s%Priority::HIGH => '!!',%Priority::HIGH => ' >',%"
+
+# ntfy's scale is 1–5 and only 4 and 5 break through a phone's quiet hours, which is the entire
+# behavioural difference the marker buys. `NtfyChannelWireTest` asserts a `Priority:` header EXISTS,
+# which is true of every level — so this silent demotion would have passed it unchanged.
+run_sabotage "the high-priority push is demoted to an ordinary ntfy level" \
+  src/php/Core/Notify/Priority.php \
+  's%self::HIGH => 5,%self::HIGH => 3,%'
+
 # THE TALLY LIVES HERE, BELOW EVERY CASE, and that position is load-bearing rather than tidy.
 # It sat mid-file twice: once on 2026-08-20 (295 printed for 303 cases) and again from 2026-08-23,
 # when 21 schema-v7 / digest / reclassify cases were appended past it and the headline read 354 for

@@ -57,6 +57,19 @@ scratch_project() {
   cp "$repo/compose.yaml" "$dir/compose.yaml"
   ln -s "$repo/src" "$dir/src"
   mkdir -p "$dir/bin" && ln -s "$repo/bin/scout" "$dir/bin/scout"
+  # S8 reads SHELL readers too, since `tools/backup-state.sh` arrived — before it, every reader in
+  # the project was PHP. Omitting these made `shell_read` empty here while it was populated in the
+  # live repo, so S8 reported a P2 on an unmodified tree and the silence case failed. Same shape as
+  # the `.claude/settings.json` omission described just below, and as the sabotage ledger's own
+  # missing `.env.example`: a scratch tree that is not what it is judging.
+  # `tools` ONLY, and NEVER `tests`. Linking `tests` made a later case's
+  # `mkdir -p "$dir/tests/fixtures/tenure"` + `cp` resolve THROUGH the link into the real
+  # `tests/fixtures/tenure/corpus.json` — the classifier's ground truth, which CLAUDE.md lists among
+  # the files that must not be casually written. `cp` refused it as "the same file" and no damage
+  # was done, but a case that WROTE rather than copied would have rewritten the corpus from a test
+  # run. The scratch tree exists so the repo is never mutated; a symlink out of it defeats that
+  # entirely. No test script declares an env key, so nothing is lost by leaving `tests` out.
+  ln -s "$repo/tools" "$dir/tools"
   # Not read by S8 — present so that NO OTHER section crashes here. S1 opens it unguarded, and its
   # absence made the scratch project emit "checked NOTHING" on every run, which silently satisfied
   # the crash assertion below even with S8's entire body deleted. That check was then asserting
