@@ -35,6 +35,9 @@ until a separate go. A ruling on what a thing will be called is not a ruling tha
 - [2026-08-26 20:40] NOTED: the rename splits into three separable pieces, measured rather than estimated — **199 `rent-watch` literals across 51 files** (mostly prose; GitHub redirects the old URL so nothing breaks), **717 `RentWatch\` occurrences in 140 PHP files** (mechanical `sed` + `composer dump-autoload --dev` + full suite — it either compiles or it does not), and **101 `RENT_WATCH_*` occurrences that are only 4 distinct names**: `_DB`, `_OFFLINE`, `_MAX_PASSES`, `_BACKUP_KEEP`.
 - [2026-08-26 20:40] NOTED — **the env rename is the only piece that can hurt, and the guard already exists.** If `RENT_WATCH_DB` is renamed and the *deployed* `.env` on the host is not updated in the same breath, the default takes over, a brand-new empty database is created, and the watcher re-notifies the entire market. That is exactly what **Q36's flood guard** prevents: `scout run` refuses to notify while `isSeenSetEmpty()` is true, and since 2026-08-19 it reads the ROWS rather than the file, so an earlier `doctor` cannot disarm it. The failure mode is therefore a loud refusal, not 200 pushes. Recommended sequencing: the prose half whenever; **the namespace and env rename in the same change as the car-domain refactor**, which touches the tree anyway — one test run instead of two.
 - [2026-08-26 23:05] NOTED: item 1 (AL'in) parked — the developer has an `al-in.fr` account but no NUR/NUD, and obtaining one runs through `demande-logement-social.gouv.fr`, which hard rule 5 puts out of scope. Raises an UNMEASURED §1 question: a NUR requirement is the tier-3 procedural tell for social housing, so AL'in's gated stock may be out of scope rather than merely unreachable.
+- [2026-08-26 23:20] AGREED: every domain's alerts are tagged on the RECIPIENT — `<you>+<label-root>@gmail.com`, so `+car` / `+rent` — and a Gmail filter on `To:` routes each to its own label. NO domain is left untagged: a catch-all working domain must be edited every time a domain is added, and the catch-all must be the ERROR bucket instead. Developer's reasoning, and it overrode the "don't touch five live sources" objection.
+- [2026-08-26 23:20] AGREED: the `watch/UNROUTED` tripwire is added LAST, after every rent saved search is re-tagged and verified. Added first it matches every still-untagged rent alert and takes the live rent sources to zero.
+- [2026-08-26 23:20] AGREED: the car domain runs as its OWN DEPLOYMENT — own `.env`, `IMAP_MAILBOX`, SQLite and ntfy topic, plus a `[car-watch]` notification prefix. `IMAP_MAILBOX` is global per deployment, so two deployments buy folder isolation with zero code change.
 
 ## What is still owed BY the developer
 
@@ -95,6 +98,61 @@ window — the exact shared-budget failure that took SeLoger from 9 listings to 
 The link-host and separator collisions are [Verified]; whether the sender address is identical is
 [Unverified]. **A separate mailbox or alias closes it at the source; a `from` filter alone does
 not.**
+
+## Mailbox routing — RULED 2026-08-26, and it resolves the hazard above
+
+**Every domain is tagged on the RECIPIENT**, none is left as a catch-all. The address is
+`<you>+<label-root>@gmail.com` — `+car`, `+rent`, later `+job` — which is **not a new account**:
+Gmail delivers `you+anything@gmail.com` to `you@gmail.com` and preserves the tag in the `To:` header,
+so a filter can match it. Each tag routes to its own label, and Gmail labels are IMAP folders:
+
+| Filter | Match | Action |
+|---|---|---|
+| 1 | `To: <you>+car@…` | → `car-watch/portails`, skip inbox |
+| 2 | `To: <you>+rent@…` | → `rent-watch/portails`, skip inbox |
+| 3 | `From:` any known portal **AND NOT** any `+tag` | → `watch/UNROUTED`, **keep in inbox** |
+
+**Why the recipient and not the sender** — the sender cannot discriminate. leboncoin sends the rent
+alert and the car alert from the same `no.reply@leboncoin.fr` through the same saved-search system
+[Inferred: same system; no leboncoin car alert has been seen here], and `From:` is exactly what the
+live rent sources already match on. The recipient tag is the only difference the developer controls.
+
+**Why NO domain is untagged** — developer's argument, and it beats the "don't touch five live
+sources" one: a catch-all working domain must be EDITED every time a domain is added
+(`AND NOT +car AND NOT +job …`), and the day that edit is forgotten the new domain's alerts land
+silently in the old one. Adding a domain must be purely additive. **The catch-all is the ERROR
+bucket, never a working domain.**
+
+**THE MIGRATION ORDER IS THE WHOLE SAFETY.** Filter 3 goes LAST. Added while the rent searches are
+still untagged it matches every rent alert, and the live rent sources go to zero — silently, the
+SeLoger 9 → 0 shape of 2026-08-25.
+
+1. Add filter 1. Harmless today; nothing sends there yet.
+2. Add filter 2. Also harmless; nothing carries that tag yet.
+3. **Leave the existing catch-all rent filter in place.** Both filters point at the same label, so a
+   portal is covered whether tagged or not, for the whole migration.
+4. Re-register the rent saved searches as `+rent`, **one portal at a time**, running
+   `scout doctor --source=<name>` after each and confirming the count has not dropped.
+5. Only once all are tagged and verified: retire the catch-all, then add filter 3.
+
+Steps 1–2 unblock item 3. Steps 4–5 can wait indefinitely; nothing in the car domain depends on them.
+
+### The car domain runs as its OWN DEPLOYMENT
+
+Own `.env`, own `IMAP_MAILBOX=car-watch/portails`, own SQLite, own ntfy topic, and a `[car-watch]`
+prefix on every notification. **`IMAP_MAILBOX` is global per deployment** — one key, no per-source
+override [Verified 2026-08-26: `.env.example:73`, and no `mailbox` param in `EmailAlertSource`] — so
+two deployments give folder isolation with **zero code change**, where one deployment would require
+a new per-source `params.mailbox`. This is also what the ruled architecture already says: second
+domain, own SQLite + config.
+
+**The separate ntfy topic is not cosmetic.** Both watchers emit the Q27 daily heartbeat; into one
+topic you cannot tell WHICH one died, and distinguishing a dead watcher from a quiet market is that
+signal's entire job. The `[car-watch]` prefix is then mildly redundant with a separate topic, and is
+kept anyway because two topics interleave in one phone notification shade.
+
+⚠️ **On ntfy.sh the topic name IS the access control.** Anyone who guesses it can read the listings
+and publish to the device. Long and random, in `.env`, never in a commit and never in chat.
 
 ## The car-domain §1 analog — proposed, fail-closed
 
