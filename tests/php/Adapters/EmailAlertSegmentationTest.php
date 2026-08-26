@@ -189,21 +189,77 @@ final class EmailAlertSegmentationTest extends TestCase
     }
 
     /**
-     * Two DISTINCT cards resolving to one id is an extraction failure, not a re-send.
+     * Two cards in one message sharing an id: KEEP ONE, DROP THE REST, AND SAY SO.
      *
-     * Scoped to the message on purpose: across messages the same id IS a legitimate re-send, which
-     * is the behaviour content-addressing exists to give. Within one message it means the fields
-     * that distinguish two flats were not read.
+     * **This used to throw, and the change is a ruling rather than a relaxation** (developer, 2026-08-26).
+     * The throw was right that a collision must never be silent and wrong about its blast radius,
+     * which is the detail-hydration lesson exactly: a per-message data EVENT was being treated as a
+     * broken-template STATE, so one message took the whole source down.
+     *
+     * It happened for real. On 2026-08-26 at 17:11 a `Baisse de prix` digest carried three coliving
+     * ROOMS in one flat at Gros Saule, Aulnay-sous-Bois — each advertised with the whole flat's
+     * `6 pièces . 83,99 m²`, so commune, postcode, rooms, surface and residence were genuinely
+     * identical and only the OLD price differed. seloger returned zero listings for seven
+     * consecutive passes. The guard's own message — *the fields that distinguish them were not
+     * read* — was FALSE: they were read correctly, and the three rooms are indistinguishable by any
+     * field that belongs in a stable identity. That is the documented cost of content-addressing
+     * arriving, not a fault.
+     *
+     * What is NOT relaxed is the silence: the collision is announced every pass, with the id.
      */
-    public function testTwoCardsInOneMessageSharingAnIdentityIsALoudFailure(): void
+    public function testTwoCardsInOneMessageSharingAnIdentityKeepOneAndSaysSo(): void
     {
-        $this->expectException(SourceError::class);
-        $this->expectExceptionMessageMatches('~identité~i');
+        $said = [];
 
-        $this->source(self::body([
+        $listings = $this->source(
+            self::body([
+                self::card('980', 'Appartement A', '3 pièces . 44,71 m²', 'Romagne', 'Conflans-Sainte-Honorine', '78700'),
+                self::card('1 400', 'Appartement B', '3 pièces . 44,71 m²', 'Romagne', 'Conflans-Sainte-Honorine', '78700'),
+            ]),
+            warn: function (string $m) use (&$said): void { $said[] = $m; },
+        )->fetch();
+
+        self::assertCount(1, $listings, 'one survives; the source does not go down over it');
+        self::assertCount(1, $said, 'and it is announced, not swallowed');
+        self::assertStringContainsString($listings[0]->externalId, $said[0], 'the id is named');
+    }
+
+    /**
+     * The counterweight, and without it the ruling above is satisfied by dropping every card.
+     *
+     * Two cards that genuinely differ must still yield TWO listings and say nothing at all.
+     */
+    public function testTwoDistinctCardsAreBothKeptAndSilent(): void
+    {
+        $said = [];
+
+        $listings = $this->source(
+            self::body([
+                self::card('980', 'Appartement A', '3 pièces . 44,71 m²', 'Romagne', 'Conflans-Sainte-Honorine', '78700'),
+                self::card('1 400', 'Appartement B', '4 pièces . 71,20 m²', 'Romagne', 'Dourdan', '91410'),
+            ]),
+            warn: function (string $m) use (&$said): void { $said[] = $m; },
+        )->fetch();
+
+        self::assertCount(2, $listings);
+        self::assertSame([], $said, 'a message with no collision says nothing');
+    }
+
+    /**
+     * A source given no warn channel must not crash on a collision.
+     *
+     * Every other test in this class constructs the source without one, so the null branch is the
+     * common path — and a diagnostic able to take down a fetch is worse than the silence it
+     * replaced.
+     */
+    public function testACollisionWithNoWarnChannelIsStillSurvivable(): void
+    {
+        $listings = $this->source(self::body([
             self::card('980', 'Appartement A', '3 pièces . 44,71 m²', 'Romagne', 'Conflans-Sainte-Honorine', '78700'),
             self::card('1 400', 'Appartement B', '3 pièces . 44,71 m²', 'Romagne', 'Conflans-Sainte-Honorine', '78700'),
         ]))->fetch();
+
+        self::assertCount(1, $listings);
     }
 
     // ------------------------------------------------------------------ backwards compatibility
@@ -627,7 +683,7 @@ final class EmailAlertSegmentationTest extends TestCase
         self::assertSame(3, $listings[0]->rooms);
     }
 
-    private function source(string $body, ?array $params = null): EmailAlertSource
+    private function source(string $body, ?array $params = null, ?\Closure $warn = null): EmailAlertSource
     {
         $this->dir = sys_get_temp_dir() . '/rentwatch-seg-' . bin2hex(random_bytes(8));
         mkdir($this->dir, 0o700, true);
@@ -658,6 +714,7 @@ final class EmailAlertSegmentationTest extends TestCase
             Store::open($this->dbPath),
             new FileMailbox($this->dir),
             ['conflans-sainte-honorine' => 'Conflans-Sainte-Honorine', 'dourdan' => 'Dourdan'],
+            warn: $warn,
         );
     }
 

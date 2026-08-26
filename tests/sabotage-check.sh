@@ -2752,10 +2752,20 @@ run_sabotage "the rent joins the content identity, so a price cut mints a new fl
   src/php/Adapters/EmailAlertSource.php \
   "s%identityFor(\\\$commune, \\\$postcode, \\\$rooms, \\\$surface, \\\$residence)%identityFor(\\\$commune, \\\$postcode, \\\$rooms, \\\$surface, \\\$residence . '|' . \\\$rent)%"
 
-# Two DISTINCT cards sharing an identity is an extraction failure; swallowing it loses a flat for ever.
-run_sabotage "duplicate identities within one message are swallowed" \
+# Two cards in one message sharing an identity: one is kept, the rest dropped, and the drop is
+# ANNOUNCED (ruling 2026-08-26, replacing a throw that took the whole source down for seven passes
+# over three indistinguishable coliving rooms). Not detecting the collision at all re-emits the
+# duplicate under an identity another card already owns.
+run_sabotage "duplicate identities within one message stop being noticed" \
   src/php/Adapters/EmailAlertSource.php \
   's%            if (isset($seenIds\[$listing->externalId\])) {%            if (false) {%'
+
+# The half the ruling did NOT relax. Dropping a card without a word is exactly the silence the old
+# throw existed to prevent, and it is the shape that would make the change a regression rather than
+# a fix — a source quietly under-reporting, which is indistinguishable from a quiet market.
+run_sabotage "a dropped duplicate card is dropped in silence" \
+  src/php/Adapters/EmailAlertSource.php \
+  's%                if ($this->warn !== null) {%                if (false) {%'
 
 # Hard rule 2. A message that plainly carries cards and yields none is a changed template, and it is
 # indistinguishable from a quiet market unless it is loud.

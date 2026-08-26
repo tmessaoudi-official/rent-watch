@@ -96,6 +96,15 @@ final readonly class EmailAlertSource implements Source
          */
         private array $communeLabels = [],
         private int $limit = 50,
+        /**
+         * Where a non-fatal remark about this fetch goes, or `null` to say nothing.
+         *
+         * Exists because {@see cardsIn()} stopped throwing on an identity collision and had nowhere
+         * else to be loud. A closure rather than a widened {@see Source} contract: the collision is
+         * a property of one message, not a health verdict about the source, and `SourceHealth`
+         * describes the source.
+         */
+        private ?\Closure $warn = null,
     ) {}
 
     public function name(): string
@@ -280,17 +289,40 @@ final readonly class EmailAlertSource implements Source
                 continue;
             }
 
-            // Two DISTINCT cards resolving to one identity is an extraction failure, not a re-send.
+            // Two cards in one message sharing an identity: KEEP ONE, DROP THE REST, SAY SO.
+            //
             // Scoped to the message on purpose: ACROSS messages the same id is exactly the
-            // legitimate re-send that content-addressing exists to recognise, so the guard cannot
-            // live in the store. Within one message it means the fields that tell two flats apart
-            // were not read, and the second flat would be silently swallowed for ever.
+            // legitimate re-send that content-addressing exists to recognise, so this cannot live
+            // in the store.
+            //
+            // **THIS USED TO THROW, and the throw was right about silence and wrong about blast
+            // radius** — the same mistake detail hydration made once already, and the same fix. On
+            // 2026-08-26 at 17:11 a `Baisse de prix` digest carried three coliving ROOMS in one flat
+            // at Gros Saule, Aulnay-sous-Bois, each advertised with the WHOLE flat's `6 pièces .
+            // 83,99 m²`. Commune, postcode, rooms, surface and residence were genuinely identical;
+            // only the OLD price differed, and the rent is deliberately not in the key because a
+            // price drop must not mint a new listing. seloger returned zero listings for seven
+            // consecutive passes over three rooms that `exclude_title_patterns` rejects anyway.
+            //
+            // The thrown message asserted *the fields that distinguish them were not read*, which
+            // was FALSE: they were read correctly. Two indistinguishable units in one residence is
+            // the STATED cost of content-addressing arriving, an EVENT rather than a broken
+            // template — and a state is what a throw is for.
+            //
+            // What is NOT relaxed is the silence. Dropping a card without a word is the failure the
+            // throw existed to prevent, so the collision is announced on every pass that sees it.
             if (isset($seenIds[$listing->externalId])) {
-                throw new SourceError(
-                    $this->name(),
-                    'deux annonces distinctes du même message partagent une identité ('
-                        . $listing->externalId . ') — les champs qui les distinguent n\'ont pas été lus',
-                );
+                if ($this->warn !== null) {
+                    ($this->warn)(
+                        'deux annonces d\'un même message partagent une identité ('
+                            . $listing->externalId . ') — une seule est retenue. Les champs qui '
+                            . 'composent l\'identité sont identiques : ce sont soit deux logements '
+                            . 'indiscernables (même résidence, même surface), soit une extraction '
+                            . 'incomplète',
+                    );
+                }
+
+                continue;
             }
 
             $seenIds[$listing->externalId] = true;

@@ -477,8 +477,20 @@ Three rules travel with that identity, each closing what another opens:
   `sha1('seloger|||||')` and they all collapse onto that one id — the store's own *"nothing
   collapses onto a shared key"* guarantee violated one layer up, where the store cannot see it.
   Refusing costs nothing: a listing with no location can never match anyway (Q32).
-- **Duplicate ids WITHIN one message are a `SourceError`**, across messages they are the legitimate
-  re-send content-addressing exists to recognise. Scope is the whole distinction.
+- **Duplicate ids WITHIN one message keep ONE card, drop the rest, and ANNOUNCE the drop**; across
+  messages they are the legitimate re-send content-addressing exists to recognise. Scope is still
+  the whole distinction. **This was a `SourceError` until 2026-08-26, and what changed it is worth
+  reading before changing it back.** A `Baisse de prix` digest carried three coliving ROOMS in one
+  flat at Gros Saule, Aulnay-sous-Bois, each advertised with the WHOLE flat's `6 pièces . 83,99 m²`:
+  commune, postcode, rooms, surface and residence genuinely identical, only the OLD price differing
+  — and the rent is deliberately not in the key. **`seloger` returned zero listings for seven
+  consecutive passes**, over three rooms `exclude_title_patterns` rejects anyway, while the thrown
+  message asserted *les champs qui les distinguent n'ont pas été lus* — which was **false**: they
+  were read correctly. Two indistinguishable units in one residence is the STATED cost of
+  content-addressing arriving, an EVENT, and a throw is for a STATE. Same taxonomy, same mistake and
+  same fix as detail hydration. **The silence is NOT relaxed** — the drop is warned on every pass
+  that sees it, and `tests/sabotage-check.sh` carries that half as its own case, because a silent
+  drop is the regression this change could otherwise become.
 
 **The redirect is never followed at ingest** — one third-party request per listing, on a token tied
 to the subscriber, manufacturing an engagement signal from a click nobody made. Hard rule 5's

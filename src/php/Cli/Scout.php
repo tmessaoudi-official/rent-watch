@@ -2058,6 +2058,10 @@ final readonly class Scout
             // one of ~96 daily passes — which is why the knob ships beside a warning that says when
             // it is biting rather than a larger default that hides it.
             ImapMailbox::maxMessages(getenv('IMAP_MAX_MESSAGES') ?: null),
+            // An identity collision inside one message drops a card instead of taking the source
+            // down (2026-08-26). Dropping it silently is the failure the old throw existed to
+            // prevent, so this channel is what keeps the ruling honest.
+            warn: fn (string $message): mixed => $this->warn('source ' . $definition->name . ' : ' . $message),
         );
     }
 
