@@ -1,0 +1,154 @@
+# `scout` rename + the car domain
+
+> **Written 2026-08-26 as a RECOVERY.** The session that asked these two questions and received
+> both answers stalled immediately after printing `── Phase 5: PERSIST THE RULINGS ──`, so the
+> rulings existed only inside a dead transcript. The global session-remember pipeline failed the
+> same minute (`Haiku call failed after 3 attempts`, exit 141, 22:41), leaving `buffer.md`,
+> `today.md` and `handoff.md` all **empty** — so the usual handoff carried nothing either. This
+> file is the durable record the stalled session was one tool call away from writing.
+>
+> **Provenance, because this repo has been bitten by an unratified `AGREED` before**
+> ([[resuming-a-stalled-session-check-agreed-timestamps]]): both entries below are quoted verbatim
+> from `AskUserQuestion` **tool results** in transcript `53d224a9-5c89-493f-90c3-98daee5a7e60`,
+> at 20:35:50 and 20:40:34 respectively. They are developer answers, not a stuck session logging
+> its own preference as a ruling.
+
+## Scope — what is ruled, and what is explicitly NOT
+
+The developer's own words, in the free-text half of the first answer:
+
+> *"Okay for option 1 ! i agree now what should we rename the repo ? **and don't implement yet !**
+> just give me everything you need from me to build everything ? and are there other good sources
+> to buy used cars ?"*
+
+So: **the DIRECTION is ruled and the NAME is ruled. Execution is not.** Nothing is renamed,
+nothing is refactored, no `Vehicle*` module is created, and no `RENT_WATCH_*` variable is touched
+until a separate go. A ruling on what a thing will be called is not a ruling that it be done now.
+
+**`STATUS: Designed — not yet implemented.`**
+
+## Decisions Log
+
+- [2026-08-26 20:35] AGREED (developer, `AskUserQuestion` result, recovered from transcript `53d224a9`): the car watcher is built as a **second domain inside this repo** — `Vehicle*` modules beside the housing ones, its own SQLite file and its own config, with the generic machinery shared **byte-identical**. The recommendation given was that a separate repo duplicates ~6 000 lines against the developer's own no-duplication ruling, and that a shared Composer package is hostile in this environment specifically: the container 403s on `codeload.github.com`, which is why this project has zero runtime dependencies at all.
+- [2026-08-26 20:35] NOTED, with the measurement that made the recommendation honest: the tree splits **5 967 lines of generic machinery** (`Adapters/Http`, `Adapters/Mail`, `Adapters/Html`, `PacedSource`, `Source`, `SourceError`, `FixtureSource`, `Core/Pacer`, …) against **5 082 domain-bound** and **9 166 mixed** (`Store`, `Cli`, `ConfigLoader`, `HtmlSource`, `HttpJsonSource`, `EmailAlertSource`, `Formatter`). The mixed column is the real cost of a second domain, and it is larger than the generic one — sizing that assumed "share the generic half" would understate the work by roughly half.
+- [2026-08-26 20:40] AGREED (developer, `AskUserQuestion` result, same transcript): the repo is renamed to **`scout`** — GitHub name, local directory, PHP namespace `RentWatch\` → `Scout\`, env prefix `RENT_WATCH_*` → `SCOUT_*`. The recommendation was `scout` because **the name already exists in this codebase and is already domain-neutral**: the binary is `bin/scout`, the class is `Cli\Scout`, every verb is `scout run` / `scout doctor` / `scout digest`. Every alternative (`vigie`, `annonces`) would have introduced a *third* identity on top of repo ≠ CLI ≠ namespace; this one collapses them to a single word.
+- [2026-08-26 20:40] NOTED: the rename splits into three separable pieces, measured rather than estimated — **199 `rent-watch` literals across 51 files** (mostly prose; GitHub redirects the old URL so nothing breaks), **717 `RentWatch\` occurrences in 140 PHP files** (mechanical `sed` + `composer dump-autoload --dev` + full suite — it either compiles or it does not), and **101 `RENT_WATCH_*` occurrences that are only 4 distinct names**: `_DB`, `_OFFLINE`, `_MAX_PASSES`, `_BACKUP_KEEP`.
+- [2026-08-26 20:40] NOTED — **the env rename is the only piece that can hurt, and the guard already exists.** If `RENT_WATCH_DB` is renamed and the *deployed* `.env` on the host is not updated in the same breath, the default takes over, a brand-new empty database is created, and the watcher re-notifies the entire market. That is exactly what **Q36's flood guard** prevents: `scout run` refuses to notify while `isSeenSetEmpty()` is true, and since 2026-08-19 it reads the ROWS rather than the file, so an earlier `doctor` cannot disarm it. The failure mode is therefore a loud refusal, not 200 pushes. Recommended sequencing: the prose half whenever; **the namespace and env rename in the same change as the car-domain refactor**, which touches the tree anyway — one test run instead of two.
+
+## What is still owed BY the developer
+
+Recorded here rather than re-asked, because the ask was already made once and answering it is not
+this file's job. Nothing in the car domain can start without items 2–4.
+
+### Inputs — no default can invent these
+
+| # | Input | Why it cannot be defaulted |
+|---|---|---|
+| 1 | **The AL'in DevTools cURL capture** (authenticated) | Unchanged, and unrelated to cars. Hard rule 1 forbids writing an endpoint from memory; AL'in is the ONLY route to the Action Logement ESH stock (A5, A6, A8 and A14 all dead-end there) |
+| 2 | **A separate mailbox — or alias — for car alerts** | See § "The immediate hazard" below. This is not tidiness; without it a car alert is ingested by the *rent* source. Credentials go straight into `.env`, never pasted into chat |
+| 3 | **Saved searches created** on leboncoin, La Centrale and AutoScout24 with the real criteria | The alert cannot arrive until the search exists |
+| 4 | **One real alert email from each**, run through `php tools/scrub-eml.php` | **This is the gate.** The email parser was written blind here and cost four defects the day a real message first reached it, behind 1 886 green tests. Not repeating that |
+
+### Open decisions — each has a proposed default, per the repo's open-questions convention
+
+| # | Question | Default if unanswered |
+|---|---|---|
+| 5 | Budget ceiling — and is it the **displayed price** or price + delivery/fees? | Displayed price; a delivered-seller uplift is unverifiable per-source, same reasoning as Logirep's `charges_included: false` |
+| 6 | Geography — radius from where, or **national**? | National. It becomes the reasonable default the moment delivered sellers (Autohero, Carizy, CapCar) are in scope, and geography stops discriminating |
+| 7 | Hard filters — max mileage, min year, fuel, gearbox, body type, brand allow/deny | Mileage and year as **score components**, not disqualifiers (hard rule 8, and the Q5 precedent that killed `max_floor`) |
+| 8 | Private sellers, professionals, or **both**? | Both. It is the exact analog of `family: institutional \| private`, which already exists and already carries both |
+| 9 | **The car §1 exclusion set** — confirm it | Proposed fail-closed set below. **The one genuinely open call is `accidenté réparé`** — legal to sell, often good value, but a different risk appetite. Defaulting it **OUT** (fail-closed) until ruled |
+| 10 | Are **auctions** in scope at all? | Out, for now. An Alcopa or Interencheres lot needs a deposit and often a physical viewing — a notification about a lot asks something very different of the reader than a listing does |
+
+## THE IMMEDIATE HAZARD — before any car alert is created
+
+`EmailAlertSource` scopes on **`params.from` + `params.link_host` only**. There is no subject
+filter and no category filter [Verified: grep of `EmailAlertSource.php`, 2026-08-26].
+
+The live **rent** source `leboncoin` carries:
+
+- `from: no.reply@leboncoin.fr`
+- `link_host: leboncoin.fr/vi/` ← **category-agnostic**; `/vi/<id>.htm` is leboncoin's universal ad path
+- `card_separator: "Voir l'annonce"` ← also category-agnostic
+
+So a leboncoin **car** saved-search alert would very likely be ingested by the **rent** source:
+parsed into listings, counted in its `SourceHealth`, and eating the shared `IMAP_MAX_MESSAGES`
+window — the exact shared-budget failure that took SeLoger from 9 listings to 0 on 2026-08-25.
+The link-host and separator collisions are [Verified]; whether the sender address is identical is
+[Unverified]. **A separate mailbox or alias closes it at the source; a `from` filter alone does
+not.**
+
+## The car-domain §1 analog — proposed, fail-closed
+
+Vehicles that cannot legally or safely transfer, using the official vocabulary:
+`VEI` (économiquement irréparable), `VGE` (gravement endommagé) / *procédure VE*,
+`gagé` / `opposition`, `pour pièces`, `sans carte grise`, `CT non fourni` / non roulant.
+[Verified: sécurité routière + Ministère de l'Intérieur descriptions of the VE/VGE procedure]
+
+**HistoVec** (`histovec.interieur.gouv.fr`, Ministère de l'Intérieur, free) is the official record
+— successive owners, gage/opposition/vol, CT dates **with recorded mileage since January 2021**,
+VEI/VGE procedures. **But the report is generated by the OWNER** from the plate plus the
+registration document, neither of which a listing carries. So it is **contact-time enrichment,
+never ingest-time classification**: it belongs in the notification as *what to ask the seller for*.
+Ingest must classify on text signals, exactly as tenure does — which is why the set above is a
+classifier vocabulary and not a lookup.
+
+## Source catalogue — `robots.txt` fetched 2026-08-26, honest UA, wildcard group only
+
+Kept here rather than in `var/claude/` because that path is gitignored scratch. Each row cost one
+fetch; do not re-derive them.
+
+### Open to polling
+
+| Host | HTTP | Wildcard group | Verdict |
+|---|---|---|---|
+| `www.autohero.com` | 200 | disallows only `/myhero/`, `/inspection/`, `/checkout/`, `/identify`, `/center`, `/unsubscribe/` | **OPEN.** Publishes `sitemap.xml` per locale **and `sitemap_search.xml`**. Best polling candidate measured. Fixed price, delivered, national — geography stops mattering |
+| `www.agorastore.fr` | 200 | `Allow: *` | **WIDE OPEN.** Public-sector and fleet disposals, open to individuals. Low volume, low competition |
+| `www.alcopa-auction.fr` | 200 | `Disallow: /*.pdf$`, `/calendrier/` | **OPEN.** 105 000 vehicles/year, 7 rooms, public auctions |
+| `www.leparking.fr` | 200 | only `/tools/`, `/extlink/`, `/tag/` | **WIDE OPEN**, and a **meta-search** across many portals — breadth in one adapter. ⚠️ It is an AGGREGATOR, so the Jinka caveat applies in full: a truncated description can lose a `VEI` the original ad carried. Needs its own §1 evaluation before it is trusted |
+
+### Refused, with the reason
+
+| Host | HTTP | Verdict |
+|---|---|---|
+| `www.lacentrale.fr` | **403** | **REFUSED BY RULING.** Body is a **DataDome CAPTCHA challenge** (`captcha-delivery.com`) — hard rule 5 refuses solving it, same class as A15 Val d'Oise Habitat. Also fail-closed under this repo's posture (403 = blocked). Email-alert route only |
+| `www.spoticar.fr` | **403** | Akamai-style `Access Denied` + reference id. **Fails closed.** Stellantis' 80 000-car network — alert route only, if any |
+| `www.encheres-domaine.gouv.fr` | 200 | `robots.txt` is a **JS redirect requiring cookies**. The 2026-08-25 rule already refuses this: a 2xx whose body starts `<` is not a robots file |
+| `www.capcar.fr` | 200 | `Disallow: /trouver-une-voiture/*` — the search itself |
+| `www.leboncoin.fr` | 200 | **No `User-agent: *` group at all** (verified across the whole file). Moot — already email-only here (403s a plain client). Named AI groups carry `Disallow: /recherche`, `/ad/` |
+| `www.autoscout24.fr` | 200 | `Disallow: /lst?`, `/lst/?`, `/listing-search-api/graphql` — **search-with-query refused**. Separately: `ClaudeBot`, `GPTBot`, `CCBot`, `Google-Extended` get `Disallow: /`, a stated position on automated agents |
+
+### Partly refused — the listing path is out, another may not be. UNMEASURED
+
+| Host | Disallowed | What is left |
+|---|---|---|
+| `www.interencheres.com` | `/recherche/*` | The category *ventes* pages sit outside it. #1 French auction portal. Sitemap published |
+| `www.autosphere.fr` | `/occasions`, `*recherchecourte*` | `/recherche` is not disallowed. Emil Frey France network |
+| `www.paruvendu.fr` | `/auto-moto/rechercheautofo/`, `/auto-moto/listefo/`, `/auto-moto/annonceautofo/` | Those are NAMED legacy front-office paths; whether the CURRENT search route falls under them is unmeasured |
+| `www.vpauto.fr` | long named-bot blocklist | Wildcard group not isolated; needs a second read |
+
+### Email alerts — the preferred route (hard rule 4)
+
+- **leboncoin** — saved searches with email alerts, up to 50 [Verified: portal help centre]
+- **La Centrale** — *"Créer une alerte nouvelles annonces"* on a saved search [Verified: FAQ]
+- **AutoScout24** — saved search + alert at chosen intervals (1 h / 12 h / 24 h / 7 d), **including price drops** [Verified: FAQ] — price drops land straight in the existing `price_history` machinery
+- **Alcopa Auction** — *"être alerté"* on matching vehicles [Inferred: third-party guides, not confirmed on the portal itself]
+- Autohero / Aramisauto / VPauto / Agorastore / BCAuto — UNMEASURED
+
+### Dead rows — dated, so nobody re-proposes them
+
+- **Reezocar** — ceased sales **4 November 2024**. Was the German/Belgian import route with the paperwork handled [Verified: multiple 2026 write-ups]
+- **Ayvens Carmarket** — **professionals only**, out of scope for a private buyer
+
+### Alive, deliberately unmeasured
+
+Carizy (C2C, Renault-backed), Renault/Dacia Occasions, Toyota Occasions, Das WeltAuto, VPauto,
+BCAuto Enchères (pro-oriented), encheres-vo.com, Ouest-France Auto, Caradisiac Occasions, L'Argus,
+mobile.de + AutoScout24.de (import), Aramisauto.
+
+## The standing read on where the value is
+
+The **email-alert route** (leboncoin, La Centrale, AutoScout24) covers the overwhelming majority of
+the French private market with **zero anti-bot exposure** — which is hard rule 4's whole argument,
+arriving intact in a second domain. Polling is worth it for the three genuinely open ones,
+especially **Agorastore** and **Alcopa**, because they carry stock the big portals never see.
