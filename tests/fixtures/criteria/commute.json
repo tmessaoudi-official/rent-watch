@@ -1,0 +1,73 @@
+{
+  "_comment": "COMMUTE TEST CRITERIA. Copied from pipeline.json and switched to commute-on, because the SHIPPED config cannot express this: the loader's two-sided guard refuses weights.commute with commute.enabled false, and the real destination is a personal address that lives only in the gitignored criteria.local.json. So CI, the fixtures and the sabotage ledger all run commute OFF, and this file is the only place the component is exercised. max_minutes is the component's ZERO POINT, never a gate: a journey longer than it scores 0 and the listing still matches.",
+  "communes": [],
+  "postcode_prefixes": [
+    "78",
+    "95"
+  ],
+  "min_rooms": 3,
+  "min_surface_m2": 75,
+  "max_rent_cc": 1800,
+  "exclude_patterns": [
+    "\\bcolocation\\b",
+    "\\bcoloc\\b",
+    "\\b(?:location|louer|loue|appartement|logement|studio|bien|t[1-9])\\s+meuble",
+    "\\bmeuble\\s+de\\s+tourisme\\b",
+    "\\bbail\\s+mobilite\\b",
+    "\\bresidence\\s+(?:etudiante|etudiant|senior|seniors|services|service|autonomie|intergenerationnelle|geree)\\b",
+    "\\bviager\\b",
+    "\\blmnp\\b",
+    "\\bsaisonnier\\b",
+    "\\bsaisonniere\\b",
+    "\\bsous[-\\s]location\\b",
+    "\\bfoyer\\s+(?:de\\s+)?(?:jeunes|travailleurs)\\b",
+    "\\bresidence\\s+foyer\\b",
+    "\\behpad\\b",
+    "\\blocal\\s+commercial\\b",
+    "\\blocal\\s+professionnel\\b",
+    "\\bfonds\\s+de\\s+commerce\\b",
+    "\\bmurs\\s+commerciaux\\b"
+  ],
+  "exclude_title_patterns": [
+    "^\\s*(?:location\\s+)?(?:de\\s+)?(?:parking|box|garage|cave|cellier|local|bureau|bureaux|entrepot|terrain|hangar|emplacement)\\b",
+    "\\b(?:loue|a\\s+louer|location)\\s+(?:de\\s+)?(?:parking|box|garage|emplacement)\\b",
+    "\\bemplacement\\s+de\\s+stationnement\\b"
+  ],
+  "commune_rank": {
+    "Sartrouville": 1,
+    "Houilles": 1,
+    "Maisons-Laffitte": 1,
+    "Le Vésinet": 2,
+    "Chatou": 2,
+    "Carrières-sur-Seine": 2,
+    "Montesson": 2,
+    "Bezons": 3,
+    "Cormeilles-en-Parisis": 3,
+    "Argenteuil": 3
+  },
+  "weights": {
+    "commune": 25,
+    "commute": 30,
+    "rent_headroom": 15,
+    "surface": 10,
+    "lift": 15,
+    "high_floor_no_lift": -20,
+    "freshness": 10
+  },
+  "commute": {
+    "enabled": true,
+    "station": "163 Quai test, 92600 Ville",
+    "max_minutes": 75
+  },
+  "freshness_minutes": 60,
+  "notify": {
+    "channels": [
+      "console"
+    ],
+    "high_priority_score": 70,
+    "rent_drop_min_eur": 20,
+    "rent_drop_min_pct": 2,
+    "source_broken_cooldown_hours": 24,
+    "digest_hour": 8
+  }
+}

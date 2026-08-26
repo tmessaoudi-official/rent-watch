@@ -244,6 +244,35 @@ final readonly class CriteriaEngine
             }
         }
 
+        // --- S8 commute ---
+        //
+        // The largest single component (30, ahead of commune's 25), and it exists because nothing
+        // else discriminated: 83 live matches spread over eight departements scored 16–48, so
+        // `high_priority_score: 70` could never fire.
+        //
+        // **IT IS A SCORE COMPONENT AND NEVER A DISQUALIFIER** — hard rule 8, and the developer's
+        // own ruling of 2026-08-26: *"1 hour 15 max ! but keep showing even those with more anyway"*.
+        if ($w->commute > 0 && $this->criteria->commuteEnabled) {
+            $minutes = $listing->commuteMinutes;
+            $ceiling = $this->criteria->commuteMaxMinutes;
+
+            if ($minutes === null || $ceiling === null) {
+                // UNKNOWN IS NOT FAR (hard rule 9). The component goes unscored — it cannot be
+                // earned on evidence nobody has — and the reasons SAY so, because on a phone a
+                // missing line is indistinguishable from a short commute. Same shape as the
+                // `rentHc` line that reports an unverifiable ceiling.
+                $reasons[] = 'trajet inconnu — hors score';
+            } else {
+                // `max_minutes` is the ZERO POINT of a linear scale, not a gate. Clamped at both
+                // ends: a three-hour commute and a 76-minute one are equally unrewarded rather than
+                // progressively punished, so the component can never push a score negative and can
+                // never act as a back-door rejection.
+                $share = $ceiling <= 0 ? 0.0 : max(0.0, min(1.0, ($ceiling - $minutes) / $ceiling));
+                $earned += (int) round($w->commute * $share);
+                $reasons[] = $minutes . ' min de trajet';
+            }
+        }
+
         // Clamped, and the clamp is not cosmetic: `highFloorNoLift` is negative and is deliberately
         // excluded from `$total`, so `$earned` can go below zero. A negative score would sort below
         // a rejected listing and, before the Q31 ruling removed the confidence multiplier, would

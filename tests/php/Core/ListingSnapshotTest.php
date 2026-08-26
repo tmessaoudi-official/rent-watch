@@ -247,4 +247,29 @@ final class ListingSnapshotTest extends TestCase
 
         ListingSnapshot::decode('{"sourceName":"demo","externalId":"x-4","fields":"not a map"}');
     }
+
+    public function testASnapshotWrittenBeforeCommuteExistedDecodesToUnknown(): void
+    {
+        // Backward compatibility the reflection guard structurally cannot cover: it checks that
+        // every constructor parameter is ENCODED, which says nothing about decoding a payload
+        // written before the parameter existed. A stored row from yesterday has no `commuteMinutes`
+        // key, and that is an OLD row, not a corrupt one — the decoder refuses corrupt snapshots
+        // loudly, and must not refuse this.
+        //
+        // It decodes to null (unknown), never to 0. Zero minutes would be a listing on the doorstep
+        // and would score the full commute component on the strength of an absent key.
+        $decoded = ListingSnapshot::decode(json_encode([
+            'sourceName' => 'pap',
+            'externalId' => 'https://www.pap.fr/annonces/-r1',
+            'title' => 'Location appartement 3 pièces',
+            'description' => '',
+            'fields' => [],
+            'commune' => 'Milly-la-Forêt',
+            'postcode' => '91490',
+            'detailRead' => false,
+        ], JSON_THROW_ON_ERROR));
+
+        self::assertNull($decoded->commuteMinutes);
+        self::assertSame('Milly-la-Forêt', $decoded->commune);
+    }
 }

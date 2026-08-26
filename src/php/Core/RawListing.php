@@ -81,6 +81,19 @@ final readonly class RawListing
          * {@see \RentWatch\Core\TenureClassifier}.
          */
         public bool $detailRead = false,
+        /**
+         * Door-to-door public-transport minutes to the configured destination, or `null`.
+         *
+         * ENRICHMENT, and it lives here rather than as a `judge()` argument for one reason:
+         * `scout reclassify` re-judges from the schema-v7 snapshot, and the snapshot is exactly the
+         * `RawListing` the classifier consumed. A commute passed alongside would be absent on every
+         * re-judge, so a stored listing would silently score lower the second time it was looked at.
+         * `floor` and `hasElevator` arrive by the same route (detail hydration) for the same reason.
+         *
+         * `null` means UNKNOWN — the API was unreachable, the commune did not geocode, or commute is
+         * switched off. It is never "far": hard rule 9, and the component is simply not scored.
+         */
+        public ?int $commuteMinutes = null,
     ) {}
 
     /**
@@ -123,6 +136,11 @@ final readonly class RawListing
             // Reaching this method IS the detail page having been read. A failed fetch never gets
             // here — `HtmlSource` records the failure and returns the card untouched.
             detailRead: true,
+            // Carried even though today's order (hydrate, THEN enrich) means the card never holds
+            // one yet. A constructor parameter this method forgets is silently DROPPED, and the
+            // reflection guard cannot catch it: that guard checks the snapshot ENCODER, not the
+            // merge. The trap arms itself the day the order changes.
+            commuteMinutes: $any($this->commuteMinutes, $detail->commuteMinutes),
         );
     }
 

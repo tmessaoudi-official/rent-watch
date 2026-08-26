@@ -57,6 +57,7 @@ final class ListingSnapshot
             'floor' => $listing->floor,
             'hasElevator' => $listing->hasElevator,
             'detailRead' => $listing->detailRead,
+            'commuteMinutes' => $listing->commuteMinutes,
         ], JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     }
 
@@ -111,6 +112,11 @@ final class ListingSnapshot
             floor: self::nullableInt($data['floor'] ?? null),
             hasElevator: self::nullableBool($data['hasElevator'] ?? null),
             detailRead: (bool) ($data['detailRead'] ?? false),
+            // A snapshot written BEFORE this field existed is not corrupt — it is simply older, so
+            // it decodes to null (unknown) rather than being refused. Same treatment as detailRead,
+            // and the reason is the same: an absent key is absence of evidence, never evidence of
+            // a long commute (hard rule 9).
+            commuteMinutes: isset($data['commuteMinutes']) ? (int) $data['commuteMinutes'] : null,
         );
     }
 
