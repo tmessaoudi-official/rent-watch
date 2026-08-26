@@ -38,6 +38,10 @@ until a separate go. A ruling on what a thing will be called is not a ruling tha
 - [2026-08-26 23:20] AGREED: every domain's alerts are tagged on the RECIPIENT — `<you>+<label-root>@gmail.com`, so `+car` / `+rent` — and a Gmail filter on `To:` routes each to its own label. NO domain is left untagged: a catch-all working domain must be edited every time a domain is added, and the catch-all must be the ERROR bucket instead. Developer's reasoning, and it overrode the "don't touch five live sources" objection.
 - [2026-08-26 23:20] AGREED: the `watch/UNROUTED` tripwire is added LAST, after every rent saved search is re-tagged and verified. Added first it matches every still-untagged rent alert and takes the live rent sources to zero.
 - [2026-08-26 23:20] AGREED: the car domain runs as its OWN DEPLOYMENT — own `.env`, `IMAP_MAILBOX`, SQLite and ntfy topic, plus a `[car-watch]` notification prefix. `IMAP_MAILBOX` is global per deployment, so two deployments buy folder isolation with zero code change.
+- [2026-08-26 23:40] AGREED: car budget 0–30 000 € on the DISPLAYED price; the ceiling is wide on purpose and the score does the discriminating (*"i won't really pay 30 000 now ! but i want to be informed"*).
+- [2026-08-26 23:40] AGREED: car geography is Île-de-France for now and MUST be settable to any set — national, one departement, several. Reuses the rent side's `postcode_prefixes` region mode verbatim; no second geography mechanism.
+- [2026-08-26 23:40] AGREED: age ≤ 5 years and mileage ≤ 80 000 km are a SCORE PEAK, not disqualifiers, and the PORTAL saved search is set WIDER (≤ 7 y, ≤ 100 000 km) so near-misses reach the scorer. Hard rule 8, and the Q5 precedent that removed `max_floor`.
+- [2026-08-26 23:40] AGREED: both private and professional sellers, as a displayed fact and a score component — the analog of `family: institutional | private`.
 
 ## What is still owed BY the developer
 
@@ -80,6 +84,9 @@ this file's job. Nothing in the car domain can start without items 2–4.
 | 8 | Private sellers, professionals, or **both**? | Both. It is the exact analog of `family: institutional \| private`, which already exists and already carries both |
 | 9 | **The car §1 exclusion set** — confirm it | Proposed fail-closed set below. **The one genuinely open call is `accidenté réparé`** — legal to sell, often good value, but a different risk appetite. Defaulting it **OUT** (fail-closed) until ruled |
 | 10 | Are **auctions** in scope at all? | Out, for now. An Alcopa or Interencheres lot needs a deposit and often a physical viewing — a notification about a lot asks something very different of the reader than a listing does |
+
+> **Decisions 5–8 are RULED as of 2026-08-26** — see § "Car criteria" below. Rows 9 and 10 remain
+> open and keep their defaults. The table above is left intact as the record of what was proposed.
 
 ## THE IMMEDIATE HAZARD — before any car alert is created
 
@@ -228,3 +235,36 @@ The **email-alert route** (leboncoin, La Centrale, AutoScout24) covers the overw
 the French private market with **zero anti-bot exposure** — which is hard rule 4's whole argument,
 arriving intact in a second domain. Polling is worth it for the three genuinely open ones,
 especially **Agorastore** and **Alcopa**, because they carry stock the big portals never see.
+
+## Car criteria — RULED 2026-08-26
+
+| # | Question | Ruling |
+|---|---|---|
+| 5 | Budget | **0 – 30 000 €**, on the DISPLAYED price. Developer, verbatim: *"i won't really pay 30 000 now ! but i want to be informed ! and the criterias can be changed anyway"* — so the ceiling is wide and the SCORE does the discriminating |
+| 6 | Geography | **Île-de-France for now**, and it must be **settable to any set** — national, one departement, several. Reuses the rent side's `postcode_prefixes` verbatim (region mode, Q1/Q2); `commune_rank`'s soft-preference shape is available on top. **Do not invent a second geography mechanism** |
+| 7 | Age / mileage | **≤ 5 years, ≤ 80 000 km — as a SCORE PEAK, not a disqualifier.** See the two-layer rule below |
+| 8 | Seller type | **Both private and professional.** The exact analog of `family: institutional \| private`, which already exists and already carries both. It becomes a displayed fact and a score component, never a filter |
+
+### THE TWO-LAYER FILTER — the portal's is COARSE and deliberately WIDER
+
+A portal's saved-search form can only express hard limits; our criteria are the fine instrument. So
+the two layers are set to DIFFERENT values on purpose, and the portal's is the looser one:
+
+| | Portal saved search | Our criteria |
+|---|---|---|
+| Price | ≤ 30 000 € | ceiling 30 000 €, score rewards lower |
+| Age | ≤ **7** years | score **peaks at ≤ 5 years**, decays after |
+| Mileage | ≤ **100 000** km | score **peaks at ≤ 80 000**, decays after |
+
+**Why not filter tight at the portal:** our scorer can only ever rank what the portal already
+accepted. Tighten the portal to 5 y / 80 000 km and the near-misses never arrive, at which point the
+score peak is decorative. **Why not reject hard on our side either:** hard rule 8, and the Q5
+precedent that removed `max_floor` from the rent side entirely — a 5-year-3-month car at 62 000 km
+inside budget would be discarded with no trace, and silent over-rejection is invisible by
+definition, because nothing arrives to notice.
+
+**[Proposal, not a measurement]** The 7 y / 100 000 km widening is a judgement about how far past the
+peak a near-miss is still worth reading. Nobody has measured the alert volume it produces. If the
+first week is noisy, the portal filter is one form field away from tightening — and tightening it is
+reversible in a way that a listing never sent is not.
+
