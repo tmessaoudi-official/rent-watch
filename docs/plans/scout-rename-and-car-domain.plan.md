@@ -47,6 +47,11 @@ until a separate go. A ruling on what a thing will be called is not a ruling tha
 - [2026-08-27 00:15] AGREED: decision 11 — automatic gearbox is PREFERRED, petrol/hybrid is PREFERRED over diesel, and body type is a RANKED preference `suv > break > berline`. All three are SCORE components, never portal filters and never disqualifiers: the two-layer rule from decision 7, and hard rule 8. The three fields are left UNSET on the portal saved search, so the searches specified for item 3 are unchanged and do not need re-creating.
 - [2026-08-27 00:15] NOTED: the body preference is a RANK, not a set — the exact shape `commune_rank` already has on the rent side. An unranked body (citadine, monospace, coupé, cabriolet) scores 0 on that component and is still notified. Do not reimplement ranking; reuse it.
 - [2026-08-27 00:15] OWED, and deliberately not answered from memory: the diesel penalty's SIZE depends on the Grand Paris ZFE / Crit'Air rules in force, which have changed repeatedly and are [Unverified] here. Hard rule 1's spirit — verify against a live authoritative source before the number is written. Until then the penalty is a plain preference, not a regulatory one.
+- [2026-08-27 01:05] AGREED (developer, verbatim: *"i think i want to add auctions now"*): **decision 10 is REVERSED — auctions are IN.** Decision 10 said *revisit once the email-alert sources are proven*; this arrives earlier, which is the developer's call and is recorded rather than re-litigated. It is also the decision that makes the car domain's FIRST polling adapter possible: three of the four hosts measured genuinely OPEN are auction sites, while every retail portal recommended so far is email-only.
+- [2026-08-27 01:05] AGREED: a LOT is not a LISTING, and four rules travel with it — the price is a MOVING BID so the ceiling applies to the estimate/reserve when published and to the current bid otherwise, and a lot that later crosses the ceiling is RECORDED but never re-notified (a rising bid is the price-RISE fact, not a drop); a CLOSING TIME is mandatory in the notification and a source publishing none is refused fail-closed; the §1 vehicle set will reject a large share of auction stock and that is CORRECT; deposit and viewing requirements are STATED in the notification, never used to filter.
+- [2026-08-27 01:05] NOTED: **pro-only auction houses stay OUT, and that is a fact rather than a preference** — Ayvens Carmarket, BCAuto Enchères, Openlane, Autorola and Auto1.com sell to registered traders only, so a private buyer cannot bid at all. Same class as the existing Ayvens row.
+- [2026-08-27 01:05] AGREED: **Autohero is IN as tier 2**, and is the source that proves the HTTP path — the best polling candidate measured (`sitemap_search.xml`, robots open). Stated cost: it is a RESELLER, so no private sellers, prices above private sale, and because it delivers nationally at a fixed price the decision-6 geography filter is INERT on it — do not read a region match as evidence the filter works.
+- [2026-08-27 01:05] OWED (new input, ~2 minutes): **does CapCar offer an email alert on a saved search?** Its polling route is refused (`Disallow: /trouver-une-voiture/*` is the search itself), so an alert is the only way in. It is C2C with a professional intermediary — inspected, paperwork handled, private seller — which is inventory the pro portals do not carry.
 
 ## What is still owed BY the developer
 
@@ -321,7 +326,7 @@ link. A listing does not carry it. So ingest must classify on TEXT signals, exac
 classifier does, and HistoVec is a step the human takes before viewing. Do not design an adapter
 around it.
 
-**10 — auctions are OUT for now.** A lot needs a deposit and usually a physical viewing, so a
+**10 — auctions are OUT for now.** ⚠️ **REVERSED 2026-08-27 — see below.** Kept as written because the cost it names turned out to be the reason for the reversal. A lot needs a deposit and usually a physical viewing, so a
 notification about one asks something very different of the reader than a listing does. Note the
 cost of this ruling: **most of the measured-OPEN hosts are auction sites** (Alcopa, Agorastore,
 Interencheres), while the ordinary retail portals are the ones refusing a polling client. Revisit
@@ -360,3 +365,59 @@ had existed.
 > must not be presented in a notification as a regulatory restriction** — a wrong claim that a car
 > is banned from Paris is the car-domain twin of a §1 false positive: it makes the tool
 > untrustworthy in the one direction the reader cannot check for themselves.
+
+### Decision 10 REVERSED — auctions are IN (2026-08-27)
+
+Developer ruling, verbatim: *"i think i want to add auctions now"*. Decision 10's own text said
+*revisit once the email-alert sources are proven*; this arrives earlier than that, which is the
+developer's call to make.
+
+**The cost decision 10 stated is the reason it was reversed.** That ruling noted that most of the
+measured-OPEN hosts are auction sites while the retail portals refuse a polling client. So excluding
+auctions did not merely drop some inventory — it left the car domain with **no polling source at
+all**, and therefore no way to exercise the HTTP adapter the rent side already has. Auctions bring
+that back.
+
+**A LOT IS NOT A LISTING.** Four rules, each closing something the others open:
+
+1. **The price is a MOVING BID.** The 30 000 € ceiling applies to the **estimate or reserve where
+   the house publishes one**, and to the current bid otherwise. A lot that later crosses the ceiling
+   is **recorded and never re-notified** — a rising bid is the price-RISE fact this store already
+   distinguishes from a drop, and re-announcing it would train the reader to ignore the channel.
+2. **A CLOSING TIME is mandatory in the notification, and a source that publishes none is refused
+   fail-closed.** An alert about a lot whose deadline the reader cannot see is an alert they cannot
+   act on — hard rule 2's shape at the display layer, and the exact reason the notification already
+   carries `reasons[]` rather than a bare score.
+3. **The §1 vehicle set will reject a large share of auction stock, and that is CORRECT.** `VEI`,
+   `pour pièces`, `sans carte grise` and `CT non fourni` are not edge cases at a saleroom — they are
+   ordinary inventory. Expect the yield to look poor and do not read that as a broken source; the
+   `SourceHealth` baseline is measured on listings FETCHED, not on matches. **`accidenté réparé` is
+   the first line to relax if the yield disappoints, and auctions are where that pressure will come
+   from** — relax it deliberately, in a commit, not because a number looked low.
+4. **Deposit and physical-viewing requirements are STATED, never used to filter.** Decision 10's
+   original objection stands as a fact — a lot asks something different of the reader than a listing
+   does — and the fix is to say so in the notification. Same shape as *"the rent ceiling is not
+   checkable for this source"*, which is already how Logirep and leboncoin are handled.
+
+**`family: auction`** joins `institutional | private` — the enum already exists and already carries
+a source-family fact into the score and the display. Do not invent a second mechanism.
+
+**Pro-only houses stay OUT, and that is a fact, not a preference.** Ayvens Carmarket, BCAuto
+Enchères, Openlane, Autorola and Auto1.com sell to registered traders; a private buyer cannot bid.
+
+### Autohero and CapCar — asked 2026-08-27
+
+**Autohero — IN, tier 2, and it is the one that proves the HTTP path.** The best polling candidate
+in the whole catalogue: robots open, and it publishes `sitemap_search.xml`. **Stated costs, all
+three:** it is a RESELLER, so there are no private sellers on it; its prices sit above private-sale
+because reconditioning and warranty are priced in; and because it sells at a fixed price and
+delivers nationally, **the decision-6 geography filter is INERT on this source** — every lot
+"matches" Île-de-France in the sense that it can be delivered there. Do not read a region match on
+Autohero as evidence the geography filter works.
+
+**CapCar — polling REFUSED, and one input is owed.** `Disallow: /trouver-une-voiture/*` is the
+search itself, so the only way in is an email alert, and **whether CapCar offers one is UNMEASURED**
+— a two-minute check on the site. Worth doing: CapCar is C2C with a professional intermediary
+(inspection, paperwork, warranty on a private-seller car), which is inventory neither the pro
+portals nor the pure-C2C ones carry. **Carizy** is the same shape, Renault-backed, and equally
+unmeasured.
