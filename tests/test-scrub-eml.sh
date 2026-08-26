@@ -103,6 +103,26 @@ https://www.portal.test/annonce/abc-123
 EOF
 }
 
+# A capture in the shape leboncoin actually sends: HTML-only, quoted-printable, greeting the
+# subscriber by USERNAME rather than by address, and carrying an account-scoped saved-search UUID
+# plus opaque analytics hexes. None of those is an email address, so the address checks all pass on
+# it -- which is exactly how a file carrying personal data got reported as `scrubbed`.
+message_with_personal_ids() {
+  cat <<'EOF'
+From: no.reply@portal.test
+To: takieddine.messaoudi.official@gmail.com
+Subject: 3 nouveaux biens a louer
+Content-Type: text/html; charset=UTF-8
+Content-Transfer-Encoding: quoted-printable
+
+<p>Bonjour tmessaoudi,</p>
+<a href=3D"https://www.portal.test/my-searches/e5ce7f30-114f-4d67-96be-28d6c8=
+9cad0b/">Ma recherche</a>
+<a href=3D"https://www.portal.test/vi/3256902167.htm?t=3D1d09633ac8dfb2e54bc9=
+ffa92ba58ef3e7dffb26">Appartement 48 m2</a>
+EOF
+}
+
 scrub() {
   php "$repo/tools/scrub-eml.php" "$1" "$2" "$address"
 }
@@ -122,6 +142,13 @@ for run in re.findall(r'[A-Za-z0-9_\-]{16,}', raw):
         pass
 print('\n'.join(out))
 PY
+}
+
+# Quoted-printable decoded. Without this a `grep -F` for a FOLDED identifier finds nothing and the
+# assertion passes on a file that still carries it -- QP breaks lines at 76 columns, straight through
+# the middle of a UUID. Two assertions below were green for exactly that reason before this existed.
+decoded_qp() {
+  python3 -c 'import quopri,sys;sys.stdout.write(quopri.decodestring(open(sys.argv[1],"rb").read()).decode("utf-8","replace"))' "$1"
 }
 
 printf '\n== test-scrub-eml: is the address RECOVERABLE from a scrubbed fixture? ==\n\n'
@@ -239,6 +266,45 @@ scrub "$work/plain.eml" "$work/plain.out.eml" >"$work/plain.log" 2>&1 || plain_s
 check "an ordinary capture with no tokens still scrubs" test "$plain_status" -eq 0
 refute "and the subscriber's address is gone from its headers" \
   grep -qF "$address" "$work/plain.out.eml"
+
+# ── MUST STRIP PERSONAL IDENTIFIERS THAT ARE NOT ADDRESSES ────────────────────────────────────────
+# Measured on the first real leboncoin alert, 2026-08-26: the scrubber reported
+# `0 tracking tokens and 0 signed tokens replaced` and wrote a file containing `Bonjour tmessaoudi`,
+# the account's saved-search UUID, and three 40-char analytics hexes. Every address check passed,
+# correctly -- a username is not an address. The tool verified the thing it knew how to verify and
+# said nothing about the rest, which is the same failure the JWT round found wearing a new hat.
+message_with_personal_ids >"$work/ids.eml"
+ids_status=0
+php "$repo/tools/scrub-eml.php" "$work/ids.eml" "$work/ids.out.eml" "$address" tmessaoudi \
+  >"$work/ids.log" 2>&1 || ids_status=$?
+
+check "a capture greeting the subscriber by username is scrubbed rather than refused" \
+  test "$ids_status" -eq 0
+refute "and the username is gone" grep -qF 'tmessaoudi' "$work/ids.out.eml"
+decoded_qp "$work/ids.out.eml" >"$work/ids.decoded"
+refute "and the account-scoped saved-search UUID is gone (checked DECODED, not folded)" \
+  grep -qiF 'e5ce7f30-114f-4d67-96be-28d6c89cad0b' "$work/ids.decoded"
+check "but a UUID-SHAPED placeholder remains, because the shape is what the fixture exercises" \
+  grep -qiE '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}' "$work/ids.decoded"
+refute "and the opaque analytics hex is gone (checked DECODED)" \
+  grep -qiF '1d09633ac8dfb2e54bc9ffa92ba58ef3e7dffb26' "$work/ids.decoded"
+check "and the LISTING id survives, because it is the payload not the subscriber" \
+  grep -qF '3256902167' "$work/ids.decoded"
+
+# An extra needle that survives as an ENCODING must REFUSE, exactly as an unstrippable address does.
+# `dXNlcj1zdXJ2aXZvciZzcmM9YWxlcnQ` is base64url for `user=survivor&src=alert`, so a literal replace
+# cannot reach the name and only the recoverable-forms check can. It is 31 characters on purpose:
+# `recoverableForms()` only decodes runs of 16 or more, so a shorter token sits BELOW its floor and
+# a test using one would fail for a reason that says nothing about the guard. Without this case the
+# new argument would be advisory -- and an advisory guard is one somebody drops when it is
+# inconvenient.
+printf 'From: a@b.test\nSubject: x\n\nhttps://p.test/x?ref=dXNlcj1zdXJ2aXZvciZzcmM9YWxlcnQ\n' >"$work/needle.eml"
+needle_status=0
+php "$repo/tools/scrub-eml.php" "$work/needle.eml" "$work/needle.out.eml" "$address" survivor \
+  >"$work/needle.log" 2>&1 || needle_status=$?
+check "a named identifier recoverable only by decoding REFUSES the write" \
+  test "$needle_status" -ne 0
+check "and nothing is written" test ! -f "$work/needle.out.eml"
 
 printf '\n  %d passed, %d failed\n\n' "$pass" "$fail"
 [[ "$fail" -eq 0 ]]

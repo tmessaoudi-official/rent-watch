@@ -88,6 +88,25 @@ if (count($argvLocal) < 3) {
 [$in, $out] = [$argvLocal[1], $argvLocal[2]];
 $address = $argvLocal[3] ?? null;
 
+/**
+ * Extra identifiers to mask, named by the operator.
+ *
+ * A portal greets you by USERNAME, not by address — leboncoin's alert opens `Bonjour tmessaoudi`.
+ * That is personal data by any reading of hard rule 7, and no address check can find it: it is not
+ * derivable from the address either (`takieddine.messaoudi.official` does not contain `tmessaoudi`).
+ * Measured 2026-08-26 on the first real leboncoin capture, where this tool reported
+ * `0 tracking tokens and 0 signed tokens replaced` and wrote the username straight through.
+ *
+ * Each needle is masked AND verified as unrecoverable, exactly like the address — an advisory
+ * argument is the shape of a guard that gets quietly dropped.
+ *
+ * @var list<string> $needles
+ */
+$needles = array_values(array_filter(
+    array_slice($argvLocal, 4),
+    static fn (string $a): bool => trim($a) !== '',
+));
+
 $raw = @file_get_contents($in);
 if ($raw === false) {
     fwrite(STDERR, "cannot read {$in}\n");
@@ -194,6 +213,57 @@ $message = preg_replace_callback(
     $message,
 ) ?? $message;
 
+// Opaque ACCOUNT-SCOPED identifiers: a saved-search UUID, an analytics hex. Neither is an address,
+// so every address check passes on them; both identify the subscriber's account to anyone holding
+// the file. The VALUE goes and the SHAPE stays, same rule as `qs=` and the JWT — a fixture whose
+// UUID had become `xxxx` would stop exercising the link handling it was captured for.
+//
+// Matched LOOSELY and validated STRICTLY in the callback, because quoted-printable folds lines at
+// 76 columns straight through the middle of a 36-character token; a pattern that only understood
+// unbroken tokens matched nothing on real mail and left the identifier in place. That exact defect
+// is why the JWT pattern above carries the same note.
+$unfold = static fn (string $s): string => (string) preg_replace('~=\r?\n~', '', $s);
+$refold = static fn (string $replacement, string $original): string
+    => preg_match('~=\r?\n~', $original) === 1
+        ? rtrim(chunk_split($replacement, 60, '=' . $eol), '=' . $eol)
+        : $replacement;
+
+$uuidSeq = 0;
+$message = preg_replace_callback(
+    '~(?<![0-9a-fA-F-])(?:[0-9a-fA-F-]|=\r?\n){36,60}(?![0-9a-fA-F-])~',
+    static function (array $m) use (&$uuidSeq, $unfold, $refold): string {
+        $flat = $unfold($m[0]);
+        if (preg_match('~^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$~i', $flat) !== 1) {
+            return $m[0];   // not a UUID after all — the loose match earns nothing here
+        }
+        ++$uuidSeq;
+        $n = str_pad((string) $uuidSeq, 4, '0', STR_PAD_LEFT);
+
+        return $refold('ffffffff-0000-4000-8000-00000000' . $n, $m[0]);
+    },
+    $message,
+) ?? $message;
+
+$hexSeq = 0;
+$message = preg_replace_callback(
+    '~(?<![0-9a-fA-F])(?:[0-9a-fA-F]|=\r?\n){24,}(?![0-9a-fA-F])~',
+    static function (array $m) use (&$hexSeq, $unfold, $refold): string {
+        $flat = $unfold($m[0]);
+        if (preg_match('~^[0-9a-fA-F]{24,}$~', $flat) !== 1) {
+            return $m[0];
+        }
+        ++$hexSeq;
+
+        return $refold(str_pad(substr('f0f0f0f0', 0, 8) . $hexSeq, strlen($flat), '0'), $m[0]);
+    },
+    $message,
+) ?? $message;
+
+foreach ($needles as $needle) {
+    // Case-insensitively, because a portal's greeting capitalises what its account record does not.
+    $message = (string) preg_replace('~' . preg_quote($needle, '~') . '~i', 'abonne', $message);
+}
+
 if ($address !== null && $address !== '') {
     $message = str_replace($address, 'alertes@example.invalid', $message);
     // The local part alone appears in some ESP ids.
@@ -254,6 +324,27 @@ foreach ($remaining[1] as $token) {
     }
 }
 
+// Each named identifier, held to the SAME standard as the address: gone from the text, and not
+// recoverable from any encoding of it either. Anything weaker makes the argument advisory, and an
+// advisory guard is one somebody drops the first time it is inconvenient.
+foreach ($needles as $needle) {
+    if (stripos($message, $needle) !== false) {
+        $leaks[] = 'the identifier `' . $needle . '` is still present';
+
+        continue;
+    }
+
+    foreach (recoverableForms($message) as $form) {
+        if (stripos($form, $needle) !== false) {
+            $leaks[] = 'the identifier `' . $needle . '` is RECOVERABLE from the output — it '
+                . 'survives ENCODED inside a token this scrubber does not know how to strip. Teach '
+                . 'it that token, or drop the parameter; do not relax this check.';
+
+            break;
+        }
+    }
+}
+
 if ($leaks !== []) {
     fwrite(STDERR, "REFUSING to write — scrub incomplete:\n  - " . implode("\n  - ", array_unique($leaks)) . "\n");
 
@@ -267,10 +358,14 @@ if (file_put_contents($out, $message) === false) {
 }
 
 fwrite(STDOUT, sprintf(
-    "scrubbed %s -> %s (%d bytes, %d tracking tokens and %d signed tokens replaced)\n",
+    "scrubbed %s -> %s (%d bytes, %d tracking tokens, %d signed tokens, %d UUIDs, %d opaque hexes"
+    . " and %d named identifier(s) replaced)\n",
     basename($in),
     $out,
     strlen($message),
     $tokenSeq,
     $jwtSeq,
+    $uuidSeq,
+    $hexSeq,
+    count($needles),
 ));
