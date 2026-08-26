@@ -314,7 +314,14 @@ postcode, so nothing would have looked broken. Ranked communes now feed that voc
 > **A4 AL'in** (authenticated — an INPUT, not a decision) and the Tier B email-alert route.
 >
 > **A11 and A13 were the last two marker-scan rows, and both were measured on 2026-08-21 — so Track 1
-> is now measured out, and this time the word is earned.** The exhaustive pass produced a THIRD kind
+> is now measured out, and this time the word is earned.** ⚠️ **That last clause was FALSE when
+> written and is worth keeping as the correction it earned.** A14 and A15 were both `UNMEASURED` at
+> the time and still sat in the table; "measured out" described the marker-scan GROUP and was written
+> as though it described Track 1. **A14 RIVP was measured 2026-08-26** and is NOT pollable and out of
+> scope by §1 — no lettings post type at all (`wp-json/wp/v2/types` settles it in one request), a
+> `residence` type that is the heritage map, and a *"Je cherche un logement **social**"* route to
+> `demande-logement-social.gouv.fr` stating `numéro unique` twice. **A15 Val d'Oise Habitat remains
+> genuinely unmeasured.** The exhaustive pass produced a THIRD kind
 > of verdict, which the catalogue had no column for. **A11 Toit et Joie is `www.postehabitat.com`**
 > (301; the domain was stale, the third in three rows) and it is the delegation pattern a fourth
 > time: its availability search is real and returns **0 dwellings** — but that zero is only worth
