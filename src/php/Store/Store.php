@@ -47,7 +47,7 @@ final readonly class Store
      * without complaint and then threw a raw `no such column` at the first sighting. That is the
      * whole argument for this constant existing, demonstrated against itself.
      */
-    public const int SCHEMA_VERSION = 9;
+    public const int SCHEMA_VERSION = 10;
 
     /**
      * How many undelivered digest rows one `scout digest` may carry.
@@ -144,12 +144,19 @@ final readonly class Store
      * successful resolution, deliberately. Caching a failure would turn one bad afternoon at the API
      * into a permanently missing score component, and the component is the largest in the tree.
      */
-    public function cachedCommuteMinutes(string $communeKey, string $postcode): ?int
+    public function cachedCommuteMinutes(string $communeKey, string $postcode, string $destination): ?int
     {
+        // THE DESTINATION IS PART OF THE KEY, and it is the whole reason this cannot be a plain
+        // lookup. A commute is minutes BETWEEN TWO PLACES; cache it against one of them and the day
+        // the other changes -- a new job, a moved office -- every row goes on answering with the
+        // journey to the old address. Nothing would say so: the numbers stay plausible, the reasons
+        // stay confident, failures are deliberately not cached and nothing expires. A mismatch reads
+        // as NOT CACHED, so the commune re-resolves lazily and overwrites.
         $stmt = $this->pdo->prepare(
-            'SELECT minutes FROM commute_cache WHERE commune_key = :k AND postcode = :p',
+            'SELECT minutes FROM commute_cache'
+            . ' WHERE commune_key = :k AND postcode = :p AND destination = :d',
         );
-        $stmt->execute(['k' => $communeKey, 'p' => $postcode]);
+        $stmt->execute(['k' => $communeKey, 'p' => $postcode, 'd' => $destination]);
         $value = $stmt->fetchColumn();
 
         return is_int($value) || (is_string($value) && $value !== '') ? (int) $value : null;
@@ -169,13 +176,15 @@ final readonly class Store
         ?float $lon,
         int $minutes,
         string $nowIso,
+        string $destination,
     ): void {
         $stmt = $this->pdo->prepare(
-            'INSERT INTO commute_cache (commune_key, postcode, lat, lon, minutes, resolved_at)'
-            . ' VALUES (:k, :p, :lat, :lon, :m, :at)'
+            'INSERT INTO commute_cache'
+            . ' (commune_key, postcode, lat, lon, minutes, resolved_at, destination)'
+            . ' VALUES (:k, :p, :lat, :lon, :m, :at, :d)'
             . ' ON CONFLICT (commune_key, postcode) DO UPDATE SET'
             . ' lat = excluded.lat, lon = excluded.lon, minutes = excluded.minutes,'
-            . ' resolved_at = excluded.resolved_at',
+            . ' resolved_at = excluded.resolved_at, destination = excluded.destination',
         );
         $stmt->execute([
             'k' => $communeKey,
@@ -184,6 +193,7 @@ final readonly class Store
             'lon' => $lon,
             'm' => $minutes,
             'at' => $nowIso,
+            'd' => $destination,
         ]);
     }
 
@@ -451,6 +461,12 @@ final readonly class Store
                 lon         REAL,
                 minutes     INTEGER,
                 resolved_at TEXT,
+                -- v10. WHICH DESTINATION these minutes are to. Without it the cache answers with
+                -- the journey to a PREVIOUS address for ever the day the destination changes --
+                -- plausible numbers, confident reasons, nothing anywhere saying they are stale.
+                -- Same guarantee as the schema-v6 detail-map fingerprint, and the same failure it
+                -- was built to stop.
+                destination TEXT,
                 PRIMARY KEY (commune_key, postcode)
             );
 
@@ -680,6 +696,20 @@ final readonly class Store
                     . ' lat REAL, lon REAL, minutes INTEGER, resolved_at TEXT,'
                     . ' PRIMARY KEY (commune_key, postcode))',
                 );
+            }
+
+            if ($recorded < 10) {
+                // Additive and re-runnable. Existing rows get NULL, which no live fingerprint can
+                // equal, so every cached commune re-resolves once against the current destination
+                // rather than serving a journey to whatever the address used to be.
+                $existing = array_column(
+                    $this->pdo->query('PRAGMA table_info(commute_cache)')->fetchAll(),
+                    'name',
+                );
+
+                if (!\in_array('destination', $existing, true)) {
+                    $this->pdo->exec('ALTER TABLE commute_cache ADD COLUMN destination TEXT');
+                }
             }
 
             $stamp = $this->pdo->prepare("UPDATE schema_meta SET value = :value WHERE key = 'schema_version'");

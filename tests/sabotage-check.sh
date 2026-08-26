@@ -3143,6 +3143,17 @@ run_sabotage "an unreachable commute API takes the whole pass down with it" \
   src/php/Enrich/NavitiaCommute.php \
   's%} catch (\\Throwable) {%} catch (\\JsonException) {%'
 
+# A COMMUTE IS MINUTES BETWEEN TWO PLACES. Drop the destination from the cache lookup and every
+# cached commune answers with the journey to a PREVIOUS address for ever the day the destination
+# changes -- plausible numbers, confident reasons, nothing expiring, and failures deliberately not
+# cached. Schema v6's detail-map fingerprint exists for exactly this failure on a different surface.
+# Targeted at the FINGERPRINT rather than at the SQL: removing the WHERE clause would leave `:d`
+# bound and unused, so the suite would go red on a PDO error rather than on the guarantee, which
+# proves nothing. A constant key is the same defect with no crash to hide behind.
+run_sabotage "the commute cache forgets which destination its minutes are to" \
+  src/php/Enrich/NavitiaCommute.php \
+  's%\$destinationKey = sha1(\$destination);%\$destinationKey = "any-destination";%'
+
 # THE TALLY LIVES HERE, BELOW EVERY CASE, and that position is load-bearing rather than tidy.
 # It sat mid-file twice: once on 2026-08-20 (295 printed for 303 cases) and again from 2026-08-23,
 # when 21 schema-v7 / digest / reclassify cases were appended past it and the headline read 354 for

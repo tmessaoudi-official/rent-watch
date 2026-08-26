@@ -68,7 +68,12 @@ final readonly class NavitiaCommute implements CommutePlanner
         // caches the same place twice and spends the requests twice.
         $key = Criteria::communeKey($commune);
 
-        $cached = $this->store->cachedCommuteMinutes($key, $postcode);
+        // The destination is HASHED rather than stored verbatim: it is a personal address, and the
+        // store's rows end up in diagnostics, in backups and in anything anyone pastes. A hash
+        // compares exactly as well and reveals nothing.
+        $destinationKey = sha1($destination);
+
+        $cached = $this->store->cachedCommuteMinutes($key, $postcode, $destinationKey);
 
         if ($cached !== null) {
             return $cached;
@@ -104,6 +109,7 @@ final readonly class NavitiaCommute implements CommutePlanner
                 $from[0],
                 $minutes,
                 $this->nowIso ?? (new \DateTimeImmutable())->format(\DATE_ATOM),
+                $destinationKey,
             );
 
             return $minutes;

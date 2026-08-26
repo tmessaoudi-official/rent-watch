@@ -94,7 +94,7 @@ final class NavitiaCommuteTest extends TestCase
         self::assertNull($planner->minutesFrom('Sartrouville', '78500'));
 
         $store = Store::open((string) $this->dbPath);
-        self::assertNull($store->cachedCommuteMinutes('sartrouville', '78500'));
+        self::assertNull($store->cachedCommuteMinutes('sartrouville', '78500', self::destinationKey()));
     }
 
     public function testAnUnreachableApiNeverThrows(): void
@@ -137,6 +137,33 @@ final class NavitiaCommuteTest extends TestCase
         // Marseille's 13001 is not Yvelines' 78500. Without the check this returns 20 minutes for a
         // place 750 km away — cached for ever, and mis-scoring the whole commune in silence.
         self::assertNull($planner->minutesFrom('Sainte-Marie', '78500'));
+    }
+
+    public function testChangingTheDestinationInvalidatesTheCache(): void
+    {
+        // A COMMUTE IS MINUTES BETWEEN TWO PLACES. Cached against only one of them, the day the
+        // other changes — a new job, a moved office — every row goes on answering with the journey
+        // to the old address, and nothing says so: the numbers stay plausible, the reasons stay
+        // confident, failures are deliberately not cached and nothing expires. Same guarantee as the
+        // schema-v6 detail-map fingerprint, and the same silent-wrong-for-ever failure it stops.
+        $planner = $this->planner(1800);
+        self::assertSame(30, $planner->minutesFrom('Sartrouville', '78500'));
+
+        $store = Store::open((string) $this->dbPath);
+
+        // The row is there for THIS destination...
+        self::assertSame(30, $store->cachedCommuteMinutes('sartrouville', '78500', self::destinationKey()));
+
+        // ...and reads as NOT CACHED for any other, so the commune re-resolves lazily.
+        self::assertNull($store->cachedCommuteMinutes('sartrouville', '78500', sha1('somewhere else')));
+    }
+
+    /** The fingerprint the planner writes: a HASH, because the destination is a personal address. */
+    private static function destinationKey(): string
+    {
+        $criteria = ConfigLoader::loadCriteria(self::CRITERIA);
+
+        return sha1((string) $criteria->commuteStation);
     }
 
     // ── plumbing ─────────────────────────────────────────────────────────────────────────────────
