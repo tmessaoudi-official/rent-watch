@@ -1,0 +1,145 @@
+Date: Wed, 26 Aug 2026 13:42:10 +0200
+To: alertes@example.invalid
+From: "PAP.fr" <users-alertes@pap.fr>
+Subject: =?iso-8859-1?Q?Alerte_email_:_Appartement_3_pi=E8ces_Meulan-en-Yvelines_(78250)?=
+X-Mailer: PHPMailer 7.0.2 (https://github.com/PHPMailer/PHPMailer)
+X-Type-Envoi: pap/alerte-envoi-location
+MIME-Version: 1.0
+Content-Type: multipart/alternative;
+ boundary="b1=_lf84uEJvz6ORcDN8PdDzOR83fXtyDqmV8sslCe604"
+Content-Transfer-Encoding: 8bit
+Message-ID: <fixture-afac1af92611@example.invalid>
+To: <alertes@example.invalid>
+
+--b1=_lf84uEJvz6ORcDN8PdDzOR83fXtyDqmV8sslCe604
+Content-Type: text/plain; charset=iso-8859-1
+Content-Transfer-Encoding: 8bit
+
+PAP.fr                          De Particulier à Particulier
+____________________________________________________________
+
+
+Une annonce correspond à votre recherche Location appartement, maison Île-de-France 3 pièces et plus à partir de 2 chambres jusqu'à 1.200 EUR à partir de 45 m².
+
+Location appartement 3 pièces
+Meulan-en-Yvelines (78250)
+90 m²
+1.150 EUR / mois
+
+Pour voir l'annonce, suivez ce lien :
+https://www.pap.fr/annonces/-r453201284?a=62367795&email=alertes%40gmail.com&md5=f0f0f0f0100000000000000000000000&utm_source=alerte_location&utm_medium=email&utm_campaign=alerte_location
+
+
+Se désinscrire :
+https://www.pap.fr/utilisateur/alertes?email=alertes%40gmail.com&md5=f0f0f0f0200000000000000000000000&utm_source=alerte_location&utm_medium=email&utm_campaign=alerte_location
+
+
+--
+De Particulier à Particulier
+SAS au capital de 337 800 euros
+RC 75 B 6752
+SIRET 304 555 154 00232
+APE 5814 Z
+
+
+--b1=_lf84uEJvz6ORcDN8PdDzOR83fXtyDqmV8sslCe604
+Content-Type: text/html; charset=iso-8859-1
+Content-Transfer-Encoding: 8bit
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<body bgcolor="#f2f2f2" style="background:#f2f2f2">
+<table width="550" align="center" border="0" cellpadding="15" bgcolor="#ffffff">
+<tr>
+<td>
+<table width="100%" border="0" cellpadding="0">
+<tr>
+<td><img src="https://www.pap.fr/emails/images/logo-pap-particulier-a-particulier-3.png" width="334" alt="PAP - Particulier à Particulier"></td>
+<td align="right" style="text-align : right"><img src="https://www.pap.fr/emails/images/logo-tampon.png" width="72" alt="1ère plateforme immobilière sans commission"></td>
+</tr>
+</table>
+</td>
+</tr><tr>
+<td style="font-family: sans-serif; font-size: 15px; color: #535353; line-height: 1.5em">
+Une annonce correspond à votre recherche <b>Location appartement, maison Île-de-France 3 pièces et plus à partir de 2 chambres jusqu'à 1.200 EUR à partir de 45 m²</b>.
+</td>
+</tr>
+<tr>
+<td>
+<table width="100%" border="0" cellpadding="0">
+<tr>
+<td width="270">
+<a href="https://www.pap.fr/annonces/-r453201284?a=62367795&amp;email=alertes%40gmail.com&amp;md5=f0f0f0f0300000000000000000000000&amp;utm_source=alerte_location&amp;utm_medium=email&amp;utm_campaign=alerte_location">
+<img src="https://cdn.pap.fr/photos/pap/91/76/f0f0f0f0400000000000000000000000/9-p2.jpg" width="250" border="0">
+</a>
+</td>
+<td width="330" valign="top" style="font-family: sans-serif; font-size: 15px; color: #535353; line-height: 1.5em">
+<b>Meulan-en-Yvelines (78250)</b>
+<br>Location appartement 3 pièces<br>90&nbsp;m²<br>1.150&nbsp;&euro; / mois
+<br><a href="https://www.pap.fr/annonces/-r453201284?a=62367795&amp;email=alertes%40gmail.com&amp;md5=f0f0f0f0500000000000000000000000&amp;utm_source=alerte_location&amp;utm_medium=email&amp;utm_campaign=alerte_location" style="color: #e2007a">Voir l'annonce</a>
+</td>
+</tr>
+</table>
+</td>
+</tr>
+<tr>
+<td style="font-family: sans-serif; font-size: 15px; color: #535353; line-height: 1.5em">
+<hr style="border:0;border-bottom-width:3px;border-bottom-style:solid;border-bottom-color:#000000;margin-top:18px;margin-bottom:18px">
+<table border="0" cellpadding="0" cellspacing="0" width="100%">
+	<tr>
+		<td valign="top" width="120">
+			<img src="https://www.pap.fr/emails/images/icons/icon-bubble-calendar.png" width="90" alt="">
+		</td>
+		<td valign="middle" style="font-family: sans-serif; font-size: 15px; color: #535353; line-height: 1.5em">
+			<b style="font-size : 1.2em">Webinaire - Étudiants : trouvez votre location (sans galérer)</b><br/>
+			<b>Aujourd'hui à 18h00</b>. Créez un dossier béton, visitez en premier et signez votre contrat en toute sécurité.			<br/><a href="https://www.pap.fr/outils/atelier/detail?origine=alerte-location&slug=etudiant-location&utm_source=alerte_location&utm_medium=email&utm_campaign=alerte_location_contenu">Je m'inscris</a>
+		</td>
+	</tr>
+	<tr><td height="18"></td></tr>
+	<tr>
+		<td valign="top" width="120">
+			<img src="https://www.pap.fr/emails/images/icons/icon-bubble-passpremium.png" width="90" alt="">
+		</td>
+		<td valign="middle" style="font-family: sans-serif; font-size: 15px; color: #535353; line-height: 1.5em">
+			<b style="font-size : 1.2em">Ne laissez pas filer votre futur logement !</b><br/>
+			Mettez toutes les chances de votre côté : accédez à des annonces exclusives, réservées aux locataires avec le Pass Prioritaire, et bénéficiez d'un profil vérifié mis en avant ! 			<br/><a href="https://www.pap.fr/pass-prioritaire?utm_source=alerte_location&utm_medium=email&utm_campaign=alerte_location_contenu">En savoir plus</a>
+		</td>
+	</tr>
+	<tr><td height="18"></td></tr>
+</table>
+<hr style="border:0;border-bottom-width:3px;border-bottom-style:solid;border-bottom-color:#000000;margin-top:10px;margin-bottom:15px">
+Restez informé(e) des dernières <b>tendances du marché immobilier</b> et bénéficiez des <b>conseils de nos experts</b> en vous abonnant à PAP sur votre réseau préféré :
+<table style="margin-top : 10px">
+<tr>
+<td width="60"><a href="https://www.pap.fr/s/instagram"><img src="https://www.pap.fr/emails/images/icons/social/icon-social-instagram.png" width="40"></a></td>
+<td width="60"><a href="https://www.pap.fr/s/tiktok"><img src="https://www.pap.fr/emails/images/icons/social/icon-social-tiktok.png" width="40"></a></td>
+<td width="60"><a href="https://www.pap.fr/s/youtube"><img src="https://www.pap.fr/emails/images/icons/social/icon-social-youtube.png" width="40"></a></td>
+<td width="60"><a href="https://www.pap.fr/s/twitter"><img src="https://www.pap.fr/emails/images/icons/social/icon-social-twitter.png" width="40"></a></td>
+<td width="60"><a href="https://www.pap.fr/s/facebook"><img src="https://www.pap.fr/emails/images/icons/social/icon-social-facebook.png" width="40"></a></td>
+</tr>
+</table>
+</td>
+</tr>
+<tr>
+<td style="font-family: sans-serif; font-size: 15px; color: #535353; line-height: 1.5em">
+<a href="https://www.pap.fr/utilisateur/alertes?email=alertes%40gmail.com&amp;md5=f0f0f0f0600000000000000000000000&amp;utm_source=alerte_location&amp;utm_medium=email&amp;utm_campaign=alerte_location" style="color: #e2007a">Se d&eacute;sinscrire</a>
+</td>
+</tr>
+
+
+</table>
+<table width="550" align="center" border="0" cellpadding="0">
+<tr>
+<td style="color: #a8a8a8; font-family: sans-serif; font-size: 13px; line-height: 155%; padding-bottom: 20px; padding-top: 20px;">
+&copy; De Particulier à Particulier
+<br/>S.A.S.U. au capital de 337.800 EUR
+<br/>TVA intracommunautaire : FR 67 304 555 154	
+</td>
+</tr>
+</table>
+</body>
+</html>
+
+
+--b1=_lf84uEJvz6ORcDN8PdDzOR83fXtyDqmV8sslCe604--
+

@@ -657,6 +657,57 @@ cost: the rent ceiling is not checkable for this source.**
 > capture, and this repo has twice paid for generalising from one. The second alert to arrive is the
 > first regression test.
 
+### PAP — source #8, and the numeric twin of the title lesson (2026-08-26)
+
+`scout doctor --source=pap` returns **2 annonces, `ok`, 483 ms**. Prove a change offline with
+`MAILBOX_DIR=tests/fixtures/pap scout doctor --source=pap`. It is the first **direct-from-owner**
+portal, so its inventory does not overlap the agency portals every other private source draws from,
+and structurally the simplest alert in the tree: a real `text/plain` part, **one listing per
+message** (no `card_separator` at all), and a real ad id — `/annonces/-r458301723` — so identity is
+the link.
+
+**THE ALERT QUOTES THE SUBSCRIBER'S OWN SEARCH CRITERIA ABOVE THE LISTING, and every generic reader
+is a first-match-wins `preg_match`.** Measured on the real capture before any config existed: the
+surface read **45** — *"à partir de 45 m²"*, the search FLOOR — instead of the flat's 50. 45 is below
+`min_surface_m2`, so **the first PAP alert ever sent would have been rejected for being too small**,
+silently, with nothing reading as a fault. That is Bien'ici's defect a second time, **down to the
+same number 45**, because the same saved search is used on every portal. Rooms read 3 and were right
+*by coincidence* — the criteria line also says 3. Rent survived only because the periodic-figure rule
+from the SeLoger price-drop fix outranks a bare `1.200 EUR`. The commune came back `null`, the
+SeLoger regression exactly: Milly-la-Forêt is not a RANKED commune, so the vocabulary scan is blind.
+
+The fix is four **POSITIONAL** anchors keyed on the `(NNNNN)` postcode line — the one landmark the
+template guarantees — and deliberately not on vocabulary. **This is the numeric twin of *a title is a
+position, never a vocabulary*.** Two new per-source params carry it, `surface_pattern` and
+`rooms_pattern`, compile-checked beside the other three; **a configured pattern that MISSES yields
+`null`, never the generic scan**, because falling back restores the defect *and* gives it an alibi —
+the row reads as a small flat rather than as a broken extraction. An unconfigured source keeps the
+scan bit-for-bit, and that counterweight is asserted, since without it the guarantee is satisfied by
+deleting the feature.
+
+- **`link_host` CARRIES THE PATH here**, as at leboncoin. The message has two links and **both are on
+  `www.pap.fr`**: the annonce, and the unsubscribe page at `/utilisateur/alertes`, whose wording
+  matches **none** of the noise words `looksLikeAListing()` rejects. A non-segmented source builds one
+  listing **per accepted link**, so a host-only value yielded a phantom second listing carrying the
+  real flat's rent, commune and surface under its own identity — notified as a separate flat, and
+  never delisted, because an unsubscribe page never goes away.
+- **`title_pattern` was INERT on every non-segmented source.** `listingsIn()` hardcoded the subject;
+  only the segmented path consulted `cardTitle()`. A configured pattern doing nothing — and on this
+  source it makes `exclude_title_patterns` unreachable, the In'li/SeLoger lesson a third time.
+- **No fixture reaches the miss branch**, so `EmailAlertSegmentationTest` enters it on purpose. That
+  is the dead-safety-code trap the SeLoger title walked into hours earlier, avoided by having already
+  been paid for once.
+
+**Stated cost: the rent ceiling is not checkable for this source.** The payload mentions charges
+nowhere — zero occurrences of `charges`, `CC` or `HC` — so the Logirep and leboncoin precedent
+applies and the figure lands in `rentHc`.
+
+> **n=1 lasted about three hours.** The anchors were measured on ONE message with the risk stated;
+> a second alert arrived the same afternoon (Meulan-en-Yvelines, 78250), confirms every anchor on a
+> different commune, and adds the case the first lacked — a rent written `1.150 EUR / mois`, where
+> the dot is a **thousands separator** and *"the rightmost separator is the decimal point"* would
+> read it as 1 €. Both are frozen. Append a third; never renumber.
+
 **`seloger` IS LIVE as of 2026-08-25 — source #5, and the first that is not a landlord.** The IMAP
 credentials arrived, and `scout doctor --source=seloger` against the real mailbox returns **9
 annonces, `ok`, ~19 s**. Prove a change without touching the network with
@@ -1415,6 +1466,11 @@ tests/fixtures/bienici/     The second portal's alerts. A five-card alert, a one
 tests/fixtures/leboncoin/   The third portal's, and the first HTML-ONLY alert: no text/plain
                             part at all, so every URL lives in an href. n=1 — one message, three
                             cards, the first this subscription ever produced
+tests/fixtures/pap/         The fourth portal's, and the first DIRECT-FROM-OWNER one. ONE listing
+                            per message, so no card_separator at all. Both captures quote the
+                            alert's own SEARCH CRITERIA above the listing — the 45 m² floor the
+                            first-match-wins surface reader returned instead of the flat's 50 —
+                            which is what the positional anchors exist to defeat
 tools/scrub-eml.php         Turns a captured .eml into a committable fixture; REFUSES to write
                             while the address is RECOVERABLE — decoding base64url runs and
                             quoted-printable before it looks, not merely grepping for it

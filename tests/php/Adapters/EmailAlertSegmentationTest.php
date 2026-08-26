@@ -563,6 +563,70 @@ final class EmailAlertSegmentationTest extends TestCase
     // ------------------------------------------------------------------ helpers
 
     /** @param array<string,mixed> $params */
+    /**
+     * A configured `surface_pattern` that MISSES yields no surface — never the generic scan.
+     *
+     * NO FIXTURE REACHES THIS BRANCH. With the shipped PAP anchors in place every frozen card
+     * extracts, so nothing enters the fallback — and stripping the safety out leaves all six fixture
+     * suites green, which is the dead-safety-code trap this repo walked into six days ago on the
+     * SeLoger title. This test enters the branch on purpose.
+     *
+     * Falling back would be worse than no anchor at all: the generic scan is what returns the
+     * subscriber's own search FLOOR (45) instead of the flat's surface, so the fallback would
+     * restore the defect AND give it an alibi — the row reads as a small flat, not a broken
+     * extraction. An extraction failure is not a value (hard rule 9, one layer up).
+     */
+    public function testAConfiguredSurfacePatternThatMissesYieldsNoSurface(): void
+    {
+        $params = self::shippedParams();
+        $params['surface_pattern'] = '~(NOTHING-MATCHES-THIS)~';
+
+        $listings = $this->source(self::body([
+            self::card('1 100', 'Appartement 3 pièces', '3 pièces . 66,57 m²', 'Résidence X', 'Pontault-Combault', '77340'),
+        ]), $params)->fetch();
+
+        self::assertCount(1, $listings);
+        self::assertNull(
+            $listings[0]->surfaceM2,
+            'an unread surface is unread — falling back to the first m² in the body is the defect '
+            . 'the anchor exists to remove',
+        );
+    }
+
+    /** The room count, on the same terms and for the same reason. */
+    public function testAConfiguredRoomsPatternThatMissesYieldsNoRoomCount(): void
+    {
+        $params = self::shippedParams();
+        $params['rooms_pattern'] = '~(NOTHING-MATCHES-THIS)~';
+
+        $listings = $this->source(self::body([
+            self::card('1 100', 'Appartement 3 pièces', '3 pièces . 66,57 m²', 'Résidence X', 'Pontault-Combault', '77340'),
+        ]), $params)->fetch();
+
+        self::assertCount(1, $listings);
+        self::assertNull($listings[0]->rooms, 'an unread room count is unread, not the first digit in the body');
+    }
+
+    /**
+     * A source configuring NEITHER keeps the generic scan, bit-for-bit.
+     *
+     * This is the counterweight, and without it the two tests above are satisfied by deleting the
+     * feature outright. seloger, bienici and leboncoin all rely on this path.
+     */
+    public function testASourceWithNoNumericPatternsStillUsesTheGenericScan(): void
+    {
+        $params = self::shippedParams();
+        unset($params['surface_pattern'], $params['rooms_pattern']);
+
+        $listings = $this->source(self::body([
+            self::card('1 100', 'Appartement 3 pièces', '3 pièces . 66,57 m²', 'Résidence X', 'Pontault-Combault', '77340'),
+        ]), $params)->fetch();
+
+        self::assertCount(1, $listings);
+        self::assertSame(66.57, $listings[0]->surfaceM2);
+        self::assertSame(3, $listings[0]->rooms);
+    }
+
     private function source(string $body, ?array $params = null): EmailAlertSource
     {
         $this->dir = sys_get_temp_dir() . '/rentwatch-seg-' . bin2hex(random_bytes(8));

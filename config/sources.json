@@ -185,6 +185,29 @@
         "charges_included": false
       }
     },
+    "pap": {
+      "_comment": "B?. De Particulier a Particulier — direct-from-owner stock, so its inventory does not overlap the agency portals. email_alert for the usual reason (hard rule 4). ONE listing per message, which makes it the simplest shape in the tree: no card_separator at all.",
+      "_verified_at": "2026-08-26",
+      "_source": "TWO real alerts, scrubbed to tests/fixtures/pap/. The anchors were measured on the first and the n=1 risk was stated; the second arrived three hours later the same day and confirms every one of them on a different commune, adding the case the first lacked — a rent written 1.150 EUR, where the dot is a thousands separator and \"the rightmost separator is the decimal point\" would read it as 1 EUR.",
+      "enabled": true,
+      "family": "private",
+      "type": "email_alert",
+      "default_tenure": "LIBRE",
+      "mixed_tenure": false,
+      "_why": "TWO defects a naive config walks straight into, both measured on the real capture. (1) link_host CARRIES THE PATH, as at leboncoin: the message has two links and both are on www.pap.fr — the annonce, and the unsubscribe page at /utilisateur/alertes, whose wording matches none of the noise words looksLikeAListing() rejects. A non-segmented source builds one listing PER ACCEPTED LINK, so a host-only value made every alert yield a phantom second listing carrying the real flat's rent, commune and surface under its own identity: notified as a separate flat, and never delisted because an unsubscribe page never goes away. (2) All four patterns are POSITIONAL, anchored on the (NNNNN) postcode line — the one structural landmark the template guarantees — and NOT on vocabulary, because an owner writes the title and 'a title is a position, never a vocabulary' is a lesson already paid for on SeLoger. The alert quotes the subscriber's OWN search criteria above the listing ('jusqu'a 1.200 EUR a partir de 45 m2') and every generic reader is first-match-wins, so without these the surface reads 45 — the search FLOOR — instead of the flat's 50, and min_surface_m2 rejects it as too small with nothing anywhere reading as a fault.",
+      "params": {
+        "from": "users-alertes@pap.fr",
+        "link_host": "www.pap.fr/annonces/",
+        "title_pattern": "~^\\h*([^\\n]{2,80}?)\\h*\\n[^\\n]*\\(\\d{5}\\)\\h*$~mu",
+        "commune_pattern": "~^\\h*([^\\n\\d(]{2,60}?)\\h*\\(\\d{5}\\)\\h*$~mu",
+        "surface_pattern": "~\\(\\d{5}\\)\\h*\\n\\h*([\\d.,]+)\\h*m²~u",
+        "rooms_pattern": "~^[^\\n]*?(\\d+)\\h*pi[eè]ces?[^\\n]*\\n[^\\n]*\\(\\d{5}\\)~mu"
+      },
+      "map": {
+        "ref": "url",
+        "charges_included": false
+      }
+    },
     "fixture_demo": {
       "_comment": "NOT a real landlord. A frozen-payload source that exercises the whole pipeline end to end offline — config load, fetch, field map, classify, criteria, dedup, store, notify — with no network and no credentials. DISABLED 2026-08-22, having shipped enabled since before any real endpoint existed: back then it was the only way `scout run --once` could be demonstrated at all, and the reason it was safe (it reads a committed file, not the internet) was never the reason it belonged in a deployment. With four real sources live it stopped being a demo and became ten fabricated listings inside the operator's own store — counted in every pass total, every `doctor` table and every heartbeat source count, and a notification for a flat that does not exist on any path where the seen-set is lost or the seed step skipped. Still fully reachable, because `--source=<name>` force-runs a disabled source: `scout doctor --source=fixture_demo`, or `scout run --once --seed --source=fixture_demo` against a throwaway RENT_WATCH_DB. mixed_tenure is true so the fixture exercises the fail-closed path, which is the half that matters.",
       "enabled": false,

@@ -228,7 +228,13 @@ final readonly class EmailAlertSource implements Source
             $out[] = new RawListing(
                 sourceName: $this->name(),
                 externalId: $id,
-                title: $message->subject(),
+                // `cardTitle()`, not the raw subject. It used to be the subject unconditionally, so
+                // `title_pattern` was silently INERT on every non-segmented source — a configured
+                // pattern doing nothing, which is the shape of defect this repo keeps finding.
+                // Sources configuring no pattern keep subject semantics exactly (`cardTitle()`
+                // returns the subject when unconfigured), so seloger, bienici and leboncoin are
+                // untouched — the first two are segmented anyway.
+                title: $this->cardTitle($message, $body),
                 description: $body,
                 fields: ['email.from' => $message->from(), 'email.subject' => $message->subject()],
                 url: $link,
@@ -236,8 +242,8 @@ final readonly class EmailAlertSource implements Source
                 postcode: self::postcodeIn($body),
                 rentCc: $this->definition->map->chargesIncluded === true ? self::rentIn($body) : null,
                 rentHc: $this->definition->map->chargesIncluded === false ? self::rentIn($body) : null,
-                surfaceM2: self::surfaceIn($body),
-                rooms: self::roomsIn($body),
+                surfaceM2: $this->surfaceIn($body),
+                rooms: $this->roomsIn($body),
             );
         }
 
@@ -330,8 +336,8 @@ final readonly class EmailAlertSource implements Source
 
         $commune = $this->communeIn($segment);
         $postcode = self::postcodeIn($segment);
-        $rooms = self::roomsIn($segment);
-        $surface = self::surfaceIn($segment);
+        $rooms = $this->roomsIn($segment);
+        $surface = $this->surfaceIn($segment);
         $residence = $this->matchParam('residence_pattern', $segment);
 
         // THE LAST LINK, NOT THE FIRST — and the difference is the whole value of the notification.
@@ -669,26 +675,86 @@ final readonly class EmailAlertSource implements Source
         return null;
     }
 
-    private static function surfaceIn(string $body): ?float
+    /**
+     * The surface, preferring a per-source POSITIONAL anchor over the generic first-match scan.
+     *
+     * The generic scan is `preg_match` — first match wins — and that is correct only while the body
+     * contains exactly one surface. PAP's alert quotes the SUBSCRIBER'S OWN SEARCH CRITERIA above
+     * the listing (*"a partir de 45 m2"*), so the scan returns the search FLOOR and the flat's real
+     * 50 m2 is never reached. 45 is below `min_surface_m2`, so the listing is rejected for being too
+     * small — silently, with nothing reading as a fault. Measured, not predicted, on the first real
+     * PAP alert; it is Bien'ici's defect a second time, down to the same number.
+     *
+     * **A CONFIGURED PATTERN THAT MISSES YIELDS `null`, NEVER THE GENERIC SCAN.** Falling back would
+     * restore the exact defect the anchor exists to remove, and give it an alibi: the listing would
+     * read as a small flat rather than as a broken extraction. Same rule as {@see cardTitle()}, and
+     * the same reason — an extraction failure is not a value (hard rule 9, one layer up).
+     *
+     * A source configuring NO pattern is bit-for-bit unchanged.
+     */
+    private function surfaceIn(string $body): ?float
     {
+        // A CONFIGURED pattern OWNS the answer, hit or miss — ownership is decided by the CONFIG,
+        // never by whether the pattern matched. Deciding it on the match is the defect in disguise:
+        // a miss would then fall through to the generic scan below, which is exactly what returns
+        // the subscriber's own search floor.
+        $owned = $this->stringParam('surface_pattern') !== null;
+
+        if ($owned) {
+            $captured = $this->matchParam('surface_pattern', $body);
+
+            return $captured === null ? null : self::plausibleSurface(Payload::float(['v' => $captured], ['v']));
+        }
+
         if (preg_match(self::SURFACE_PATTERN, $body, $m) !== 1) {
             return null;
         }
 
-        $value = Payload::float(['v' => $m[1]], ['v']);
-
-        return $value !== null && $value >= 5.0 && $value <= 1000.0 ? $value : null;
+        return self::plausibleSurface(Payload::float(['v' => $m[1]], ['v']));
     }
 
-    private static function roomsIn(string $body): ?int
+    /**
+     * The room count, on the same terms as {@see surfaceIn()} and for the same reason.
+     *
+     * On the PAP capture the generic scan returns the RIGHT answer — and only by coincidence, since
+     * the criteria line quoted above the listing happens to say `3 pieces et plus` while the flat
+     * happens to be a 3. A 4-piece flat surfaced by that same alert would have been recorded as a 3
+     * and rejected by `min_rooms` on a number the listing never stated. A coincidence is not a
+     * guarantee, so the anchor is applied here too.
+     */
+    private function roomsIn(string $body): ?int
     {
+        // Ownership by CONFIG, not by match — see {@see surfaceIn()}.
+        $owned = $this->stringParam('rooms_pattern') !== null;
+
+        if ($owned) {
+            $captured = $this->matchParam('rooms_pattern', $body);
+
+            return $captured === null ? null : self::plausibleRooms((int) $captured);
+        }
+
         if (preg_match(self::ROOMS_PATTERN, $body, $m) !== 1) {
             return null;
         }
 
         $digits = ($m[1] ?? '') !== '' ? $m[1] : ($m[2] ?? '');
-        $value = $digits === '' ? null : (int) $digits;
 
-        return $value !== null && $value >= 1 && $value <= 12 ? $value : null;
+        return $digits === '' ? null : self::plausibleRooms((int) $digits);
+    }
+
+    /**
+     * The plausibility band, applied on BOTH paths.
+     *
+     * A positional capture that bypassed the band would be a new hole: the anchor guarantees the
+     * figure came from the right LINE, never that the line held a sane number.
+     */
+    private static function plausibleSurface(?float $value): ?float
+    {
+        return $value !== null && $value >= 5.0 && $value <= 1000.0 ? $value : null;
+    }
+
+    private static function plausibleRooms(int $value): ?int
+    {
+        return $value >= 1 && $value <= 12 ? $value : null;
     }
 }

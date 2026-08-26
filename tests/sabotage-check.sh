@@ -3055,6 +3055,44 @@ run_sabotage "the seloger title capture floor rises to 3 (T5 and T3 stop being t
   config/sources.json \
   's%{2,80}%{3,80}%'
 
+# --- PAP: the search criteria quoted above the listing (2026-08-26) --------------------------
+#
+# PAP's alert prints the SUBSCRIBER'S OWN search criteria above the flat — "jusqu'a 1.200 EUR a
+# partir de 45 m2" — and every generic reader in EmailAlertSource is a first-match-wins preg_match.
+# Measured on the real capture: the surface read 45 (the search FLOOR) instead of the flat's 50, and
+# 45 is below min_surface_m2, so the first PAP alert ever sent was rejected as too small. Silently.
+#
+# The fix is a POSITIONAL anchor on the (NNNNN) postcode line. These four cases are the guarantees.
+
+# A configured pattern that MISSES must yield null, never the generic scan. Falling back restores
+# the defect AND gives it an alibi: the row reads as a small flat, not a broken extraction.
+# NO FIXTURE ENTERS THIS BRANCH — with the anchors in place every frozen card extracts — so this is
+# pinned by EmailAlertSegmentationTest, which enters it on purpose. Same dead-safety-code trap the
+# seloger title walked into on 2026-08-26.
+run_sabotage "a missed surface_pattern falls back to the first m² in the body again" \
+  src/php/Adapters/EmailAlertSource.php \
+  's%\$owned = \$this->stringParam(.surface_pattern.) !== null;%\$owned = \$this->matchParam("surface_pattern", \$body) !== null;%'
+
+run_sabotage "a missed rooms_pattern falls back to the first digit in the body again" \
+  src/php/Adapters/EmailAlertSource.php \
+  's%\$owned = \$this->stringParam(.rooms_pattern.) !== null;%\$owned = \$this->matchParam("rooms_pattern", \$body) !== null;%'
+
+# link_host CARRIES THE PATH here. PAP's message has two links, both on www.pap.fr: the annonce and
+# the unsubscribe page, whose wording matches none of the noise words looksLikeAListing() rejects. A
+# non-segmented source builds one listing PER ACCEPTED LINK, so a host-only value yields a phantom
+# second listing carrying the real flat's rent, commune and surface under its own identity —
+# notified as a separate flat, and never delisted because an unsubscribe page never goes away.
+run_sabotage "the pap link filter loses its path (the unsubscribe page becomes a listing)" \
+  config/sources.json \
+  's%"link_host": "www.pap.fr/annonces/"%"link_host": "www.pap.fr"%'
+
+# title_pattern was INERT on every non-segmented source: listingsIn() hardcoded the subject and only
+# the segmented path consulted cardTitle(). A configured pattern doing nothing, which on this source
+# makes exclude_title_patterns unreachable — the In'li and SeLoger lesson a third time.
+run_sabotage "a non-segmented source takes the message subject as its title again" \
+  src/php/Adapters/EmailAlertSource.php \
+  's%title: \$this->cardTitle(\$message, \$body),%title: \$message->subject(),%'
+
 # THE TALLY LIVES HERE, BELOW EVERY CASE, and that position is load-bearing rather than tidy.
 # It sat mid-file twice: once on 2026-08-20 (295 printed for 303 cases) and again from 2026-08-23,
 # when 21 schema-v7 / digest / reclassify cases were appended past it and the headline read 354 for

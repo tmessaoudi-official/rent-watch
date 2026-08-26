@@ -497,7 +497,12 @@ final class ConfigLoader
         // sitting next to it: the commune falls back to the ranked-vocabulary scan, which on a
         // region-mode config knows almost no names, so `null` reads as "this town is not one of the
         // ranked ones" rather than as "the pattern is broken".
-        foreach (['title_pattern', 'residence_pattern', 'commune_pattern'] as $patternKey) {
+        // `surface_pattern` and `rooms_pattern` join the list for the same reason and with a sharper
+        // edge: on a miss they yield `null` rather than falling back, so a broken one silently
+        // removes a NUMERIC filter's input. An unknown surface is never a disqualification
+        // (hard rule 9), so the listing goes on matching with one fewer filter and one fewer score
+        // component — visible nowhere.
+        foreach (['title_pattern', 'residence_pattern', 'commune_pattern', 'surface_pattern', 'rooms_pattern'] as $patternKey) {
             $pattern = $params[$patternKey] ?? null;
 
             if ($pattern === null || $pattern === '') {

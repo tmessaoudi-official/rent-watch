@@ -1287,8 +1287,17 @@ final class ConfigTest extends TestCase
         // and it is the first HTML-ONLY alert, which needed `EmailMessage::harvestHrefs()` before it
         // could yield anything at all: every URL lived in an `href` that `strip_tags()` removed, so
         // the parser produced a full body and ZERO links.
+        // `pap` joined 2026-08-26, the fourth portal and the eighth source. Same IMAP cost, sharing
+        // the same session budget. It is the first DIRECT-FROM-OWNER portal, so its inventory does
+        // not overlap the agency portals, and the simplest shape in the tree — one listing per
+        // message, no `card_separator` at all. What it cost was two defects a naive config walks
+        // into, both measured: a host-only `link_host` accepted the unsubscribe page as a second
+        // listing, and the alert quotes the subscriber's own search criteria ABOVE the listing, so
+        // the first-match-wins surface reader returned the 45 m² search floor instead of the flat's
+        // 50 — below `min_surface_m2`, so the first PAP alert ever sent would have been rejected as
+        // too small, silently.
         self::assertSame(
-            ['inli', 'cdc_habitat', 'cityloger', 'seloger', 'bienici', 'leboncoin', 'logirep'],
+            ['inli', 'cdc_habitat', 'cityloger', 'seloger', 'bienici', 'leboncoin', 'pap', 'logirep'],
             $enabled,
             'the set of enabled network sources changed',
         );
