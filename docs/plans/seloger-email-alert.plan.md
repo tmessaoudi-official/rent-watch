@@ -441,3 +441,58 @@ reversing there would pick a different FLAT rather than a different link on the 
 
 - [2026-08-25 21:05] AGREED: on a segmented email source the listing link is the LAST qualifying link in the card, because the separator is the call to action and its own url precedes its anchor text; the first link is portal furniture and differs per card.
 - [2026-08-25 21:10] AGREED: link identity for a card was established from the message's HTML part, never by following a redirect — the per-subscriber token makes a verification click an engagement signal nobody made.
+
+## A title is a position, never a vocabulary (2026-08-26)
+
+`title_pattern` required the title line to begin with
+`Appartement|Maison|Studio|Duplex|Loft|Chambre` — a guess at what an estate agent types.
+
+**Verified** [2026-08-26], measured over 72 live cards pulled from the production v7 snapshots:
+the old pattern missed **27 (37.5%)**, and every miss fell back to the message SUBJECT. The stored
+title of a real Moret-Loing-et-Orvanne flat was `2 nouvelles annonces : Ile-de-France`.
+
+Found by querying production, not by any test:
+
+```sql
+SELECT title, COUNT(*) FROM listings WHERE source='seloger' GROUP BY title ORDER BY 2 DESC;
+```
+
+### What it cost — narrower than it first appeared
+
+`Criteria::excludedBy()` holds two lists. `exclude_patterns` matches title **and** description, so
+`colocation`, `coloc` and the meublé family kept firing through the description throughout.
+`exclude_title_patterns` matches the TITLE ONLY, deliberately (`3 chambres` in a description is the
+family flat the criteria want) — so what actually went unreachable is `^\s*chambre\b` and the
+parking/box/garage/cave/cellier/bureau/terrain family. `^\s*chambre\b` is the exclusion added
+*because* four of this source's first nine matches were coliving rooms passing every numeric filter.
+
+> A first version of the regression test asserted the Saint-Denis colocation was now rejected. It
+> passed before the fix as well as after — `\bcolocation\b` had been catching it via the description
+> all along. A true observation attached to the wrong mechanism, produced while fixing an instance
+> of exactly that. The replacement test holds the description constant and varies only the title.
+
+### The replacement
+
+Structural, anchored on the layout the portal emits — the same correction `commune_pattern` took on
+this source. SeLoger writes `<rent> €/mois`, then the agency's free text, then `<n> pièces . <s> m²`;
+the title is the line above the `pièces` line.
+
+**Verified** [2026-08-26] over the same 72 cards: **27 rescued, 45 identical, 0 lost, 0 fallbacks
+left.** The capture floor is 2 characters because `T5` and `T3` are real titles; `APARTMENT` is real
+too, and no French vocabulary list would have held it.
+
+### The half no fixture reaches
+
+A configured pattern that misses now yields `''`. **The obvious sabotage does not detect that** — with
+the positional pattern in place every frozen card extracts, the fallback branch is never entered, and
+all six fixture suites stay green while the safety is deleted [measured 2026-08-26].
+`EmailAlertSegmentationTest` enters it with a pattern that cannot match; both halves are in the
+nightly ledger. A guarantee whose branch no fixture reaches is dead safety code until something
+reaches it.
+
+## Decisions Log (continued)
+
+- [2026-08-26 09:40] AGREED: a listing title is read from its POSITION in the portal's layout, never from a vocabulary of dwelling nouns — the vocabulary form missed 27 of 72 live SeLoger cards and an agency writes the title, not the portal.
+- [2026-08-26 09:45] AGREED: a CONFIGURED `title_pattern` that misses yields `''` and never the message subject; a source configuring NO pattern keeps subject semantics, because there the subject is the documented answer rather than a substitute for one.
+- [2026-08-26 09:50] AGREED: `\bcoliving\b` joins `exclude_patterns`; the meublé patterns are NOT widened until the negation shapes (`non meublé`) are checked, per the lift-negation precedent.
+- [2026-08-26 09:55] AGREED: after a source goes live, its stored titles are audited against production with a GROUP BY — this defect was invisible to the suite and visible in one query.

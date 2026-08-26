@@ -497,6 +497,69 @@ final class EmailAlertSegmentationTest extends TestCase
         self::assertSame('https://www.example-portal.test/annonce/agency-111', $listings[0]->externalId);
     }
 
+    /**
+     * A CONFIGURED `title_pattern` THAT MISSES YIELDS `''` — never the message subject.
+     *
+     * This exists because the obvious sabotage does not detect the guarantee. Restore the subject
+     * fallback and every fixture suite stays green, because the SeLoger pattern that replaced the
+     * vocabulary one extracts a title from all six frozen cards — so the fallback branch is never
+     * entered and the safety is dead code nobody would notice was gone [measured 2026-08-26].
+     *
+     * The failure it guards was live for a month. SeLoger's old pattern missed 27 of 72 real cards
+     * and each stored `4 nouvelles annonces : Ile-de-France` as a flat's title, which reads as a
+     * value rather than as the extraction failure it is — and which no
+     * {@see \RentWatch\Config\Criteria::excludedBy()} title-only rule can ever match, so
+     * `^\s*chambre\b` and the parking/box/garage family were unreachable on 37.5% of the source.
+     */
+    public function testAConfiguredTitlePatternThatMissesYieldsNoTitle(): void
+    {
+        $params = self::shippedParams();
+        // Cannot match anything this body contains — the shape of a template SeLoger has not sent
+        // yet, which is precisely the case the fallback used to paper over.
+        $params['title_pattern'] = '~^\s*(NOTHING-MATCHES-THIS)\s*$~m';
+
+        $listings = $this->source(self::body([
+            "\n<L>\n1 100 €/mois charges comprises\n"
+                . "<L>\nAppartement 3 pièces\n"
+                . "<L>\n3 pièces . 66,57 m² \n"
+                . "<L>\n Mairie Rouxel-Sud Est, \n\n Pontault-Combault\n (77340)\n"
+                . "<L>\nVoir l'annonce\n",
+        ]), $params)->fetch();
+
+        self::assertCount(1, $listings);
+        self::assertSame('', $listings[0]->title, 'an unread title is unread, not the subject line');
+        self::assertStringNotContainsString(
+            'nouvelle',
+            $listings[0]->title,
+            'the subject must never stand in for a card it does not describe',
+        );
+    }
+
+    /**
+     * A source that configures NO pattern keeps subject semantics, and that asymmetry is deliberate.
+     *
+     * Where nothing claims to read a title, the subject IS the documented answer rather than a
+     * substitute for one — a single-flat alert whose subject names the flat. Without this half the
+     * change would silently blank the title of every such source, so it is asserted rather than
+     * assumed.
+     */
+    public function testASourceWithNoTitlePatternStillUsesTheSubject(): void
+    {
+        $params = self::shippedParams();
+        unset($params['title_pattern']);
+
+        $listings = $this->source(self::body([
+            "\n<L>\n1 100 €/mois charges comprises\n"
+                . "<L>\nAppartement 3 pièces\n"
+                . "<L>\n3 pièces . 66,57 m² \n"
+                . "<L>\n Mairie Rouxel-Sud Est, \n\n Pontault-Combault\n (77340)\n"
+                . "<L>\nVoir l'annonce\n",
+        ]), $params)->fetch();
+
+        self::assertCount(1, $listings);
+        self::assertNotSame('', $listings[0]->title);
+    }
+
     // ------------------------------------------------------------------ helpers
 
     /** @param array<string,mixed> $params */

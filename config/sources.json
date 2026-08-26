@@ -132,7 +132,7 @@
         "link_host": "click.by.seloger.com",
         "card_separator": "Voir l'annonce",
         "id_from": "content",
-        "title_pattern": "~^\\h*((?:Appartement|Maison|Studio|Duplex|Loft|Chambre)[^\\n]*?)\\h*$~m",
+        "title_pattern": "~^\\h*(?!https?://)([^\\n€]{2,80}?)\\h*\\n(?:\\h*\\n|\\h*https?://[^\\n]*\\n)+\\h*\\d+\\h*pi[eè]ces?\\b~mu",
         "residence_pattern": "~^\\h*([^\\n,]{2,60}),\\h*$~m",
         "commune_pattern": "~^\\h*([^\\W\\d_][^\\n(]{1,59}?)\\h*\\n\\h*\\(\\d{5}\\)~mu"
       },

@@ -390,7 +390,7 @@ final readonly class EmailAlertSource implements Source
         return new RawListing(
             sourceName: $this->name(),
             externalId: $id,
-            title: $this->matchParam('title_pattern', $segment) ?? $message->subject(),
+            title: $this->cardTitle($message, $segment),
             description: trim($message->subject() . "\n" . $segment),
             fields: [
                 'email.from' => $message->from(),
@@ -508,6 +508,41 @@ final readonly class EmailAlertSource implements Source
     }
 
     /** First capture of a configured regex, or `null` when the key is unset or matches nothing. */
+    /**
+     * The title of ONE card — and the subject line is a title only where no pattern claims to read one.
+     *
+     * **A configured `title_pattern` that misses yields `''`, never the subject**, and the asymmetry
+     * is the whole point. Falling back to the subject was this repo's named *failure with an alibi*:
+     * on 2026-08-26 SeLoger's vocabulary-based pattern was measured missing **27 of 72 live cards**,
+     * and every one of them stored `4 nouvelles annonces : Ile-de-France` as a flat's title. Nothing
+     * about that reads as a fault. It is a plausible French sentence sitting in a plausible field,
+     * and it survived a fixture suite, a live acceptance run and a review round.
+     *
+     * What it costs is precise: {@see \RentWatch\Config\Criteria::excludeTitlePatterns} is matched
+     * against the TITLE ONLY — deliberately, because `3 chambres` in a *description* is the family
+     * flat the criteria are looking for — so a card wearing the subject line as its title cannot be
+     * rejected by `^\s*chambre\b` or by the parking/box/garage/cave/bureau family, whatever it
+     * actually advertises. That is the exclusion added *because* four of this source's first nine
+     * matches were coliving ROOMS passing every numeric filter.
+     *
+     * `''` restores nothing on its own — an empty title matches no pattern either. What it buys is
+     * that the failure is VISIBLE: in the push, in `scout dump`, in the stored v7 snapshot, an
+     * unread title looks unread instead of looking like a flat an agency named after the alert.
+     * Hard rule 9's shape, one layer up — an extraction failure is not a value.
+     *
+     * A source that configures NO pattern keeps subject semantics, because there the subject IS the
+     * documented answer rather than a substitute for one: `email_demo` and any portal whose alert
+     * carries a single flat are unchanged, byte for byte.
+     */
+    private function cardTitle(EmailMessage $message, string $segment): string
+    {
+        if ($this->stringParam('title_pattern') === null) {
+            return $message->subject();
+        }
+
+        return $this->matchParam('title_pattern', $segment) ?? '';
+    }
+
     private function matchParam(string $key, string $subject): ?string
     {
         $pattern = $this->stringParam($key);

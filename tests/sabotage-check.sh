@@ -3016,6 +3016,45 @@ run_sabotage "the whole URL is blanked, not just its parameters (a social path s
   src/php/Core/RawListing.php \
   's%, .\$1., \$text)%, "", $text)%'
 
+# A CONFIGURED `title_pattern` THAT MISSES MUST NOT WEAR THE SUBJECT LINE AS AN ALIBI.
+# Measured 2026-08-26: SeLoger's vocabulary-based pattern missed 27 of 72 live cards and every one
+# stored `4 nouvelles annonces : Ile-de-France` as a flat's title. `Criteria::excludedBy()` matches
+# `exclude_title_patterns` against the TITLE ONLY -- deliberately, `3 chambres` in a description is
+# the family flat the criteria want -- so `^\s*chambre\b` and the parking/box/garage family were
+# unreachable on 37.5% of the source, which is the exclusion added BECAUSE four of its first nine
+# matches were coliving rooms passing every numeric filter.
+#
+# This case exists because the obvious sabotage does not detect it: with the positional pattern in
+# place every frozen card extracts, so the fallback branch is never entered and all six fixture
+# suites stay green while the safety is deleted. `EmailAlertSegmentationTest` enters it on purpose.
+run_sabotage "an unread title falls back to the message subject again (a title-only exclusion goes unreachable)" \
+  src/php/Adapters/EmailAlertSource.php \
+  "s%?? ''%?? \$message->subject()%"
+
+# And the half that keeps the asymmetry honest: a source configuring NO pattern must still take the
+# subject, because there it is the documented answer rather than a substitute for one. Blanking both
+# would silently strip the title from every single-flat alert.
+run_sabotage "a source with no title_pattern loses its subject title" \
+  src/php/Adapters/EmailAlertSource.php \
+  's%return \$message->subject();%return "";%'
+
+# A TITLE IS A POSITION, NEVER A VOCABULARY. The replacement anchors on the layout SeLoger emits --
+# rent line, agency free text, `<n> pièces . <s> m²` -- rather than on a guess at what an agency
+# types. `APARTMENT` is English and `T5` is two characters; neither starts with a French dwelling
+# noun, and the old list read all four cards of the 003 fixture as the alert's subject.
+# The POSITIONAL ANCHOR is what makes the pattern structural: the title is the line above
+# `<n> pièces . <s> m²`. Break the anchor and nothing matches, so every card falls back — which is
+# the state the source shipped in for a month.
+run_sabotage "the seloger title loses its positional anchor (every card falls back again)" \
+  config/sources.json \
+  's%pi\[eè\]ces?\\\\b~mu%piZZZces?\\\\b~mu%'
+
+# And the capture floor is 2 characters, not 3, because `T5` and `T3` are real SeLoger titles. A
+# floor of 3 looks harmless and silently drops exactly the shortest titles the portal emits.
+run_sabotage "the seloger title capture floor rises to 3 (T5 and T3 stop being titles)" \
+  config/sources.json \
+  's%{2,80}%{3,80}%'
+
 # THE TALLY LIVES HERE, BELOW EVERY CASE, and that position is load-bearing rather than tidy.
 # It sat mid-file twice: once on 2026-08-20 (295 printed for 303 cases) and again from 2026-08-23,
 # when 21 schema-v7 / digest / reclassify cases were appended past it and the headline read 354 for

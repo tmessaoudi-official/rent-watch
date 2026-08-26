@@ -23,6 +23,7 @@
   "exclude_patterns": [
     "\\bcolocation\\b",
     "\\bcoloc\\b",
+    "\\bcoliving\\b",
     "\\b(?:location|louer|loue|appartement|logement|studio|bien|t[1-9])\\s+meuble",
     "\\bmeuble\\s+de\\s+tourisme\\b",
     "\\bbail\\s+mobilite\\b",

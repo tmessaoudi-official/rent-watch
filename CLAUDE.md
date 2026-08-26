@@ -491,6 +491,58 @@ writing can ever remove it. A first version of the fixture test asserted the wor
 from a card — unachievable, and wrong in kind: the guarantee is the classifier's verdict, not the
 absence of a common French adverb.
 
+### A title is a position, never a vocabulary (2026-08-26)
+
+**`exclude_title_patterns` was unreachable on 37.5% of SeLoger's cards for a month, and every
+document here said the opposite.** `title_pattern` required the line to begin with
+`Appartement|Maison|Studio|Duplex|Loft|Chambre` — a guess at what an ESTATE AGENT types — and on
+**27 of 72 live cards** it missed, at which point the title silently became the message SUBJECT.
+The stored title of a real flat in Moret-Loing-et-Orvanne read `2 nouvelles annonces : Ile-de-France`.
+
+Nothing about that reads as a fault: it is a plausible French sentence in a plausible field, and it
+survived a fixture suite, a live acceptance run and a review round. **It was found by querying the
+production database, not by any test** — `SELECT title, COUNT(*) FROM listings GROUP BY title` on
+`state/rent-watch.sqlite3`, which is worth running after any source goes live.
+
+What it cost is precise, and narrower than the first draft of this entry claimed.
+`Criteria::excludedBy()` has two lists: `exclude_patterns` matches title **and description**, and
+`exclude_title_patterns` matches the TITLE ONLY — deliberately, because `3 chambres` in a
+description is the family flat the criteria are looking for. So `colocation`, `coloc` and the
+meublé family kept firing through the description all along; what went unreachable is
+**`^\s*chambre\b` and the parking/box/garage/cave/cellier/bureau/terrain family**, which have no
+second surface. `^\s*chambre\b` is the exclusion added *because* four of this source's first nine
+matches were coliving ROOMS passing every numeric filter.
+
+> **A first version of the test asserted the Saint-Denis COLOCATION was now rejected, and it passed
+> before the fix as well as after.** `\bcolocation\b` was catching it via the description the whole
+> time. A true observation attached to the wrong mechanism — this repo's named failure, arriving
+> while writing the fix for an instance of it. The test that replaced it holds the description
+> constant and varies only the title.
+
+Three things carry forward:
+
+- **The replacement is STRUCTURAL**, and it is the correction `commune_pattern` already took on this
+  same source: anchor on the layout the portal emits, not on the words someone chose. SeLoger writes
+  `<rent> €/mois`, then the agency's free text, then `<n> pièces . <s> m²`; the title is the line
+  above the `pièces` line. Measured over the same 72 cards: **27 rescued, 45 identical, 0 lost, 0
+  fallbacks left.** The capture floor is **2 characters**, not 3, because `T5` and `T3` are real
+  titles; `APARTMENT` is real too, and no French vocabulary list would ever have held it.
+- **A configured pattern that misses now yields `''`, never the subject** — and a source configuring
+  NO pattern keeps subject semantics, because there the subject IS the answer rather than a
+  substitute for one. `''` restores no filtering on its own; what it buys is that the failure is
+  VISIBLE instead of wearing an alibi. Hard rule 9 one layer up: an extraction failure is not a value.
+- **THE OBVIOUS SABOTAGE DOES NOT DETECT THAT.** With the positional pattern in place every frozen
+  card extracts, so the fallback branch is never entered and all six fixture suites stay green while
+  the safety is deleted. `EmailAlertSegmentationTest` enters it on purpose with a pattern that cannot
+  match. Both halves are in `tests/sabotage-check.sh`. **A guarantee whose branch no fixture reaches
+  is dead safety code until something reaches it.**
+
+`\bcoliving\b` joined `exclude_patterns` here (a live card read
+`Menilmontant 287 -Premium Coliving House Paris 20`). The meublé patterns were deliberately NOT
+widened — `MEUBLE - RUE WAGRAM` and `Beau 3P MEUBLÉ 59m²` both escape
+`\b(?:location|louer|loue|appartement|logement|studio|bien|t[1-9])\s+meuble`, and widening it needs
+the negation shapes checked first (`non meublé`), which is the lift-negation lesson.
+
 ### Bien'ici — source #6, and it disagrees with SeLoger on almost every decision (2026-08-25)
 
 Three real alerts landed within ninety minutes of the subscription being created, and the source was
@@ -616,7 +668,9 @@ Two defects were found by pointing it at the real mailbox, and neither was finda
 **Four of the first nine matches were COLIVING ROOMS** — a bedroom advertised with the whole flat's
 room count and surface, so every numeric filter passed. Excluded by an ANCHORED title pattern
 (`^\s*chambre\b`), never by a description match: `3 chambres` in a description is exactly the family
-flat the criteria are looking for. And **every listing came back with `commune = null`** while its
+flat the criteria are looking for. **That exclusion was then INERT on 37.5% of the source for a
+month, and this file said it worked** — see § "A title is a position, never a vocabulary" above.
+And **every listing came back with `commune = null`** while its
 postcode parsed correctly: `communeIn()` scanned only `Criteria::communeLabels`, which in region mode
 is built from the RANKED communes, so a watch covering all of Île-de-France knew the names of a
 handful of towns and no others. Nothing about that looks like a fault from outside — the listing
@@ -1353,7 +1407,9 @@ tests/php/                  PHPUnit suites
 tests/fixtures/tenure/      corpus.json — the language-neutral classifier corpus
 tests/fixtures/<source>/    Frozen payloads, one dir per source
 tests/fixtures/seloger/     The first REAL portal alerts, scrubbed. Their AWKWARD structure is
-                            the point — preamble, `=_?:` boundary, 2047 subject split mid-word
+                            the point — preamble, `=_?:` boundary, 2047 subject split mid-word.
+                            The 003 capture is the TITLE one: four cards, not one of which the
+                            old vocabulary pattern could read (`APARTMENT`, `T5`, `T3`)
 tests/fixtures/bienici/     The second portal's alerts. A five-card alert, a one-card alert whose
                             suggestion card makes it two, and a message with NO cards at all
 tests/fixtures/leboncoin/   The third portal's, and the first HTML-ONLY alert: no text/plain

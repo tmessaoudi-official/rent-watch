@@ -10,6 +10,7 @@ use RentWatch\Adapters\EmailAlertSource;
 use RentWatch\Adapters\Mail\FileMailbox;
 use RentWatch\Config\ConfigLoader;
 use RentWatch\Core\Outcome;
+use RentWatch\Core\RawListing;
 use RentWatch\Core\Tenure;
 use RentWatch\Core\TenureClassifier;
 use RentWatch\Store\Store;
@@ -69,16 +70,16 @@ final class SelogerFixtureTest extends TestCase
     }
 
     /**
-     * Two messages, two cards, two listings — and NOT one listing per link.
+     * Three messages, six cards, six listings — and NOT one listing per link.
      *
-     * The two fixtures carry 16 and 19 links respectively, every one of them a
+     * The first two fixtures carry 16 and 19 links respectively, every one of them a
      * `click.by.seloger.com` redirect. Under link-identity that is 35 listings sharing a single id
      * and a single flat's facts. This assertion is the one that would go red if `card_separator`
      * were dropped from the config.
      */
-    public function testEachMessageYieldsExactlyOneListing(): void
+    public function testEachMessageYieldsOneListingPerCardAndNotPerLink(): void
     {
-        self::assertCount(2, $this->listings(), 'two alerts, two flats');
+        self::assertCount(6, $this->listings(), 'three alerts, six flats');
     }
 
     /**
@@ -169,16 +170,16 @@ final class SelogerFixtureTest extends TestCase
     }
 
     /**
-     * The two flats do not share an identity, which is the whole reason `id_from: content` exists.
+     * No two flats share an identity, which is the whole reason `id_from: content` exists.
      *
-     * Under the link-identity path both would be `https://click.by.seloger.com/` — the second flat
+     * Under the link-identity path all six would be `https://click.by.seloger.com/` — five flats
      * silently swallowed as already seen, for ever.
      */
-    public function testTheTwoFlatsHaveDistinctIdentities(): void
+    public function testEveryFlatHasADistinctIdentity(): void
     {
         $ids = array_map(static fn ($l) => $l->externalId, $this->listings());
 
-        self::assertCount(2, array_unique($ids));
+        self::assertCount(6, array_unique($ids));
         foreach ($ids as $id) {
             self::assertMatchesRegularExpression('~^[0-9a-f]{40}$~', $id, 'content-addressed, not a URL');
         }
@@ -320,4 +321,136 @@ final class SelogerFixtureTest extends TestCase
         self::assertStringContainsString('boundary="8PaVqvzMwU9R=_?:"', $alert, 'the awkward boundary');
         self::assertStringContainsString("exclusivit?=\r\n =?UTF-8?Q?", $exclusive, 'the mid-word 2047 split');
     }
+
+    /**
+     * A TITLE IS A POSITION, NEVER A VOCABULARY — and reading it as a vocabulary was silent.
+     *
+     * `title_pattern` used to require the line to begin with `Appartement|Maison|Studio|Duplex|
+     * Loft|Chambre`, which is a guess at what an ESTATE AGENT types. Measured against 72 live cards
+     * on 2026-08-26 it missed **27 of them (37.5%)**, and every miss fell back to
+     * {@see \RentWatch\Adapters\Mail\EmailMessage::subject()} — so the stored title of a real flat
+     * read `4 nouvelles annonces : Ile-de-France`.
+     *
+     * That is not a cosmetic defect. `Criteria::excludeTitlePatterns` is matched against the TITLE
+     * ONLY, deliberately (`config/criteria.json` records why: `3 chambres` in a description is the
+     * family flat the criteria are looking for). A subject line matches none of those patterns and
+     * never can, so on 37.5% of this source's cards **every title-only exclusion was inert** —
+     * `chambre`, `colocation`, `meublé`, `parking`, `box`, `garage`, `cave`, `bureau`. Card 1 below
+     * is what that cost: a COLOCATION notified as a 6-room 105 m² family flat.
+     *
+     * The replacement is structural, and it is the same correction `commune_pattern` already took:
+     * anchor on the layout the portal emits rather than on the words someone chose. SeLoger writes
+     * `<rent> €/mois`, then the agency's own free-text title, then `<n> pièces . <s> m²`; the title
+     * is the line above the `pièces` line. Ground truth below is hand-read off the rendered message.
+     */
+    public function testATitleIsReadFromItsPositionAndNotFromAVocabulary(): void
+    {
+        $byPostcode = $this->listings();
+
+        // Not one of these four starts with a French dwelling noun. `APARTMENT` is English, `T5`
+        // and `T3` are two characters — which is why the capture floor is 2 and not 3 — and card 1
+        // begins with the very word that must exclude it.
+        $expected = [
+            '93380' => 'Colocation Saint-Denis - Remis à Neuf - Proche Mét...',
+            '77000' => 'T5',
+            '95220' => 'APARTMENT',
+            '95100' => 'T3',
+        ];
+
+        foreach ($expected as $postcode => $title) {
+            self::assertArrayHasKey($postcode, $byPostcode, (string) $postcode);
+            self::assertSame(
+                $title,
+                $byPostcode[$postcode]->title,
+                $postcode . ': the card\'s own title, not the alert\'s subject line',
+            );
+        }
+    }
+
+    /**
+     * The subject line never becomes a listing's title, on any card.
+     *
+     * The pattern above fixes the 27 cards that were measured; THIS is what stops the class of
+     * defect returning the next time SeLoger reshapes a template. A configured `title_pattern` that
+     * misses now yields an EMPTY title rather than the subject — an extraction failure that looks
+     * like an extraction failure, instead of one wearing a plausible French sentence as an alibi.
+     *
+     * An empty title excludes nothing either, so this buys no filtering on its own. What it buys is
+     * that the failure is VISIBLE — in the notification, in `scout dump`, in the stored snapshot —
+     * rather than indistinguishable from a flat an agency happened to name after the alert.
+     */
+    public function testAnUnreadableTitleIsNeverTheSubjectLine(): void
+    {
+        foreach ($this->listings() as $postcode => $listing) {
+            self::assertStringNotContainsString('nouvelle', $listing->title, (string) $postcode);
+            self::assertStringNotContainsString('Ile-de-France', $listing->title, (string) $postcode);
+        }
+    }
+
+    /**
+     * THE TITLE-ONLY RULE SEES THE CARD'S TITLE — and the same card's subject line defeats it.
+     *
+     * A first version of this test asserted the Saint-Denis COLOCATION was rejected, and it passed
+     * before the fix as well as after: `\bcolocation\b` lives in `exclude_patterns`, which is
+     * matched against title AND description, and the description is the whole card. The test proved
+     * nothing and its premise was wrong — recorded here rather than quietly corrected, because
+     * *a true observation attached to the wrong mechanism* is this repo's named failure and it
+     * arrived while writing the fix for an instance of it.
+     *
+     * What the subject fallback actually disabled is {@see \RentWatch\Config\Criteria} 's
+     * TITLE-ONLY set: `^\s*chambre\b` and the parking/box/garage/cave/bureau family. Those are
+     * title-scoped deliberately — `3 chambres` in a description is the family flat the criteria are
+     * looking for — so they have no second surface to fall back on, and a card wearing
+     * `4 nouvelles annonces : Ile-de-France` is unreachable by every one of them.
+     *
+     * This asserts that difference directly, on a REAL card: same description, two titles, two
+     * verdicts. It is the sabotage shape for the whole change — revert the pattern and the left-hand
+     * column becomes the right-hand one.
+     */
+    public function testATitleOnlyExclusionIsReachableOnlyWhenTheTitleIsTheCardsOwn(): void
+    {
+        $criteria = ConfigLoader::loadCriteria(self::ROOT . '/config/criteria.json');
+        $card = $this->listings()['95220'];
+
+        // The card's own description is held constant; only the title varies. `Chambre en
+        // colocation` is not invented — it is verbatim what a live SeLoger card carried on
+        // 2026-08-26, and the shape the `^\s*chambre\b` exclusion was added for.
+        $withCardTitle = new RawListing(
+            sourceName: $card->sourceName,
+            externalId: $card->externalId,
+            title: 'Chambre en colocation maison meublée',
+            description: $card->description,
+            commune: $card->commune,
+            postcode: $card->postcode,
+            rentCc: $card->rentCc,
+            surfaceM2: $card->surfaceM2,
+            rooms: $card->rooms,
+        );
+
+        $withSubject = new RawListing(
+            sourceName: $card->sourceName,
+            externalId: $card->externalId,
+            title: '4 nouvelles annonces : Ile-de-France',
+            description: $card->description,
+            commune: $card->commune,
+            postcode: $card->postcode,
+            rentCc: $card->rentCc,
+            surfaceM2: $card->surfaceM2,
+            rooms: $card->rooms,
+        );
+
+        self::assertSame(
+            '^\s*chambre\b',
+            $criteria->excludedBy($withCardTitle->title, $withCardTitle->description),
+            'the card\'s own title reaches the title-only rule',
+        );
+
+        self::assertNotSame(
+            '^\s*chambre\b',
+            $criteria->excludedBy($withSubject->title, $withSubject->description),
+            'and the subject line does not — which is what the fallback was costing on 27 of 72 '
+                . 'live cards measured 2026-08-26',
+        );
+    }
+
 }
