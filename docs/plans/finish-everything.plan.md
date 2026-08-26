@@ -493,3 +493,73 @@ reintroducing the same class of defect they fixed. **That is evidence about the 
 about the code:** the defects are getting narrower (round 4 found two §1 breaches, round 5 found one
 plus five stale claims), but a rule that demands two consecutive clean rounds may not terminate
 while every round is reviewing fresh work.
+
+---
+
+## Session of 2026-08-26 (evening): the four standing decisions, answered
+
+The developer's instruction was *"if you have input you need from me ask them one by one and one
+at a time! if not then continue to finish everything"*. Four decisions had been standing since the
+private portals went live; all four were asked one at a time and answered, each after being
+grounded in a measurement rather than in prose.
+
+### Decisions Log
+
+- [2026-08-26 20:00] AGREED (developer): **the §1 residual on the four private portals STANDS —
+  `mixed_tenure` stays `false` on `seloger`, `bienici`, `leboncoin` and `pap`.** Grounded in the
+  store before asking: every listing those four have ever pushed classifies `LIBRE` — 73 + 42 + 4 +
+  1 = **120 of 120** — and `LIBRE` there does not mean *the ad said private market*, it means **no
+  tenure signal was found and the source default was applied**. So arming the flag would send 100%
+  of all four portals to the digest, which is the In'li lesson of 2026-08-23: *not §1 satisfied, it
+  is the tool switched off*. What holds unchanged: an explicit `PLS`/`PLUS`/`PLAI`/`conventionné`
+  on any card is still rejected at 0.90 by the tier-2 label rules, which never consult
+  `mixed_tenure` — proven live by In'li's one `PLS` listing sitting in DIGEST rather than in a push.
+  **Stated cost, and it is the whole residual:** a genuinely-PLS flat advertised on a commercial
+  portal *without naming its financing* is pushed as a match. Narrow because PLS ads normally
+  disclose their income ceilings. **Reversed by one line per source.**
+- [2026-08-26 20:00] AGREED (developer): **`high_priority_score` 70 → 50.** This is the FIRST
+  calibration this threshold has ever had — 70 predates commute and was not derived from anything.
+- [2026-08-26 20:00] AGREED (developer): **the match path stays UNCAPPED.** Re-confirms the
+  2026-08-24 written decision rather than reversing it, now against measured volume: 94 / 23 / 71 /
+  104 pushes on 22, 24, 25 and 26 August. The 24th is the only day no new source went live, so
+  **23/day is the quiet-day figure** and the high days are one-time backlog — three portals live in
+  48 h, plus the `IMAP_MAX_MESSAGES` raise reaching five days of unread alerts. Steady state with
+  all eight sources is expected 40–60/day. Left uncapped because a match is sent and marked PER
+  LISTING, so nothing compounds the way an all-or-nothing digest does.
+- [2026-08-26 20:00] AGREED (developer): **a VPS deploy kit is written and verified here, and
+  nothing is deployed.** The watcher runs on the developer's own machine, so it stops when that box
+  sleeps; the heartbeat already makes that loud rather than silent, so this is convenience, not a
+  §1 or hard-rule-2 gap. Deploying needs a host, which is an input.
+
+### The measurement that changed the second decision, and refuted two documented claims
+
+`CLAUDE.md` said *"scores run 16–48, so `high_priority_score: 70` can never fire and the `!!` marker
+is currently dead. Left alone on purpose"*. Re-judging all 256 stored v7 snapshots through the real
+`CriteriaEngine`, with commute enabled from `criteria.local.json`, refutes **both halves**:
+
+- Scores now run **0 – 70** (median 28, p90 40). Commute lifted the ceiling from 48; one listing
+  actually reaches 70. The 16–48 figure is pre-commute and stale.
+- **And `!!` still cannot fire — for a reason nobody had written down.** It needs score ≥ threshold
+  **AND** `confidenceBp >= HIGH_PRIORITY_MIN_CONFIDENCE_BP` (80), and those two conditions are
+  satisfied by **disjoint sets of listings**. The top scorers are all `conf 50` — private portals,
+  whose tenure comes from the source default — while the listings that clear the confidence floor
+  (CDC Habitat at `conf 99`) top out at **55**:
+
+  ```
+   70  conf 50  bienici       68  conf 50  bienici       66  conf 50  seloger
+   56  conf 50  inli          55  conf 99  cdc_habitat   52  conf 99  cdc_habitat
+  ```
+
+  Confident listings: **47 of 256, running 13–55.** So at any threshold ≥ 60 the marker is
+  unreachable **by construction**, not by luck. That is the finding that made 50 the answer rather
+  than 55 or 60: at 50 it marks **3 of 47** confident listings (~6%), at 55 exactly one, at 60 zero.
+
+**The confidence floor is deliberately NOT touched.** It is what stops a *"drop everything"* marker
+appearing on a listing whose tenure is a guess — lowering the score threshold while leaving it in
+place tightens the marker's meaning rather than loosening it.
+
+> **A method note worth keeping.** The score is not a stored column, so the distribution was
+> recovered by decoding every `evidence_json` v7 snapshot and re-judging it offline — no network, no
+> live poll, and against the same evidence the original verdict was formed from. That is the cheap
+> way to answer *"what would this criteria change do?"* without the `--seed` throwaway-database
+> poll, and it exists only because schema v7 persists the snapshot.
