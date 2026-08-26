@@ -582,6 +582,61 @@ final class ScoutReclassifyTest extends TestCase
         return $root;
     }
 
+    /**
+     * A dedup MEMBER keeps its `NULL` outcome — reclassify may re-verdict it, never re-judge it.
+     *
+     * **This guarantee had no test at all, and the nightly ledger said so for three consecutive
+     * nights** (issues #3, #4 and #5; `an unjudged dedup member is given a manufactured outcome`
+     * stayed undetected while 476 other cases were caught). It predates the work that was running
+     * beside it — commit `f6dfa43`, 2026-08-25 — so this is a pre-existing hole, and the ledger is
+     * the only thing that ever noticed.
+     *
+     * Every member of a dedup cluster is CLASSIFIED; only the survivor is JUDGED by the criteria
+     * engine. `outcome = NULL` is precisely what distinguishes *never judged* from *judged and
+     * rejected*, and nothing else in the schema carries that difference. Manufacturing an outcome
+     * here destroys it permanently — and the row then reads as a survivor to every later pass, so a
+     * MEMBER becomes eligible for promotion to `MATCH` and a push. That is the same class of defect
+     * as widening `pendingDigest()` to reach pre-v7 rows, which §1 refused for the same reason:
+     * nothing stored distinguishes the two states afterwards.
+     */
+    public function testAnUnjudgedDedupMemberIsNeverGivenAnOutcome(): void
+    {
+        $root = $this->tempRoot();
+
+        $member = $this->seed($root, new RawListing(
+            sourceName: 'cdc_habitat',
+            externalId: 'MEMBRE-1',
+            title: 'Appartement T4',
+            description: 'Aucun régime annoncé',
+            commune: 'Sartrouville',
+            postcode: '78500',
+            rentCc: 1450,
+            surfaceM2: 82.0,
+            rooms: 4,
+        ), 'UNKNOWN', null);
+
+        self::assertNull($this->outcomeOf($root, $member), 'precondition: the member is unjudged');
+
+        $r = $this->scout($root, ['reclassify']);
+
+        self::assertSame(0, $r['code'], $r['err']);
+        self::assertNull(
+            $this->outcomeOf($root, $member),
+            'a member the criteria engine never judged must keep NULL — an outcome here cannot be '
+            . 'told apart from a real REJECT afterwards, and the row then reads as a survivor',
+        );
+    }
+
+    /** The stored outcome, or `null` when the row was never judged. */
+    private function outcomeOf(string $root, string $key): ?string
+    {
+        $stmt = $this->pdo($root)->prepare('SELECT outcome FROM listings WHERE dedup_key = :key');
+        $stmt->execute(['key' => $key]);
+        $value = $stmt->fetchColumn();
+
+        return is_string($value) ? $value : null;
+    }
+
     private function seed(string $root, RawListing $listing, string $tenure, ?string $outcome): string
     {
         $store = Store::open($root . '/state/rent-watch.sqlite3');
