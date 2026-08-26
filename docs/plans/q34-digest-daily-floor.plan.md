@@ -104,3 +104,25 @@ This plan closes that half only. It does not touch the two built paths.
 
 Each item is its own commit; `git revert` is sufficient. Nothing migrates and nothing is written to
 the store that was not written before — `markNotified` is the pre-existing call.
+
+## Deployed 2026-08-26 05:44 UTC
+
+One rebuild served both this and tier 4. Verified the way `CLAUDE.md`'s top gotcha prescribes —
+a green tree says nothing about what the watcher is running:
+
+```
+built image: sha256:9cfe6d96ddb3208117c92fa9efd468b507506221f9de3f445ff502529c4e26ff
+container:   sha256:9cfe6d96ddb3208117c92fa9efd468b507506221f9de3f445ff502529c4e26ff
+```
+
+The deployed banner reads *"plancher quotidien du récapitulatif « à vérifier » à 8h Europe/Paris
+(Q34) — silencieux si rien n'est en attente"*, which also confirms the zone resolved to Paris rather
+than to UTC in the real container.
+
+**`state/digest.txt` does not exist after the deploy, and that is CORRECT.** The startup check ran,
+found nothing pending, and returned without writing a marker — the ruled empty-day behaviour, and
+the reason the window stays open. Verified against the database rather than inferred: 12 rows carry
+`outcome = DIGEST` and all 12 already have `notified_at`, so the undelivered count is 0.
+
+**The cheap production check for the first real firing** is `ls state/digest.txt` after 08:00 Paris.
+Its absence before then is not a fault.

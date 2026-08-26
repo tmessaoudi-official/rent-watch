@@ -86,3 +86,19 @@ caught at 0.90 and never tier 4's business.
 **Do not read the zero as "it works".** It says the tier is inert against today's payloads, which is
 also what a broken extractor would say. What proves the mechanism is the eight sabotage cases and the
 five corpus cases; what proves it is harmless is the 2 023-test suite and the unchanged corpus.
+
+## Deployed 2026-08-26 05:44 UTC
+
+Same rebuild as the Q34 floor. Verified inside the DEPLOYED image rather than the working tree:
+
+```
+bands loaded: yes  IdF threshold: 36144 EUR
+classifier armed: yes
+```
+
+**The full sabotage ledger was NOT run locally.** This item touches
+`src/php/Core/TenureClassifier.php` and the corpus, both on `CLAUDE.md`'s mandatory trigger list, and
+a local ledger run is ~5 h on this debug build. `gh` is not installed here, so the on-demand
+`workflow_dispatch` route was unavailable; the judge is therefore the **03:00 UTC nightly**. What was
+run: the 8 new cases individually (all detected), `test-sabotage-applies.sh` over all 481 expressions,
+and the full 2 023-test suite.
