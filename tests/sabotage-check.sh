@@ -2983,6 +2983,39 @@ run_sabotage "the classifier ships with tier 4 disarmed again" \
   src/php/Core/TenureClassifier.php \
   's%$bands ?? PlafondBands::ileDeFrance2026()%$bands ?? new PlafondBands()%'
 
+# ── leboncoin: HTML-only alert mail (2026-08-26) ──────────────────────────────
+# The failure this guards is hard rule 2's exact shape reached without a catch: leboncoin sends no
+# text/plain alternative, so before the harvest the parser produced a perfect body carrying all
+# three listings and ZERO links -- a source that yields no listings and reports a quiet market for
+# ever, while `doctor` says `ok`.
+
+run_sabotage "an HTML-only alert loses its links again (a source that reports a quiet market for ever)" \
+  src/php/Adapters/Mail/EmailMessage.php \
+  's%strip_tags(self::harvestHrefs($spaced))%strip_tags($spaced)%'
+
+# RETIRED 2026-08-26: "the harvested URL is emitted before its anchor text".
+# The rule is real -- the URL is emitted AFTER the anchor text so reading order matches the rendered
+# one -- but the leboncoin payload CANNOT DISTINGUISH the two orders, measured: each card's own URL
+# appears twice (image anchor and CTA anchor), so the last qualifying link in a segment is the same
+# either way, and the mutation left the suite green. A sabotage case whose guarantee no test can
+# separate reports coverage it does not have, which is precisely what this ledger exists to catch,
+# so it is retired rather than left green. The ordering therefore stands as a REASONED default, not
+# a measured one; a portal whose card links only once would distinguish them, and that payload is
+# the case to write when it arrives.
+
+# Tracking parameters are machine furniture, and harvesting URLs into the body fed them to the
+# tenure scan. A campaign string carrying `lli` and `plai` conflicts a correct verdict into the
+# digest -- the CDC-tooltip class on a surface no listing copy controls.
+run_sabotage "URL tracking parameters are classified as prose again (a campaign string vetoes a flat)" \
+  src/php/Core/RawListing.php \
+  's%\[?#\]\[^%[?#]ZZZ[^%'
+
+# And the §1 half of that rule: the PATH is kept on purpose, because `/logement-social/` is real
+# evidence and losing a social signal is the dangerous direction.
+run_sabotage "the whole URL is blanked, not just its parameters (a social path signal is lost)" \
+  src/php/Core/RawListing.php \
+  's%, .\$1., \$text)%, "", $text)%'
+
 # THE TALLY LIVES HERE, BELOW EVERY CASE, and that position is load-bearing rather than tidy.
 # It sat mid-file twice: once on 2026-08-20 (295 printed for 303 cases) and again from 2026-08-23,
 # when 21 schema-v7 / digest / reclassify cases were appended past it and the headline read 354 for

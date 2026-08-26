@@ -250,4 +250,77 @@ final class EmailMessageTest extends TestCase
             . $html . "\n"
             . "--BOUND--\n";
     }
+
+    // ── HTML-only mail, where the links live in attributes ───────────────────────────────────────
+
+    /**
+     * An HTML-only alert must still yield its links, and they must land IN THE BODY TEXT.
+     *
+     * leboncoin is the first portal to send HTML with no `text/plain` alternative. Measured on the
+     * first real capture, 2026-08-26: the parser produced a perfectly good 15 975-character body
+     * carrying all three listings, and **zero links** — because `stripHtml()` removes tags, and
+     * every URL lived in an `href` attribute that went with them. A source with no links yields no
+     * listings and reports a quiet market for ever, which is hard rule 2's exact shape.
+     *
+     * **The side `$links` array alone would not be enough**, and that is the constraint that decides
+     * the design. `EmailAlertSource::cardListing()` finds a card's link by scanning THAT SEGMENT's
+     * text (`linksIn($segment)`), so a URL that exists only in a message-level array can never be
+     * associated with the card it belongs to. The URL has to sit next to its own anchor text.
+     */
+    public function testAnHtmlOnlyMessageKeepsItsLinksInTheBodyText(): void
+    {
+        $raw = "From: alerts@portal.test\r\n"
+            . "Subject: 2 nouveaux biens\r\n"
+            . "Content-Type: text/html; charset=UTF-8\r\n"
+            . "\r\n"
+            . '<p>Bonjour,</p>'
+            . '<a href="https://portal.test/vi/111.htm">1 042 &euro; Appartement 3 pieces 48 m2</a>'
+            . '<a href="https://portal.test/vi/222.htm">980 &euro; Appartement 3 pieces 45 m2</a>';
+
+        $m = EmailMessage::parse($raw);
+
+        self::assertContains('https://portal.test/vi/111.htm', $m->links);
+        self::assertContains('https://portal.test/vi/222.htm', $m->links);
+
+        // AND in the body, each next to the card it belongs to — which is what makes per-segment
+        // association possible at all.
+        self::assertStringContainsString('https://portal.test/vi/111.htm', $m->body);
+        self::assertLessThan(
+            strpos($m->body, '980'),
+            strpos($m->body, 'https://portal.test/vi/111.htm'),
+            'the first card\'s URL must precede the second card\'s text, or a segmented source '
+            . 'associates every card with the wrong flat',
+        );
+
+        // Entities still decoded, because `Text::fold()` THROWS on an undecoded one and says
+        // decoding is the adapter's job.
+        self::assertStringNotContainsString('&euro;', $m->body);
+        self::assertStringContainsString('€', $m->body);
+    }
+
+    public function testHarvestingHrefsDoesNotDisturbAPlainTextMessage(): void
+    {
+        // The catastrophic direction. Bien'ici's IDENTITY is its links, so a changed link set
+        // re-keys the whole backlog and re-notifies every listing already seen. A message with a
+        // plain alternative must be byte-identical to what it parsed to before the harvest existed.
+        $raw = "From: alerts@portal.test\r\n"
+            . "Subject: x\r\n"
+            . "Content-Type: multipart/alternative; boundary=BB\r\n"
+            . "\r\n"
+            . "preamble\r\n"
+            . "--BB\r\n"
+            . "Content-Type: text/plain; charset=UTF-8\r\n"
+            . "\r\n"
+            . "Photo\r\n1 042 EUR\r\nhttps://portal.test/annonce/111\r\n"
+            . "--BB\r\n"
+            . "Content-Type: text/html; charset=UTF-8\r\n"
+            . "\r\n"
+            . '<a href="https://portal.test/TRACKING/should-not-appear">x</a>'
+            . "\r\n--BB--\r\n";
+
+        $m = EmailMessage::parse($raw);
+
+        self::assertSame(['https://portal.test/annonce/111'], $m->links);
+        self::assertStringNotContainsString('TRACKING', $m->body, 'the HTML part is not the chosen part');
+    }
 }

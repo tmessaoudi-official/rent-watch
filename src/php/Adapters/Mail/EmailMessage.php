@@ -317,7 +317,36 @@ final readonly class EmailMessage
         $spaced = preg_replace('~</(p|div|br|li|tr|h[1-6]|td)\s*>|<br\s*/?>~i', "\n", $html) ?? $html;
         $spaced = preg_replace('~<(script|style)[^>]*>.*?</\1>~is', ' ', $spaced) ?? $spaced;
 
-        return trim(preg_replace('~\n{3,}~', "\n\n", strip_tags($spaced)) ?? '');
+        return trim(preg_replace('~\n{3,}~', "\n\n", strip_tags(self::harvestHrefs($spaced))) ?? '');
+    }
+
+    /**
+     * Move each anchor's URL into the TEXT, immediately after the words it wraps.
+     *
+     * leboncoin is the first portal to send an alert as HTML with no `text/plain` alternative, and
+     * before this the parser produced a perfectly good body carrying all three listings and **zero
+     * links** — every URL lived in an `href`, and `strip_tags()` takes attributes with the tags. A
+     * source that yields no links yields no listings and reports a quiet market for ever, which is
+     * hard rule 2's exact shape reached without a single `catch`.
+     *
+     * **The URL goes into the body rather than only into the side `$links` array, and that is the
+     * whole design.** `EmailAlertSource::cardListing()` finds a card's link by scanning THAT
+     * SEGMENT's text, so a URL known only at message level can never be associated with the card it
+     * belongs to. It is emitted AFTER the anchor text so the reading order matches the rendered
+     * one — a segmented source takes the last qualifying link in a segment, and a URL emitted first
+     * would attach each card to the link of the card above it.
+     *
+     * Only the HTML path calls this. A message with a `text/plain` alternative is unaffected, which
+     * matters more than the feature does: Bien'ici's listing IDENTITY is its links, so a changed
+     * link set would re-key the whole stored backlog and re-notify every flat already seen.
+     */
+    private static function harvestHrefs(string $html): string
+    {
+        return preg_replace_callback(
+            '~<a\b[^>]*\bhref\s*=\s*(["\'])(https?://[^"\']+)\1[^>]*>(.*?)</a>~is',
+            static fn (array $m): string => $m[3] . "\n" . $m[2] . "\n",
+            $html,
+        ) ?? $html;
     }
 
     /** @return list<string> */

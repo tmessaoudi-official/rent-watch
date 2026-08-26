@@ -22,7 +22,7 @@
   ],
   "version": 1,
   "declared_counts": {
-    "synthetic": 120,
+    "synthetic": 122,
     "captured": 8
   },
   "sources": {
@@ -1914,6 +1914,33 @@
         "outcome": "MATCH"
       },
       "why": "WHAT THE ANCHOR UNIQUELY PROTECTS, and it took a sabotage run to find a case that shows it. The obvious example -- `loyer plafonne a 1 250 EUR` -- is guarded twice over and so proves nothing: folded, `plafonne` is not `plafond`, and 1 250 is below the plausibility floor anyway. This one defeats both of those. `Plafond de loyer` is a real intermediate concept quoted as a real ANNUAL figure, so the number is plausible and the word is `plafond` exactly. Only the `de ressources` half of the anchor keeps a RENT ceiling from being read as an INCOME ceiling -- and 15 000 EUR sits below the 36 144 EUR threshold, so a loosened anchor concludes SOCIAL, contradicts this listing's own explicit intermediate label, and digests a flat the tool exists to find."
+    },
+    {
+      "id": "url-001-tracking-parameters-are-not-tenure-labels",
+      "source": "leboncoin",
+      "provenance": "synthetic",
+      "title": "Appartement 3 pièces",
+      "description": "935 €\nAppartement · 3 pièces · 59.9 m²\nCombs-la-Ville 77380\nhttps://www.portal.test/vi/3256893138.htm#at_campaign=fr_lbc_immo_plus_lli_emllbc_part_plai_click-ad",
+      "fields": {},
+      "expect": {
+        "tenure": "LIBRE",
+        "outcome": "MATCH",
+        "max_confidence": 59
+      },
+      "why": "URLS ARE CLASSIFIED TEXT NOW, and this is the fifth instance of one failure class. Since 2026-08-26 EmailMessage::harvestHrefs() moves each anchor's URL INTO the body, because a segmented source associates a link with a card by scanning that segment's text -- so every tracking parameter a portal writes is fed to the tenure scan. This URL carries `plus`, `lli` and `plai` inside one campaign string, which is the CDC tooltip / Cityloger prose / Logirep facet / SeLoger CTA pattern arriving on a new surface: excluded vocabulary appearing as machine furniture on an eligible listing. The guards must hold on it exactly as they do on the others -- and unlike careful listing copy, nobody can rewrite a portal's analytics parameters."
+    },
+    {
+      "id": "url-002-a-path-segment-still-carries-its-signal",
+      "source": "cdc_habitat",
+      "provenance": "synthetic",
+      "title": "Appartement 3 pièces",
+      "description": "Appartement 3 pièces, 62 m².\nhttps://www.portal.test/annonces/plai/3256893138.htm#at_campaign=fr_immo_click-ad",
+      "fields": {},
+      "expect": {
+        "tenure": "PLAI",
+        "outcome": "REJECT"
+      },
+      "why": "THE §1 HALF OF THE URL RULE, and the pair that proves the split is not arbitrary. RawListing::text() strips a URL's QUERY and FRAGMENT but keeps its PATH, and both halves are measured: `plai` as a path SEGMENT classifies PLAI/REJECT, while the same acronym inside `?c=plai_plus` classifies nothing at all. Blanking the whole URL would be simpler and would run the wrong way -- losing a social signal is the dangerous direction, where losing a campaign string costs nothing. Paired with url-001, which is the same rule read from the other side. (A hyphenated `logement-social` matches neither, because the label literal carries a space; that is a separate gap, not this rule's job.)"
     }
   ]
 }

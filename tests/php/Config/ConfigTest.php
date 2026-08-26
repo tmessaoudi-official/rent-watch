@@ -1283,8 +1283,12 @@ final class ConfigTest extends TestCase
         // `bienici` joined the same day, the second portal on that route. Same cost, and it shares
         // seloger's IMAP session budget rather than adding one: each email source scopes its own
         // `SEARCH … FROM`, which is why `params.from` is now refused at load when it is missing.
+        // `leboncoin` joined 2026-08-26, the third portal and the seventh source. Same IMAP cost —
+        // and it is the first HTML-ONLY alert, which needed `EmailMessage::harvestHrefs()` before it
+        // could yield anything at all: every URL lived in an `href` that `strip_tags()` removed, so
+        // the parser produced a full body and ZERO links.
         self::assertSame(
-            ['inli', 'cdc_habitat', 'cityloger', 'seloger', 'bienici', 'logirep'],
+            ['inli', 'cdc_habitat', 'cityloger', 'seloger', 'bienici', 'leboncoin', 'logirep'],
             $enabled,
             'the set of enabled network sources changed',
         );

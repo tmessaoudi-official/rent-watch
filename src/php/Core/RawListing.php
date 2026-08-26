@@ -193,9 +193,35 @@ final readonly class RawListing
         // label sits in whichever surface the landlord chose.
         $cardText = $this->fields['_text'] ?? null;
 
-        return trim(
+        return self::withoutUrlParameters(trim(
             $this->title . "\n" . $this->description
             . (is_string($cardText) && $cardText !== '' ? "\n" . $cardText : ''),
-        );
+        ));
+    }
+
+    /**
+     * A URL's QUERY and FRAGMENT removed; its scheme, host and path kept.
+     *
+     * **Fifth instance of one failure class, on a surface that did not exist before 2026-08-26.**
+     * `EmailMessage::harvestHrefs()` now moves each anchor's URL into the body — it has to, because
+     * a segmented source associates a link with a card by scanning that segment's text — so every
+     * tracking parameter a portal writes is fed to the tenure scan. Measured on a synthetic campaign
+     * string carrying `plus`, `lli` and `plai`: two explicit label signals fired and conflicted the
+     * verdict to `UNKNOWN`, digesting an eligible flat. leboncoin's real campaign string happens to
+     * contain none of them, which is luck rather than a guard — and unlike the CDC tooltip, the
+     * Cityloger prose or the SeLoger CTA, nobody can rewrite a portal's analytics parameters.
+     *
+     * **The path is KEPT, and that asymmetry is §1.** Blanking the whole URL would be simpler and
+     * would run the wrong way: a path segment like `/logement-social/` is real evidence, and losing
+     * a social signal is the dangerous direction, where losing a campaign string costs nothing. A
+     * query or fragment is machine parameters by construction — the same distinction
+     * {@see \RentWatch\Adapters\EmailAlertSource::stableId()} already draws for identity.
+     *
+     * Applied HERE because this method is the classifier's only prose surface — every tier folds it,
+     * and nothing else in the tree calls it.
+     */
+    private static function withoutUrlParameters(string $text): string
+    {
+        return preg_replace('~(https?://[^\s<>"\']*?)[?#][^\s<>"\']*~i', '$1', $text) ?? $text;
     }
 }

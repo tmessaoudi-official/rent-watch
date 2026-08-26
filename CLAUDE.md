@@ -19,7 +19,7 @@ Status: **milestone 1 is functionally complete against a frozen payload.** The p
 (schema v8), the config layer, the adapter contract, the criteria engine, dedup, the notification
 layer and the `scout` CLI all exist. What is missing is a NETWORK adapter, and that is blocked on an
 input rather than a decision. As of 2026-08-07 there is a PHP 8.5
-implementation of `models` + `tenure` under `src/php/Core/`, a 128-case language-neutral classifier
+implementation of `models` + `tenure` under `src/php/Core/`, a 130-case language-neutral classifier
 corpus at `tests/fixtures/tenure/corpus.json`, the seen-set / price-history / run-log store under
 `src/php/Store/` with `SourceHealth` + `SourceStatus` in `Core/`, a strict JSON config layer under
 `src/php/Config/` with both files committed, the `Source` contract plus `Payload` / `ListingMapper` /
@@ -411,8 +411,8 @@ Two smaller things landed with it, both hard rule 9: `Payload::floor()` reads fl
 they are (`RDC` is **0**, not unknown; and the generic number reader would return the ROOM COUNT from
 `3 pièces - 4ème étage - 82m²`), and `Payload::bool()` accepts the amenity noun `ascenseur`, which
 can only ever yield `true` or `null` and so cannot manufacture the explicit `false` the high-floor
-penalty needs. **`tests/fixtures/tenure/corpus.json` now has CAPTURED cases** (128
-total, 120 synthetic + 8 captured): two CDC cards — including the `au plus près` one, which is what
+penalty needs. **`tests/fixtures/tenure/corpus.json` now has CAPTURED cases** (130
+total, 122 synthetic + 8 captured): two CDC cards — including the `au plus près` one, which is what
 stops that classifier fix from being quietly undone — two Cityloger detail pages, and two Logirep
 captures added 2026-08-22, one an ordinary card that states no tenure at all and one the site's own
 FILTER FACET STRIP, which contains `PLAI` inside `Plain-pied`, `LLI` inside `Ce·lli·er` and `PLUS`
@@ -547,6 +547,63 @@ portal applies the saved search's own criteria before sending and those criteria
 > `tests/php/Repo/FixtureSecretsTest.php` would have refused the committed fixture (it already
 > matches JWTs). It would not have caught the scrubber reporting success, which is the half that
 > matters: a tool nobody doubts is a tool nobody checks.
+
+### leboncoin — source #7, and the first HTML-only alert (2026-08-26)
+
+Its first alert ever fired at 07:33 Paris and the source was live the same morning:
+`scout doctor --source=leboncoin` returns **3 annonces, `ok`, 864 ms**, and a seeded pass matches
+**1 of 3** (Combs-la-Ville, 59,9 m², 935 €; the other two rejected at 48 m² and 45 m² against the
+50 m² floor). Prove a change offline with
+`MAILBOX_DIR=tests/fixtures/leboncoin scout doctor --source=leboncoin`.
+
+**IT NEEDED A PARSER CHANGE, not config alone — and the failure it would otherwise have produced is
+this project's defining one.** leboncoin sends **no `text/plain` alternative**, the first portal to
+do so. `stripHtml()` removes tags, and every URL lived in an `href` that went with them: the parser
+produced a perfect 15 975-character body carrying all three listings and **zero links**. A source
+with no links yields no listings and reports a quiet market for ever, while `doctor` says `ok` —
+hard rule 2's exact shape, reached without a single `catch`. `EmailMessage::harvestHrefs()` moves
+each anchor's URL into the body text.
+
+- **Into the BODY, not just the side `links` array**, and that decides the whole design:
+  `cardListing()` associates a link with a card by scanning **that segment's** text, so a URL known
+  only at message level could never be attached to the card it belongs to. It is emitted *after* the
+  anchor text so reading order matches the rendered one — a reasoned default rather than a measured
+  one, because this payload cannot distinguish the two orders (each card links twice) and the
+  sabotage case that claimed otherwise was **retired** rather than left green.
+- **Only the HTML path.** A message with a plain alternative is untouched, which matters more than
+  the feature: Bien'ici's identity IS its links, so a changed link set would re-key the whole stored
+  backlog and re-notify every flat already seen. Asserted by the existing fixture tests passing
+  unchanged.
+
+**THE SEPARATOR IS THE CTA HERE — the opposite of Bien'ici — and the first attempt failed.**
+`"\nVoir l'annonce\n"` matched nothing, because the CTA sits inside a run of spaces rather than
+alone on its line, and the whole message parsed as ONE card: card 3's URL with card 1's rent,
+commune and surface. One plausible-looking listing, and nothing about it reads as a fault. The
+literal `"Voir l'annonce"` gives every segment exactly one card's data and its own trailing link.
+Every value is asserted against hand-read ground truth, so it cannot drift back.
+
+**Identity is the LINK** — `/vi/3256902167.htm` is a real ad id, and the tracking lives in a
+`#fragment` that `stableId()` drops along with the query. Chosen before the first enabled pass,
+because nothing migrates a stored row between key schemes.
+
+**Rent is `hors charges` by decision, not omission**: the alert mentions charges **nowhere**
+(measured — zero occurrences of `charges`, `CC` or `HC`), so the Logirep precedent applies. The
+figure lands in `rentHc`, `max_rent_cc` never fires on it, and the score line says so. **Stated
+cost: the rent ceiling is not checkable for this source.**
+
+> **URLS ARE CLASSIFIED TEXT NOW, and that is the fifth instance of one failure class.** Harvesting
+> hrefs into the body feeds every tracking parameter to the tenure scan. Measured on a campaign
+> string carrying `plus`, `lli` and `plai`: two explicit label signals fired and conflicted a
+> correct verdict into the digest. leboncoin's real campaign string contains none of them — luck,
+> not a guard, and unlike the CDC tooltip or the SeLoger CTA, nobody can rewrite a portal's
+> analytics parameters. `RawListing::text()` now strips a URL's **query and fragment** and **keeps
+> its path**, and that split is §1: measured, `plai` as a path SEGMENT classifies PLAI/REJECT while
+> the same acronym in `?c=plai_plus` classifies nothing, so blanking the whole URL would lose a
+> social signal to save a campaign string. Both halves are corpus cases (`url-001`, `url-002`).
+
+> **n=1.** One message, three cards. The separator and `commune_pattern` are measured on that single
+> capture, and this repo has twice paid for generalising from one. The second alert to arrive is the
+> first regression test.
 
 **`seloger` IS LIVE as of 2026-08-25 — source #5, and the first that is not a landlord.** The IMAP
 credentials arrived, and `scout doctor --source=seloger` against the real mailbox returns **9
@@ -764,13 +821,25 @@ travelling with it: link identity was *unreachable* on a segmented source, becau
 answered only for `id_from: content`. **A prediction about a payload is not a prediction about the
 code that would read it.**
 
-**Two portals remain, and both are asks rather than builds.** PAP and leboncoin show account
-mail only — PAP has sent two *Création de votre alerte* receipts and one *Suppression*, leboncoin
-only a new-device notice, and no search alert has ever fired from either. So the ask on both is
-*create (or repair) the alert with the current criteria*, not *send a file*. Jinka has sent a
-newsletter and no alert; it is an AGGREGATOR rather than a portal, so it needs its own §1
-evaluation before it is treated as a source — a truncated description can lose a `PLS` label that
-the original listing carried.
+**leboncoin FIRED ITS FIRST ALERT ON 2026-08-26 and is source #7** (§ "leboncoin"). Before that
+morning it had sent only a new-device notice, which is what the paragraph here used to record.
+
+**PAP is the one portal still silent.** Two *Création de votre alerte* receipts and one
+*Suppression*, all on 2026-08-25 at 19:29, and no search alert since — so one alert should survive
+and is producing nothing. The ask is *check the surviving alert carries the current criteria*, not
+*send a file*.
+
+> **This paragraph also said "Jinka has sent a newsletter and no alert", and that was WRONG** — a
+> mailbox census on 2026-08-26 found **two real alerts**, on 12 and 15 August, alongside the
+> newsletter. The claim was written from a partial look and never re-checked, which is the same
+> failure class as the retired *"live yield is 0"* entry: a confident statement about a source's
+> behaviour, formed once and repeated. **Jinka is still not a candidate**, for a reason that
+> survives the correction and is stronger than the old one: its `text/plain` part is **78 bytes
+> total** — *"Bonjour, Sur votre alete Jinka, 1 nouvelles annonces ont été reçues"* — carrying no
+> rent, no surface, no commune and no link, so everything is in the HTML and its links are
+> `sendgrid.net` tracking redirects. It is also an AGGREGATOR rather than a portal, so it needs its
+> own §1 evaluation before it is treated as a source: a truncated description can lose a `PLS` label
+> the original listing carried.
 
 The `plafonds` figures were reassigned the same day — hard rule 1 forbids writing a ceiling *from
 memory*, not verifying one against a live authoritative source — and **they were fetched and
@@ -1193,8 +1262,8 @@ Required coverage, per spec §11 — non-negotiable once `src/` exists:
   Offline. No network in CI. A parser test that reaches the network is a monitoring check, not a test.
 - **Classifier tests.** ≥30 hand-labelled listing texts covering pure-LLI In'li, mixed CDC Habitat,
   an explicit PLAI, an explicit PLS, and an ambiguous case. The suite must go red if the classifier
-  regresses. **Done** — `tests/fixtures/tenure/corpus.json`, 128 cases, and the suite asserts all five
-  shapes are present so "30 easy ones" cannot satisfy it. The corpus is **120 synthetic + 8 CAPTURED**
+  regresses. **Done** — `tests/fixtures/tenure/corpus.json`, 130 cases, and the suite asserts all five
+  shapes are present so "30 easy ones" cannot satisfy it. The corpus is **122 synthetic + 8 CAPTURED**
   (2026-08-20 onward — CDC Habitat cards, Cityloger detail pages, Logirep card + filter facets, and a
   SeLoger alert CTA — the first captured from an EMAIL, and the first whose offending text belongs to
   a portal's template rather than to anyone's listing copy;
@@ -1287,6 +1356,9 @@ tests/fixtures/seloger/     The first REAL portal alerts, scrubbed. Their AWKWAR
                             the point — preamble, `=_?:` boundary, 2047 subject split mid-word
 tests/fixtures/bienici/     The second portal's alerts. A five-card alert, a one-card alert whose
                             suggestion card makes it two, and a message with NO cards at all
+tests/fixtures/leboncoin/   The third portal's, and the first HTML-ONLY alert: no text/plain
+                            part at all, so every URL lives in an href. n=1 — one message, three
+                            cards, the first this subscription ever produced
 tools/scrub-eml.php         Turns a captured .eml into a committable fixture; REFUSES to write
                             while the address is RECOVERABLE — decoding base64url runs and
                             quoted-printable before it looks, not merely grepping for it

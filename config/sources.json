@@ -164,15 +164,24 @@
       }
     },
     "leboncoin": {
-      "_comment": "B2. Where non-agency private landlords actually post. 403s a plain client, so email alert is the only route regardless of preference.",
-      "enabled": false,
+      "_comment": "B2. Where non-agency private landlords actually post. 403s a plain client, so the email alert is the only route regardless of preference. Private market, so LIBRE — in scope since the Q4 answer.",
+      "_verified_at": "2026-08-26",
+      "_source": "ONE real message, frozen at tests/fixtures/leboncoin/alert-3-listings.eml — the first alert this subscription has EVER produced, 26 Aug 07:33 Paris. n=1, and that is stated rather than hidden: the separator and commune_pattern below are measured on a single three-card message, and this repo has twice paid for generalising from one capture. The second alert to arrive is the first regression test. Scrubbed by tools/scrub-eml.php with the USERNAME named as an extra identifier — the tool reported `0 tokens replaced` and wrote `Bonjour tmessaoudi` straight through until that argument existed, because a username is not an address and is not derivable from one.",
+      "_why": "THE FIRST HTML-ONLY PORTAL, and it needed a parser change rather than config alone: leboncoin sends no text/plain alternative, so every URL lived in an href that strip_tags() removed, and the parser produced a perfect 15 975-character body with ZERO links — a source that would have reported a quiet market for ever. EmailMessage::harvestHrefs() now moves each anchor's URL into the body text, AFTER its own anchor text, because cardListing() associates a link with a card by scanning that SEGMENT's text and a message-level array could never do it. IDENTITY IS THE LINK: /vi/3256902167.htm carries a real ad id and stableId() drops both the query and the #fragment the tracking parameters live in, so none of SeLoger's content-addressing is needed — chosen BEFORE the first enabled pass, because nothing migrates a stored row between key schemes. THE SEPARATOR IS THE CTA HERE, which is the opposite of Bien'ici, and it is measured: each card is `<url> <rent> <type · rooms · surface> <features> <quartier> <Commune CP>` then `Voir l'annonce` then the same url again, so splitting on the CTA gives every segment exactly one card's data and its own trailing link; array_reverse takes that last link, and the header and footer segments carry no rent and drop. commune_pattern anchors on the commune BEFORE the postcode on one line (`Combs-la-Ville 77380`) — the inverse of Bien'ici's and different again from SeLoger's parenthesised form. charges_included FALSE because the alert states a bare figure and mentions charges NOWHERE (measured: zero occurrences of `charges`, `CC` or `HC` in the whole message); the Logirep precedent applies, so the value lands in rentHc, max_rent_cc never fires on it, and the score line says the ceiling is unverifiable. STATED COST: the rent ceiling is not checkable for this source. mixed_tenure false carries the same §1 residual as seloger and bienici — an explicit PLS/PLUS/PLAI label anywhere in a card is still caught at 0.90 by the tier-2 label rules, which never consult the flag, but a card stating no tenure takes the LIBRE default. Reversed by one line.",
+      "enabled": true,
       "family": "private",
       "type": "email_alert",
       "default_tenure": "LIBRE",
       "mixed_tenure": false,
+      "params": {
+        "from": "no.reply@leboncoin.fr",
+        "link_host": "leboncoin.fr/vi/",
+        "card_separator": "Voir l'annonce",
+        "commune_pattern": "~^\\h*([^\\n\\d]{2,60}?)\\h+\\d{5}\\h*$~mu"
+      },
       "map": {
-        "ref": "REMPLACER",
-        "charges_included": true
+        "ref": "url",
+        "charges_included": false
       }
     },
     "fixture_demo": {
