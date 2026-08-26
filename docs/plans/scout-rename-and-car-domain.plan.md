@@ -44,6 +44,9 @@ until a separate go. A ruling on what a thing will be called is not a ruling tha
 - [2026-08-26 23:40] AGREED: both private and professional sellers, as a displayed fact and a score component — the analog of `family: institutional | private`.
 - [2026-08-26 23:55] AGREED: the car §1 fail-closed set is confirmed — VEI, VGE/procédure VE, gagé/opposition, pour pièces, sans carte grise, CT non fourni/non roulant — and `accidenté réparé` is EXCLUDED with it. That last one is a risk-appetite ruling rather than a safety fact, and is the first line to relax if the yield disappoints.
 - [2026-08-26 23:55] AGREED: auctions are OUT of scope for now. Stated cost: most of the measured-OPEN hosts are auction sites, while the retail portals are the ones refusing a polling client.
+- [2026-08-27 00:15] AGREED: decision 11 — automatic gearbox is PREFERRED, petrol/hybrid is PREFERRED over diesel, and body type is a RANKED preference `suv > break > berline`. All three are SCORE components, never portal filters and never disqualifiers: the two-layer rule from decision 7, and hard rule 8. The three fields are left UNSET on the portal saved search, so the searches specified for item 3 are unchanged and do not need re-creating.
+- [2026-08-27 00:15] NOTED: the body preference is a RANK, not a set — the exact shape `commune_rank` already has on the rent side. An unranked body (citadine, monospace, coupé, cabriolet) scores 0 on that component and is still notified. Do not reimplement ranking; reuse it.
+- [2026-08-27 00:15] OWED, and deliberately not answered from memory: the diesel penalty's SIZE depends on the Grand Paris ZFE / Crit'Air rules in force, which have changed repeatedly and are [Unverified] here. Hard rule 1's spirit — verify against a live authoritative source before the number is written. Until then the penalty is a plain preference, not a regulatory one.
 
 ## What is still owed BY the developer
 
@@ -293,3 +296,36 @@ cost of this ruling: **most of the measured-OPEN hosts are auction sites** (Alco
 Interencheres), while the ordinary retail portals are the ones refusing a polling client. Revisit
 once the email-alert sources are proven.
 
+### Decision 11 — RULED 2026-08-27
+
+The three fields decision 7 named and never answered — fuel, gearbox, body type. **All three are
+SCORE components. None is a portal filter and none is a disqualifier**, which is decision 7's
+two-layer rule applied unchanged and hard rule 8 independently.
+
+| Field | Ruling |
+|---|---|
+| Gearbox | **Automatic preferred.** Manual still arrives, scores lower |
+| Fuel | **Petrol / hybrid preferred over diesel.** Diesel still arrives, scores lower |
+| Body | **RANKED: `suv > break > berline`.** Highest rank scores most |
+
+**The body preference is a RANK, not a set — and that shape already exists here.** It is
+`commune_rank` on the rent side: a ranked member scores, an UNRANKED one scores zero on that
+component and is *still notified*. So a citadine or a monospace is never rejected for being absent
+from the list. Reuse `commune_rank`'s mechanism rather than writing a second one, exactly as
+decision 6 rules for geography.
+
+**Item 3 is UNCHANGED by this.** The three fields are left unset on the portal form, so the saved
+searches already specified — ≤ 30 000 €, ≤ 7 years, ≤ 100 000 km, Île-de-France, both private and
+professional — stand as written. Anything set at the portal is invisible to the scorer: a car that
+scores 90 on every other axis but has the wrong gearbox would never arrive, and nothing would say it
+had existed.
+
+> **ONE FIGURE IS OWED AND IS DELIBERATELY NOT WRITTEN FROM MEMORY.** How hard diesel should be
+> penalised depends on the Grand Paris **ZFE / Crit'Air** rules actually in force — an older diesel
+> that cannot legally enter the zone is a different fact from one that merely burns diesel. Those
+> rules have been revised and partly reversed several times and are **[Unverified]** here. Hard rule
+> 1's spirit applies: verify against a live authoritative source (`service-public.fr`,
+> `certificat-air.gouv.fr`) at build time. **Until then the diesel penalty is a plain preference and
+> must not be presented in a notification as a regulatory restriction** — a wrong claim that a car
+> is banned from Paris is the car-domain twin of a §1 false positive: it makes the tool
+> untrustworthy in the one direction the reader cannot check for themselves.
