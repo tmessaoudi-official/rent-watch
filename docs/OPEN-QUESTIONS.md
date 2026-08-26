@@ -1151,11 +1151,40 @@ start another.
 
 ## Part 2f — Raised by schema v4, the cross-portal group (2026-08-19)
 
-### Q38 — should a cluster member's tenure be able to VETO the survivor's notification?
+### Ⓐ Q38 — ANSWERED 2026-08-24: yes, an excluded member decides the whole cluster
 
-**UNANSWERED. Default if it stays unanswered: no — the notification gate keeps consulting only the
-survivor's verdict, exactly as it does today.** One line reverses it: *"a member classified as
-excluded blocks the whole group."*
+**ANSWERED 2026-08-24 — and NOT by anyone deliberating this entry.** It was settled by a P0 the
+round-4 review panel found in the code, which is the part worth recording: §1 was being judged on
+the survivor of a cluster ALONE, so the same flat published on a pure-LLI portal and on a mixed one
+declaring `PLS` came out a MATCH or a REJECT depending on **which source `Pacer` happened to shuffle
+first that pass**. The store then held `PLS` at confidence 99 under the same `group_key` as the row
+it had just pushed as a 75/100 match. That is not the "for a veto / against a veto" trade-off below;
+it is a verdict that was not a function of the evidence at all, and no answer to this question could
+have left it standing.
+
+So the argument *against* — that a cluster is a fuzzy guess and should not be allowed to suppress a
+real match — did not lose. It was **priced and accepted**, and the price is stated in
+`CLAUDE.md` § store test contract: an over-merge now rejects BOTH flats, permanently.
+
+What shipped, in three parts, each with its own test:
+
+- an EXCLUDED member decides the cluster (`Pipeline::clusterClassification()`);
+- an UNDETERMINED one deliberately does **not** — absence of a signal is not evidence, and In'li's
+  166-of-168 weak-label population would otherwise digest most of the tree's yield;
+- the decision is DURABLE, read from the persisted group via `Store::groupExcludedTenure()` rather
+  than recomputed per pass. Two later fixes forced that: a pass in which the excluded sibling was
+  not fetched (a failed source, a `--source=<name>` run, a delisting) laundered the flat back into a
+  match, and `scout reclassify` — which re-judges from each member's OWN v7 snapshot — undid it
+  wholesale.
+
+One line reverses it: make `Pipeline::clusterClassification()` return the survivor's own classification.
+**Reversing it is no longer free**, which is why this entry says so rather than repeating the
+boilerplate: `group_key` is never cleared, so the rejections a cluster has already caused stay
+rejected.
+
+**The third route below was NOT taken and is still available** — it is an addition to this, not a
+replacement for it, since it decides nothing and so cannot fix the poll-order defect that forced the
+change.
 
 This became askable only on 2026-08-19. Before schema v4 the pipeline clustered before recording and
 iterated survivors only, so an absorbed duplicate was never classified — the question had no data to
@@ -1186,7 +1215,10 @@ notification's `reasons[]` — "In'li dit LLI, CDC Habitat dit PLUS sur ce qui s
 bien". That satisfies §1's spirit (the user is not misled) without letting a fuzzy cluster suppress
 anything. It is the option to raise first if this is ever picked up.
 
-Not blocking. Nothing in milestone 1 depends on the answer.
+**Still true, and still unbuilt.** With the answer above in place it is no longer an alternative to
+the cluster rule but a complement to it: today a rejected cluster is silent, so the user cannot tell
+an over-merge from an absent listing. Surfacing the disagreement is what would make the accepted
+over-rejection cost VISIBLE rather than merely documented.
 
 ## Decisions Log
 
@@ -1356,3 +1388,13 @@ Not blocking. Nothing in milestone 1 depends on the answer.
   and the global Stop hook mechanically requires it. The `❓`/`⏹` end-of-reply markers retire with
   the plain-text protocol. Question QUALITY rules (five parts, recommendation first, after-states,
   visible escape) are unchanged — see `.claude/skills/rw-ask-human/SKILL.md`.
+
+- [2026-08-24] AGREED (Q38): **an EXCLUDED cluster member decides the whole cluster; an UNDETERMINED
+  one does not.** Not deliberated on its merits — forced by a P0 the round-4 panel found, in which
+  §1 was judged on the survivor alone and so returned MATCH or REJECT according to the order `Pacer`
+  shuffled the sources into that pass. Made DURABLE (read from the persisted group) by two follow-up
+  fixes: a pass that did not fetch the excluded sibling laundered the flat, and `scout reclassify`
+  undid the decision wholesale. Accepted cost, stated rather than discovered: an over-merge now
+  rejects both flats and `group_key` is never cleared, so that rejection is permanent. Recorded here
+  on 2026-08-26 — the entry had said UNANSWERED for two days after the code answered it, which is
+  the drift `/rw-repair` exists to catch.
