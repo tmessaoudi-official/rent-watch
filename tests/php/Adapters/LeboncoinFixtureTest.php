@@ -91,6 +91,34 @@ final class LeboncoinFixtureTest extends TestCase
         }
     }
 
+    public function testEachCardTakesItsOwnTitleAndNotTheEmailSubject(): void
+    {
+        // WITHOUT `title_pattern` every listing's title was the SUBJECT LINE — "3 nouveaux biens à
+        // louer à Ile-de-France" for all three cards — which makes `exclude_title_patterns`
+        // structurally dead on this source. That is the In'li lesson verbatim, and it lands here on
+        // the portal with the largest coliving market in France, where SeLoger's anchored
+        // `^\s*chambre\b` exclusion exists because four of its first nine matches were coliving
+        // ROOMS advertised with the whole flat's room count and surface — passing every numeric
+        // filter, and rejectable only on the title.
+        //
+        // The pattern anchors on the portal's own TYPE LINE rather than a list of dwelling types, so
+        // a `Chambre · 1 pièce · 12 m²` matches it too and the exclusion can fire.
+        $titles = array_map(
+            static fn (RawListing $l): string => (string) $l->title,
+            $this->listings(),
+        );
+
+        self::assertSame([
+            'Appartement · 3 pièces · 48 m²',
+            'Appartement · 3 pièces · 45 m²',
+            'Appartement · 3 pièces · 59.9 m²',
+        ], $titles);
+
+        foreach ($titles as $title) {
+            self::assertStringNotContainsString('nouveaux biens', $title, 'the subject line is not a title');
+        }
+    }
+
     public function testIdentityIsTheListingUrlStrippedOfItsTracking(): void
     {
         // leboncoin publishes a REAL ad id, so identity is the link and none of SeLoger's
