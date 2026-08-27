@@ -554,7 +554,11 @@ not a listing.
    sources — a private seller's car, inspected, paperwork handled — and Carizy died on an
    unreadable page. Refusing CapCar now costs the whole class, not half of it. Must be checked in a
    browser: the alert form sits behind `/trouver-une-voiture/*`, which robots disallows.
-8. **Agorastore — one look at whether the alert can be scoped to the vehicles category.**
+8. **Agorastore — scope the alert to the vehicles CATEGORY if the form allows it.** Not tidiness:
+   `SourceHealth`'s baseline counts listings FETCHED, so a feed that is 97% furniture stays green on
+   the day the vehicle stock goes to zero — hard rule 2's exact failure. It is also the first source
+   here that is not category-scoped by construction, and the alternative (a text discriminator for
+   *is this even a vehicle*) is the vocabulary-guess class that has cost this repo three fixes.
 9. Unchanged and parked: **AL'in** (item 1), still blocked on the NUR question, which is itself a §1
    question before it is an input.
 
