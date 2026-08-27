@@ -610,7 +610,10 @@ not a listing.
 ### What is left for you, in order
 
 1. **The `From:` header of one `vous propose` message** — the only blocker on routing it. Ten seconds.
-2. **One real `.eml` from each live car alert**, through `tools/scrub-eml.php`. This is THE gate:
+2. **One real `.eml` from each live car alert**, through `tools/scrub-eml.php` — **the step-by-step
+   runbook is [`docs/ALERT-CAPTURE.md`](../ALERT-CAPTURE.md)**, which carries the Gmail export steps,
+   the scrub command, what each capture must ANSWER, and the five rules for alerts not yet created.
+   This is THE gate:
    the email parser was written blind once and cost four defects the day a real message reached it,
    behind 1 886 green tests. Priority order: the leboncoin `Voitures : 58 nouveaux résultats`
    message **specifically** — it answers whether the alert carries all 58 cards or a truncated few,
