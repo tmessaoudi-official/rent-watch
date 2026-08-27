@@ -128,6 +128,8 @@ that is not a bug to fix.
 
 ## Decisions Log
 
+- [2026-08-28 01:50] MEASURED and APPLIED (developer, `AskUserQuestion`): **`IMAP_MAX_MESSAGES` 150 → 250.** The deployed run reported `fenêtre IMAP tronquée : 161 message(s) … 150 lus`, so the 7-day catch-up `IMAP_SINCE_DAYS` promises was being cut — the shared-budget class that took this source 9 → 0 on 2026-08-25, caught this time by the warning that incident produced. Verified against the DEPLOYED container: the warning is gone and the source went **209 → 234 annonces** (+25 that the truncated tail was silently dropping), at 7.1 s against 11.2 s. Today's alerts were always read; what was lost was depth, which is why nothing looked wrong.
+- [2026-08-28 01:50] NOTED: the window is PER-SOURCE (the `FROM` filter is pushed into the IMAP query), so raising it for seloger does not starve the other portals — which is exactly what the 2026-08-25 fix bought and what makes this a one-source knob rather than a budget reallocation.
 - [2026-08-25 10:20] AGREED: the other three portals (PAP, Bien'ici, Leboncoin) are NOT needed yet — spec milestone 6 asks for ONE portal, and SeLoger is the hard case (opaque links, no id, padded feed), so building against it makes the others field maps rather than a redesign.
 - [2026-08-25 10:22] AGREED: the click-tracking redirect is never followed at ingest; the unresolved link goes in the notification so the user's own real click resolves it.
 - [2026-08-25 10:24] AGREED: SeLoger identity is content-addressed from commune|postcode|rooms|surface|residence, with rent excluded so a price drop stays a price event.
