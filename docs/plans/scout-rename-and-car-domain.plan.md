@@ -75,6 +75,8 @@ until a separate go. A ruling on what a thing will be called is not a ruling tha
 - [2026-08-27 19:46] PROPOSED (answering the developer's question): **ParuVendu's rent section is worth adding, and the alert is worth creating today even though the build waits.** Its value is direct-from-owner stock — the gap PAP fills and the agency portals do not [Inferred, not measured]; its cost is one saved search plus one `.eml`; and cross-portal dedup (schema v4 `group_key`) already merges whatever it duplicates, so a generalist added late is cheap. **It is the SECOND generalist and therefore the second collision**: give the saved search a distinctive NAME so its subject carries a discriminator by construction, instead of discovering the collision the way leboncoin's was discovered.
 - [2026-08-27 19:46] NOTED: **CapCar is refused for now on a ground decision 7 already rules.** Its alert form requires selecting a MAKE, which is a hard brand filter AT THE PORTAL — tighter than our criteria, which decision 7 forbids: what the portal rejects the scorer can never rank, and a make left unpicked is invisible for ever with nothing saying so. **If the form accepts SEVERAL makes at once, picking them all lifts the refusal** — one check, unmeasured.
 - [2026-08-27 19:46] NOTED: **Interencheres needed no alert and never did.** Its coarse car filter is irrelevant — auctions are IN as of 01:05, `/recherche/*` is disallowed but the *ventes* pages sit outside it, so its route is POLLING. Nothing is owed by the developer on that row; it is an engineering task.
+- [2026-08-27 20:20] MEASURED, and it **CORRECTS the Carizy row written 34 minutes earlier in this same file** (`25d245b`): one fetch of `/voiture-occasion/annonce/DACIA/SANDERO/2014/84324` returns **4 707 bytes of Nuxt SPA shell** carrying no price, no mileage, no make, no model and no real `<title>`. `window.__NUXT__` holds app config only. So Carizy is **REFUSED**, not open: neither `html` nor `embedded_json` can read that page, and robots separately disallows `/contentAjax/*` and `/listMake`, which is a stated position on the data endpoints the bundle would call.
+- [2026-08-27 20:20] NOTED, the lesson under it: **a sitemap proves that URLs EXIST, never that a page is READABLE.** The catalogue already distinguishes *pollable* from *useful* (Erilia: 49 clean listings, zero in Île-de-France); this adds a third column between them, **readable**. `robots.txt` plus a sitemap answer *may I fetch it*. Only fetching ONE PAGE answers *is there anything in it*, and it costs one request — the same request that would otherwise be spent discovering it after an adapter was designed.
 - [2026-08-27 19:46] NOTED: **Agorastore's price-only alert is tolerable and should be category-scoped if the form allows it.** The site disposes of every category of public-sector asset, so a price-only alert is mostly non-vehicles, and noise costs `SourceHealth` its credibility — that baseline is measured on listings FETCHED, not on matches. Its robots is `Allow: *`, so polling is the real route either way and the alert is a bonus.
 
 ## What is still owed BY the developer
@@ -223,7 +225,6 @@ fetch; do not re-derive them.
 | `www.agorastore.fr` | 200 | `Allow: *` | **WIDE OPEN.** Public-sector and fleet disposals, open to individuals. Low volume, low competition |
 | `www.alcopa-auction.fr` | 200 | `Disallow: /*.pdf$`, `/calendrier/` | **OPEN.** 105 000 vehicles/year, 7 rooms, public auctions |
 | `www.leparking.fr` | 200 | only `/tools/`, `/extlink/`, `/tag/` | **WIDE OPEN**, and a **meta-search** across many portals — breadth in one adapter. ⚠️ It is an AGGREGATOR, so the Jinka caveat applies in full: a truncated description can lose a `VEI` the original ad carried. Needs its own §1 evaluation before it is trusted |
-| `www.carizy.com` | 200 | disallows `/voiture-occasion/recherche*`, `/voiture-occasion?q=*`, `/achat/*`, `/pro*`, `/client*` | **OPEN VIA SITEMAP ONLY — measured 2026-08-27.** The search is refused; `/voiture-occasion/sitemap.xml` carries **1 341 URLs**, ad pages as `/voiture-occasion/annonce/<MARQUE>/<MODELE>/<ANNEE>/<id>`, **none matching any disallow**. Make, model and year are IN THE PATH, so a pre-filter costs no request. **No email alert exists at all** [Verified by the developer, 2026-08-27] |
 
 ### Refused, with the reason
 
@@ -233,6 +234,7 @@ fetch; do not re-derive them.
 | `www.spoticar.fr` | **403** | Akamai-style `Access Denied` + reference id. **Fails closed.** Stellantis' 80 000-car network — alert route only, if any |
 | `www.encheres-domaine.gouv.fr` | 200 | `robots.txt` is a **JS redirect requiring cookies**. The 2026-08-25 rule already refuses this: a 2xx whose body starts `<` is not a robots file |
 | `www.capcar.fr` | 200 | `Disallow: /trouver-une-voiture/*` — the search itself. **And its email alert requires selecting a MAKE** [Verified by the developer, 2026-08-27], a portal-side hard filter that decision 7 refuses — so CapCar is OUT for now, unless the form takes several makes at once (unmeasured) |
+| `www.carizy.com` | 200 | **REFUSED — measured 2026-08-27 in TWO steps, and the second refuted the first.** robots opens the sitemap (`/voiture-occasion/sitemap.xml`, 1 341 URLs, **1 000 of them ad pages**, none matching a disallow), so the row was first written *OPEN VIA SITEMAP*. Then one ad page was fetched: **4 707 bytes of Nuxt SPA shell** — `window.__NUXT__` carries app config ONLY, `<title>` is `carizy.com`, and the body contains **zero** occurrences of `€`, `km`, the make or the model. Neither `html` nor `embedded_json` can read it. The data arrives by XHR from an unmeasured host, and robots separately disallows `/contentAjax/*` and `/listMake` — a stated position on data endpoints. **No email alert either** [Verified by the developer]. Dead unless the bundle → API route is chased |
 | `www.leboncoin.fr` | 200 | **No `User-agent: *` group at all** (verified across the whole file). Moot — already email-only here (403s a plain client). Named AI groups carry `Disallow: /recherche`, `/ad/` |
 | `www.autoscout24.fr` | 200 | `Disallow: /lst?`, `/lst/?`, `/listing-search-api/graphql` — **search-with-query refused**. Separately: `ClaudeBot`, `GPTBot`, `CCBot`, `Google-Extended` get `Disallow: /`, a stated position on automated agents |
 
@@ -507,12 +509,24 @@ already paid for once:
 > structural discriminator of its own — a `+car` alias for that portal alone, or a body-level match.
 > Three misses is a pattern.
 
-### Carizy: the dead row that came back
+### Carizy: the dead row that came back, and then died again
 
-Asking the alert question measured it. Its search is disallowed and it has no alert — and its
-sitemap publishes **1 341 URLs** including every ad page, none of them matching a disallow, with
-make, model and year in the path. It is the Autohero shape exactly: search refused, sitemap open.
-**No developer action; it became an engineering row.**
+Asking the alert question measured it, and the measurement took two steps that disagree — which is
+the part worth keeping. Its search is disallowed and it has no alert, but its sitemap publishes
+**1 341 URLs** (1 000 of them ad pages), none matching a disallow, with make, model and year in the
+path. On that evidence the row was written **OPEN VIA SITEMAP** and committed in `25d245b`.
+
+Then one ad page was fetched. It is **4 707 bytes of Nuxt SPA shell**: `window.__NUXT__` holds app
+config only, the `<title>` is `carizy.com`, and the body contains **zero** occurrences of `€`, `km`,
+`DACIA` or `SANDERO` — for a page whose URL names that exact car. Neither adapter in this project
+can read it, and the sitemap's 1 000 ad URLs yield make/model/year **and nothing else**, which is
+not a listing.
+
+> **A sitemap proves that URLs EXIST. It never proves a page is READABLE.** The catalogue already
+> separates *pollable* from *useful* — the Erilia row, 49 clean listings and zero in Île-de-France.
+> This adds a third column between them: **readable**. `robots.txt` and a sitemap answer *may I
+> fetch it*; only fetching one page answers *is there anything in it*. The row was OPEN on the
+> strength of the first two and was already wrong when it was committed.
 
 ### What is left for you, in order
 
@@ -560,7 +574,7 @@ having refuses a client, and every open host is an auction house, a reseller or 
 | Candidate | Read |
 |---|---|
 | **leparking.fr** | The biggest single breadth win: WIDE OPEN, and a meta-search across many portals. ⚠️ Aggregator — the Jinka caveat in full, a truncated description can lose a `VEI` the original ad carried. Needs its own §1 evaluation first |
-| **Carizy** | Measured today. Sitemap-pollable, 1 341 URLs, no alert needed |
+| ~~Carizy~~ | **Refused, measured today.** Sitemap-open, ad page unreadable (SPA). Dead unless someone chases the bundle → API |
 | **Interencheres** | Auctions are IN; the *ventes* pages sit outside the disallowed `/recherche/*`. Unmeasured, worth one fetch |
 | **Autohero, Agorastore, Alcopa** | Already OPEN and already catalogued. These three plus Carizy are enough to prove the HTTP path |
 | Aramisauto, Autosphere, VPauto, Das WeltAuto, Renault/Dacia Occasions, Toyota Occasions, encheres-vo.com, Ouest-France Auto, Caradisiac, L'Argus | Alive, **unmeasured**. One `robots.txt` fetch each settles them; do not add them to the plan as candidates until one has |
