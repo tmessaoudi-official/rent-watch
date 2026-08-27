@@ -76,6 +76,7 @@ until a separate go. A ruling on what a thing will be called is not a ruling tha
 - [2026-08-27 19:46] NOTED: **CapCar is refused for now on a ground decision 7 already rules.** Its alert form requires selecting a MAKE, which is a hard brand filter AT THE PORTAL — tighter than our criteria, which decision 7 forbids: what the portal rejects the scorer can never rank, and a make left unpicked is invisible for ever with nothing saying so. **If the form accepts SEVERAL makes at once, picking them all lifts the refusal** — one check, unmeasured.
 - [2026-08-27 19:46] NOTED: **Interencheres needed no alert and never did.** Its coarse car filter is irrelevant — auctions are IN as of 01:05, `/recherche/*` is disallowed but the *ventes* pages sit outside it, so its route is POLLING. Nothing is owed by the developer on that row; it is an engineering task.
 - [2026-08-27 20:20] MEASURED, and it **CORRECTS the Carizy row written 34 minutes earlier in this same file** (`25d245b`): one fetch of `/voiture-occasion/annonce/DACIA/SANDERO/2014/84324` returns **4 707 bytes of Nuxt SPA shell** carrying no price, no mileage, no make, no model and no real `<title>`. `window.__NUXT__` holds app config only. So Carizy is **REFUSED**, not open: neither `html` nor `embedded_json` can read that page, and robots separately disallows `/contentAjax/*` and `/listMake`, which is a stated position on the data endpoints the bundle would call.
+- [2026-08-27 20:35] NOTED: **Carizy's death raises the cost of refusing CapCar, and the decision is deferred on one unmeasured detail.** The two were the catalogue's ONLY C2C-with-intermediary sources; with Carizy refused, dropping CapCar costs that entire inventory class rather than one of two routes to it. The refusal still stands on decision 7's ground — a mandatory make is a portal-side hard filter tighter than our criteria, on a field decision 11 does not rank at all — but **if the selector takes several makes at once, the objection evaporates and there is no trade-off left**. Developer to check in a browser; robots disallows the path an automated check would use.
 - [2026-08-27 20:20] NOTED, the lesson under it: **a sitemap proves that URLs EXIST, never that a page is READABLE.** The catalogue already distinguishes *pollable* from *useful* (Erilia: 49 clean listings, zero in Île-de-France); this adds a third column between them, **readable**. `robots.txt` plus a sitemap answer *may I fetch it*. Only fetching ONE PAGE answers *is there anything in it*, and it costs one request — the same request that would otherwise be spent discovering it after an adapter was designed.
 - [2026-08-27 19:46] NOTED: **Agorastore's price-only alert is tolerable and should be category-scoped if the form allows it.** The site disposes of every category of public-sector asset, so a price-only alert is mostly non-vehicles, and noise costs `SourceHealth` its credibility — that baseline is measured on listings FETCHED, not on matches. Its robots is `Allow: *`, so polling is the real route either way and the alert is a bonus.
 
@@ -547,8 +548,12 @@ not a listing.
    delete an alert email** — until the parser exists the mailbox IS the corpus.
 6. **ParuVendu rent — create the saved search now** with a distinctive NAME, even though the build
    waits. It costs three minutes and starts collecting the corpus.
-7. **CapCar — one look at whether the make selector is multi-select.** If it is, pick them all and
-   the refusal lifts.
+7. **CapCar — one look at whether the make selector is multi-select** (or offers *toutes les
+   marques*). If it is, tick everything and the refusal lifts entirely. **This got more important
+   the same afternoon**: CapCar and Carizy were the catalogue's only two C2C-with-intermediary
+   sources — a private seller's car, inspected, paperwork handled — and Carizy died on an
+   unreadable page. Refusing CapCar now costs the whole class, not half of it. Must be checked in a
+   browser: the alert form sits behind `/trouver-une-voiture/*`, which robots disallows.
 8. **Agorastore — one look at whether the alert can be scoped to the vehicles category.**
 9. Unchanged and parked: **AL'in** (item 1), still blocked on the NUR question, which is itself a §1
    question before it is an input.
