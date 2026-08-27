@@ -76,6 +76,11 @@ until a separate go. A ruling on what a thing will be called is not a ruling tha
 - [2026-08-27 19:46] NOTED: **CapCar is refused for now on a ground decision 7 already rules.** Its alert form requires selecting a MAKE, which is a hard brand filter AT THE PORTAL — tighter than our criteria, which decision 7 forbids: what the portal rejects the scorer can never rank, and a make left unpicked is invisible for ever with nothing saying so. **If the form accepts SEVERAL makes at once, picking them all lifts the refusal** — one check, unmeasured.
 - [2026-08-27 19:46] NOTED: **Interencheres needed no alert and never did.** Its coarse car filter is irrelevant — auctions are IN as of 01:05, `/recherche/*` is disallowed but the *ventes* pages sit outside it, so its route is POLLING. Nothing is owed by the developer on that row; it is an engineering task.
 - [2026-08-27 20:20] MEASURED, and it **CORRECTS the Carizy row written 34 minutes earlier in this same file** (`25d245b`): one fetch of `/voiture-occasion/annonce/DACIA/SANDERO/2014/84324` returns **4 707 bytes of Nuxt SPA shell** carrying no price, no mileage, no make, no model and no real `<title>`. `window.__NUXT__` holds app config only. So Carizy is **REFUSED**, not open: neither `html` nor `embedded_json` can read that page, and robots separately disallows `/contentAjax/*` and `/listMake`, which is a stated position on the data endpoints the bundle would call.
+- [2026-08-27 21:40] MEASURED, the readable check on all three OPEN hosts (§ "The readable check"): **Autohero is READABLE and carries a schema.org `Vehicle` JSON-LD block** with price, mileage, first registration, fuel, transmission, body type and previous owners — every ruled criterion including all three of decision 11's, in a standard shape, readable through the existing `embedded_json_selector`. **No new adapter is needed**, and it MEASURES the inference that Autohero's geography filter is inert: the payload has no location field at all.
+- [2026-08-27 21:40] MEASURED: **Agorastore is a Nuxt SPA like Carizy, and unlike Carizy it is not dead** — its `<head>` names `api.auctelia.com`, whose `robots.txt` is `User-agent: *` / `Disallow: /sentry`. The documented follow-the-bundle route needed no bundle. What separates the two rows is precisely that: a discovered, permitting API host versus an undiscovered one behind a `Disallow: /contentAjax/*`.
+- [2026-08-27 21:40] MEASURED, and it is deliberately NOT a verdict: **one Alcopa lot page carries no price and no closing time.** Rule 2 of the auction ruling refuses such a source fail-closed — but three explanations fit (client-side auction state, login-gated bidding, or a lot that is simply not in an active sale), and they have opposite consequences. `sitemap.sales.xml` is the way to find a live one. **Alcopa is recorded as UNRESOLVED, not refused**: n=1 has already cost this project a row today, and writing the verdict now would be the same mistake with the sign flipped.
+- [2026-08-27 21:40] NOTED: **`Disallow: /calendrier/` does not cover `/calendrier-des-ventes`** — literal prefix matching, the same rule that let Logirep's `/recherche` through a `Disallow: /search/`. Relevant because the calendar is where a closing time would live.
+- [2026-08-27 21:40] NOTED: **Alcopa segregates `/vehicules-hs`** (hors service) from `/vehicules-de-tourisme`, so the §1 vehicle set's largest auction class is separable by URL before any classifier runs. A second line of defence, not a replacement for the first.
 - [2026-08-27 21:10] AGREED (developer, `AskUserQuestion`), and it generalises: **NO ParuVendu Gmail filter is written until its first message has been read.** A split is needed only for a sender that carries TWO domains, and ParuVendu carries one today — leboncoin is the only actual collision in the tree. The first alert lands in the inbox, costing one message, and the filter is then written against a real subject rather than a guessed one (02:35's rule).
 - [2026-08-27 21:10] NOTED — **the best filter is on the SAVED-SEARCH NAME, not on the portal's vocabulary, and it is self-tripwiring.** If the alert's subject carries the name the developer chose (`rent-watch-pv-idf`), the filter matches a discriminator WE control instead of a French word the portal may stop using — and because it is narrow, anything else from that sender (a future car alert, a changed template) lands in the INBOX instead of being swallowed into the rent label and parsed as a flat. leboncoin's `Voitures` / `à louer` split is the weaker fallback, needed only because those searches were named before this was understood. **Name every future saved search distinctively for this reason**, on both domains — rule 3 of § "Creating the alerts" was written as a fallback for portals refusing `+tags`, and it turns out to be the PREFERRED mechanism.
 - [2026-08-27 20:55] AGREED (developer, `AskUserQuestion`): **the ParuVendu RENT alert is created now, built later.** Distinctive saved-search name, portal settings a notch wider than the criteria (Île-de-France, 3 pièces min, 45 m² min, 1 300 € max) per the two-layer rule.
@@ -226,9 +231,9 @@ fetch; do not re-derive them.
 
 | Host | HTTP | Wildcard group | Verdict |
 |---|---|---|---|
-| `www.autohero.com` | 200 | disallows only `/myhero/`, `/inspection/`, `/checkout/`, `/identify`, `/center`, `/unsubscribe/` | **OPEN.** Publishes `sitemap.xml` per locale **and `sitemap_search.xml`**. Best polling candidate measured. Fixed price, delivered, national — geography stops mattering |
-| `www.agorastore.fr` | 200 | `Allow: *` | **WIDE OPEN.** Public-sector and fleet disposals, open to individuals. Low volume, low competition |
-| `www.alcopa-auction.fr` | 200 | `Disallow: /*.pdf$`, `/calendrier/` | **OPEN.** 105 000 vehicles/year, 7 rooms, public auctions |
+| `www.autohero.com` | 200 | disallows only `/myhero/`, `/inspection/`, `/checkout/`, `/identify`, `/center`, `/unsubscribe/` | **OPEN AND READABLE — confirmed 2026-08-27, the only one of the three that is.** `/fr/sitemap_search.xml` = **3 453 vehicles**; a lot page is 640 KB server-rendered carrying a schema.org `Vehicle` JSON-LD block with price, mileage, registration date, fuel, transmission and body type. Reads through the existing `embedded_json_selector`. Fixed price, delivered, national — and the payload has **no location field**, so decision 6's geography filter is measurably inert here |
+| `www.agorastore.fr` | 200 | `Allow: *` | **WIDE OPEN — but the site itself is a Nuxt SPA** (measured 2026-08-27: zero `€` on the homepage). Its `<head>` names `api.auctelia.com`, whose robots is `User-agent: *` / `Disallow: /sentry` — so the data host is open and discovered. Public-sector and fleet disposals, open to individuals |
+| `www.alcopa-auction.fr` | 200 | `Disallow: /*.pdf$`, `/calendrier/` | **OPEN, lot pages READABLE, verdict UNRESOLVED** (measured 2026-08-27). `sitemap.items-fr.xml` = **5 839 lots**; one lot page is 84 KB server-rendered with make/model/saleroom/`38 656 KM` — and **no price and no closing time**, which rule 2 of the auction ruling refuses fail-closed. Reason unmeasured: client-side auction state, login gate, or a lot not in an active sale. Check one from `sitemap.sales.xml` before ruling |
 | `www.leparking.fr` | 200 | only `/tools/`, `/extlink/`, `/tag/` | **WIDE OPEN**, and a **meta-search** across many portals — breadth in one adapter. ⚠️ It is an AGGREGATOR, so the Jinka caveat applies in full: a truncated description can lose a `VEI` the original ad carried. Needs its own §1 evaluation before it is trusted |
 
 ### Refused, with the reason
@@ -251,6 +256,74 @@ fetch; do not re-derive them.
 | `www.autosphere.fr` | `/occasions`, `*recherchecourte*` | `/recherche` is not disallowed. Emil Frey France network |
 | `www.paruvendu.fr` | `/auto-moto/rechercheautofo/`, `/auto-moto/listefo/`, `/auto-moto/annonceautofo/` — **and, measured 2026-08-27, on the immo side `/immobilier/annonceimmofo/`, `/immobilier/annoncefo/`, `/immobilier/listecommunfo/`, `/immobilier/structureimmofo/`, `/immobilier/geo/*`, `/immobilier/immoneuffo/`, `/immobilier/bloc/*`, plus the generic `/*/listeAnnonces*`** | Those are NAMED legacy front-office paths; whether the CURRENT search route falls under them is unmeasured, on either side. The two immo `annonce*` names read as the ad-DETAIL route. **Largely moot — the route in is the email alert (hard rule 4), and ParuVendu has a RENT section, which is why it is now recommended on the housing side too** |
 | `www.vpauto.fr` | long named-bot blocklist | Wildcard group not isolated; needs a second read |
+
+### The readable check, run on all three open hosts — 2026-08-27 21:40
+
+Prompted by Carizy: three rows rated OPEN on `robots.txt` plus a sitemap, the same evidence that was
+refuted three hours earlier. One page fetched per host, honest UA, spaced.
+
+**AUTOHERO — READABLE, and it carries the best payload in this project.** `/fr/sitemap_search.xml`
+lists **3 453 vehicles** as `/fr/<make>-<model>/id/<uuid>/`; one fetched page is **640 KB of
+server-rendered HTML** containing a single `application/ld+json` block of `@type: Vehicle`:
+
+```json
+{"name":"Peugeot 3008 1.6 Blue-HDi Allure","offers":{"price":13690,"priceCurrency":"EUR"},
+ "brand":"Peugeot","model":"3008","bodyType":"SUV","dateVehiclefirstregistered":"2017-02",
+ "vehicleEngine":{"fuelType":"Diesel","enginePower":"120 CV / 88 kW"},
+ "mileageFromOdometer":"107 087 KMT","vehicleTransmission":"Boite de vitesse manuelle",
+ "numberOfPreviousOwners":"4","numberOfDoors":5,"sku":"HK87832"}
+```
+
+Every field the ruled criteria need, in a **standard schema.org shape**: price (decision 5), mileage
+and first registration (decision 7), and **all three of decision 11's score components at once** —
+`fuelType`, `vehicleTransmission`, `bodyType`. It reads through `embedded_json_selector`, the
+mechanism Logirep already forced us to build, so this needs **no new adapter**.
+
+Three details that will bite whoever writes the field map:
+
+- **`mileageFromOdometer` is `"107 087 KMT"`** — a narrow no-break space as thousands separator and
+  the UN/CEFACT unit code `KMT`, not `km`. `\h` for the separator (the SeLoger rent fix) and a unit
+  suffix the integer reader must not swallow into the number.
+- **`vehicleTransmission` is `"Boite de vitesse manuelle"` — no circumflex.** A matcher written for
+  *boîte automatique* misses it; `Text::fold()` is what makes that safe, and it must be used here.
+- **There is NO location field at all.** That MEASURES what the 01:05 ruling inferred: the
+  decision-6 geography filter is **inert on this source**. Not "probably inert" — the payload has
+  nowhere to put a commune.
+
+**AGORASTORE — SPA, like Carizy, but NOT dead: it names its own API in the first line of HTML.**
+The page is a Nuxt shell (`#__nuxt`, `window.__NUXT__`, **zero** `€` on the homepage). Its `<head>`
+opens with `<link rel="preconnect" href="https://api.auctelia.com">` — the platform behind
+Agorastore — so the documented *follow the bundle to its API host* route needs no bundle-digging at
+all. **`api.auctelia.com/robots.txt` is `User-agent: *` / `Disallow: /sentry`** [Verified
+2026-08-27]: everything but error reporting is permitted. That is the difference between this row
+and Carizy's, where the API host is undiscovered AND `/contentAjax/*` is disallowed.
+
+**ALCOPA — lot pages are readable, but the ONE FIELD THE AUCTION RULING MAKES MANDATORY WAS NOT ON
+THE PAGE.** `sitemap.items-fr.xml` lists **5 839 lots** as `/voiture-occasion/<make>/<version>-<id>`;
+one fetched lot is 84 KB of server-rendered HTML with the make, model, version, saleroom and
+`38 656 KM`. It carries **no `€` at all and no closing time** — zero matches for `clôtur`,
+*se termine*, *fin des enchères*; the only `h`-times on the page are the saleroom's opening hours.
+
+> **That is a refusal trigger, not a defect — and the REASON is unmeasured, which is the part that
+> matters.** Rule 2 of the auction ruling: *a closing time is mandatory in the notification, and a
+> source that publishes none is refused fail-closed.* But three explanations fit the same evidence,
+> and they have opposite consequences: the live auction state is fetched client-side or behind
+> login; or it is shown only to a signed-in bidder; or **this particular lot is not in an active
+> sale** — 5 839 items in a sitemap is a catalogue, not a saleroom floor. `sitemap.sales.xml` exists
+> and is the way to find a lot in a live sale. **Do not record Alcopa as refused until that is
+> checked**, and do not record it as open either. n=1, on a source where n=1 has already cost this
+> project a row today.
+
+Two smaller things worth keeping:
+
+- **Alcopa segregates `/vehicules-hs`** — *hors service* — as its own category, alongside
+  `/vehicules-de-tourisme`, `/vehicules-utilitaires` and `/voitures-de-collection`. So the §1
+  vehicle set's largest auction-house class is **structurally separable by URL**, before any
+  classifier runs. That does not replace the classifier; it means the classifier is not the only
+  line of defence on this source.
+- **`Disallow: /calendrier/` does NOT cover `/calendrier-des-ventes`.** Robots matching is literal
+  prefix matching — the same rule that let Logirep's `/recherche` through a `Disallow: /search/`.
+  Worth stating because the calendar page is exactly where a closing time would live.
 
 ### Email alerts — the preferred route (hard rule 4)
 
@@ -591,7 +664,9 @@ having refuses a client, and every open host is an auction house, a reseller or 
 | **leparking.fr** | The biggest single breadth win: WIDE OPEN, and a meta-search across many portals. ⚠️ Aggregator — the Jinka caveat in full, a truncated description can lose a `VEI` the original ad carried. Needs its own §1 evaluation first |
 | ~~Carizy~~ | **Refused, measured today.** Sitemap-open, ad page unreadable (SPA). Dead unless someone chases the bundle → API |
 | **Interencheres** | Auctions are IN; the *ventes* pages sit outside the disallowed `/recherche/*`. Unmeasured, worth one fetch |
-| **Autohero, Agorastore, Alcopa** | Already OPEN and already catalogued. These three plus Carizy are enough to prove the HTTP path |
+| **Autohero** | **Measured readable 2026-08-27** and carrying schema.org JSON-LD. This is the source the first HTTP adapter should be built against — no new adapter code needed |
+| **Agorastore** | SPA, but its API host `api.auctelia.com` is open and named in the page. Alive, one step further out |
+| **Alcopa** | Readable lots, 5 839 of them — but the mandatory closing time was not on the one page fetched. **Unresolved**, check a lot in a live sale |
 | Aramisauto, Autosphere, VPauto, Das WeltAuto, Renault/Dacia Occasions, Toyota Occasions, encheres-vo.com, Ouest-France Auto, Caradisiac, L'Argus | Alive, **unmeasured**. One `robots.txt` fetch each settles them; do not add them to the plan as candidates until one has |
 | mobile.de / AutoScout24.de | German import route. Real inventory, but paperwork and travel change what a notification is asking of the reader — the Reezocar niche, and Reezocar is dead |
 | Spoticar, La Centrale | 403 / DataDome. **Refused by ruling**, not by capability. Email-alert route only |
