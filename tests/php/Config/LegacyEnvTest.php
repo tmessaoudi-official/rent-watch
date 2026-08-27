@@ -150,6 +150,56 @@ final class LegacyEnvTest extends TestCase
         }
     }
 
+    /**
+     * WHERE the check runs is the guarantee, not merely THAT it runs.
+     *
+     * Called from `bin/scout` — the obvious place, beside the `.env` load — the refusal is stderr
+     * only: `recordRefusal()` is a method on `Scout`, and no `Scout` exists that early. The reader
+     * this guard is FOR is a container crash-looping under a restart policy on a host whose `.env`
+     * still says `RENT_WATCH_DB`, and Q27's whole observation is that such a reader is not watching
+     * stderr. So the call lives inside `Scout::run()`'s try, where `failRun()` persists it.
+     *
+     * This test fails if it is ever moved back, which a docblock alone would not.
+     */
+    public function testARefusalDuringRunIsRECORDEDForTheNextHeartbeat(): void
+    {
+        $root = sys_get_temp_dir() . '/scout-legacy-' . bin2hex(random_bytes(6));
+        mkdir($root . '/state', 0o777, true);
+        mkdir($root . '/config', 0o777, true);
+        copy(\dirname(__DIR__, 3) . '/config/criteria.json', $root . '/config/criteria.json');
+        copy(\dirname(__DIR__, 3) . '/config/sources.json', $root . '/config/sources.json');
+
+        putenv('RENT_WATCH_MAX_PASSES=1');
+        putenv('SCOUT_DB=' . $root . '/state/db.sqlite3');
+
+        try {
+            $out = fopen('php://memory', 'r+');
+            $err = fopen('php://memory', 'r+');
+            $code = (new \Scout\Cli\Scout($root, $out, $err))->run(['run', '--once']);
+
+            self::assertSame(2, $code, 'a legacy env name must stop the run');
+            self::assertFileExists(
+                $root . '/state/last-refusal.txt',
+                'the refusal must survive the process for the next start to report it (Q27)'
+            );
+            self::assertStringContainsString(
+                'SCOUT_MAX_PASSES',
+                (string) file_get_contents($root . '/state/last-refusal.txt')
+            );
+        } finally {
+            putenv('RENT_WATCH_MAX_PASSES');
+            putenv('SCOUT_DB');
+            unset($_ENV['RENT_WATCH_MAX_PASSES'], $_SERVER['RENT_WATCH_MAX_PASSES']);
+            @unlink($root . '/state/last-refusal.txt');
+            @unlink($root . '/state/db.sqlite3');
+            @unlink($root . '/config/criteria.json');
+            @unlink($root . '/config/sources.json');
+            @rmdir($root . '/state');
+            @rmdir($root . '/config');
+            @rmdir($root);
+        }
+    }
+
     /** An empty legacy value is still SET — the shadowing case, and the one that reads as absent. */
     public function testAnEmptyLegacyValueIsStillRefused(): void
     {

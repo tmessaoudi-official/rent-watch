@@ -26,9 +26,16 @@ namespace Scout\Config;
  * quietly" is precisely the shape that hid a dead key behind a plausible config. A stale line is
  * something to delete, not something to out-rank.
  *
- * The message names the VARIABLE and never its VALUE: a startup refusal is persisted to
- * `state/last-refusal.txt` and read back onto the Q27 heartbeat, and a channel that quotes values
- * is how a pasted `imap://user:password@host` reaches a file — see {@see \Scout\Core\Redact}.
+ * The message names the VARIABLE and never its VALUE: `Scout::run()` calls this INSIDE its own
+ * try, so a refusal here goes through `failRun()` and is persisted to `state/last-refusal.txt`,
+ * then read back onto the Q27 heartbeat. A channel that quotes values is how a pasted
+ * `imap://user:password@host` reaches a file — see {@see \Scout\Core\Redact}.
+ *
+ * That call site is deliberate and was corrected once. Called from `bin/scout` — the obvious place,
+ * next to the `.env` load — the refusal is stderr ONLY, because `recordRefusal()` is a method on
+ * `Scout` and no `Scout` exists yet. The audience for this guard is a container crash-looping under
+ * a restart policy on a host whose `.env` still carries the old name, which is exactly the reader
+ * Q27 observes is not watching stderr.
  */
 final class LegacyEnv
 {

@@ -19,6 +19,7 @@ use Scout\Adapters\PacedSource;
 use Scout\Adapters\Source;
 use Scout\Adapters\SourceError;
 use Scout\Config\ConfigError;
+use Scout\Config\LegacyEnv;
 use Scout\Config\ConfigLoader;
 use Scout\Config\Criteria;
 use Scout\Config\SourceDefinition;
@@ -140,6 +141,14 @@ final readonly class Scout
         $flags = array_slice($argv, 1);
 
         try {
+            // The `RENT_WATCH_*` → `SCOUT_*` rename of 2026-08-27. HERE rather than in `bin/scout`,
+            // and the placement is the whole value: a refusal thrown inside this try is recorded to
+            // `state/last-refusal.txt` by `failRun()` and reported on the next heartbeat, whereas one
+            // thrown in the entry point is stderr only. The audience for this guard is a container
+            // crash-looping under a restart policy on a host whose `.env` still says `RENT_WATCH_DB`
+            // — which is precisely the reader whose stderr scrolls past unread (Q27).
+            LegacyEnv::checkProcess();
+
             return match ($command) {
                 'doctor' => $this->doctor($flags),
                 'dump' => $this->dump($flags),

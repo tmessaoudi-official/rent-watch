@@ -39,17 +39,6 @@ try {
     exit(2);
 }
 
-// The `RENT_WATCH_*` → `SCOUT_*` rename of 2026-08-27, made impossible to half-apply. Runs AFTER
-// `.env` is loaded, because the deployed `.env` on the host is not in git and is exactly where a
-// legacy name survives; and BEFORE `Scout` exists, because a legacy `SCOUT_DB` spelling means the
-// store would silently open a different — empty — database. See `Scout\Config\LegacyEnv`.
-try {
-    Scout\Config\LegacyEnv::checkProcess();
-} catch (Scout\Config\ConfigError $e) {
-    fwrite(STDERR, 'configuration : ' . $e->getMessage() . "\n");
-    exit(2);
-}
-
 // Ruled 2026-08-07 (Q34): a Docker container without TZ runs UTC, so "08:00 local" silently becomes
 // 10:00 Paris in summer. Read from the environment, with the same default `.env.example` documents.
 $tz = getenv('TZ');
