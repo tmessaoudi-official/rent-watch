@@ -63,6 +63,19 @@ until a separate go. A ruling on what a thing will be called is not a ruling tha
 - [2026-08-27 02:35] MEASURED (developer, from a real message): the leboncoin CAR alert subject is `Voitures : 58 nouveaux résultats`. The rent one is `3 nouveaux biens à louer à Ile-de-France`. So the split is TWO POSITIVE subject matches — `Voitures` and `à louer` — not a negation. A negation would also have caught account notices and marketing, which carry no `/vi/` links and would have read as a quiet source.
 - [2026-08-27 02:35] NOTED — **the UNROUTED tripwire needs no filter at all, and that is better than the one it replaces.** Both leboncoin filters skip the inbox, so any message from that sender matching NEITHER subject lands in the inbox BY DEFAULT. A changed template therefore surfaces where the developer will see it, rather than vanishing into a folder nobody reads — the SeLoger 9 → 0 shape, made loud for free. The negated-search filter of 02:10 is withdrawn as unnecessary.
 - [2026-08-27 02:35] OPEN, for the first `.eml`: the subject counts **58** results. Whether the message CARRIES 58 cards or only the first few is unknown, and it decides how much `card_separator` work leboncoin's car alert needs. Do not assume either — read it off the capture.
+- [2026-08-27 19:46] MEASURED (developer, operator report): alerts **CREATED** on Autohero, Alcopa Auction, Agorastore and leboncoin (cars). **NOT created** on Interencheres (its car filter is too coarse to be worth one), CapCar (the form requires selecting a MAKE) and Carizy (no alert facility exists at all).
+- [2026-08-27 19:46] MEASURED: **the Alcopa alert EXPIRES — valid to 27/09/2026, one month.** That is hard rule 2's shape introduced by the PORTAL rather than by the code: the source falls silent and the silence is indistinguishable from a quiet saleroom. Renewal is an operator task with a dated reminder (~24/09, three days of slack); `SourceHealth` is a lagging backstop at best — it needs a non-zero baseline and three empty passes — and the car domain is not built, so today there is **no backstop at all**.
+- [2026-08-27 19:46] PROPOSED, not ruled: a source whose alert expires carries that date in **its own config block**, and `doctor` prints it. It would be the first `expires` field in this project. Written down now because the alternative is a date that lives only in a calendar the code cannot read.
+- [2026-08-27 19:46] MEASURED, and it is the day's most important row: **leboncoin sends a THIRD subject template** — `TRANSAKAUTO MEAUX vous propose HYUNDAI i20 ACTIVE 1.0 T-GDi 100 DCT-7 Active à 11 490 € à Villenoy (77124)` — matching neither `Voitures` nor `à louer`. It is therefore routed by nothing and lands in the inbox. **The sender is [Unverified] and no filter is written until it is read** (02:35's own rule: the filter is written against a real message, never guessed). IF the sender is `no.reply@leboncoin.fr`, this is the 02:35 tripwire's **first live confirmation**, behaving exactly as designed — an unknown template surfacing where the developer sees it instead of vanishing into a folder nobody reads.
+- [2026-08-27 19:46] NOTED: the routing fix is CONDITIONAL and the condition is one header. **A different sender → a `From:` filter**, which is the 02:10 sender-routing ruling with nothing added, and the better outcome. **The same sender → a third POSITIVE subject match** (`vous propose`), never a negation — 02:35's reason holds: a negation also catches account notices and marketing, which carry no listing links and would read as a quiet source.
+- [2026-08-27 19:46] NOTED, and it is the standing weakness of subject routing: **a subject filter IS a vocabulary**, the exact shape *"a title is a position, never a vocabulary"* warns about, and it will need extending every time the portal invents a template. That is tolerable ONLY because the default is the INBOX. If a FOURTH template appears, stop extending the list and move leboncoin to a structural discriminator (a dedicated `+car` alias for that portal alone, or a body-level match) — three misses is a pattern, not an accident.
+- [2026-08-27 19:46] NOTED: the `vous propose` message is a **ONE-AD-PER-MESSAGE** shape whose subject carries the title, the price and `commune (NNNNN)` — structurally **PAP**, not leboncoin's own digest. So it probably needs its own source block (no `card_separator`, positional anchors keyed on the postcode parenthesis, `title_pattern` consulted per the PAP fix) rather than a parameter on the leboncoin car source. [Inferred from the subject line alone; the `.eml` decides, and one of the two shapes is wrong.]
+- [2026-08-27 19:46] MEASURED (one fetch, honest UA): **Carizy is POLLABLE through its sitemap**, despite offering no email alert and disallowing its search. Wildcard group disallows `/voiture-occasion/recherche*`, `/voiture-occasion?q=*`, `/achat/*`; `sitemap.xml` → `/voiture-occasion/sitemap.xml` carries **1 341 URLs**, the ad pages being `/voiture-occasion/annonce/<MARQUE>/<MODELE>/<ANNEE>/<id>`, and **zero of them match any disallow**. The path itself carries make, model and year, so a pre-filter costs no request. Same shape as Autohero: the search is refused, the sitemap is the way in. A dead row became a live one **because the alert question was asked**.
+- [2026-08-27 19:46] MEASURED: **ParuVendu's immo paths are partly disallowed** — `/immobilier/annonceimmofo/`, `/immobilier/annoncefo/`, `/immobilier/listecommunfo/`, `/immobilier/structureimmofo/`, `/immobilier/geo/*`, `/immobilier/immoneuffo/`, `/immobilier/bloc/*`, plus the generic `/*/listeAnnonces*`. The two `annonce*` names read as the ad-DETAIL route. The current search route is not named and is UNMEASURED. Largely moot: the route in is the email alert (hard rule 4), as it is for every private portal here.
+- [2026-08-27 19:46] PROPOSED (answering the developer's question): **ParuVendu's rent section is worth adding, and the alert is worth creating today even though the build waits.** Its value is direct-from-owner stock — the gap PAP fills and the agency portals do not [Inferred, not measured]; its cost is one saved search plus one `.eml`; and cross-portal dedup (schema v4 `group_key`) already merges whatever it duplicates, so a generalist added late is cheap. **It is the SECOND generalist and therefore the second collision**: give the saved search a distinctive NAME so its subject carries a discriminator by construction, instead of discovering the collision the way leboncoin's was discovered.
+- [2026-08-27 19:46] NOTED: **CapCar is refused for now on a ground decision 7 already rules.** Its alert form requires selecting a MAKE, which is a hard brand filter AT THE PORTAL — tighter than our criteria, which decision 7 forbids: what the portal rejects the scorer can never rank, and a make left unpicked is invisible for ever with nothing saying so. **If the form accepts SEVERAL makes at once, picking them all lifts the refusal** — one check, unmeasured.
+- [2026-08-27 19:46] NOTED: **Interencheres needed no alert and never did.** Its coarse car filter is irrelevant — auctions are IN as of 01:05, `/recherche/*` is disallowed but the *ventes* pages sit outside it, so its route is POLLING. Nothing is owed by the developer on that row; it is an engineering task.
+- [2026-08-27 19:46] NOTED: **Agorastore's price-only alert is tolerable and should be category-scoped if the form allows it.** The site disposes of every category of public-sector asset, so a price-only alert is mostly non-vehicles, and noise costs `SourceHealth` its credibility — that baseline is measured on listings FETCHED, not on matches. Its robots is `Allow: *`, so polling is the real route either way and the alert is a bonus.
 
 ## What is still owed BY the developer
 
@@ -210,6 +223,7 @@ fetch; do not re-derive them.
 | `www.agorastore.fr` | 200 | `Allow: *` | **WIDE OPEN.** Public-sector and fleet disposals, open to individuals. Low volume, low competition |
 | `www.alcopa-auction.fr` | 200 | `Disallow: /*.pdf$`, `/calendrier/` | **OPEN.** 105 000 vehicles/year, 7 rooms, public auctions |
 | `www.leparking.fr` | 200 | only `/tools/`, `/extlink/`, `/tag/` | **WIDE OPEN**, and a **meta-search** across many portals — breadth in one adapter. ⚠️ It is an AGGREGATOR, so the Jinka caveat applies in full: a truncated description can lose a `VEI` the original ad carried. Needs its own §1 evaluation before it is trusted |
+| `www.carizy.com` | 200 | disallows `/voiture-occasion/recherche*`, `/voiture-occasion?q=*`, `/achat/*`, `/pro*`, `/client*` | **OPEN VIA SITEMAP ONLY — measured 2026-08-27.** The search is refused; `/voiture-occasion/sitemap.xml` carries **1 341 URLs**, ad pages as `/voiture-occasion/annonce/<MARQUE>/<MODELE>/<ANNEE>/<id>`, **none matching any disallow**. Make, model and year are IN THE PATH, so a pre-filter costs no request. **No email alert exists at all** [Verified by the developer, 2026-08-27] |
 
 ### Refused, with the reason
 
@@ -218,7 +232,7 @@ fetch; do not re-derive them.
 | `www.lacentrale.fr` | **403** | **REFUSED BY RULING.** Body is a **DataDome CAPTCHA challenge** (`captcha-delivery.com`) — hard rule 5 refuses solving it, same class as A15 Val d'Oise Habitat. Also fail-closed under this repo's posture (403 = blocked). Email-alert route only |
 | `www.spoticar.fr` | **403** | Akamai-style `Access Denied` + reference id. **Fails closed.** Stellantis' 80 000-car network — alert route only, if any |
 | `www.encheres-domaine.gouv.fr` | 200 | `robots.txt` is a **JS redirect requiring cookies**. The 2026-08-25 rule already refuses this: a 2xx whose body starts `<` is not a robots file |
-| `www.capcar.fr` | 200 | `Disallow: /trouver-une-voiture/*` — the search itself |
+| `www.capcar.fr` | 200 | `Disallow: /trouver-une-voiture/*` — the search itself. **And its email alert requires selecting a MAKE** [Verified by the developer, 2026-08-27], a portal-side hard filter that decision 7 refuses — so CapCar is OUT for now, unless the form takes several makes at once (unmeasured) |
 | `www.leboncoin.fr` | 200 | **No `User-agent: *` group at all** (verified across the whole file). Moot — already email-only here (403s a plain client). Named AI groups carry `Disallow: /recherche`, `/ad/` |
 | `www.autoscout24.fr` | 200 | `Disallow: /lst?`, `/lst/?`, `/listing-search-api/graphql` — **search-with-query refused**. Separately: `ClaudeBot`, `GPTBot`, `CCBot`, `Google-Extended` get `Disallow: /`, a stated position on automated agents |
 
@@ -228,7 +242,7 @@ fetch; do not re-derive them.
 |---|---|---|
 | `www.interencheres.com` | `/recherche/*` | The category *ventes* pages sit outside it. #1 French auction portal. Sitemap published |
 | `www.autosphere.fr` | `/occasions`, `*recherchecourte*` | `/recherche` is not disallowed. Emil Frey France network |
-| `www.paruvendu.fr` | `/auto-moto/rechercheautofo/`, `/auto-moto/listefo/`, `/auto-moto/annonceautofo/` | Those are NAMED legacy front-office paths; whether the CURRENT search route falls under them is unmeasured |
+| `www.paruvendu.fr` | `/auto-moto/rechercheautofo/`, `/auto-moto/listefo/`, `/auto-moto/annonceautofo/` — **and, measured 2026-08-27, on the immo side `/immobilier/annonceimmofo/`, `/immobilier/annoncefo/`, `/immobilier/listecommunfo/`, `/immobilier/structureimmofo/`, `/immobilier/geo/*`, `/immobilier/immoneuffo/`, `/immobilier/bloc/*`, plus the generic `/*/listeAnnonces*`** | Those are NAMED legacy front-office paths; whether the CURRENT search route falls under them is unmeasured, on either side. The two immo `annonce*` names read as the ad-DETAIL route. **Largely moot — the route in is the email alert (hard rule 4), and ParuVendu has a RENT section, which is why it is now recommended on the housing side too** |
 | `www.vpauto.fr` | long named-bot blocklist | Wildcard group not isolated; needs a second read |
 
 ### Email alerts — the preferred route (hard rule 4)
@@ -236,8 +250,12 @@ fetch; do not re-derive them.
 - **leboncoin** — saved searches with email alerts, up to 50 [Verified: portal help centre]
 - **La Centrale** — *"Créer une alerte nouvelles annonces"* on a saved search [Verified: FAQ]
 - **AutoScout24** — saved search + alert at chosen intervals (1 h / 12 h / 24 h / 7 d), **including price drops** [Verified: FAQ] — price drops land straight in the existing `price_history` machinery
-- **Alcopa Auction** — *"être alerté"* on matching vehicles [Inferred: third-party guides, not confirmed on the portal itself]
-- Autohero / Aramisauto / VPauto / Agorastore / BCAuto — UNMEASURED
+- **Alcopa Auction** — *"être alerté"* on matching vehicles. **CONFIRMED and CREATED 2026-08-27**, and it carries an EXPIRY: valid to **27/09/2026**. The only alert in this file with a deadline — see § "Operator report"
+- **Autohero** — alert **CREATED 2026-08-27**
+- **Agorastore** — alert **CREATED 2026-08-27**, but the form offered a PRICE filter only; scope it to the vehicles category if it can be
+- **CapCar** — an alert exists but demands a MAKE; refused for now, see the table above
+- **Carizy** — **no alert facility found** [Verified by the developer, 2026-08-27]. It does not need one: sitemap-pollable
+- Aramisauto / VPauto / BCAuto — UNMEASURED
 
 ### Creating the alerts — the operational half, and it is where this goes wrong
 
@@ -277,7 +295,7 @@ Five rules for creating them, each of which silently breaks the pipeline if miss
 
 ### Alive, deliberately unmeasured
 
-Carizy (C2C, Renault-backed), Renault/Dacia Occasions, Toyota Occasions, Das WeltAuto, VPauto,
+Renault/Dacia Occasions, Toyota Occasions, Das WeltAuto, VPauto,
 BCAuto Enchères (pro-oriented), encheres-vo.com, Ouest-France Auto, Caradisiac Occasions, L'Argus,
 mobile.de + AutoScout24.de (import), Aramisauto.
 
@@ -432,3 +450,124 @@ search itself, so the only way in is an email alert, and **whether CapCar offers
 (inspection, paperwork, warranty on a private-seller car), which is inventory neither the pro
 portals nor the pure-C2C ones carry. **Carizy** is the same shape, Renault-backed, and equally
 unmeasured.
+
+## Operator report — 2026-08-27 19:46, and what is left for the developer
+
+The alerts of § "Creating the alerts" were created. Six of the eight rows below changed a catalogue
+verdict, which is why the report is kept rather than summarised.
+
+| Portal | Alert | What it changed |
+|---|---|---|
+| **Autohero** | created | Also the best polling candidate measured. The alert is a bonus, not the route |
+| **Alcopa Auction** | created | ⚠️ **expires 27/09/2026** — the only row in this file with a clock on it |
+| **Agorastore** | created | Price filter only; the site sells every category, so expect non-vehicles |
+| **leboncoin** (cars) | created | And it produced a THIRD subject template that nothing routes — below |
+| **Interencheres** | not created | Car filter too coarse. **Correct call** — its route is polling, not email |
+| **CapCar** | not created | The form demands a MAKE. Refused for now, on decision 7's own ground |
+| **Carizy** | not created | No alert facility exists — **and it turns out not to need one** |
+| **ParuVendu** | — | Has a RENT section too. Answered below |
+
+### The Alcopa expiry is the only thing here with a deadline
+
+An alert that expires is hard rule 2's failure introduced by the portal instead of by the code: on
+28/09 the source falls silent, and silence is exactly what a quiet saleroom looks like. Three
+consequences, in the order they bite:
+
+1. **A dated reminder is the primary control** — ~24/09, three days of slack. Not the code: the car
+   domain is not built, so today there is no backstop at all.
+2. **`SourceHealth` is a lagging backstop even once it exists.** `SOURCE_BROKEN` needs three
+   consecutive empty passes against a non-zero baseline, so a source that expires quietly is
+   detected days late — which is fine for a slow market and useless for an auction closing date.
+3. **The date belongs in the config block**, printed by `doctor`. Proposed above, not ruled. A
+   deadline that lives only in a calendar is one the tool cannot warn about.
+
+### The leboncoin third template — do NOT write the filter yet
+
+`TRANSAKAUTO MEAUX vous propose HYUNDAI i20 … à 11 490 € à Villenoy (77124)` matches neither
+positive subject pattern, so it is routed by nothing and sits in the inbox. **That is not
+necessarily a fault** — if the sender is `no.reply@leboncoin.fr` it is the 02:35 tripwire working,
+first live confirmation, and the design's whole claim was that an unknown template would surface
+where it is seen.
+
+**Two things are needed before a single filter is written**, and the second is the gate this repo
+already paid for once:
+
+- **The `From:` header of one such message.** Different sender → a `From:` filter and nothing else
+  changes (the 02:10 sender-routing ruling, unamended). Same sender → a third positive subject
+  match on `vous propose`, never a negation.
+- **One full `.eml` through `php tools/scrub-eml.php`.** The subject reads like a PAP message — one
+  ad, title + price + `commune (NNNNN)` — not like a leboncoin digest. If that holds it is its own
+  source block, not a parameter on the car source. Guessing which shape it is has a 50% failure rate
+  and the failure is silent.
+
+> **The standing weakness of subject routing, stated once so it is not rediscovered:** a subject
+> filter IS a vocabulary, the very shape *"a title is a position, never a vocabulary"* warns about,
+> and it needs extending every time the portal invents a template. It is tolerable ONLY because the
+> default is the inbox. **A fourth template means stop extending the list** and give leboncoin a
+> structural discriminator of its own — a `+car` alias for that portal alone, or a body-level match.
+> Three misses is a pattern.
+
+### Carizy: the dead row that came back
+
+Asking the alert question measured it. Its search is disallowed and it has no alert — and its
+sitemap publishes **1 341 URLs** including every ad page, none of them matching a disallow, with
+make, model and year in the path. It is the Autohero shape exactly: search refused, sitemap open.
+**No developer action; it became an engineering row.**
+
+### What is left for you, in order
+
+1. **The `From:` header of one `vous propose` message** — the only blocker on routing it. Ten seconds.
+2. **One real `.eml` from each live car alert**, through `tools/scrub-eml.php`. This is THE gate:
+   the email parser was written blind once and cost four defects the day a real message reached it,
+   behind 1 886 green tests. Priority order: the leboncoin `Voitures : 58 nouveaux résultats`
+   message **specifically** — it answers whether the alert carries all 58 cards or a truncated few,
+   which decides how much `card_separator` work it needs — then `vous propose`, Autohero, Alcopa,
+   Agorastore.
+3. **A calendar reminder for ~24/09** — renew the Alcopa alert.
+4. **Confirm the two leboncoin filters actually exist as FILTERS** (`Voitures` → car label,
+   `à louer` → rent label), not merely as labels. The one-message ingestion cost accepted at 02:10
+   lives in exactly that gap.
+5. **Verify the alerts just created against rules 1, 2 and 4** of § "Creating the alerts": created
+   on the WEB not in an app (an app alert delivers a push and never reaches the mailbox — the
+   watcher then sees a quiet market for ever); frequency set to the HIGHEST offered; and **never
+   delete an alert email** — until the parser exists the mailbox IS the corpus.
+6. **ParuVendu rent — create the saved search now** with a distinctive NAME, even though the build
+   waits. It costs three minutes and starts collecting the corpus.
+7. **CapCar — one look at whether the make selector is multi-select.** If it is, pick them all and
+   the refusal lifts.
+8. **Agorastore — one look at whether the alert can be scoped to the vehicles category.**
+9. Unchanged and parked: **AL'in** (item 1), still blocked on the NUR question, which is itself a §1
+   question before it is an input.
+
+### Other sources — the honest read, 2026-08-27
+
+**Rent is near saturation, and that is the useful answer.** Eight sources are live; Track 1
+(institutional) is measured out with every row dated; the four private portals plus the two HTML
+landlords already cover the agency stock, and cross-portal dedup merges what they duplicate. The
+remaining upside is narrow:
+
+| Candidate | Read |
+|---|---|
+| **ParuVendu** | The one worth doing. Direct-from-owner, the PAP gap. Recommended above |
+| Logic-Immo, Avendrealouer, Figaro Immobilier | Same agency stock, syndicated. Dedup would merge most of it — **low marginal value** [Inferred, not measured] |
+| Locservice, Gens de Confiance | Subscription/matching services, not alert feeds. Out on shape, not on quality |
+| Facebook Marketplace | No email alerts, and automated access is ToS-hostile. Out under hard rule 5's posture |
+| `demande-logement-social.gouv.fr`, Bienvéo, Loc'Annonces | **Out of scope entirely by §1** — social-housing channels. Do not re-propose |
+
+**Cars still have real headroom, and it is all in the polling column** — every retail portal worth
+having refuses a client, and every open host is an auction house, a reseller or an aggregator:
+
+| Candidate | Read |
+|---|---|
+| **leparking.fr** | The biggest single breadth win: WIDE OPEN, and a meta-search across many portals. ⚠️ Aggregator — the Jinka caveat in full, a truncated description can lose a `VEI` the original ad carried. Needs its own §1 evaluation first |
+| **Carizy** | Measured today. Sitemap-pollable, 1 341 URLs, no alert needed |
+| **Interencheres** | Auctions are IN; the *ventes* pages sit outside the disallowed `/recherche/*`. Unmeasured, worth one fetch |
+| **Autohero, Agorastore, Alcopa** | Already OPEN and already catalogued. These three plus Carizy are enough to prove the HTTP path |
+| Aramisauto, Autosphere, VPauto, Das WeltAuto, Renault/Dacia Occasions, Toyota Occasions, encheres-vo.com, Ouest-France Auto, Caradisiac, L'Argus | Alive, **unmeasured**. One `robots.txt` fetch each settles them; do not add them to the plan as candidates until one has |
+| mobile.de / AutoScout24.de | German import route. Real inventory, but paperwork and travel change what a notification is asking of the reader — the Reezocar niche, and Reezocar is dead |
+| Spoticar, La Centrale | 403 / DataDome. **Refused by ruling**, not by capability. Email-alert route only |
+| Ayvens Carmarket, BCAuto, Openlane, Autorola, Auto1 | **Trade-only.** A private buyer cannot bid. A fact, not a preference |
+
+**The recommendation is not to add more sources yet.** Four car alerts now exist and none of their
+payloads has been read. Every source added before the first `.eml` is config written blind, which is
+the one thing this repo has a measured price for.
