@@ -2,24 +2,24 @@
 
 declare(strict_types=1);
 
-namespace RentWatch\Adapters;
+namespace Scout\Adapters;
 
 use Dom\Element;
 use Dom\HTMLDocument;
-use RentWatch\Adapters\Html\Selector;
-use RentWatch\Adapters\Http\HttpClient;
-use RentWatch\Adapters\Http\HttpError;
-use RentWatch\Adapters\Http\HttpRequest;
-use RentWatch\Adapters\Http\Robots;
-use RentWatch\Config\FieldMap;
-use RentWatch\Config\SourceDefinition;
-use RentWatch\Core\RawListing;
-use RentWatch\Core\Redact;
-use RentWatch\Core\SourceHealth;
-use RentWatch\Core\SourceProfile;
-use RentWatch\Core\Tenure;
-use RentWatch\Store\Store;
-use RentWatch\Store\StoredDetail;
+use Scout\Adapters\Html\Selector;
+use Scout\Adapters\Http\HttpClient;
+use Scout\Adapters\Http\HttpError;
+use Scout\Adapters\Http\HttpRequest;
+use Scout\Adapters\Http\Robots;
+use Scout\Config\FieldMap;
+use Scout\Config\SourceDefinition;
+use Scout\Core\RawListing;
+use Scout\Core\Redact;
+use Scout\Core\SourceHealth;
+use Scout\Core\SourceProfile;
+use Scout\Core\Tenure;
+use Scout\Store\Store;
+use Scout\Store\StoredDetail;
 
 /**
  * Polls a server-rendered search page and maps its listing cards with the source's field map.
@@ -68,7 +68,7 @@ final readonly class HtmlSource implements Source
      * @param ?\Closure(RawListing): int $detailPriority which listings go FIRST when the per-pass
      *        budget cannot cover them all. Lower ranks first; ties keep source order. Supplied by
      *        the caller rather than configured, because the ranking is the run's own state — see
-     *        {@see \RentWatch\Cli\Scout} for the ranks and why *not yet seen* outranks everything.
+     *        {@see \Scout\Cli\Scout} for the ranks and why *not yet seen* outranks everything.
      *
      *        It is an ORDERING, no longer a gate. Novelty is the gate, and it lives in the cache: a
      *        listing whose detail page is already on record costs no request at all. Ordering on
@@ -92,7 +92,7 @@ final readonly class HtmlSource implements Source
         private Robots $robots,
         private ?\Closure $detailPriority = null,
         /**
-         * A FIXED clock for tests, per the convention {@see \RentWatch\Cli\Scout} already uses.
+         * A FIXED clock for tests, per the convention {@see \Scout\Cli\Scout} already uses.
          * The hydration cache records when each attempt happened, and the retry backoff reads it
          * back — a backoff measured by SQL `now()` cannot be tested, and an untested backoff is how
          * a dead page gets re-fetched every fifteen minutes for ever.
@@ -151,7 +151,7 @@ final readonly class HtmlSource implements Source
     }
 
     /**
-     * @return list<\RentWatch\Core\RawListing>
+     * @return list<\Scout\Core\RawListing>
      *
      * @throws SourceError
      */
@@ -479,7 +479,7 @@ final readonly class HtmlSource implements Source
         return $out;
     }
 
-    /** The convention {@see \RentWatch\Cli\Scout::nowIso()} uses: injected for tests, real otherwise. */
+    /** The convention {@see \Scout\Cli\Scout::nowIso()} uses: injected for tests, real otherwise. */
     private function now(): string
     {
         return $this->nowIso ?? (new \DateTimeImmutable())->format('Y-m-d\TH:i:sP');
@@ -700,7 +700,7 @@ final readonly class HtmlSource implements Source
     }
 
     /**
-     * @return list<\RentWatch\Core\RawListing>
+     * @return list<\Scout\Core\RawListing>
      *
      * @throws SourceError
      */

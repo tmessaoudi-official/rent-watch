@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace RentWatch\Core;
+namespace Scout\Core;
 
 /**
  * How a source is doing — the answer `scout doctor` prints, one row per source.

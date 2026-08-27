@@ -2,13 +2,13 @@
 
 declare(strict_types=1);
 
-namespace RentWatch\Tests\Store;
+namespace Scout\Tests\Store;
 
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
-use RentWatch\Core\RawListing;
-use RentWatch\Core\SourceStatus;
-use RentWatch\Store\Store;
+use Scout\Core\RawListing;
+use Scout\Core\SourceStatus;
+use Scout\Store\Store;
 
 /**
  * The store is where a silent failure costs the most, and it is not the obvious one.

@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace RentWatch\Core;
+namespace Scout\Core;
 
 /**
  * Masks credentials and personal identifiers in text that is about to be persisted or shown.

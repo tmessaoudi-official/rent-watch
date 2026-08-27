@@ -2,12 +2,12 @@
 
 declare(strict_types=1);
 
-namespace RentWatch\Tests\Core;
+namespace Scout\Tests\Core;
 
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
-use RentWatch\Core\Heartbeat;
+use Scout\Core\Heartbeat;
 
 /**
  * Q27's liveness policy, which exists because silence has two meanings.
@@ -117,7 +117,7 @@ final class HeartbeatTest extends TestCase
      * It REFUSES rather than falling back to the default. Silently defaulting would leave an
      * operator who typed `HEARTBEAT_HOURS=0` believing liveness is off, and an operator who typed
      * `HEARTBEAT_HOURS=6h` believing it is six hours — while the process does neither. This is the
-     * same posture `RENT_WATCH_MAX_PASSES` takes and the same one the config loader takes on an
+     * same posture `SCOUT_MAX_PASSES` takes and the same one the config loader takes on an
      * unknown key.
      */
     #[DataProvider('unusableValues')]

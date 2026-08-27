@@ -2,17 +2,17 @@
 
 declare(strict_types=1);
 
-namespace RentWatch\Tests\Adapters\Http;
+namespace Scout\Tests\Adapters\Http;
 
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
-use RentWatch\Adapters\Http\HttpClient;
-use RentWatch\Adapters\Http\HttpError;
-use RentWatch\Adapters\Http\HttpRequest;
-use RentWatch\Adapters\Http\HttpResponse;
-use RentWatch\Adapters\Http\Robots;
-use RentWatch\Adapters\Http\RobotsResolver;
+use Scout\Adapters\Http\HttpClient;
+use Scout\Adapters\Http\HttpError;
+use Scout\Adapters\Http\HttpRequest;
+use Scout\Adapters\Http\HttpResponse;
+use Scout\Adapters\Http\Robots;
+use Scout\Adapters\Http\RobotsResolver;
 
 /**
  * The status-code table in {@see RobotsResolver}, one row at a time.
@@ -20,7 +20,7 @@ use RentWatch\Adapters\Http\RobotsResolver;
  * It lives here rather than in the CLI suite for a reason worth stating: every row is a POSTURE
  * decision — what a missing, forbidden or broken `robots.txt` licenses — and a posture that can only
  * be exercised through a full CLI round trip is a posture nobody will add a case to. The CLI suite
- * ({@see \RentWatch\Tests\Cli\ScoutRobotsTest}) proves the wiring exists; this one proves the wiring
+ * ({@see \Scout\Tests\Cli\ScoutRobotsTest}) proves the wiring exists; this one proves the wiring
  * carries the right verdict.
  *
  * The two rows that must never be collapsed into each other are `404` and `5xx`. They are both

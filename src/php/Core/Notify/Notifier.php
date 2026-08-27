@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace RentWatch\Core\Notify;
+namespace Scout\Core\Notify;
 
 /**
  * Fans one notification out to every usable channel, and reports honestly when it cannot.

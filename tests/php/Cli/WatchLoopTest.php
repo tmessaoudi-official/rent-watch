@@ -2,13 +2,13 @@
 
 declare(strict_types=1);
 
-namespace RentWatch\Tests\Cli;
+namespace Scout\Tests\Cli;
 
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
-use RentWatch\Adapters\SourceError;
-use RentWatch\Cli\WatchLoop;
-use RentWatch\Core\Pacer;
+use Scout\Adapters\SourceError;
+use Scout\Cli\WatchLoop;
+use Scout\Core\Pacer;
 
 /**
  * The loop that turns `scout run --once` into a watcher.

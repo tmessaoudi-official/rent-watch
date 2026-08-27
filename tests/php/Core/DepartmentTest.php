@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-namespace RentWatch\Tests\Core;
+namespace Scout\Tests\Core;
 
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
-use RentWatch\Core\Department;
+use Scout\Core\Department;
 
 /**
  * The postcode → departement lookup behind the notification's facts line.

@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace RentWatch\Core\Notify;
+namespace Scout\Core\Notify;
 
 /**
  * How an email actually leaves. The seam that lets `.env` swap a real server for a fake one.

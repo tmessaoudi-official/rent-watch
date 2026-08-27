@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace RentWatch\Core;
+namespace Scout\Core;
 
 /**
  * Postcode → French departement name, for the eight of Île-de-France.
@@ -38,7 +38,7 @@ final class Department
      * `"Yvelines (78)"`, or `null` when the postcode is absent, malformed or outside Île-de-France.
      *
      * Non-digits are stripped before the prefix is read, the same normalisation
-     * {@see \RentWatch\Config\Criteria::matchesCommune()} applies — a source that writes `78 500`
+     * {@see \Scout\Config\Criteria::matchesCommune()} applies — a source that writes `78 500`
      * or `F-78500` is describing the same place, and a display that disagreed with the filter about
      * which departement a listing is in would be worse than saying nothing.
      */

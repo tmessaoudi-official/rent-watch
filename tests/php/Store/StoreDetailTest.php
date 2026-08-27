@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-namespace RentWatch\Tests\Store;
+namespace Scout\Tests\Store;
 
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
-use RentWatch\Store\Store;
+use Scout\Store\Store;
 
 /**
  * Schema v5's `listing_detail` cache — what a listing's own detail page said, read ONCE.

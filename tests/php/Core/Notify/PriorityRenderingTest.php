@@ -2,14 +2,14 @@
 
 declare(strict_types=1);
 
-namespace RentWatch\Tests\Core\Notify;
+namespace Scout\Tests\Core\Notify;
 
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
-use RentWatch\Core\Notify\ConsoleChannel;
-use RentWatch\Core\Notify\Notification;
-use RentWatch\Core\Notify\NotificationKind;
-use RentWatch\Core\Notify\Priority;
+use Scout\Core\Notify\ConsoleChannel;
+use Scout\Core\Notify\Notification;
+use Scout\Core\Notify\NotificationKind;
+use Scout\Core\Notify\Priority;
 
 /**
  * What a HIGH-priority notification actually LOOKS LIKE — the last unpinned link in the `!!` chain.

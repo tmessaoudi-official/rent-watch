@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace RentWatch\Cli;
+namespace Scout\Cli;
 
 /**
  * What one pass of the pipeline did. The CLI's exit code and every summary line derive from this.

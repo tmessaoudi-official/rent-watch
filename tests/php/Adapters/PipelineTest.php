@@ -2,18 +2,18 @@
 
 declare(strict_types=1);
 
-namespace RentWatch\Tests\Adapters;
+namespace Scout\Tests\Adapters;
 
 use PHPUnit\Framework\TestCase;
-use RentWatch\Adapters\FixtureSource;
-use RentWatch\Adapters\SourceError;
-use RentWatch\Config\ConfigLoader;
-use RentWatch\Config\SourceDefinition;
-use RentWatch\Core\CriteriaEngine;
-use RentWatch\Core\Outcome;
-use RentWatch\Core\TenureClassifier;
-use RentWatch\Core\Verdict;
-use RentWatch\Store\Store;
+use Scout\Adapters\FixtureSource;
+use Scout\Adapters\SourceError;
+use Scout\Config\ConfigLoader;
+use Scout\Config\SourceDefinition;
+use Scout\Core\CriteriaEngine;
+use Scout\Core\Outcome;
+use Scout\Core\TenureClassifier;
+use Scout\Core\Verdict;
+use Scout\Store\Store;
 
 /**
  * The whole pipeline against a frozen payload — config, fetch, field map, classify, criteria.
@@ -146,9 +146,9 @@ final class PipelineTest extends TestCase
         // like the scoring was working.
         $engine = new CriteriaEngine(ConfigLoader::loadCriteria(self::ROOT . '/tests/fixtures/criteria/pipeline.json'));
         $classifier = new TenureClassifier();
-        $profile = new \RentWatch\Core\SourceProfile('t', 'institutional', \RentWatch\Core\Tenure::LLI, false);
+        $profile = new \Scout\Core\SourceProfile('t', 'institutional', \Scout\Core\Tenure::LLI, false);
 
-        $make = static fn (?bool $lift): \RentWatch\Core\RawListing => new \RentWatch\Core\RawListing(
+        $make = static fn (?bool $lift): \Scout\Core\RawListing => new \Scout\Core\RawListing(
             sourceName: 't',
             externalId: 'lift-' . var_export($lift, true),
             title: 'T4 Sartrouville - logement intermediaire',
@@ -209,7 +209,7 @@ final class PipelineTest extends TestCase
         $classifier = new TenureClassifier();
 
         $listing = $source->fetch()[0];
-        $over = new \RentWatch\Core\RawListing(
+        $over = new \Scout\Core\RawListing(
             sourceName: $listing->sourceName,
             externalId: 'over',
             title: $listing->title,
@@ -252,9 +252,9 @@ final class PipelineTest extends TestCase
     {
         $engine = new CriteriaEngine(ConfigLoader::loadCriteria(self::ROOT . '/tests/fixtures/criteria/pipeline.json'));
         $classifier = new TenureClassifier();
-        $profile = new \RentWatch\Core\SourceProfile('t', 'institutional', \RentWatch\Core\Tenure::LLI, false);
+        $profile = new \Scout\Core\SourceProfile('t', 'institutional', \Scout\Core\Tenure::LLI, false);
 
-        $listing = new \RentWatch\Core\RawListing(
+        $listing = new \Scout\Core\RawListing(
             sourceName: 't',
             externalId: 'nowhere',
             title: 'T4 logement intermediaire',
@@ -362,7 +362,7 @@ final class PipelineTest extends TestCase
             type: 'fixture',
             mixedTenure: true,
             itemsPath: 'results.items',
-            map: new \RentWatch\Config\FieldMap(ref: ['reference_absente']),
+            map: new \Scout\Config\FieldMap(ref: ['reference_absente']),
             fixture: 'tests/fixtures/fixture_demo/search.json',
         );
 
@@ -432,14 +432,14 @@ final class PipelineTest extends TestCase
             512,
             JSON_THROW_ON_ERROR,
         );
-        $items = \RentWatch\Adapters\Payload::at($payload, (string) $definition->itemsPath);
+        $items = \Scout\Adapters\Payload::at($payload, (string) $definition->itemsPath);
         self::assertIsArray($items);
 
         $unused = [];
         foreach ($definition->map->allPaths() as $path) {
             $seen = false;
             foreach ($items as $item) {
-                if (!\RentWatch\Adapters\Payload::isNullish(\RentWatch\Adapters\Payload::at($item, $path))) {
+                if (!\Scout\Adapters\Payload::isNullish(\Scout\Adapters\Payload::at($item, $path))) {
                     $seen = true;
                     break;
                 }

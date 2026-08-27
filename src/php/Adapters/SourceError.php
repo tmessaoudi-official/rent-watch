@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace RentWatch\Adapters;
+namespace Scout\Adapters;
 
-use RentWatch\Core\Redact;
+use Scout\Core\Redact;
 
 /**
  * A source failed. Loudly, and with the failure preserved.

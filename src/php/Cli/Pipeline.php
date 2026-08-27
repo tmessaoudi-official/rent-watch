@@ -2,24 +2,24 @@
 
 declare(strict_types=1);
 
-namespace RentWatch\Cli;
+namespace Scout\Cli;
 
-use RentWatch\Adapters\Source;
-use RentWatch\Adapters\SourceError;
-use RentWatch\Config\Criteria;
-use RentWatch\Core\Classification;
-use RentWatch\Core\CriteriaEngine;
-use RentWatch\Core\Dedup;
-use RentWatch\Core\Notify\Formatter;
-use RentWatch\Core\Notify\Notifier;
-use RentWatch\Core\Outcome;
-use RentWatch\Core\RawListing;
-use RentWatch\Core\Tenure;
-use RentWatch\Core\TenureSignal;
-use RentWatch\Core\TenureClassifier;
-use RentWatch\Core\Verdict;
-use RentWatch\Enrich\CommutePlanner;
-use RentWatch\Store\Store;
+use Scout\Adapters\Source;
+use Scout\Adapters\SourceError;
+use Scout\Config\Criteria;
+use Scout\Core\Classification;
+use Scout\Core\CriteriaEngine;
+use Scout\Core\Dedup;
+use Scout\Core\Notify\Formatter;
+use Scout\Core\Notify\Notifier;
+use Scout\Core\Outcome;
+use Scout\Core\RawListing;
+use Scout\Core\Tenure;
+use Scout\Core\TenureSignal;
+use Scout\Core\TenureClassifier;
+use Scout\Core\Verdict;
+use Scout\Enrich\CommutePlanner;
+use Scout\Store\Store;
 
 /**
  * One pass: fetch every enabled source, classify, filter, dedup, store, notify.
@@ -186,7 +186,7 @@ final readonly class Pipeline
         //
         // Recorded once and reused below, keyed on object identity, so the survivor is not stored
         // twice in one pass.
-        /** @var array<int, array{sighting: \RentWatch\Store\Sighting, classification: \RentWatch\Core\Classification}> $observed */
+        /** @var array<int, array{sighting: \Scout\Store\Sighting, classification: \Scout\Core\Classification}> $observed */
         $observed = [];
         /** @var array<int, list<string>> $clusterKeys survivor object id -> every member's dedup key */
         $clusterKeys = [];
@@ -693,7 +693,7 @@ final readonly class Pipeline
     /**
      * @param list<Source> $sources
      */
-    private function profileFor(array $sources, RawListing $listing): \RentWatch\Core\SourceProfile
+    private function profileFor(array $sources, RawListing $listing): \Scout\Core\SourceProfile
     {
         foreach ($sources as $source) {
             if ($source->name() === $listing->sourceName) {
@@ -704,6 +704,6 @@ final readonly class Pipeline
         // Unreachable in practice — the listing came from one of these sources. Fail CLOSED anyway:
         // `mixedTenure: true` with no default means a listing with no signal digests rather than
         // matching, which is the direction §1 requires when we do not know what we are looking at.
-        return new \RentWatch\Core\SourceProfile($listing->sourceName, 'institutional', null, true);
+        return new \Scout\Core\SourceProfile($listing->sourceName, 'institutional', null, true);
     }
 }

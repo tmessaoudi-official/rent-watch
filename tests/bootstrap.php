@@ -5,7 +5,7 @@ declare(strict_types=1);
 /**
  * Test bootstrap — exists to turn one silent failure into a loud one.
  *
- * `composer dump-autoload` WITHOUT `--dev` omits the `RentWatch\Tests\` PSR-4 entry. PHPUnit then
+ * `composer dump-autoload` WITHOUT `--dev` omits the `Scout\Tests\` PSR-4 entry. PHPUnit then
  * still discovers and runs the test FILES (it loads those itself), but the corpus reader they share
  * is a normal autoloaded class, so every corpus test errors with `Class ... not found` while the
  * unit tests carry on passing. The run looks like a code regression and is actually a build state.
@@ -33,12 +33,12 @@ require $autoload;
 // `CurlHttpClient::send()` reads this and refuses, so an accidental real client fails instantly and
 // says why, instead of hanging or quietly succeeding on a developer's machine and hammering the
 // site from CI. Adapters under test are given fakes; this is the backstop for the ones that are not.
-putenv('RENT_WATCH_OFFLINE=1');
+putenv('SCOUT_OFFLINE=1');
 
-if (!class_exists(\RentWatch\Tests\Core\Corpus::class)) {
+if (!class_exists(\Scout\Tests\Core\Corpus::class)) {
     fwrite(
         STDERR,
-        "rent-watch: the RentWatch\\Tests\\ namespace is not autoloadable, so the corpus suite cannot\n"
+        "rent-watch: the Scout\\Tests\\ namespace is not autoloadable, so the corpus suite cannot\n"
         . "  load its fixtures. The autoloader was generated without dev namespaces.\n"
         . "  run: composer dump-autoload --dev\n",
     );

@@ -153,7 +153,7 @@ docker tag rent-watch:local rent-watch:pre-<what-you-are-leaving>   # rollback, 
 docker compose build                                                # BEFORE stopping: a failed
                                                                     #   build must not leave you down
 sqlite3 state/rent-watch.sqlite3 ".backup /tmp/mig-rehearse.sqlite3"
-php -r 'require "vendor/autoload.php"; $s=RentWatch\Store\Store::open("/tmp/mig-rehearse.sqlite3");
+php -r 'require "vendor/autoload.php"; $s=Scout\Store\Store::open("/tmp/mig-rehearse.sqlite3");
         echo $s->schemaVersion()," ",$s->journalMode(),PHP_EOL;'    # rehearse the migration
 docker compose stop                                                 # graceful; finishes the pass
 sqlite3 state/rent-watch.sqlite3 ".backup state/rent-watch.sqlite3.pre-<v>.$(date +%s).bak"
@@ -200,7 +200,7 @@ reports a plausible row count**. You find out at restore, which is the one momen
 to. `tools/backup-state.sh` uses SQLite's own online-backup API, which is safe against a live writer
 and checkpoints the WAL, then **reads the copy back** (`integrity_check` plus a row count) before
 reporting success — a backup nobody opened is a file, not a backup. It keeps 7
-(`RENT_WATCH_BACKUP_KEEP`), pruning oldest-first, because an unbounded backup directory fills the
+(`SCOUT_BACKUP_KEEP`), pruning oldest-first, because an unbounded backup directory fills the
 VPS disk and takes the live seen-set down with it. Restoring is a move: stop the container, put the
 file at `state/rent-watch.sqlite3`, start it.
 
@@ -346,7 +346,7 @@ ls -t var/outbox | head -1     # `file` transport: the message that was written 
 > `command not found`. A value containing backticks would have been executed.
 >
 > The parser takes values literally — no expansion, no substitution — and **the real environment
-> still wins**, so `RENT_WATCH_DB=/tmp/throwaway bin/scout run` works as before. A line that is not
+> still wins**, so `SCOUT_DB=/tmp/throwaway bin/scout run` works as before. A line that is not
 > `KEY=VALUE` is a startup refusal naming the line NUMBER and never the line, because this file
 > holds credentials.
 

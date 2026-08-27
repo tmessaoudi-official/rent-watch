@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace RentWatch\Core;
+namespace Scout\Core;
 
 /**
  * What the pipeline does with a classified listing.

@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace RentWatch\Adapters\Mail;
+namespace Scout\Adapters\Mail;
 
 /**
  * A source of raw alert emails, and the ONE place a test replaces the network.

@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-namespace RentWatch\Tests\Adapters;
+namespace Scout\Tests\Adapters;
 
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
-use RentWatch\Adapters\Payload;
+use Scout\Adapters\Payload;
 
 /**
  * Value extraction — the layer where `CLAUDE.md` hard rule 9 lives or dies.

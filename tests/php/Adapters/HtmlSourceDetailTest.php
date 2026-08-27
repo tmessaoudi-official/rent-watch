@@ -2,20 +2,20 @@
 
 declare(strict_types=1);
 
-namespace RentWatch\Tests\Adapters;
+namespace Scout\Tests\Adapters;
 
 use PHPUnit\Framework\TestCase;
-use RentWatch\Adapters\Http\HttpClient;
-use RentWatch\Adapters\Http\HttpError;
-use RentWatch\Adapters\Http\HttpRequest;
-use RentWatch\Adapters\Http\HttpResponse;
-use RentWatch\Adapters\Http\Robots;
-use RentWatch\Adapters\HtmlSource;
-use RentWatch\Adapters\SourceError;
-use RentWatch\Config\FieldMap;
-use RentWatch\Config\SourceDefinition;
-use RentWatch\Core\RawListing;
-use RentWatch\Store\Store;
+use Scout\Adapters\Http\HttpClient;
+use Scout\Adapters\Http\HttpError;
+use Scout\Adapters\Http\HttpRequest;
+use Scout\Adapters\Http\HttpResponse;
+use Scout\Adapters\Http\Robots;
+use Scout\Adapters\HtmlSource;
+use Scout\Adapters\SourceError;
+use Scout\Config\FieldMap;
+use Scout\Config\SourceDefinition;
+use Scout\Core\RawListing;
+use Scout\Store\Store;
 
 /**
  * Detail-page hydration: the second request a listing sometimes needs, and the gate that decides.
@@ -288,7 +288,7 @@ final class HtmlSourceDetailTest extends TestCase
      * hydrating everything and hydrating nothing — retired when novelty became the gate: there is
      * no longer a gate to be absent. The thing it protected is still real, so it has a successor
      * one layer up, at config load: `detail_budget_per_pass: 0` is REFUSED
-     * ({@see \RentWatch\Tests\Config\ConfigTest::testADetailMapWithAZeroBudgetIsRefused}),
+     * ({@see \Scout\Tests\Config\ConfigTest::testADetailMapWithAZeroBudgetIsRefused}),
      * because a detail map that can never run is a disabled feature wearing a configured one's
      * clothes. An omitted priority merely means the budget is spent in source order.
      */

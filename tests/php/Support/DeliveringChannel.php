@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace RentWatch\Tests\Support;
+namespace Scout\Tests\Support;
 
-use RentWatch\Core\Notify\Channel;
-use RentWatch\Core\Notify\Notification;
+use Scout\Core\Notify\Channel;
+use Scout\Core\Notify\Notification;
 
 /**
  * A channel that COUNTS as a delivery and always succeeds, for CLI tests that need one.

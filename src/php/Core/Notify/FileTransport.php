@@ -2,12 +2,12 @@
 
 declare(strict_types=1);
 
-namespace RentWatch\Core\Notify;
+namespace Scout\Core\Notify;
 
 /**
  * Writes each message to a directory as an `.eml` file. Never sends anything.
  *
- * The counterpart to {@see \RentWatch\Adapters\Mail\FileMailbox}, and the reason the email path is
+ * The counterpart to {@see \Scout\Adapters\Mail\FileMailbox}, and the reason the email path is
  * testable end to end offline: `scout test-notify` with `SMTP_TRANSPORT=file` produces a real
  * message you can open, without a server, a credential or an outbound connection.
  *

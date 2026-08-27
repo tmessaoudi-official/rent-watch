@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace RentWatch\Config;
+namespace Scout\Config;
 
 /**
  * Notification routing, ruled 2026-08-07 (`docs/OPEN-QUESTIONS.md` § "Resolution of 1c").

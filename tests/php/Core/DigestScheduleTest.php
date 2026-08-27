@@ -2,12 +2,12 @@
 
 declare(strict_types=1);
 
-namespace RentWatch\Tests\Core;
+namespace Scout\Tests\Core;
 
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
-use RentWatch\Core\DigestSchedule;
+use Scout\Core\DigestSchedule;
 
 /**
  * Q34's daily floor: *has the local `digest_hour` come round again since the last emission?*
@@ -28,7 +28,7 @@ use RentWatch\Core\DigestSchedule;
  * happens to be default asserts nothing about zone handling, so the case below pins BOTH directions
  * on one pair of instants — due in Paris, not due in UTC.
  *
- * The bias is inherited from {@see \RentWatch\Core\Heartbeat}: one emission too many, never one
+ * The bias is inherited from {@see \Scout\Core\Heartbeat}: one emission too many, never one
  * suppressed. An extra low-priority rollup costs a glance; a suppressed one costs the guarantee.
  */
 #[CoversClass(DigestSchedule::class)]

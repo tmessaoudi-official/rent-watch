@@ -2,13 +2,13 @@
 
 declare(strict_types=1);
 
-namespace RentWatch\Tests\Store;
+namespace Scout\Tests\Store;
 
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
-use RentWatch\Core\RawListing;
-use RentWatch\Core\Tenure;
-use RentWatch\Store\Store;
+use Scout\Core\RawListing;
+use Scout\Core\Tenure;
+use Scout\Store\Store;
 
 /**
  * Schema v4's `group_key` overlay — the cross-portal price history, ruled 2026-08-19 23:02.

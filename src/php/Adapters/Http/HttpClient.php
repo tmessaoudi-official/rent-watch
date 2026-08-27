@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace RentWatch\Adapters\Http;
+namespace Scout\Adapters\Http;
 
 /**
  * The HTTP surface every network adapter uses, and the ONE place a test can replace.

@@ -169,7 +169,7 @@ Cityloger skews to the intermediate and libre stock this project is looking for.
 > headline number was right and its explanation was invented, which is worse than being wrong twice:
 > a true number attached to a false cause stops anyone looking. **Never generalise one source's
 > measurement to the tree** — `scout run --seed -v --source=<name>` on a throwaway
-> `RENT_WATCH_DB` prints every rejection with its reason and costs one poll.
+> `SCOUT_DB` prints every rejection with its reason and costs one poll.
 
 **The notification carries the postcode, the departement, the floor and the lift** (phase 1,
 2026-08-22). Headline: `82/100 — Sartrouville 78500 · T4 88 m² · 1450 € CC`; first reason line:
@@ -277,7 +277,7 @@ widening to all eight departements while dropping the surface floor to 50 m² an
 > eight of the old matches quoted 1258–1669 € CC, so the ceiling alone kills every one of them — a
 > first draft of the Q2 entry reasoned exactly that far and wrote *"the live yield is zero"*. The
 > other two changes had opened a pool the old criteria never looked at. **Never predict a yield from
-> the previous filter's matches**; `scout run --once --seed` on a throwaway `RENT_WATCH_DB` costs
+> the previous filter's matches**; `scout run --once --seed` on a throwaway `SCOUT_DB` costs
 > one poll. Two live consequences worth knowing: nearly every match is OUTSIDE the ranked communes
 > (91/93/94 — Les Ulis, Aulnay, Pierrefitte, Vitry — with Dourdan and Dammarie-les-Lys scoring
 > highest), because there is nothing under 1200 € CC in the Boucle de Seine; and scores ran
@@ -761,7 +761,7 @@ score discriminated**: 83 live matches spread over all eight departements scored
 > The threshold is `50` since 2026-08-26 for that reason. Full measurement in the Q2 block above.
 
 `Enrich/CommutePlanner` is the interface, `Enrich/NavitiaCommute` the IDFM/PRIM implementation over
-the ordinary `HttpClient` seam — which is what makes `RENT_WATCH_OFFLINE=1` cover it structurally
+the ordinary `HttpClient` seam — which is what makes `SCOUT_OFFLINE=1` cover it structurally
 rather than by discipline. **Verified against the live API** (hard rule 1): base
 `prim.iledefrance-mobilites.fr/marketplace/v2/navitia`, an `apikey` HEADER, and
 `journeys?from=<lon>;<lat>` returning `duration` in **SECONDS**. Three details that are easy to get
@@ -945,7 +945,7 @@ the disk — a `ConfigError` message quotes the offending VALUE back, which is e
 `imap://user:password@host` ends up in a file.
 
 **No test reaches the network, and that is now structural rather than accidental.**
-`tests/bootstrap.php` sets `RENT_WATCH_OFFLINE=1` and `CurlHttpClient::send()` refuses any
+`tests/bootstrap.php` sets `SCOUT_OFFLINE=1` and `CurlHttpClient::send()` refuses any
 third-party host (loopback stays allowed — the wire tests need a real socket). Before In'li was
 enabled the offline guarantee held only because every source was disabled; enabling one turned the
 suite into a four-page-per-test crawler of a live landlord's site within a single run.
@@ -973,7 +973,7 @@ any path that loses the seen-set. `ConfigTest::testNoFixtureSourceShipsEnabled` 
 creeping back.
 
 **Two more environment seams, both of them there so a test cannot become a hang or a crawl**
-(2026-08-19). `RENT_WATCH_MAX_PASSES=<n>` bounds `scout run --watch` to n passes; absent — the
+(2026-08-19). `SCOUT_MAX_PASSES=<n>` bounds `scout run --watch` to n passes; absent — the
 normal case — the loop runs until stopped, and when it is set the watcher SAYS so on its banner
 every time. `tests/php/Cli/ScoutTest.php` sets it for every test in the class, because `--watch` is
 the one verb whose success case never returns: a test that expects the run to be refused and is
@@ -1214,7 +1214,7 @@ impossible by design rather than by omission (`docs/PHORJ-REQUIREMENTS.md`).
 | Fixtures | `tests/fixtures/<source>/` | Frozen HTML/JSON payloads, and frozen `.eml` alerts for an `email_alert` source. Parser tests run **offline**. No network in CI. |
 | Classifier corpus | `tests/fixtures/tenure/corpus.json` | **Language-neutral.** Read by both implementations — that shared file is what makes the differential test mean anything. |
 
-PHP is **8.5**, no runtime dependencies, PSR-4 `RentWatch\` → `src/php/`. The test runner is
+PHP is **8.5**, no runtime dependencies, PSR-4 `Scout\` → `src/php/`. The test runner is
 PHPUnit's official PHAR, not a Composer dev dependency — see `README.md` § Getting started for why.
 
 Every source implements the same interface — no exceptions:
@@ -1672,7 +1672,7 @@ var/claude/                 Reports, review outputs — gitignored scratch (hand
   adding a dev dependency. Per `/root/.ccr/README.md`, a 403 from the proxy is reported, not routed
   around.
 - **`composer dump-autoload` WITHOUT `--dev` silently breaks the corpus suite.** It omits the
-  `RentWatch\Tests\` PSR-4 entry; PHPUnit still loads the test *files* itself, so the unit tests keep
+  `Scout\Tests\` PSR-4 entry; PHPUnit still loads the test *files* itself, so the unit tests keep
   passing while every corpus test errors `Class ... not found`. It reads as a code regression and is
   a build state. `tests/bootstrap.php` now checks this and prints the fix, but if you see that error,
   run `composer dump-autoload --dev`.
@@ -1696,19 +1696,19 @@ var/claude/                 Reports, review outputs — gitignored scratch (hand
 `.env.example` is the agreed SHAPE of the configuration rather than live settings.
 `.env.example` is the committed template and lists every key: the dedicated alert mailbox's IMAP
 host/user/password, the notification channel token (ntfy / Telegram / SMTP), the IDFM/PRIM API key,
-`RFR_N2` if income-eligibility checking is enabled (Q6), and `RENT_WATCH_DB`. Keep the two in sync —
+`RFR_N2` if income-eligibility checking is enabled (Q6), and `SCOUT_DB`. Keep the two in sync —
 a key added to `.env` and not to the template is invisible to the next deployment.
 
 **Adapter error text is a secrets channel, and the guard is already in place.** An exception from an
 HTTP or IMAP adapter naturally carries the request URL (the IDFM key is a query parameter) or the
 mailbox it failed on. `Store::recordRun()` persists that text and `Store::health()` interpolates it
-into a user-facing detail, so `RentWatch\Core\Redact` masks it at that single funnel. Do not bypass
+into a user-facing detail, so `Scout\Core\Redact` masks it at that single funnel. Do not bypass
 `Redact::text()` when adding an adapter, and do not add a second, per-adapter copy of it.
 
 Stateful data that must not be casually deleted (the container-era `BLAST-RADIUS.md` that
 documented this left with `scripts/claude-bootstrap/` on 2026-08-18 — this list is now the record):
 
-- the seen-set / listings DB (`RENT_WATCH_DB`, default `state/rent-watch.sqlite3` — deliberately NOT
+- the seen-set / listings DB (`SCOUT_DB`, default `state/rent-watch.sqlite3` — deliberately NOT
   under `var/`, which this file documents as container-lifetime scratch) — deleting it makes the next
   run **re-notify everything**
 - price history — a rent drop is a notification-worthy event; the history is not reconstructible

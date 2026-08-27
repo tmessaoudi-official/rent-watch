@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace RentWatch\Core;
+namespace Scout\Core;
 
 /**
  * What an adapter produced, before enrichment and before scoring.
@@ -78,7 +78,7 @@ final readonly class RawListing
          *
          * Read by the fail-closed rule: weak evidence on a mixed source digests while the page is
          * unread, and matches once it has been read and found to say nothing excluding. See
-         * {@see \RentWatch\Core\TenureClassifier}.
+         * {@see \Scout\Core\TenureClassifier}.
          */
         public bool $detailRead = false,
         /**
@@ -233,7 +233,7 @@ final readonly class RawListing
      * would run the wrong way: a path segment like `/logement-social/` is real evidence, and losing
      * a social signal is the dangerous direction, where losing a campaign string costs nothing. A
      * query or fragment is machine parameters by construction — the same distinction
-     * {@see \RentWatch\Adapters\EmailAlertSource::stableId()} already draws for identity.
+     * {@see \Scout\Adapters\EmailAlertSource::stableId()} already draws for identity.
      *
      * Applied HERE because this method is the classifier's only prose surface — every tier folds it,
      * and nothing else in the tree calls it.

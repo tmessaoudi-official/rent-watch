@@ -2,17 +2,17 @@
 
 declare(strict_types=1);
 
-namespace RentWatch\Tests\Adapters;
+namespace Scout\Tests\Adapters;
 
 use PHPUnit\Framework\TestCase;
-use RentWatch\Adapters\Html\Selector;
-use RentWatch\Adapters\Payload;
-use RentWatch\Core\Prose;
-use RentWatch\Config\ConfigLoader;
-use RentWatch\Core\RawListing;
-use RentWatch\Core\SourceProfile;
-use RentWatch\Core\Tenure;
-use RentWatch\Core\TenureClassifier;
+use Scout\Adapters\Html\Selector;
+use Scout\Adapters\Payload;
+use Scout\Core\Prose;
+use Scout\Config\ConfigLoader;
+use Scout\Core\RawListing;
+use Scout\Core\SourceProfile;
+use Scout\Core\Tenure;
+use Scout\Core\TenureClassifier;
 
 /**
  * In'li's detail page, frozen — and what the committed `detail_map` is allowed to conclude from it.

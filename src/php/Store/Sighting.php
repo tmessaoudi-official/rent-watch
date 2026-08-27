@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace RentWatch\Store;
+namespace Scout\Store;
 
 /**
  * What the store learned by being shown a listing — the answer to "is this worth telling anyone?".

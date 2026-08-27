@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace RentWatch\Adapters\Mail;
+namespace Scout\Adapters\Mail;
 
 /**
  * A parsed RFC-822 message: headers, a text body, and the links it contains.

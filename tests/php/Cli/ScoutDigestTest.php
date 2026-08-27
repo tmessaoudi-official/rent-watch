@@ -2,15 +2,15 @@
 
 declare(strict_types=1);
 
-namespace RentWatch\Tests\Cli;
+namespace Scout\Tests\Cli;
 
 use PHPUnit\Framework\TestCase;
-use RentWatch\Cli\Scout;
-use RentWatch\Core\Notify\ConsoleChannel;
-use RentWatch\Core\Notify\Notifier;
-use RentWatch\Tests\Support\DeliveringChannel;
-use RentWatch\Core\RawListing;
-use RentWatch\Store\Store;
+use Scout\Cli\Scout;
+use Scout\Core\Notify\ConsoleChannel;
+use Scout\Core\Notify\Notifier;
+use Scout\Tests\Support\DeliveringChannel;
+use Scout\Core\RawListing;
+use Scout\Store\Store;
 
 /**
  * `scout digest` — the ON-DEMAND half of Q34.
@@ -62,7 +62,7 @@ final class ScoutDigestTest extends TestCase
             self::removeTree($root);
         }
         $this->roots = [];
-        putenv('RENT_WATCH_DB');
+        putenv('SCOUT_DB');
         putenv('NTFY_TOPIC');
         putenv('NTFY_SERVER');
     }
@@ -338,7 +338,7 @@ final class ScoutDigestTest extends TestCase
         self::assertIsResource($out);
         self::assertIsResource($err);
 
-        putenv('RENT_WATCH_DB=' . $root . '/state/rent-watch.sqlite3');
+        putenv('SCOUT_DB=' . $root . '/state/rent-watch.sqlite3');
 
         $code = (new Scout($root, $out, $err, self::NOW, null, self::compose($out, $delivering)))->run($argv);
         rewind($out);

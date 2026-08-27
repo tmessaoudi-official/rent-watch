@@ -4,7 +4,7 @@
 #
 #     tools/backup-state.sh [<database>] [<destination-dir>]
 #
-# Defaults: `$RENT_WATCH_DB` or `state/rent-watch.sqlite3`, into `state/backups/`.
+# Defaults: `$SCOUT_DB` or `state/rent-watch.sqlite3`, into `state/backups/`.
 #
 # **`cp` IS THE WRONG TOOL AND THE REASON IS SILENT.** The watcher holds the database open in WAL
 # mode, so a byte copy taken mid-transaction is torn — and a torn SQLite file OPENS WITHOUT
@@ -21,10 +21,10 @@
 
 set -euo pipefail
 
-_keep="${RENT_WATCH_BACKUP_KEEP:-7}"
+_keep="${SCOUT_BACKUP_KEEP:-7}"
 
 _root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-_db="${1:-${RENT_WATCH_DB:-$_root/state/rent-watch.sqlite3}}"
+_db="${1:-${SCOUT_DB:-$_root/state/rent-watch.sqlite3}}"
 _dest="${2:-$_root/state/backups}"
 
 die() {

@@ -2,12 +2,12 @@
 
 declare(strict_types=1);
 
-namespace RentWatch\Adapters;
+namespace Scout\Adapters;
 
-use RentWatch\Core\RawListing;
-use RentWatch\Core\SourceHealth;
-use RentWatch\Core\SourceProfile;
-use RentWatch\Core\Tenure;
+use Scout\Core\RawListing;
+use Scout\Core\SourceHealth;
+use Scout\Core\SourceProfile;
+use Scout\Core\Tenure;
 
 /**
  * The one contract every source satisfies — `CLAUDE.md` § Architecture.

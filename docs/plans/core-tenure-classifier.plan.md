@@ -299,7 +299,7 @@ constructor argument that can change it — per `CLAUDE.md` §1, *"not user-over
 
 | Path | What |
 |---|---|
-| `composer.json` | PSR-4 `RentWatch\` → `src/php/`. **Zero dependencies** — the runner is `tools/phpunit.phar` |
+| `composer.json` | PSR-4 `Scout\` → `src/php/`. **Zero dependencies** — the runner is `tools/phpunit.phar` |
 | `src/php/Core/Tenure.php` | The `Tenure` enum + excluded/eligible sets |
 | `src/php/Core/Outcome.php` | `MATCH` / `DIGEST` / `REJECT` |
 | `src/php/Core/RawListing.php` | What an adapter emits — spec §3 `models` |

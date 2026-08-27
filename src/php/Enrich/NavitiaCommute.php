@@ -2,12 +2,12 @@
 
 declare(strict_types=1);
 
-namespace RentWatch\Enrich;
+namespace Scout\Enrich;
 
-use RentWatch\Adapters\Http\HttpClient;
-use RentWatch\Adapters\Http\HttpRequest;
-use RentWatch\Config\Criteria;
-use RentWatch\Store\Store;
+use Scout\Adapters\Http\HttpClient;
+use Scout\Adapters\Http\HttpRequest;
+use Scout\Config\Criteria;
+use Scout\Store\Store;
 
 /**
  * Île-de-France Mobilités (PRIM), Navitia-based, over the ordinary {@see HttpClient} seam.

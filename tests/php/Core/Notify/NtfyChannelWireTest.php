@@ -2,13 +2,13 @@
 
 declare(strict_types=1);
 
-namespace RentWatch\Tests\Core\Notify;
+namespace Scout\Tests\Core\Notify;
 
 use PHPUnit\Framework\TestCase;
-use RentWatch\Core\Notify\Notification;
-use RentWatch\Core\Notify\NotificationKind;
-use RentWatch\Core\Notify\NtfyChannel;
-use RentWatch\Core\Notify\Priority;
+use Scout\Core\Notify\Notification;
+use Scout\Core\Notify\NotificationKind;
+use Scout\Core\Notify\NtfyChannel;
+use Scout\Core\Notify\Priority;
 
 /**
  * `NtfyChannel` against a real socket, answered by the scripted HTTP responder on loopback.

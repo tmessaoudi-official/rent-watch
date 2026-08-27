@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace RentWatch\Core;
+namespace Scout\Core;
 
 /**
  * Decides whether two listings from DIFFERENT sources are the same flat.
@@ -71,8 +71,8 @@ final class Dedup
 
         // Location must AGREE POSITIVELY. Two unknown communes are not a match — they are two
         // unknowns, and treating them as equal is the over-merge that hides a flat.
-        $communeA = $a->commune === null ? null : \RentWatch\Config\Criteria::communeKey($a->commune);
-        $communeB = $b->commune === null ? null : \RentWatch\Config\Criteria::communeKey($b->commune);
+        $communeA = $a->commune === null ? null : \Scout\Config\Criteria::communeKey($a->commune);
+        $communeB = $b->commune === null ? null : \Scout\Config\Criteria::communeKey($b->commune);
 
         if ($communeA === null || $communeB === null || $communeA === '' || $communeA !== $communeB) {
             return null;

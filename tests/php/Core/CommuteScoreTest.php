@@ -2,17 +2,17 @@
 
 declare(strict_types=1);
 
-namespace RentWatch\Tests\Core;
+namespace Scout\Tests\Core;
 
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
-use RentWatch\Config\ConfigLoader;
-use RentWatch\Core\CriteriaEngine;
-use RentWatch\Core\Outcome;
-use RentWatch\Core\RawListing;
-use RentWatch\Core\SourceProfile;
-use RentWatch\Core\Tenure;
-use RentWatch\Core\TenureClassifier;
+use Scout\Config\ConfigLoader;
+use Scout\Core\CriteriaEngine;
+use Scout\Core\Outcome;
+use Scout\Core\RawListing;
+use Scout\Core\SourceProfile;
+use Scout\Core\Tenure;
+use Scout\Core\TenureClassifier;
 
 /**
  * S8 — the commute component.
@@ -90,7 +90,7 @@ final class CommuteScoreTest extends TestCase
         );
     }
 
-    private function judge(?int $commuteMinutes): \RentWatch\Core\Verdict
+    private function judge(?int $commuteMinutes): \Scout\Core\Verdict
     {
         $criteria = ConfigLoader::loadCriteria(self::CRITERIA);
 

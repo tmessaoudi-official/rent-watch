@@ -2,12 +2,12 @@
 
 declare(strict_types=1);
 
-namespace RentWatch\Tests\Store;
+namespace Scout\Tests\Store;
 
 use PHPUnit\Framework\TestCase;
-use RentWatch\Core\ListingSnapshot;
-use RentWatch\Core\RawListing;
-use RentWatch\Store\Store;
+use Scout\Core\ListingSnapshot;
+use Scout\Core\RawListing;
+use Scout\Store\Store;
 
 /**
  * Schema v7: the evidence a verdict was formed from, and the outcome it was judged to.

@@ -2,16 +2,16 @@
 
 declare(strict_types=1);
 
-namespace RentWatch\Tests\Enrich;
+namespace Scout\Tests\Enrich;
 
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
-use RentWatch\Adapters\Http\HttpClient;
-use RentWatch\Adapters\Http\HttpRequest;
-use RentWatch\Adapters\Http\HttpResponse;
-use RentWatch\Config\ConfigLoader;
-use RentWatch\Enrich\NavitiaCommute;
-use RentWatch\Store\Store;
+use Scout\Adapters\Http\HttpClient;
+use Scout\Adapters\Http\HttpRequest;
+use Scout\Adapters\Http\HttpResponse;
+use Scout\Config\ConfigLoader;
+use Scout\Enrich\NavitiaCommute;
+use Scout\Store\Store;
 
 /**
  * The IDFM/PRIM commute lookup, against a fake client. No test reaches the network.

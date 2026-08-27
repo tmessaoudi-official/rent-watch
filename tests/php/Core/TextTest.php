@@ -2,13 +2,13 @@
 
 declare(strict_types=1);
 
-namespace RentWatch\Tests\Core;
+namespace Scout\Tests\Core;
 
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
-use RentWatch\Core\MalformedText;
-use RentWatch\Core\Text;
+use Scout\Core\MalformedText;
+use Scout\Core\Text;
 
 #[CoversClass(Text::class)]
 final class TextTest extends TestCase

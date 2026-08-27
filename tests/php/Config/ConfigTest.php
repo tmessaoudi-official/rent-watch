@@ -2,17 +2,17 @@
 
 declare(strict_types=1);
 
-namespace RentWatch\Tests\Config;
+namespace Scout\Tests\Config;
 
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
-use RentWatch\Config\ConfigError;
-use RentWatch\Adapters\Http\Robots;
-use RentWatch\Config\ConfigLoader;
-use RentWatch\Config\Criteria;
-use RentWatch\Config\NotifyPolicy;
-use RentWatch\Config\Weights;
-use RentWatch\Core\Tenure;
+use Scout\Config\ConfigError;
+use Scout\Adapters\Http\Robots;
+use Scout\Config\ConfigLoader;
+use Scout\Config\Criteria;
+use Scout\Config\NotifyPolicy;
+use Scout\Config\Weights;
+use Scout\Core\Tenure;
 
 /**
  * The config layer's contract.

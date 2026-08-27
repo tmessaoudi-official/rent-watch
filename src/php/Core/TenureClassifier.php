@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace RentWatch\Core;
+namespace Scout\Core;
 
 /**
  * THE classifier. `spec/PROJECT_BRIEF.md` §4, and the module that carries `CLAUDE.md` §1.

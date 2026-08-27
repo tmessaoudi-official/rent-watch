@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace RentWatch\Core;
+namespace Scout\Core;
 
 /**
  * The listing's text is not valid UTF-8, so no claim can be made about its tenure.

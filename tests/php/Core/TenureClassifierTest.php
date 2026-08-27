@@ -2,18 +2,18 @@
 
 declare(strict_types=1);
 
-namespace RentWatch\Tests\Core;
+namespace Scout\Tests\Core;
 
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
-use RentWatch\Core\Outcome;
-use RentWatch\Core\PlafondBands;
-use RentWatch\Core\RawListing;
-use RentWatch\Core\SourceProfile;
-use RentWatch\Core\Tenure;
-use RentWatch\Core\TenureClassifier;
-use RentWatch\Core\TenureSignal;
+use Scout\Core\Outcome;
+use Scout\Core\PlafondBands;
+use Scout\Core\RawListing;
+use Scout\Core\SourceProfile;
+use Scout\Core\Tenure;
+use Scout\Core\TenureClassifier;
+use Scout\Core\TenureSignal;
 
 /**
  * Structural invariants — the properties that must hold for EVERY input, not just the corpus ones.

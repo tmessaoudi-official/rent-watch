@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-namespace RentWatch\Adapters\Html;
+namespace Scout\Adapters\Html;
 
 use Dom\Element;
 use Dom\HTMLElement;
-use RentWatch\Core\Prose;
+use Scout\Core\Prose;
 
 /**
  * The micro-syntax a `type: html` field map is written in, and the resolver that reads it.
@@ -24,7 +24,7 @@ use RentWatch\Core\Prose;
  *
  * **Why this lives here and not in `Config\FieldMap`.** `FieldMap` validates that each entry is a
  * non-empty string and nothing more — dotted-path *semantics* already live adapter-side, in
- * {@see \RentWatch\Adapters\Payload::at()}. So HTML semantics belong adapter-side too, and the
+ * {@see \Scout\Adapters\Payload::at()}. So HTML semantics belong adapter-side too, and the
  * config layer needs no schema change, no new key and no second dialect to validate. The one thing
  * the loader does enforce is that a `type: html` source names an `item_selector`.
  *
@@ -128,7 +128,7 @@ final readonly class Selector
      * An invalid selector is `null` rather than an exception. It is not silence: a field map whose
      * selectors have rotted produces listings with no `ref`, and `ListingMapper` refuses those
      * loudly by name. The genuinely fatal case — the ITEM selector matching nothing — is caught in
-     * {@see \RentWatch\Adapters\HtmlSource}, where it belongs, because that one is indistinguishable
+     * {@see \Scout\Adapters\HtmlSource}, where it belongs, because that one is indistinguishable
      * from a quiet market and is what hard rule 2 exists for.
      */
     private function target(Element $item): ?Element

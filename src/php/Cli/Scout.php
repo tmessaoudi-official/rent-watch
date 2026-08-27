@@ -2,50 +2,50 @@
 
 declare(strict_types=1);
 
-namespace RentWatch\Cli;
+namespace Scout\Cli;
 
-use RentWatch\Adapters\EmailAlertSource;
-use RentWatch\Adapters\FixtureSource;
-use RentWatch\Adapters\Http\CurlHttpClient;
-use RentWatch\Adapters\Http\HttpClient;
-use RentWatch\Adapters\Http\Robots;
-use RentWatch\Adapters\Http\RobotsResolver;
-use RentWatch\Adapters\HtmlSource;
-use RentWatch\Adapters\HttpJsonSource;
-use RentWatch\Adapters\Mail\FileMailbox;
-use RentWatch\Adapters\Mail\ImapMailbox;
-use RentWatch\Adapters\Mail\Mailbox;
-use RentWatch\Adapters\PacedSource;
-use RentWatch\Adapters\Source;
-use RentWatch\Adapters\SourceError;
-use RentWatch\Config\ConfigError;
-use RentWatch\Config\ConfigLoader;
-use RentWatch\Config\Criteria;
-use RentWatch\Config\SourceDefinition;
-use RentWatch\Core\CriteriaEngine;
-use RentWatch\Core\DigestSchedule;
-use RentWatch\Core\Heartbeat;
-use RentWatch\Core\ListingSnapshot;
-use RentWatch\Core\Notify\Channel;
-use RentWatch\Core\Notify\ConsoleChannel;
-use RentWatch\Core\Notify\EmailChannel;
-use RentWatch\Core\Notify\FileTransport;
-use RentWatch\Core\Notify\Formatter;
-use RentWatch\Core\Notify\MailTransport;
-use RentWatch\Core\Notify\Notifier;
-use RentWatch\Core\Notify\NtfyChannel;
-use RentWatch\Core\Notify\Priority;
-use RentWatch\Core\Notify\SendmailTransport;
-use RentWatch\Core\Notify\SmtpTransport;
-use RentWatch\Core\Pacer;
-use RentWatch\Core\RawListing;
-use RentWatch\Core\Redact;
-use RentWatch\Core\SourceStatus;
-use RentWatch\Core\TenureClassifier;
-use RentWatch\Core\Verdict;
-use RentWatch\Enrich\CommutePlanner;
-use RentWatch\Enrich\NavitiaCommute;
-use RentWatch\Store\Store;
+use Scout\Adapters\EmailAlertSource;
+use Scout\Adapters\FixtureSource;
+use Scout\Adapters\Http\CurlHttpClient;
+use Scout\Adapters\Http\HttpClient;
+use Scout\Adapters\Http\Robots;
+use Scout\Adapters\Http\RobotsResolver;
+use Scout\Adapters\HtmlSource;
+use Scout\Adapters\HttpJsonSource;
+use Scout\Adapters\Mail\FileMailbox;
+use Scout\Adapters\Mail\ImapMailbox;
+use Scout\Adapters\Mail\Mailbox;
+use Scout\Adapters\PacedSource;
+use Scout\Adapters\Source;
+use Scout\Adapters\SourceError;
+use Scout\Config\ConfigError;
+use Scout\Config\ConfigLoader;
+use Scout\Config\Criteria;
+use Scout\Config\SourceDefinition;
+use Scout\Core\CriteriaEngine;
+use Scout\Core\DigestSchedule;
+use Scout\Core\Heartbeat;
+use Scout\Core\ListingSnapshot;
+use Scout\Core\Notify\Channel;
+use Scout\Core\Notify\ConsoleChannel;
+use Scout\Core\Notify\EmailChannel;
+use Scout\Core\Notify\FileTransport;
+use Scout\Core\Notify\Formatter;
+use Scout\Core\Notify\MailTransport;
+use Scout\Core\Notify\Notifier;
+use Scout\Core\Notify\NtfyChannel;
+use Scout\Core\Notify\Priority;
+use Scout\Core\Notify\SendmailTransport;
+use Scout\Core\Notify\SmtpTransport;
+use Scout\Core\Pacer;
+use Scout\Core\RawListing;
+use Scout\Core\Redact;
+use Scout\Core\SourceStatus;
+use Scout\Core\TenureClassifier;
+use Scout\Core\Verdict;
+use Scout\Enrich\CommutePlanner;
+use Scout\Enrich\NavitiaCommute;
+use Scout\Store\Store;
 
 /**
  * The `scout` command — `spec/PROJECT_BRIEF.md` §10.
@@ -85,7 +85,7 @@ final readonly class Scout
     /**
      * Turns an HTTP answer for `/robots.txt` into a verdict. Stateless — the once-per-host cache is
      * a local in {@see sources()}, so that its lifetime is one build of the source list and this
-     * class stays `readonly` without taking a {@see \RentWatch\Core\MutableByDesign} exemption it
+     * class stays `readonly` without taking a {@see \Scout\Core\MutableByDesign} exemption it
      * does not qualify for.
      */
     private RobotsResolver $robotsResolver;
@@ -101,7 +101,7 @@ final readonly class Scout
      *                              `new CurlHttpClient()` inline, so nothing could observe what the
      *                              CLI requested — and what it requested, on every real poll, did
      *                              not include `robots.txt`. See
-     *                              {@see \RentWatch\Tests\Cli\ScoutRobotsTest}.
+     *                              {@see \Scout\Tests\Cli\ScoutRobotsTest}.
      */
     public function __construct(
         private string $rootDir,
@@ -662,7 +662,7 @@ final readonly class Scout
                 : 'ext-pcntl absent : pas d\'arrêt propre, la passe en cours sera interrompue',
             // Said out loud, every pass, because a watcher that stops after N passes looks exactly
             // like one that is still watching — right up until the listing it missed.
-            $maxPasses === null ? '' : sprintf(' · RENT_WATCH_MAX_PASSES=%d : arrêt après %d passe(s)', $maxPasses, $maxPasses),
+            $maxPasses === null ? '' : sprintf(' · SCOUT_MAX_PASSES=%d : arrêt après %d passe(s)', $maxPasses, $maxPasses),
         ));
 
         // Said out loud so the operator knows what silence will mean. An interval nobody was told
@@ -1140,7 +1140,7 @@ final readonly class Scout
         $unencodable = 0;
         $rejudged = 0;
         $changed = 0;
-        /** @var list<array{listing: RawListing, verdict: Verdict, key: string, classification: \RentWatch\Core\Classification}> $promotions */
+        /** @var list<array{listing: RawListing, verdict: Verdict, key: string, classification: \Scout\Core\Classification}> $promotions */
         $promotions = [];
 
         foreach ($rows as $row) {
@@ -1165,7 +1165,7 @@ final readonly class Scout
                 continue;
             }
 
-            $profile = $profiles[$evidence->sourceName] ?? new \RentWatch\Core\SourceProfile(
+            $profile = $profiles[$evidence->sourceName] ?? new \Scout\Core\SourceProfile(
                 // A source removed from `sources.json` leaves its listings behind. Fail CLOSED:
                 // `mixedTenure: true` with no default digests a listing with no signal instead of
                 // matching it, which is the direction §1 requires when we do not know what we are
@@ -1334,7 +1334,7 @@ final readonly class Scout
     private function writeVerdict(
         Store $store,
         string $key,
-        \RentWatch\Core\Classification $classification,
+        \Scout\Core\Classification $classification,
         RawListing $evidence,
     ): bool {
         // The bool is RETURNED rather than discarded, even though it cannot currently be `false`
@@ -1358,7 +1358,7 @@ final readonly class Scout
      * delivered digest is notified again here — that is the miss Q35 exists to recover, not a
      * duplicate.
      *
-     * @param list<array{listing: RawListing, verdict: Verdict, key: string, classification: \RentWatch\Core\Classification}> $promotions
+     * @param list<array{listing: RawListing, verdict: Verdict, key: string, classification: \Scout\Core\Classification}> $promotions
      */
     private function announcePromotions(Store $store, Notifier $notifier, array $promotions): int
     {
@@ -1434,8 +1434,8 @@ final readonly class Scout
             $this->warn('canal ' . $name . ' désactivé : ' . $problem);
         }
 
-        $failures = $notifier->send(new \RentWatch\Core\Notify\Notification(
-            kind: \RentWatch\Core\Notify\NotificationKind::HEARTBEAT,
+        $failures = $notifier->send(new \Scout\Core\Notify\Notification(
+            kind: \Scout\Core\Notify\NotificationKind::HEARTBEAT,
             priority: Priority::NORMAL,
             title: 'rent-watch : test de notification',
             reasons: ['Si vous lisez ceci, le canal fonctionne.'],
@@ -1507,10 +1507,10 @@ final readonly class Scout
     }
 
     /**
-     * A bound on the number of `--watch` passes, from `RENT_WATCH_MAX_PASSES`. Absent — the normal
+     * A bound on the number of `--watch` passes, from `SCOUT_MAX_PASSES`. Absent — the normal
      * case, and the documented behaviour — means the loop runs until it is stopped.
      *
-     * A TEST SEAM, in the same shape as `RENT_WATCH_OFFLINE`, and it exists because `--watch` is the
+     * A TEST SEAM, in the same shape as `SCOUT_OFFLINE`, and it exists because `--watch` is the
      * one verb whose success case never returns. Without a bound, a test that expects the run to be
      * REFUSED and is wrong does not fail: it blocks, and takes the whole suite with it. The sabotage
      * ledger sat on exactly that for eleven minutes before it was noticed, and a gate that stalls
@@ -1521,7 +1521,7 @@ final readonly class Scout
      */
     private function maxPasses(): ?int
     {
-        $configured = getenv('RENT_WATCH_MAX_PASSES');
+        $configured = getenv('SCOUT_MAX_PASSES');
 
         if (!is_string($configured) || preg_match('/^[1-9]\d*$/', trim($configured)) !== 1) {
             return null;
@@ -1654,8 +1654,8 @@ final readonly class Scout
             $reasons[] = 'refus au démarrage précédent : ' . $refusal;
         }
 
-        $failures = $notifier->send(new \RentWatch\Core\Notify\Notification(
-            kind: \RentWatch\Core\Notify\NotificationKind::HEARTBEAT,
+        $failures = $notifier->send(new \Scout\Core\Notify\Notification(
+            kind: \Scout\Core\Notify\NotificationKind::HEARTBEAT,
             priority: Priority::LOW,
             title: 'rent-watch : toujours actif',
             reasons: $reasons,
@@ -1781,7 +1781,7 @@ final readonly class Scout
 
     private function dbPath(): string
     {
-        $configured = getenv('RENT_WATCH_DB');
+        $configured = getenv('SCOUT_DB');
 
         return is_string($configured) && trim($configured) !== ''
             ? $configured

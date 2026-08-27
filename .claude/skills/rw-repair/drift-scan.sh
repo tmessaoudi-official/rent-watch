@@ -519,7 +519,7 @@ if not tpl.exists():
 
 lines = tpl.read_text().splitlines()
 # A commented-out declaration still COUNTS as listed: a documented key the operator is meant to
-# leave unset (RFR_N2, RENT_WATCH_MAX_PASSES) is discoverable, which is the whole requirement.
+# leave unset (RFR_N2, SCOUT_MAX_PASSES) is discoverable, which is the whole requirement.
 declared, active = {}, []
 for n, line in enumerate(lines, 1):
     m = re.match(r'^(#?)([A-Z_][A-Z0-9_]*)=', line)
@@ -539,10 +539,10 @@ for key, ns in sorted(seen.items()):
               f"Keep one declaration.")
 
 # (b) every getenv() the shipped code performs must be discoverable here.
-#     RENT_WATCH_OFFLINE is deliberately absent and the template says why: it is the test seam that
+#     SCOUT_OFFLINE is deliberately absent and the template says why: it is the test seam that
 #     makes CurlHttpClient refuse third-party hosts, and setting it in a deployment would disable
 #     every source while health stayed plausible. Listing it as a setting would invite exactly that.
-TEST_SEAMS = {'RENT_WATCH_OFFLINE'}
+TEST_SEAMS = {'SCOUT_OFFLINE'}
 read = set()
 for path in list(pathlib.Path('src/php').rglob('*.php')) + [pathlib.Path('bin/scout')]:
     if path.exists():

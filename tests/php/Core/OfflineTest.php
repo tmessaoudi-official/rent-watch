@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-namespace RentWatch\Tests\Core;
+namespace Scout\Tests\Core;
 
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
-use RentWatch\Core\Offline;
+use Scout\Core\Offline;
 
 /**
  * The offline tripwire's own predicate, which had no test of its own until round 7.
@@ -17,7 +17,7 @@ use RentWatch\Core\Offline;
  * comparison to a substring search and the whole suite stayed green, while
  * `https://evil.test/?x=127.0.0.1` became a permitted request.
  *
- * `tests/bootstrap.php` sets `RENT_WATCH_OFFLINE=1` for the whole suite, so the refusing branch is
+ * `tests/bootstrap.php` sets `SCOUT_OFFLINE=1` for the whole suite, so the refusing branch is
  * the ambient one here.
  */
 #[CoversClass(Offline::class)]
@@ -27,7 +27,7 @@ final class OfflineTest extends TestCase
     {
         // Every assertion below is about the refusing branch, so this is the precondition rather
         // than a separate guarantee. Without it the file would pass by being inert.
-        self::assertSame('1', getenv('RENT_WATCH_OFFLINE'));
+        self::assertSame('1', getenv('SCOUT_OFFLINE'));
     }
 
     public function testAThirdPartyHostIsRefused(): void
@@ -103,7 +103,7 @@ final class OfflineTest extends TestCase
         $problem = (string) Offline::refusalForHost('imap.example.test:993', 'the alert mailbox');
 
         self::assertStringContainsString('the alert mailbox', $problem);
-        self::assertStringContainsString('RENT_WATCH_OFFLINE=1', $problem);
+        self::assertStringContainsString('SCOUT_OFFLINE=1', $problem);
     }
 
     /**

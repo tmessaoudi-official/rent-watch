@@ -2,18 +2,18 @@
 
 declare(strict_types=1);
 
-namespace RentWatch\Tests\Core;
+namespace Scout\Tests\Core;
 
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
-use RentWatch\Config\ConfigLoader;
-use RentWatch\Core\Classification;
-use RentWatch\Core\CriteriaEngine;
-use RentWatch\Core\RawListing;
-use RentWatch\Core\SourceProfile;
-use RentWatch\Core\Tenure;
-use RentWatch\Core\TenureClassifier;
-use RentWatch\Core\Verdict;
+use Scout\Config\ConfigLoader;
+use Scout\Core\Classification;
+use Scout\Core\CriteriaEngine;
+use Scout\Core\RawListing;
+use Scout\Core\SourceProfile;
+use Scout\Core\Tenure;
+use Scout\Core\TenureClassifier;
+use Scout\Core\Verdict;
 
 /**
  * The `!!` high-priority marker, and the TWO conditions it needs.

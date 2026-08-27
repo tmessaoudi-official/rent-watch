@@ -23,7 +23,7 @@ WORKDIR /app
 COPY composer.json composer.lock ./
 COPY src/ ./src/
 
-# `--no-dev` on purpose: the runtime image has no test suite in it, so the `RentWatch\Tests\`
+# `--no-dev` on purpose: the runtime image has no test suite in it, so the `Scout\Tests\`
 # PSR-4 entry would map a namespace whose files are absent. (Locally the opposite is true and
 # omitting `--dev` silently breaks the corpus suite — see CLAUDE.md § Gotchas.)
 RUN composer dump-autoload --no-dev --optimize --classmap-authoritative --no-interaction

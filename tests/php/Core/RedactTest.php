@@ -2,12 +2,12 @@
 
 declare(strict_types=1);
 
-namespace RentWatch\Tests\Core;
+namespace Scout\Tests\Core;
 
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
-use RentWatch\Core\Redact;
+use Scout\Core\Redact;
 
 /**
  * `CLAUDE.md` hard rule 7 forbids credentials reaching a log or a committed file. This class is the

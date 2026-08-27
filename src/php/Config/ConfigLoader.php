@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace RentWatch\Config;
+namespace Scout\Config;
 
-use RentWatch\Core\Tenure;
+use Scout\Core\Tenure;
 
 /**
  * Reads `config/criteria.json` and `config/sources.json`, and refuses everything it does not
@@ -721,7 +721,7 @@ final class ConfigLoader
     /**
      * A pattern must compile, and must be written in FOLDED ASCII.
      *
-     * Patterns are matched against {@see \RentWatch\Core\Text::fold()}ed text, which has had its
+     * Patterns are matched against {@see \Scout\Core\Text::fold()}ed text, which has had its
      * accents removed — so a config author who writes `meublé` gets a pattern that can never match,
      * and gets it silently. Refusing the accented form with a message naming the folded one is the
      * only way that mistake becomes visible; the alternative, folding the pattern for them, would

@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace RentWatch\Adapters\Mail;
+namespace Scout\Adapters\Mail;
 
-use RentWatch\Core\Redact;
+use Scout\Core\Redact;
 
 /**
  * A mailbox could not be read.

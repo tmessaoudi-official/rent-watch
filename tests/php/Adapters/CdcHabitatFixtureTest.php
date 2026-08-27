@@ -2,20 +2,20 @@
 
 declare(strict_types=1);
 
-namespace RentWatch\Tests\Adapters;
+namespace Scout\Tests\Adapters;
 
 use PHPUnit\Framework\TestCase;
-use RentWatch\Adapters\Http\HttpClient;
-use RentWatch\Adapters\Http\HttpRequest;
-use RentWatch\Adapters\Http\HttpResponse;
-use RentWatch\Adapters\Http\Robots;
-use RentWatch\Adapters\HtmlSource;
-use RentWatch\Config\ConfigLoader;
-use RentWatch\Config\SourceDefinition;
-use RentWatch\Core\Outcome;
-use RentWatch\Core\Tenure;
-use RentWatch\Core\TenureClassifier;
-use RentWatch\Store\Store;
+use Scout\Adapters\Http\HttpClient;
+use Scout\Adapters\Http\HttpRequest;
+use Scout\Adapters\Http\HttpResponse;
+use Scout\Adapters\Http\Robots;
+use Scout\Adapters\HtmlSource;
+use Scout\Config\ConfigLoader;
+use Scout\Config\SourceDefinition;
+use Scout\Core\Outcome;
+use Scout\Core\Tenure;
+use Scout\Core\TenureClassifier;
+use Scout\Store\Store;
 
 /**
  * The frozen CDC Habitat payload, asserted field by field — `/add-source` Step 3.
@@ -158,7 +158,7 @@ final class CdcHabitatFixtureTest extends TestCase
 
     // ---------------------------------------------------------------- helpers
 
-    /** @return list<\RentWatch\Core\RawListing> */
+    /** @return list<\Scout\Core\RawListing> */
     private function extract(): array
     {
         $definition = $this->definition();

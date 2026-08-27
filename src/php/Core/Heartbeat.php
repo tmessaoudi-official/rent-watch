@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace RentWatch\Core;
+namespace Scout\Core;
 
 /**
  * Q27's liveness policy: *has enough time passed that the watcher should say it is alive?*
@@ -42,7 +42,7 @@ final readonly class Heartbeat
     /**
      * Read the interval from the environment, refusing a value that would disable liveness silently.
      *
-     * Mirrors `RENT_WATCH_MAX_PASSES`: absent is the ordinary case and takes the documented default;
+     * Mirrors `SCOUT_MAX_PASSES`: absent is the ordinary case and takes the documented default;
      * a value that is present but unusable is a LOUD refusal, because somebody exported it meaning
      * something, and guessing which thing is how a watcher ends up silently unmonitored.
      *

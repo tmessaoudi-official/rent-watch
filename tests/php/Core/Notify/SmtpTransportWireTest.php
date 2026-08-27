@@ -2,12 +2,12 @@
 
 declare(strict_types=1);
 
-namespace RentWatch\Tests\Core\Notify;
+namespace Scout\Tests\Core\Notify;
 
 use PHPUnit\Framework\TestCase;
-use RentWatch\Core\Notify\ChannelError;
-use RentWatch\Core\Notify\SmtpTransport;
-use RentWatch\Core\Redact;
+use Scout\Core\Notify\ChannelError;
+use Scout\Core\Notify\SmtpTransport;
+use Scout\Core\Redact;
 
 /**
  * `SmtpTransport` against a real socket, answered by a scripted server on loopback.

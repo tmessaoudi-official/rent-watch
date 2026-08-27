@@ -2,13 +2,13 @@
 
 declare(strict_types=1);
 
-namespace RentWatch\Adapters;
+namespace Scout\Adapters;
 
-use RentWatch\Core\Pacer;
-use RentWatch\Core\RawListing;
-use RentWatch\Core\SourceHealth;
-use RentWatch\Core\SourceProfile;
-use RentWatch\Core\Tenure;
+use Scout\Core\Pacer;
+use Scout\Core\RawListing;
+use Scout\Core\SourceHealth;
+use Scout\Core\SourceProfile;
+use Scout\Core\Tenure;
 
 /**
  * Wraps a source so that {@see fetch()} cannot happen faster than the Q37 ruling permits.

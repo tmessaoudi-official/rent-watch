@@ -2,15 +2,15 @@
 
 declare(strict_types=1);
 
-namespace RentWatch\Store;
+namespace Scout\Store;
 
-use RentWatch\Core\ListingSnapshot;
-use RentWatch\Core\RawListing;
-use RentWatch\Core\Redact;
-use RentWatch\Core\SourceHealth;
-use RentWatch\Core\SourceStatus;
-use RentWatch\Core\Tenure;
-use RentWatch\Core\Text;
+use Scout\Core\ListingSnapshot;
+use Scout\Core\RawListing;
+use Scout\Core\Redact;
+use Scout\Core\SourceHealth;
+use Scout\Core\SourceStatus;
+use Scout\Core\Tenure;
+use Scout\Core\Text;
 
 /**
  * The seen-set, the price history and the run log — everything that must survive between runs.
@@ -1740,7 +1740,7 @@ final readonly class Store
      *
      * THE PRE-V7 BACKLOG IS NOT WHAT THAT IS FOR, and this docblock said it was. `outcome` is a v7
      * column too and is equally unbackfilled, so a pre-v7 row has `outcome = NULL` and this query
-     * never returns it at all — see {@see \RentWatch\Cli\Scout::digest()}, which carries the full
+     * never returns it at all — see {@see \Scout\Cli\Scout::digest()}, which carries the full
      * reasoning and the reason widening the query is refused. The reachable cause of a NULL
      * snapshot here is a listing whose payload could not be JSON-encoded.
      *

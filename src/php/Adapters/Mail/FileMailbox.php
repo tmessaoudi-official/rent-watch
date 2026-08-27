@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace RentWatch\Adapters\Mail;
+namespace Scout\Adapters\Mail;
 
 /**
  * Reads `.eml` files from a directory. The offline half of the email-alert path.

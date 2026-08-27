@@ -2,13 +2,13 @@
 
 declare(strict_types=1);
 
-namespace RentWatch\Adapters;
+namespace Scout\Adapters;
 
-use RentWatch\Config\SourceDefinition;
-use RentWatch\Core\SourceHealth;
-use RentWatch\Core\SourceProfile;
-use RentWatch\Core\Tenure;
-use RentWatch\Store\Store;
+use Scout\Config\SourceDefinition;
+use Scout\Core\SourceHealth;
+use Scout\Core\SourceProfile;
+use Scout\Core\Tenure;
+use Scout\Store\Store;
 
 /**
  * A source backed by a frozen payload file. No network, no credentials.
@@ -96,7 +96,7 @@ final readonly class FixtureSource implements Source
     }
 
     /**
-     * @return list<\RentWatch\Core\RawListing>
+     * @return list<\Scout\Core\RawListing>
      *
      * @throws SourceError
      */

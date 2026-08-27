@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace RentWatch\Adapters\Http;
+namespace Scout\Adapters\Http;
 
 /**
  * Fetches one `robots.txt` per origin and turns the HTTP answer into a {@see Robots} verdict.
@@ -20,7 +20,7 @@ namespace RentWatch\Adapters\Http;
  * | `404` / `410` | **allow everything** | RFC 9309 §2.3.1.3: robots.txt *unavailable* — a crawler MAY access the site. This is NOT "we could not read it": it is *we successfully established that no file exists*, which is the ordinary no-restrictions case on the open web. Reading it as a disallow would silently disable every site that never wrote one. |
  * | any other `4xx` (`401`, `403`, …) | **fail closed**, with the status in the reason | RFC 9309 would permit access here too, but a site answering `403` to `robots.txt` is actively refusing this client, and hard rule 5 says to take that at face value. This is stricter than the standard, deliberately — see `docs/SOURCES.md` § the A10/A12 round, where exactly this distinction was recorded. |
  * | `5xx` | **fail closed**, with the status in the reason | RFC 9309 §2.3.1.4: robots.txt *unreachable* — a crawler MUST assume complete disallow. |
- * | transport failure | **fail closed**, with the cURL message in the reason | A timeout, a DNS failure, a TLS error, `RENT_WATCH_OFFLINE=1`, or a cross-host redirect refused by {@see CurlHttpClient}. Nothing was learned, so nothing is permitted. |
+ * | transport failure | **fail closed**, with the cURL message in the reason | A timeout, a DNS failure, a TLS error, `SCOUT_OFFLINE=1`, or a cross-host redirect refused by {@see CurlHttpClient}. Nothing was learned, so nothing is permitted. |
  *
  * **Redirects need no row of their own.** {@see CurlHttpClient} already follows up to three
  * redirects and refuses to leave the original host, so an ordinary apex→www or http→https redirect
@@ -34,14 +34,14 @@ namespace RentWatch\Adapters\Http;
  * Reading one `robots.txt` per host per pass is a hard-rule-5 obligation rather than a speed
  * concern — re-reading it for every page of a four-page walk is load a landlord did not need to
  * serve. So the guarantee is real and is asserted, in
- * {@see \RentWatch\Tests\Cli\ScoutRobotsTest::testRobotsIsFetchedOncePerHostAndNotOncePerPage}.
+ * {@see \Scout\Tests\Cli\ScoutRobotsTest::testRobotsIsFetchedOncePerHostAndNotOncePerPage}.
  *
  * It simply is not implemented *here*. Holding the cache would make this class mutable, and
  * `TenureCorpusTest::testEveryCoreValueObjectIsImmutable()` requires every class under `src/php/` to
- * be readonly unless it implements {@see \RentWatch\Core\MutableByDesign} — whose bar is
+ * be readonly unless it implements {@see \Scout\Core\MutableByDesign} — whose bar is
  * explicitly *"its mutation must BE the mechanism, not an optimisation"*. A memoisation table does
  * not clear that bar, and taking the exemption anyway is how such a rule stops meaning anything. So
- * the table lives where it belongs: as a local array in {@see \RentWatch\Cli\Scout::sources()},
+ * the table lives where it belongs: as a local array in {@see \Scout\Cli\Scout::sources()},
  * whose lifetime is exactly one build of the source list.
  *
  * One consequence worth stating plainly: because sources are built once per process and

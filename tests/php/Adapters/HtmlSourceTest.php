@@ -2,21 +2,21 @@
 
 declare(strict_types=1);
 
-namespace RentWatch\Tests\Adapters;
+namespace Scout\Tests\Adapters;
 
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
-use RentWatch\Adapters\Html\Selector;
-use RentWatch\Adapters\Http\HttpError;
-use RentWatch\Adapters\Http\HttpResponse;
-use RentWatch\Adapters\Http\Robots;
-use RentWatch\Adapters\HtmlSource;
-use RentWatch\Adapters\SourceError;
-use RentWatch\Config\FieldMap;
-use RentWatch\Config\SourceDefinition;
-use RentWatch\Core\Tenure;
-use RentWatch\Store\Store;
+use Scout\Adapters\Html\Selector;
+use Scout\Adapters\Http\HttpError;
+use Scout\Adapters\Http\HttpResponse;
+use Scout\Adapters\Http\Robots;
+use Scout\Adapters\HtmlSource;
+use Scout\Adapters\SourceError;
+use Scout\Config\FieldMap;
+use Scout\Config\SourceDefinition;
+use Scout\Core\Tenure;
+use Scout\Store\Store;
 
 /**
  * The `type: html` adapter, and the selector micro-syntax its field maps are written in.
@@ -609,7 +609,7 @@ final class HtmlSourceTest extends TestCase
     public function testRobotsIsCheckedForEveryTemplatedPageUrl(): void
     {
         $client = new TemplatedUrlHttpClient([1 => $this->templatedPage(['a1']), 2 => $this->templatedPage(['b1'])]);
-        $robots = \RentWatch\Adapters\Http\Robots::parse("User-agent: *\nDisallow: /resultats-location-2\n");
+        $robots = \Scout\Adapters\Http\Robots::parse("User-agent: *\nDisallow: /resultats-location-2\n");
 
         $this->expectException(SourceError::class);
         $this->expectExceptionMessageMatches('/robots\.txt disallows/');
@@ -631,7 +631,7 @@ final class HtmlSourceTest extends TestCase
     private function templatedSource(
         TemplatedUrlHttpClient $client,
         ?string $pageParam = null,
-        ?\RentWatch\Adapters\Http\Robots $robots = null,
+        ?\Scout\Adapters\Http\Robots $robots = null,
     ): HtmlSource {
         $definition = new SourceDefinition(
             name: 'cityloger',
@@ -661,7 +661,7 @@ final class HtmlSourceTest extends TestCase
  * the adapter puts the parameter where it said it would — a fake that just counted calls would
  * pass just as happily if every request went to page one.
  */
-final class PagedHttpClient implements \RentWatch\Adapters\Http\HttpClient
+final class PagedHttpClient implements \Scout\Adapters\Http\HttpClient
 {
     /** @var list<string|null> */
     public array $pages = [];
@@ -672,7 +672,7 @@ final class PagedHttpClient implements \RentWatch\Adapters\Http\HttpClient
         private readonly ?string $fallback = null,
     ) {}
 
-    public function send(\RentWatch\Adapters\Http\HttpRequest $request): HttpResponse
+    public function send(\Scout\Adapters\Http\HttpRequest $request): HttpResponse
     {
         $query = parse_url($request->url, PHP_URL_QUERY);
         parse_str(is_string($query) ? $query : '', $params);
@@ -687,7 +687,7 @@ final class PagedHttpClient implements \RentWatch\Adapters\Http\HttpClient
 }
 
 /** Serves pages addressed by a `/page-N/` PATH segment, and records the URLs it was asked for. */
-final class PathPagedHttpClient implements \RentWatch\Adapters\Http\HttpClient
+final class PathPagedHttpClient implements \Scout\Adapters\Http\HttpClient
 {
     /** @var list<string> */
     public array $urls = [];
@@ -701,7 +701,7 @@ final class PathPagedHttpClient implements \RentWatch\Adapters\Http\HttpClient
         private readonly ?int $throwBeyond = null,
     ) {}
 
-    public function send(\RentWatch\Adapters\Http\HttpRequest $request): HttpResponse
+    public function send(\Scout\Adapters\Http\HttpRequest $request): HttpResponse
     {
         $this->urls[] = $request->url;
 
@@ -715,7 +715,7 @@ final class PathPagedHttpClient implements \RentWatch\Adapters\Http\HttpClient
         // Stands in for CDC Habitat, whose out-of-range page redirects rather than emptying: a fake
         // that always answers an empty page cannot express "asking is itself the failure".
         if ($this->throwBeyond !== null && $page > $this->throwBeyond) {
-            throw new \RentWatch\Adapters\Http\HttpError('HTTP 301 from ' . $request->url);
+            throw new \Scout\Adapters\Http\HttpError('HTTP 301 from ' . $request->url);
         }
 
         $body = $this->bodies[$page] ?? '<html><body><div class="featured-items"></div></body></html>';
@@ -732,7 +732,7 @@ final class PathPagedHttpClient implements \RentWatch\Adapters\Http\HttpClient
  * counted calls would pass just as happily if every request went to page one, which is precisely
  * the failure the template exists to make impossible.
  */
-final class TemplatedUrlHttpClient implements \RentWatch\Adapters\Http\HttpClient
+final class TemplatedUrlHttpClient implements \Scout\Adapters\Http\HttpClient
 {
     /** @var list<string> */
     public array $urls = [];
@@ -740,7 +740,7 @@ final class TemplatedUrlHttpClient implements \RentWatch\Adapters\Http\HttpClien
     /** @param array<int, string> $bodies */
     public function __construct(private readonly array $bodies) {}
 
-    public function send(\RentWatch\Adapters\Http\HttpRequest $request): HttpResponse
+    public function send(\Scout\Adapters\Http\HttpRequest $request): HttpResponse
     {
         $this->urls[] = $request->url;
 

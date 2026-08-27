@@ -2,13 +2,13 @@
 
 declare(strict_types=1);
 
-namespace RentWatch\Core\Notify;
+namespace Scout\Core\Notify;
 
-use RentWatch\Core\Department;
-use RentWatch\Core\RawListing;
-use RentWatch\Core\SourceHealth;
-use RentWatch\Core\SourceStatus;
-use RentWatch\Core\Verdict;
+use Scout\Core\Department;
+use Scout\Core\RawListing;
+use Scout\Core\SourceHealth;
+use Scout\Core\SourceStatus;
+use Scout\Core\Verdict;
 
 /**
  * Turns pipeline results into {@see Notification}s.

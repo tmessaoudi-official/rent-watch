@@ -14,12 +14,12 @@
     },
     "autoload": {
         "psr-4": {
-            "RentWatch\\": "src/php/"
+            "Scout\\": "src/php/"
         }
     },
     "autoload-dev": {
         "psr-4": {
-            "RentWatch\\Tests\\": "tests/php/"
+            "Scout\\Tests\\": "tests/php/"
         }
     },
     "config": {

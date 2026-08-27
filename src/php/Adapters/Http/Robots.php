@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace RentWatch\Adapters\Http;
+namespace Scout\Adapters\Http;
 
 /**
  * A minimal `robots.txt` reader — enough to answer *"may we fetch this path?"* honestly.

@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace RentWatch\Config;
+namespace Scout\Config;
 
-use RentWatch\Core\SourceProfile;
-use RentWatch\Core\Tenure;
+use Scout\Core\SourceProfile;
+use Scout\Core\Tenure;
 
 /**
  * One source block from `config/sources.json`.

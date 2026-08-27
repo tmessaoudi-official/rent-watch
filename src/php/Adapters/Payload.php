@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace RentWatch\Adapters;
+namespace Scout\Adapters;
 
-use RentWatch\Core\Text;
+use Scout\Core\Text;
 
 /**
  * Reads values out of one decoded raw item, following a field map's dotted paths.

@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace RentWatch\Core;
+namespace Scout\Core;
 
-use RentWatch\Config\Criteria;
+use Scout\Config\Criteria;
 
 /**
  * Applies the hard disqualifiers, then scores what survives.

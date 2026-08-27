@@ -2,13 +2,13 @@
 
 declare(strict_types=1);
 
-namespace RentWatch\Tests\Core;
+namespace Scout\Tests\Core;
 
 use PHPUnit\Framework\TestCase;
-use RentWatch\Core\ListingSnapshot;
-use RentWatch\Core\RawListing;
-use RentWatch\Core\SourceProfile;
-use RentWatch\Core\TenureClassifier;
+use Scout\Core\ListingSnapshot;
+use Scout\Core\RawListing;
+use Scout\Core\SourceProfile;
+use Scout\Core\TenureClassifier;
 
 /**
  * `reclassify runs on evidence ⊇ original, never ⊂` — the invariant, stated where it can fail.

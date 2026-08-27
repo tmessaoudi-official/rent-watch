@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace RentWatch\Core\Notify;
+namespace Scout\Core\Notify;
 
 /**
  * Somewhere a notification can be delivered.

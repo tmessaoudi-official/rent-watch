@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace RentWatch\Core;
+namespace Scout\Core;
 
 /**
  * The Q37 pacing ruling (2026-08-07), as the only place in the codebase that knows how fast this

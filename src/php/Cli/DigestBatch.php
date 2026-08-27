@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace RentWatch\Cli;
+namespace Scout\Cli;
 
-use RentWatch\Core\RawListing;
-use RentWatch\Core\Verdict;
+use Scout\Core\RawListing;
+use Scout\Core\Verdict;
 
 /**
  * One drain of the *à vérifier* bin, collected but not yet sent.

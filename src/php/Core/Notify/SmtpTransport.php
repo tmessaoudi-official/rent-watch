@@ -2,14 +2,14 @@
 
 declare(strict_types=1);
 
-namespace RentWatch\Core\Notify;
+namespace Scout\Core\Notify;
 
-use RentWatch\Core\Offline;
+use Scout\Core\Offline;
 
 /**
  * SMTP over TLS or STARTTLS, on stream sockets. Credentials come from `.env`.
  *
- * Hand-rolled for the same reason {@see \RentWatch\Adapters\Mail\ImapMailbox} is: Composer cannot
+ * Hand-rolled for the same reason {@see \Scout\Adapters\Mail\ImapMailbox} is: Composer cannot
  * install anything here (the egress policy 403s its dist source), so a library is not an option.
  * The surface is the minimum that delivers one message — `EHLO`, optional `STARTTLS`, `AUTH LOGIN`
  * or `PLAIN`, `MAIL FROM`, `RCPT TO`, `DATA` — because every line of a hand-written protocol client

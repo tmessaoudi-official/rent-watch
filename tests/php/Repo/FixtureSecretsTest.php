@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace RentWatch\Tests\Repo;
+namespace Scout\Tests\Repo;
 
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;

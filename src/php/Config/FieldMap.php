@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace RentWatch\Config;
+namespace Scout\Config;
 
-use RentWatch\Core\Prose;
+use Scout\Core\Prose;
 
 /**
  * Where each listing field lives inside one source's raw item.
@@ -101,7 +101,7 @@ final readonly class FieldMap
      * `ref` is required of a card map and refused here, and both rules have the same reason.
      * Identity belongs to the card, because that is what the seen-set is keyed on — a detail map
      * that redefined `ref` could re-identify a listing halfway through a pass and re-notify it on
-     * every run. {@see \RentWatch\Core\RawListing::mergedWith()} ignores detail identity outright,
+     * every run. {@see \Scout\Core\RawListing::mergedWith()} ignores detail identity outright,
      * so a `ref` here would be config that reads as behaviour and does nothing.
      *
      * @throws ConfigError

@@ -153,11 +153,11 @@ check "a template key no code reads is reported" \
 check "a key named in DECLARED_UNREAD is NOT reported (the gate must not cry wolf)" \
   silent_about "$clean" 'TELEGRAM'
 
-# RENT_WATCH_OFFLINE is read by src/ and deliberately absent from the template: it is the test seam
+# SCOUT_OFFLINE is read by src/ and deliberately absent from the template: it is the test seam
 # that makes CurlHttpClient refuse third-party hosts, so listing it as a setting would invite an
 # operator to set it and silently disable every source while health stayed plausible.
-check "RENT_WATCH_OFFLINE is NOT demanded of the template (it is a test seam)" \
-  silent_about "$clean" 'RENT_WATCH_OFFLINE is read by getenv'
+check "SCOUT_OFFLINE is NOT demanded of the template (it is a test seam)" \
+  silent_about "$clean" 'SCOUT_OFFLINE is read by getenv'
 
 # ── the section must actually RUN ────────────────────────────────────────────────────────────────
 # The failure this whole file exists for. A python section that throws writes nothing to the

@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace RentWatch\Core;
+namespace Scout\Core;
 
 /**
  * The evidence a verdict was formed from, frozen so it can be re-judged later. Schema v7.

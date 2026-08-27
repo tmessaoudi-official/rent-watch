@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-namespace RentWatch\Adapters;
+namespace Scout\Adapters;
 
-use RentWatch\Config\FieldMap;
-use RentWatch\Config\SourceDefinition;
-use RentWatch\Core\RawListing;
+use Scout\Config\FieldMap;
+use Scout\Config\SourceDefinition;
+use Scout\Core\RawListing;
 
 /**
  * Turns one raw payload item into a {@see RawListing}, following a source's field map.

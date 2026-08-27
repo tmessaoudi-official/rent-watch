@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace RentWatch\Core\Notify;
+namespace Scout\Core\Notify;
 
 /**
  * Email delivery — the readable record, as asked for on 2026-08-06:
@@ -96,8 +96,8 @@ final readonly class EmailChannel implements Channel
         $this->transport->send($this->to, $subject, $body, [
             'From' => self::headerSafe($this->from),
             'Content-Type' => 'text/plain; charset=utf-8',
-            'X-RentWatch-Kind' => $n->kind->value,
-            'X-RentWatch-Priority' => $n->priority->value,
+            'X-Scout-Kind' => $n->kind->value,
+            'X-Scout-Priority' => $n->priority->value,
         ]);
     }
 

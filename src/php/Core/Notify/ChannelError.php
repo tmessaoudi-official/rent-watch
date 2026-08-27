@@ -2,14 +2,14 @@
 
 declare(strict_types=1);
 
-namespace RentWatch\Core\Notify;
+namespace Scout\Core\Notify;
 
-use RentWatch\Core\Redact;
+use Scout\Core\Redact;
 
 /**
  * A channel could not deliver.
  *
- * Masked at construction, for the same reason {@see \RentWatch\Adapters\SourceError} is: the message
+ * Masked at construction, for the same reason {@see \Scout\Adapters\SourceError} is: the message
  * naturally carries the endpoint it failed to reach, and an ntfy topic is a secret that travels as a
  * URL path segment. This text is logged and can itself be notified through another channel, so an
  * unmasked variant would leak on the one path guaranteed to be read.

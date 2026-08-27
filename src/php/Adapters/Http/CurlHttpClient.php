@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace RentWatch\Adapters\Http;
+namespace Scout\Adapters\Http;
 
-use RentWatch\Core\Offline;
+use Scout\Core\Offline;
 
 /**
  * The real transport. cURL, because it is present here and reports failures distinguishably.
@@ -94,7 +94,7 @@ final readonly class CurlHttpClient implements HttpClient
 
         // ── the offline tripwire ─────────────────────────────────────────────────────────────
         //
-        // `RENT_WATCH_OFFLINE=1` turns every outbound request into a loud refusal, and
+        // `SCOUT_OFFLINE=1` turns every outbound request into a loud refusal, and
         // `tests/bootstrap.php` sets it for the whole suite. Spec §11 says parser tests run
         // offline; until 2026-08-19 that held only BY ACCIDENT, because every source in
         // `config/sources.json` was disabled and the tests that run the real CLI against the real
@@ -117,7 +117,7 @@ final readonly class CurlHttpClient implements HttpClient
         // is what actually crosses the wire, and that SMTP refuses a credential without STARTTLS.
         // Banning those would delete real evidence to enforce a rule they do not break.
         //
-        // The PREDICATE moved to `RentWatch\Core\Offline` on 2026-08-24; the CALL SITE stays exactly
+        // The PREDICATE moved to `Scout\Core\Offline` on 2026-08-24; the CALL SITE stays exactly
         // here, for the reason the paragraph above gives. It moved because this was not the only
         // path out: `NtfyChannel` calls libcurl directly and never passed this funnel, so the
         // guarantee `tests/bootstrap.php` describes was smaller than it read.

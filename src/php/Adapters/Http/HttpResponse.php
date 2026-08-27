@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace RentWatch\Adapters\Http;
+namespace Scout\Adapters\Http;
 
 /**
  * One answer. A non-2xx status is DATA here, not an exception.

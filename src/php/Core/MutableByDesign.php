@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace RentWatch\Core;
+namespace Scout\Core;
 
 /**
  * Marks a class that genuinely cannot be `readonly`, and says so where the class is defined.
@@ -23,7 +23,7 @@ namespace RentWatch\Core;
  * - The class must never be handed to a caller as a result. A value that leaves the module can be
  *   held, and anything held can be rewritten behind the code that produced it — which is the whole
  *   defect.
- * - Its mutation must BE the mechanism, not an optimisation. {@see \RentWatch\Config\Reader}
+ * - Its mutation must BE the mechanism, not an optimisation. {@see \Scout\Config\Reader}
  *   qualifies: it consumes each key as it is read so that "everything left over is an unknown key"
  *   is enforced by the code's shape rather than by an allow-list maintained beside it.
  * - Do not reach for the loophole of a `readonly` property holding a mutable object. PHP permits it

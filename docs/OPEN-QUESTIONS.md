@@ -186,7 +186,7 @@ Changes: whether `src/php/Enrich/Transit.php` is milestone-1 infrastructure or a
 > repo keeps re-learning: the ceiling did not move alone. The region went to all eight departements
 > and the surface floor to 50 m² in the same change, opening a pool the old criteria never looked
 > at. The eight became zero and a different 83 appeared. **Never predict a yield from the previous
-> filter's matches** — one poll on a throwaway `RENT_WATCH_DB` settles it.
+> filter's matches** — one poll on a throwaway `SCOUT_DB` settles it.
 >
 > Two consequences of the 83, both real, neither a defect to quietly fix:
 >
@@ -1116,7 +1116,7 @@ nothing batched, every historic listing pushes at once.
 
 **RULED:** `Store::open()` reports whether it **created** the database. On a fresh one `scout run`
 refuses to notify and exits saying so, offering `--seed` to populate the seen-set without notifying.
-The mount is additionally asserted by a marker file written in `RENT_WATCH_DB`'s directory at first
+The mount is additionally asserted by a marker file written in `SCOUT_DB`'s directory at first
 successful start.
 
 **AMENDED [2026-08-19], on both halves — the ruling's INTENT stands, its two mechanisms did not.**
@@ -1129,7 +1129,7 @@ been **recorded** (`Store::isSeenSetEmpty()`): a fact that lives in the rows, so
 answer it away. `--seed` is unchanged as the route through.
 
 *The marker file is WITHDRAWN, because it cannot detect what it was ruled for.* Its stated location
-is `RENT_WATCH_DB`'s own directory — that is to say, inside the volume. A typo in `-v` gives the
+is `SCOUT_DB`'s own directory — that is to say, inside the volume. A typo in `-v` gives the
 container a fresh empty directory, so the marker vanishes together with the database and the two
 states it was meant to separate stay identical. Put it outside the volume instead and it lives in
 the image layer, which resets on exactly the container recreation where the typo happens. Neither

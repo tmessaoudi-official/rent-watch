@@ -2,16 +2,16 @@
 
 declare(strict_types=1);
 
-namespace RentWatch\Tests\Cli;
+namespace Scout\Tests\Cli;
 
 use PHPUnit\Framework\TestCase;
-use RentWatch\Adapters\HtmlSource;
-use RentWatch\Store\Store;
-use RentWatch\Cli\Scout;
-use RentWatch\Core\Notify\ConsoleChannel;
-use RentWatch\Core\Notify\Notifier;
-use RentWatch\Tests\Support\DeliveringChannel;
-use RentWatch\Core\RawListing;
+use Scout\Adapters\HtmlSource;
+use Scout\Store\Store;
+use Scout\Cli\Scout;
+use Scout\Core\Notify\ConsoleChannel;
+use Scout\Core\Notify\Notifier;
+use Scout\Tests\Support\DeliveringChannel;
+use Scout\Core\RawListing;
 
 /**
  * The CLI, driven end to end against the committed fixture source.
@@ -38,18 +38,18 @@ final class ScoutTest extends TestCase
     protected function setUp(): void
     {
         $this->dbPath = sys_get_temp_dir() . '/rentwatch-cli-' . bin2hex(random_bytes(8)) . '.sqlite3';
-        putenv('RENT_WATCH_DB=' . $this->dbPath);
+        putenv('SCOUT_DB=' . $this->dbPath);
         // `--watch` never returns on its own. Every test here that reaches it expects to be stopped
         // BEFORE the loop starts, so if that expectation is ever wrong the test would block rather
         // than fail — and block the suite, and the sabotage ledger behind it. One pass is enough to
         // prove any of them.
-        putenv('RENT_WATCH_MAX_PASSES=1');
+        putenv('SCOUT_MAX_PASSES=1');
     }
 
     protected function tearDown(): void
     {
-        putenv('RENT_WATCH_DB');
-        putenv('RENT_WATCH_MAX_PASSES');
+        putenv('SCOUT_DB');
+        putenv('SCOUT_MAX_PASSES');
         putenv('NTFY_TOPIC');
         putenv('NTFY_SERVER');
         putenv('SMTP_TO');
@@ -258,7 +258,7 @@ final class ScoutTest extends TestCase
         // any store column when nothing is enabled.
         $root = $this->fixtureRoot(enabled: true);
 
-        // The suite pins `RENT_WATCH_DB` in setUp, and that is the store `doctor` will open.
+        // The suite pins `SCOUT_DB` in setUp, and that is the store `doctor` will open.
         $store = Store::open((string) $this->dbPath);
         $listing = new RawListing(
             sourceName: 'cdc_habitat',
@@ -326,9 +326,9 @@ final class ScoutTest extends TestCase
 
     public function testDoctorReportsDetailPagesItHasGivenUpOn(): void
     {
-        $store = \RentWatch\Store\Store::open((string) $this->dbPath);
+        $store = \Scout\Store\Store::open((string) $this->dbPath);
 
-        for ($attempt = 0; $attempt < \RentWatch\Adapters\HtmlSource::DETAIL_ATTEMPT_CAP; ++$attempt) {
+        for ($attempt = 0; $attempt < \Scout\Adapters\HtmlSource::DETAIL_ATTEMPT_CAP; ++$attempt) {
             $store->recordDetailFailure('fixture_demo', 'ANN-1', 'HTTP 404', '2026-08-23T10:0' . $attempt . ':00+02:00');
         }
 
@@ -592,7 +592,7 @@ final class ScoutTest extends TestCase
 
     /**
      * `--watch` used to refuse outright, because an unpaced loop over many sources from one IP is
-     * what a scraper looks like (hard rule 5). It now runs, paced by {@see \RentWatch\Core\Pacer} to
+     * what a scraper looks like (hard rule 5). It now runs, paced by {@see \Scout\Core\Pacer} to
      * the Q37 ruling — so what remains to assert here is that it is still subject to every guard
      * `--once` is subject to, rather than having quietly become a second, laxer entry point.
      *
@@ -620,7 +620,7 @@ final class ScoutTest extends TestCase
      * sabotage ledger stalls for hours reporting nothing instead of printing one red line. That was
      * observed, not imagined: a sabotage run sat on this file for eleven minutes on its first case.
      *
-     * `RENT_WATCH_MAX_PASSES` bounds the loop, and `setUp()` sets it for every test in this class,
+     * `SCOUT_MAX_PASSES` bounds the loop, and `setUp()` sets it for every test in this class,
      * so a broken guard now produces a fast wrong answer — which a test can catch.
      */
     public function testTheWatchLoopIsBoundedSoABrokenGuardFailsRatherThanHanging(): void
@@ -631,7 +631,7 @@ final class ScoutTest extends TestCase
 
         self::assertSame(0, $r['code'], $r['err']);
         self::assertStringContainsString('surveillance active', $r['out']);
-        self::assertStringContainsString('RENT_WATCH_MAX_PASSES', $r['out'], 'a bounded watcher must say so — it is not the documented behaviour');
+        self::assertStringContainsString('SCOUT_MAX_PASSES', $r['out'], 'a bounded watcher must say so — it is not the documented behaviour');
     }
 
     public function testWatchRefusesToBeCombinedWithSeed(): void
@@ -949,20 +949,20 @@ final class ScoutTest extends TestCase
         // own run too, so the backdated rows must be inserted with a stamp the health window still
         // sees as the latest — which is what makes the clock the deciding input.
         $pdo = new \PDO('sqlite:' . (string) $this->dbPath);
-        \RentWatch\Store\Store::open((string) $this->dbPath);
+        \Scout\Store\Store::open((string) $this->dbPath);
         $pdo = new \PDO('sqlite:' . (string) $this->dbPath);
         $pdo->exec("INSERT INTO source_runs (source, item_count, ok, error, at, at_epoch, duration_ms)
                     VALUES ('stale_demo', 10, 1, NULL, '2026-06-01T12:00:00+02:00', 1780308000, 5)");
 
-        $store = \RentWatch\Store\Store::open((string) $this->dbPath);
+        $store = \Scout\Store\Store::open((string) $this->dbPath);
 
         self::assertSame(
-            \RentWatch\Core\SourceStatus::STALE,
+            \Scout\Core\SourceStatus::STALE,
             $store->health('stale_demo', '2026-08-07T12:00:00+02:00')->status,
             'with a clock, a source last seen in June is STALE in August',
         );
         self::assertNotSame(
-            \RentWatch\Core\SourceStatus::STALE,
+            \Scout\Core\SourceStatus::STALE,
             $store->health('stale_demo')->status,
             'and WITHOUT a clock the same rows cannot produce that verdict — which is exactly why '
             . 'doctor must pass one, and why asserting on the store alone proves nothing about doctor',

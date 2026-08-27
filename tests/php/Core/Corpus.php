@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-namespace RentWatch\Tests\Core;
+namespace Scout\Tests\Core;
 
-use RentWatch\Core\RawListing;
-use RentWatch\Core\SourceProfile;
-use RentWatch\Core\Tenure;
+use Scout\Core\RawListing;
+use Scout\Core\SourceProfile;
+use Scout\Core\Tenure;
 
 /**
  * Reader for `tests/fixtures/tenure/corpus.json`.

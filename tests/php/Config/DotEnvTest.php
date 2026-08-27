@@ -2,12 +2,12 @@
 
 declare(strict_types=1);
 
-namespace RentWatch\Tests\Config;
+namespace Scout\Tests\Config;
 
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
-use RentWatch\Config\ConfigError;
-use RentWatch\Config\DotEnv;
+use Scout\Config\ConfigError;
+use Scout\Config\DotEnv;
 
 /**
  * `.env` is PARSED, never executed.
@@ -59,7 +59,7 @@ final class DotEnvTest extends TestCase
 
     public function testTheRealEnvironmentWinsOverTheFile(): void
     {
-        // Precedence, and it is load-bearing rather than tidy: `RENT_WATCH_DB=/tmp/throwaway
+        // Precedence, and it is load-bearing rather than tidy: `SCOUT_DB=/tmp/throwaway
         // bin/scout run` is how a live source is measured without touching the real seen-set, and
         // Compose's `environment:` outranks its own `env_file:` the same way. A file that could
         // override the environment would silently redirect a throwaway run at the real database.

@@ -2,18 +2,18 @@
 
 declare(strict_types=1);
 
-namespace RentWatch\Tests\Core;
+namespace Scout\Tests\Core;
 
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProviderExternal;
 use PHPUnit\Framework\TestCase;
-use RentWatch\Core\Classification;
-use RentWatch\Core\Outcome;
-use RentWatch\Core\RawListing;
-use RentWatch\Core\SourceProfile;
-use RentWatch\Core\Tenure;
-use RentWatch\Core\Text;
-use RentWatch\Core\TenureClassifier;
+use Scout\Core\Classification;
+use Scout\Core\Outcome;
+use Scout\Core\RawListing;
+use Scout\Core\SourceProfile;
+use Scout\Core\Tenure;
+use Scout\Core\Text;
+use Scout\Core\TenureClassifier;
 
 /**
  * The corpus suite. `spec/PROJECT_BRIEF.md` §4: "The suite must go red if the classifier regresses."
@@ -478,9 +478,9 @@ final class TenureCorpusTest extends TestCase
                 continue;
             }
 
-            // PSR-4: `src/php/` maps to `RentWatch\`, so a subdirectory is a sub-namespace.
+            // PSR-4: `src/php/` maps to `Scout\`, so a subdirectory is a sub-namespace.
             $relative = substr($file, strpos($file, 'src/php/') + strlen('src/php/'));
-            $class = 'RentWatch\\' . str_replace('/', '\\', substr($relative, 0, -4));
+            $class = 'Scout\\' . str_replace('/', '\\', substr($relative, 0, -4));
 
             if (!class_exists($class)) {
                 continue;                          // enums and interfaces have no mutable state
@@ -498,7 +498,7 @@ final class TenureCorpusTest extends TestCase
                 continue;                          // a static-only utility (`Text`) holds nothing
             }
 
-            if (is_a($class, \RentWatch\Core\MutableByDesign::class, true)) {
+            if (is_a($class, \Scout\Core\MutableByDesign::class, true)) {
                 // Declared at the class, not listed here — see that interface's docblock for why an
                 // exemption living inside this test would rot. Every implementor is still pinned by
                 // the assertion below, so adding one is a visible change to this file.

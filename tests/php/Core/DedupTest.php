@@ -2,12 +2,12 @@
 
 declare(strict_types=1);
 
-namespace RentWatch\Tests\Core;
+namespace Scout\Tests\Core;
 
 use PHPUnit\Framework\TestCase;
-use RentWatch\Config\Criteria;
-use RentWatch\Core\Dedup;
-use RentWatch\Core\RawListing;
+use Scout\Config\Criteria;
+use Scout\Core\Dedup;
+use Scout\Core\RawListing;
 
 /**
  * Dedup, attacked from BOTH sides, as `CLAUDE.md` § Testing requires.

@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace RentWatch\Config;
+namespace Scout\Config;
 
 /**
  * A config file said something the loader will not accept.

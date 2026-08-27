@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace RentWatch\Core;
+namespace Scout\Core;
 
 /**
  * Signal tier 4 — income-ceiling bands, compared against the ceiling a listing quotes.

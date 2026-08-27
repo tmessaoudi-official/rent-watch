@@ -2,18 +2,18 @@
 
 declare(strict_types=1);
 
-namespace RentWatch\Tests\Adapters;
+namespace Scout\Tests\Adapters;
 
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
-use RentWatch\Adapters\EmailAlertSource;
-use RentWatch\Adapters\Mail\FileMailbox;
-use RentWatch\Config\ConfigLoader;
-use RentWatch\Core\RawListing;
-use RentWatch\Core\SourceProfile;
-use RentWatch\Core\Tenure;
-use RentWatch\Core\TenureClassifier;
-use RentWatch\Store\Store;
+use Scout\Adapters\EmailAlertSource;
+use Scout\Adapters\Mail\FileMailbox;
+use Scout\Config\ConfigLoader;
+use Scout\Core\RawListing;
+use Scout\Core\SourceProfile;
+use Scout\Core\Tenure;
+use Scout\Core\TenureClassifier;
+use Scout\Store\Store;
 
 /**
  * Real Bien'ici alerts, parsed with the shipped `bienici` config.

@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace RentWatch\Config;
+namespace Scout\Config;
 
-use RentWatch\Core\MutableByDesign;
+use Scout\Core\MutableByDesign;
 
 /**
  * Typed, consuming reader over one decoded JSON object.

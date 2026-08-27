@@ -2,18 +2,18 @@
 
 declare(strict_types=1);
 
-namespace RentWatch\Adapters;
+namespace Scout\Adapters;
 
-use RentWatch\Adapters\Mail\EmailMessage;
-use RentWatch\Adapters\Mail\Mailbox;
-use RentWatch\Adapters\Mail\MailboxError;
-use RentWatch\Config\SourceDefinition;
-use RentWatch\Core\RawListing;
-use RentWatch\Core\SourceHealth;
-use RentWatch\Core\SourceProfile;
-use RentWatch\Core\Tenure;
-use RentWatch\Core\Text;
-use RentWatch\Store\Store;
+use Scout\Adapters\Mail\EmailMessage;
+use Scout\Adapters\Mail\Mailbox;
+use Scout\Adapters\Mail\MailboxError;
+use Scout\Config\SourceDefinition;
+use Scout\Core\RawListing;
+use Scout\Core\SourceHealth;
+use Scout\Core\SourceProfile;
+use Scout\Core\Tenure;
+use Scout\Core\Text;
+use Scout\Store\Store;
 
 /**
  * Turns portal alert emails into listings. The primary path for private portals (hard rule 4).
@@ -556,7 +556,7 @@ final readonly class EmailAlertSource implements Source
      * about that reads as a fault. It is a plausible French sentence sitting in a plausible field,
      * and it survived a fixture suite, a live acceptance run and a review round.
      *
-     * What it costs is precise: {@see \RentWatch\Config\Criteria::excludeTitlePatterns} is matched
+     * What it costs is precise: {@see \Scout\Config\Criteria::excludeTitlePatterns} is matched
      * against the TITLE ONLY — deliberately, because `3 chambres` in a *description* is the family
      * flat the criteria are looking for — so a card wearing the subject line as its title cannot be
      * rejected by `^\s*chambre\b` or by the parking/box/garage/cave/bureau family, whatever it
@@ -656,7 +656,7 @@ final readonly class EmailAlertSource implements Source
             return $configured;
         }
 
-        $folded = \RentWatch\Core\Text::fold($body);
+        $folded = \Scout\Core\Text::fold($body);
 
         foreach ($this->communeLabels as $key => $label) {
             if ($key !== '' && str_contains($folded, $key)) {

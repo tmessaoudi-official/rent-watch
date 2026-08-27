@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-namespace RentWatch\Tests\Core;
+namespace Scout\Tests\Core;
 
 use PHPUnit\Framework\TestCase;
-use RentWatch\Core\ListingSnapshot;
-use RentWatch\Core\RawListing;
+use Scout\Core\ListingSnapshot;
+use Scout\Core\RawListing;
 
 /**
  * `Core\ListingSnapshot` is the evidence half of schema v7.
@@ -173,12 +173,12 @@ final class ListingSnapshotTest extends TestCase
      *
      * `decode()` used to keep a key only `if (is_scalar($item))`, so an array-valued field was
      * written by `encode()` and silently dropped on the way back. That is precisely the value
-     * {@see \RentWatch\Core\TenureClassifier} raises its tier-1 DOUBT on, and the doubt is the only
+     * {@see \Scout\Core\TenureClassifier} raises its tier-1 DOUBT on, and the doubt is the only
      * thing withholding a match — so the round trip quietly disarmed the guard. A review panel
      * demonstrated the consequence end to end on 2026-08-24: `UNKNOWN`/`DIGEST` before,
      * `LLI`/`MATCH` and pushed after, on a listing whose own field named two excluded regimes.
      *
-     * @see \RentWatch\Tests\Core\TenureSnapshotEvidenceTest for the classifier-level assertion
+     * @see \Scout\Tests\Core\TenureSnapshotEvidenceTest for the classifier-level assertion
      */
     public function testANonScalarFieldValueSurvivesTheRoundTrip(): void
     {

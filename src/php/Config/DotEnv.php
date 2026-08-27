@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace RentWatch\Config;
+namespace Scout\Config;
 
 /**
  * Reads `.env` into the process environment — by PARSING it, never by executing it.
@@ -38,7 +38,7 @@ namespace RentWatch\Config;
  *   substitution, no escape processing. Matching single or double quotes wrapping the whole value
  *   are stripped, which is the only way to keep meaningful trailing whitespace.
  * - **The real environment WINS.** A variable already set is never overwritten, so
- *   `RENT_WATCH_DB=/tmp/throwaway bin/scout run` still works, Compose's `environment:` still
+ *   `SCOUT_DB=/tmp/throwaway bin/scout run` still works, Compose's `environment:` still
  *   outranks its own `env_file:`, and CI is never quietly overridden by a file on disk.
  *
  * ## What it will not do
@@ -46,7 +46,7 @@ namespace RentWatch\Config;
  * A malformed line is refused, and the refusal names the **line number and nothing else**. It must
  * never quote the line: this file is where the IMAP password, the SMTP password and the ntfy topic
  * live, and `ConfigError` messages are printed to the terminal and — for `run` — recorded via
- * {@see \RentWatch\Core\Redact} into `state/last-refusal.txt`. A parser that echoes what it could
+ * {@see \Scout\Core\Redact} into `state/last-refusal.txt`. A parser that echoes what it could
  * not parse is a parser that leaks a credential on the day someone fat-fingers one.
  */
 final class DotEnv

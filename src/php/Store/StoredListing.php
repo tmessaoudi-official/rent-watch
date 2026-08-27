@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace RentWatch\Store;
+namespace Scout\Store;
 
 /**
  * What the store currently believes about a listing it has seen.

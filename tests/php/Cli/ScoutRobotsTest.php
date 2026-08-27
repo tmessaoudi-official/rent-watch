@@ -2,16 +2,16 @@
 
 declare(strict_types=1);
 
-namespace RentWatch\Tests\Cli;
+namespace Scout\Tests\Cli;
 
 use PHPUnit\Framework\Attributes\CoversNothing;
 use PHPUnit\Framework\TestCase;
-use RentWatch\Adapters\Http\CurlHttpClient;
-use RentWatch\Adapters\Http\HttpClient;
-use RentWatch\Adapters\Http\HttpError;
-use RentWatch\Adapters\Http\HttpRequest;
-use RentWatch\Adapters\Http\HttpResponse;
-use RentWatch\Cli\Scout;
+use Scout\Adapters\Http\CurlHttpClient;
+use Scout\Adapters\Http\HttpClient;
+use Scout\Adapters\Http\HttpError;
+use Scout\Adapters\Http\HttpRequest;
+use Scout\Adapters\Http\HttpResponse;
+use Scout\Cli\Scout;
 
 /**
  * Hard rule 5, at the ONE place it was never enforced: the CLI's own wiring.
@@ -21,7 +21,7 @@ use RentWatch\Cli\Scout;
  * `$this->robots !== null`, and until this suite existed both production construction sites in
  * {@see Scout::buildSource()} passed `null`. So robots.txt was enforced in tests, by injection, and
  * never once on a real poll. A rule the project states and never checks is a rule it does not have
- * — which is the sentence {@see \RentWatch\Adapters\Http\Robots} opens with.
+ * — which is the sentence {@see \Scout\Adapters\Http\Robots} opens with.
  *
  * These tests therefore refuse to go anywhere near adapter injection. They drive the real `Scout`,
  * against a real `config/sources.json`, and assert on what the CLI prints. The failing-first shape

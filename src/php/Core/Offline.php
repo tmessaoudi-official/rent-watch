@@ -2,12 +2,12 @@
 
 declare(strict_types=1);
 
-namespace RentWatch\Core;
+namespace Scout\Core;
 
 /**
  * The offline tripwire, in ONE place, because it guards a promise the whole suite rests on.
  *
- * `RENT_WATCH_OFFLINE=1` turns every outbound request into a loud refusal, and
+ * `SCOUT_OFFLINE=1` turns every outbound request into a loud refusal, and
  * `tests/bootstrap.php` sets it for the whole suite. Spec §11 says parser tests run offline; before
  * 2026-08-19 that held only BY ACCIDENT, because every source in `config/sources.json` was disabled
  * and so there was nothing to poll. Enabling In'li turned the suite into a four-page crawler of a
@@ -15,7 +15,7 @@ namespace RentWatch\Core;
  *
  * **It lived on `CurlHttpClient` alone, which made the promise smaller than it read.**
  * `tests/bootstrap.php` calls that client "the backstop for the ones that are not given fakes", and
- * {@see \RentWatch\Core\Notify\NtfyChannel} calls libcurl DIRECTLY — its own sibling test says so —
+ * {@see \Scout\Core\Notify\NtfyChannel} calls libcurl DIRECTLY — its own sibling test says so —
  * so it never passed the funnel. A review panel demonstrated it on 2026-08-24: with the flag set,
  * the channel resolved and dialled a non-loopback host. Nothing was breached (the only test that
  * builds a live channel points it at `127.0.0.1:1`), but the guarantee was two `putenv` lines away
@@ -41,11 +41,11 @@ final class Offline
      */
     public static function refusal(string $target): ?string
     {
-        if (getenv('RENT_WATCH_OFFLINE') !== '1' || self::isLoopback($target)) {
+        if (getenv('SCOUT_OFFLINE') !== '1' || self::isLoopback($target)) {
             return null;
         }
 
-        return 'RENT_WATCH_OFFLINE=1 — refusing to reach ' . $target
+        return 'SCOUT_OFFLINE=1 — refusing to reach ' . $target
             . '. Tests and dry runs must not reach the network; use a fake client or a frozen fixture';
     }
 
@@ -80,7 +80,7 @@ final class Offline
             return null;
         }
 
-        return 'RENT_WATCH_OFFLINE=1 — refusing to reach ' . $describe . ' at ' . $host
+        return 'SCOUT_OFFLINE=1 — refusing to reach ' . $describe . ' at ' . $host
             . '. Tests and dry runs must not reach the network; use a fake transport or a frozen fixture';
     }
 
@@ -93,11 +93,11 @@ final class Offline
      */
     public static function refusalForLocalDelivery(string $describe): ?string
     {
-        if (getenv('RENT_WATCH_OFFLINE') !== '1') {
+        if (getenv('SCOUT_OFFLINE') !== '1') {
             return null;
         }
 
-        return 'RENT_WATCH_OFFLINE=1 — refusing to hand ' . $describe . ' to the local MTA, which may relay it. '
+        return 'SCOUT_OFFLINE=1 — refusing to hand ' . $describe . ' to the local MTA, which may relay it. '
             . 'Tests and dry runs must not reach the network; use SMTP_TRANSPORT=file';
     }
 

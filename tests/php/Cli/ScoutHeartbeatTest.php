@@ -2,19 +2,19 @@
 
 declare(strict_types=1);
 
-namespace RentWatch\Tests\Cli;
+namespace Scout\Tests\Cli;
 
 use PHPUnit\Framework\Attributes\CoversNothing;
 use PHPUnit\Framework\TestCase;
-use RentWatch\Cli\Scout;
-use RentWatch\Core\Notify\ConsoleChannel;
-use RentWatch\Core\Notify\Notifier;
-use RentWatch\Tests\Support\DeliveringChannel;
+use Scout\Cli\Scout;
+use Scout\Core\Notify\ConsoleChannel;
+use Scout\Core\Notify\Notifier;
+use Scout\Tests\Support\DeliveringChannel;
 
 /**
  * Q27 in the loop, rather than in the policy object.
  *
- * {@see \RentWatch\Tests\Core\HeartbeatTest} proves the interval arithmetic. This proves the thing
+ * {@see \Scout\Tests\Core\HeartbeatTest} proves the interval arithmetic. This proves the thing
  * that arithmetic is for: that `scout run --watch` actually emits the beat, that it emits it
  * **whether or not anything matched**, and that it does not emit one per pass. Before this suite
  * existed, `HEARTBEAT_HOURS` was documented in `.env.example` and read by no code at all — the beat
@@ -44,14 +44,14 @@ final class ScoutHeartbeatTest extends TestCase
         // ONE, not two. `WatchLoop` only breaks after the LAST pass, so a bound of 2 makes it sleep
         // out the real Q37 inter-pass interval — fifteen minutes — between them. Written as 2 first,
         // and the run had to be killed at 300 s.
-        putenv('RENT_WATCH_MAX_PASSES=1');
+        putenv('SCOUT_MAX_PASSES=1');
     }
 
     protected function tearDown(): void
     {
-        putenv('RENT_WATCH_MAX_PASSES');
+        putenv('SCOUT_MAX_PASSES');
         putenv('HEARTBEAT_HOURS');
-        putenv('RENT_WATCH_DB');
+        putenv('SCOUT_DB');
 
         foreach ($this->roots as $root) {
             self::removeTree($root);
@@ -292,7 +292,7 @@ final class ScoutHeartbeatTest extends TestCase
     {
         // The producing half. An empty seen-set is Q36's refusal and is the easiest to provoke.
         $root = $this->tempRoot();
-        putenv('RENT_WATCH_DB=' . $root . '/state/rent-watch.sqlite3');
+        putenv('SCOUT_DB=' . $root . '/state/rent-watch.sqlite3');
 
         $r = $this->scoutIn($root, ['run', '--once']);
 
@@ -313,7 +313,7 @@ final class ScoutHeartbeatTest extends TestCase
         // one. Here the bad value is a mailbox URL with a password in it, the shape somebody
         // actually pastes into a config file by mistake.
         $root = $this->tempRoot(['min_rooms' => 'imap://user:hunter2@mail.example.test/INBOX']);
-        putenv('RENT_WATCH_DB=' . $root . '/state/rent-watch.sqlite3');
+        putenv('SCOUT_DB=' . $root . '/state/rent-watch.sqlite3');
 
         $r = $this->scoutIn($root, ['run', '--once']);
 
@@ -331,7 +331,7 @@ final class ScoutHeartbeatTest extends TestCase
         // reaches that file must have been through Redact, and Redact demonstrably masks this shape.
         self::assertStringNotContainsString(
             'hunter2',
-            (string) \RentWatch\Core\Redact::text('échec IMAP sur imap://user:hunter2@mail.example.test/INBOX'),
+            (string) \Scout\Core\Redact::text('échec IMAP sur imap://user:hunter2@mail.example.test/INBOX'),
         );
     }
 
@@ -696,7 +696,7 @@ final class ScoutHeartbeatTest extends TestCase
         // The override exists because this helper used to set the path unconditionally, which
         // silently discarded the one a test had just chosen — the unwritable-store test then
         // exercised a perfectly good database and failed for a reason unrelated to its subject.
-        putenv('RENT_WATCH_DB=' . ($db ?? $root . '/state/rent-watch.sqlite3'));
+        putenv('SCOUT_DB=' . ($db ?? $root . '/state/rent-watch.sqlite3'));
 
         $code = (new Scout($root, $out, $err, self::NOW, null, self::compose($out, $delivering)))->run($argv);
         rewind($out);

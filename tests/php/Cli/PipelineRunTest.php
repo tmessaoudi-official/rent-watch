@@ -2,25 +2,25 @@
 
 declare(strict_types=1);
 
-namespace RentWatch\Tests\Cli;
+namespace Scout\Tests\Cli;
 
 use PHPUnit\Framework\TestCase;
-use RentWatch\Adapters\Source;
-use RentWatch\Adapters\SourceError;
-use RentWatch\Cli\Pipeline;
-use RentWatch\Config\ConfigLoader;
-use RentWatch\Config\Criteria;
-use RentWatch\Core\Notify\Channel;
-use RentWatch\Core\Notify\ChannelError;
-use RentWatch\Core\Notify\Notification;
-use RentWatch\Core\Notify\NotificationKind;
-use RentWatch\Core\Notify\Notifier;
-use RentWatch\Core\RawListing;
-use RentWatch\Core\SourceHealth;
-use RentWatch\Core\SourceProfile;
-use RentWatch\Core\SourceStatus;
-use RentWatch\Core\Tenure;
-use RentWatch\Store\Store;
+use Scout\Adapters\Source;
+use Scout\Adapters\SourceError;
+use Scout\Cli\Pipeline;
+use Scout\Config\ConfigLoader;
+use Scout\Config\Criteria;
+use Scout\Core\Notify\Channel;
+use Scout\Core\Notify\ChannelError;
+use Scout\Core\Notify\Notification;
+use Scout\Core\Notify\NotificationKind;
+use Scout\Core\Notify\Notifier;
+use Scout\Core\RawListing;
+use Scout\Core\SourceHealth;
+use Scout\Core\SourceProfile;
+use Scout\Core\SourceStatus;
+use Scout\Core\Tenure;
+use Scout\Store\Store;
 
 /**
  * The run loop's behaviour, driven through a source and a channel the test controls.

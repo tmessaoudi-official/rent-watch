@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-namespace RentWatch\Tests\Core;
+namespace Scout\Tests\Core;
 
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
-use RentWatch\Core\Prose;
+use Scout\Core\Prose;
 
 /**
  * `Core\Prose` reads a floor and a lift out of French listing PROSE, which is a different job from

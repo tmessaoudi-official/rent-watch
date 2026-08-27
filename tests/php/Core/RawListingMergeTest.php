@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace RentWatch\Tests\Core;
+namespace Scout\Tests\Core;
 
 use PHPUnit\Framework\TestCase;
-use RentWatch\Core\RawListing;
+use Scout\Core\RawListing;
 
 /**
  * `RawListing::mergedWith()` — the rule a detail fetch is merged under.

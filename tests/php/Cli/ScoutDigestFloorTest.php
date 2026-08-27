@@ -2,15 +2,15 @@
 
 declare(strict_types=1);
 
-namespace RentWatch\Tests\Cli;
+namespace Scout\Tests\Cli;
 
 use PHPUnit\Framework\TestCase;
-use RentWatch\Cli\Scout;
-use RentWatch\Core\Notify\ConsoleChannel;
-use RentWatch\Core\Notify\Notifier;
-use RentWatch\Core\RawListing;
-use RentWatch\Store\Store;
-use RentWatch\Tests\Support\DeliveringChannel;
+use Scout\Cli\Scout;
+use Scout\Core\Notify\ConsoleChannel;
+use Scout\Core\Notify\Notifier;
+use Scout\Core\RawListing;
+use Scout\Store\Store;
+use Scout\Tests\Support\DeliveringChannel;
 
 /**
  * Q34's DAILY FLOOR — the third emission path, and the one that was ruled and never built.
@@ -50,15 +50,15 @@ final class ScoutDigestFloorTest extends TestCase
         // `--watch` is the one verb whose success case never returns. Without this a test that
         // expects a refusal and is wrong does not fail — it blocks, and takes the suite and the
         // sabotage ledger with it.
-        putenv('RENT_WATCH_MAX_PASSES=1');
+        putenv('SCOUT_MAX_PASSES=1');
         putenv('TZ=Europe/Paris');
     }
 
     protected function tearDown(): void
     {
-        putenv('RENT_WATCH_MAX_PASSES');
+        putenv('SCOUT_MAX_PASSES');
         putenv('TZ');
-        putenv('RENT_WATCH_DB');
+        putenv('SCOUT_DB');
 
         foreach ($this->roots as $root) {
             $this->rmrf($root);
@@ -181,7 +181,7 @@ final class ScoutDigestFloorTest extends TestCase
         }
 
         // ONE pass, and that is not a weaker test than several — it is the only affordable one.
-        // `RENT_WATCH_MAX_PASSES` bounds how many passes run; it does NOT shorten the Q37 wait
+        // `SCOUT_MAX_PASSES` bounds how many passes run; it does NOT shorten the Q37 wait
         // BETWEEN them, so `passes: 3` sleeps two real fifteen-minute cadences and the suite hangs.
         // (Observed while writing this file. Every other `--watch` test in the tree uses one pass,
         // so nobody had met it.) One pass still exercises BOTH call sites — the startup check before
@@ -291,14 +291,14 @@ final class ScoutDigestFloorTest extends TestCase
     /** @return array{code: int, out: string, err: string} */
     private function watch(string $root, int $passes = 1): array
     {
-        putenv('RENT_WATCH_MAX_PASSES=' . $passes);
+        putenv('SCOUT_MAX_PASSES=' . $passes);
 
         $out = fopen('php://memory', 'r+');
         $err = fopen('php://memory', 'r+');
         self::assertIsResource($out);
         self::assertIsResource($err);
 
-        putenv('RENT_WATCH_DB=' . $root . '/state/rent-watch.sqlite3');
+        putenv('SCOUT_DB=' . $root . '/state/rent-watch.sqlite3');
 
         $notifier = new Notifier([new ConsoleChannel($out), new DeliveringChannel()]);
         $code = (new Scout($root, $out, $err, self::NOW, null, $notifier))->run(['run', '--watch']);

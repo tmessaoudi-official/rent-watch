@@ -121,7 +121,7 @@ as `detail_budget: 0`. Description is the card text plus the message subject.
 
 ## Acceptance
 
-`scout run --once --seed --source=seloger` against a throwaway `RENT_WATCH_DB` reads both fixtures
+`scout run --once --seed --source=seloger` against a throwaway `SCOUT_DB` reads both fixtures
 and judges two listings for the right reasons. Region mode means a null commune with postcode
 `78700` still passes location — so if `communeLabels` does not contain Conflans-Sainte-Honorine,
 that is not a bug to fix.

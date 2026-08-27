@@ -6,7 +6,7 @@ declare(strict_types=1);
 /**
  * `scout` — the CLI entry point (spec/PROJECT_BRIEF.md §10).
  *
- * Deliberately thin: everything testable lives in `RentWatch\Cli\Scout`, which takes its streams as
+ * Deliberately thin: everything testable lives in `Scout\Cli\Scout`, which takes its streams as
  * arguments so a test can assert on REAL stdout rather than on a description of it.
  */
 
@@ -27,14 +27,25 @@ require $autoload;
 //
 // Before this existed, `.env` was inert outside Docker and the documented workaround was
 // `set -a; . ./.env; set +a` — the SHELL, which executes the file rather than reading it. See
-// `RentWatch\Config\DotEnv` for what that cost on 2026-08-22. The real environment still wins over
-// the file, so `RENT_WATCH_DB=/tmp/throwaway bin/scout run` behaves as it always did.
+// `Scout\Config\DotEnv` for what that cost on 2026-08-22. The real environment still wins over
+// the file, so `SCOUT_DB=/tmp/throwaway bin/scout run` behaves as it always did.
 try {
-    RentWatch\Config\DotEnv::load(dirname(__DIR__) . '/.env');
-} catch (RentWatch\Config\ConfigError $e) {
+    Scout\Config\DotEnv::load(dirname(__DIR__) . '/.env');
+} catch (Scout\Config\ConfigError $e) {
     // Not routed through Scout's handler: this runs before one exists, and a `.env` the parser
     // refuses is a startup refusal in the most literal sense. The message names a line NUMBER and
     // never the line, because the file holds credentials.
+    fwrite(STDERR, 'configuration : ' . $e->getMessage() . "\n");
+    exit(2);
+}
+
+// The `RENT_WATCH_*` → `SCOUT_*` rename of 2026-08-27, made impossible to half-apply. Runs AFTER
+// `.env` is loaded, because the deployed `.env` on the host is not in git and is exactly where a
+// legacy name survives; and BEFORE `Scout` exists, because a legacy `SCOUT_DB` spelling means the
+// store would silently open a different — empty — database. See `Scout\Config\LegacyEnv`.
+try {
+    Scout\Config\LegacyEnv::checkProcess();
+} catch (Scout\Config\ConfigError $e) {
     fwrite(STDERR, 'configuration : ' . $e->getMessage() . "\n");
     exit(2);
 }
@@ -44,4 +55,4 @@ try {
 $tz = getenv('TZ');
 date_default_timezone_set(is_string($tz) && $tz !== '' ? $tz : 'Europe/Paris');
 
-exit((new RentWatch\Cli\Scout(dirname(__DIR__)))->run(array_slice($argv, 1)));
+exit((new Scout\Cli\Scout(dirname(__DIR__)))->run(array_slice($argv, 1)));

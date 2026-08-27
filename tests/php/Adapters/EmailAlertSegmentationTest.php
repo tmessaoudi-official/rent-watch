@@ -2,17 +2,17 @@
 
 declare(strict_types=1);
 
-namespace RentWatch\Tests\Adapters;
+namespace Scout\Tests\Adapters;
 
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
-use RentWatch\Adapters\EmailAlertSource;
-use RentWatch\Adapters\Mail\FileMailbox;
-use RentWatch\Adapters\SourceError;
-use RentWatch\Config\FieldMap;
-use RentWatch\Config\SourceDefinition;
-use RentWatch\Core\Tenure;
-use RentWatch\Store\Store;
+use Scout\Adapters\EmailAlertSource;
+use Scout\Adapters\Mail\FileMailbox;
+use Scout\Adapters\SourceError;
+use Scout\Config\FieldMap;
+use Scout\Config\SourceDefinition;
+use Scout\Core\Tenure;
+use Scout\Store\Store;
 
 /**
  * Card segmentation and content-addressed identity, shaped by the first real portal alert.
@@ -564,7 +564,7 @@ final class EmailAlertSegmentationTest extends TestCase
      * The failure it guards was live for a month. SeLoger's old pattern missed 27 of 72 real cards
      * and each stored `4 nouvelles annonces : Ile-de-France` as a flat's title, which reads as a
      * value rather than as the extraction failure it is — and which no
-     * {@see \RentWatch\Config\Criteria::excludedBy()} title-only rule can ever match, so
+     * {@see \Scout\Config\Criteria::excludedBy()} title-only rule can ever match, so
      * `^\s*chambre\b` and the parking/box/garage family were unreachable on 37.5% of the source.
      */
     public function testAConfiguredTitlePatternThatMissesYieldsNoTitle(): void
@@ -728,7 +728,7 @@ final class EmailAlertSegmentationTest extends TestCase
      */
     private static function shippedParams(): array
     {
-        $shipped = \RentWatch\Config\ConfigLoader::loadSources(
+        $shipped = \Scout\Config\ConfigLoader::loadSources(
             dirname(__DIR__, 3) . '/config/sources.json',
         )['seloger'];
 

@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace RentWatch\Enrich;
+namespace Scout\Enrich;
 
 /**
  * Door-to-door public-transport minutes from a commune to the configured destination.

@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-namespace RentWatch\Tests\Adapters;
+namespace Scout\Tests\Adapters;
 
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
-use RentWatch\Adapters\Mail\EmailMessage;
+use Scout\Adapters\Mail\EmailMessage;
 
 /**
  * The MIME parser, tested against the shapes a REAL mailer emits.

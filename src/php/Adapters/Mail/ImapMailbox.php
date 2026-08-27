@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace RentWatch\Adapters\Mail;
+namespace Scout\Adapters\Mail;
 
-use RentWatch\Core\MutableByDesign;
+use Scout\Core\MutableByDesign;
 
 /**
  * IMAP over TLS, hand-rolled on stream sockets.
@@ -174,7 +174,7 @@ final class ImapMailbox implements Mailbox, MutableByDesign
      * portals' alerts plus the watcher's own notification emails, which land in the same inbox. So
      * a busy portal starves a quiet one, silently, and it gets worse with every source added. Push
      * the source's own `params.from` into the QUERY and each source gets its own window instead of a
-     * slice of one. The post-fetch `from` check in {@see \RentWatch\Adapters\EmailAlertSource} stays
+     * slice of one. The post-fetch `from` check in {@see \Scout\Adapters\EmailAlertSource} stays
      * as it was: this makes the fetch cheap and correct, it is not the security boundary.
      *
      * The date is formatted with `date()`'s English month abbreviations, which RFC 3501 requires
@@ -343,7 +343,7 @@ final class ImapMailbox implements Mailbox, MutableByDesign
         // The offline tripwire, on the egress point that matters most: hard rule 4 makes email-alert
         // ingestion the PRIMARY path for private portals, and this sends a cleartext password to a
         // host read from `.env`. A raw socket, so `CurlHttpClient`'s guard never saw it.
-        $refusal = \RentWatch\Core\Offline::refusalForHost($this->host . ':' . $this->port, 'the IMAP server');
+        $refusal = \Scout\Core\Offline::refusalForHost($this->host . ':' . $this->port, 'the IMAP server');
         if ($refusal !== null) {
             throw new MailboxError($refusal);
         }

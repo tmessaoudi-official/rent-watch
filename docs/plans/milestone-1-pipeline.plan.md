@@ -113,7 +113,7 @@ fifth institutional source of the same kind does not move it.
 > One measured oddity, not a defect: consecutive passes over an unchanged payload alternate between
 > `11 à vérifier / 380 écartées` and `9 / 382` on a constant total, i.e. exactly two listings flip
 > verdict. It fails closed both ways — neither state is a match — so it is logged here rather than
-> chased. Diagnose with `scout run --once -v --source=cityloger` on a throwaway `RENT_WATCH_DB` if
+> chased. Diagnose with `scout run --once -v --source=cityloger` on a throwaway `SCOUT_DB` if
 > it outlives the current stock.
 
 ### Remaining items
@@ -533,7 +533,7 @@ correctly in the shape the tests happened to use. That is the whole argument for
 - [2026-08-07 17:05] AGREED: `Store::migrate()` refuses ANY version mismatch, not just a newer one.
   The older direction was the real gap: `CREATE TABLE IF NOT EXISTS` adds no columns and nothing
   re-stamped `schema_meta`, so schema v2 would have opened every existing database as v1 forever.
-- [2026-08-07 17:05] AGREED: adapter error text is masked by `RentWatch\Core\Redact` at the store,
+- [2026-08-07 17:05] AGREED: adapter error text is masked by `Scout\Core\Redact` at the store,
   because the store is the single funnel every adapter passes through. The text reaches
   `source_runs.error` AND a user-facing notification, so a cURL error carrying the IDFM key or an
   IMAP failure carrying the mailbox is hard rule 7's exact prohibition arriving through a channel
@@ -1298,11 +1298,11 @@ A changelog that overstates is worse than one that omits, because the next sessi
   the one command a new machine invites you to type let the next `scout run --once` notify the whole
   back catalogue (92 listings on In'li). `Store::wasCreated()` is deleted rather than kept alongside:
   emptiness is a strict superset, and two guards reading two facts is how one of them rots unnoticed.
-- [2026-08-19 22:40] AGREED: Q36's second half — a mount marker file in `RENT_WATCH_DB`'s directory —
+- [2026-08-19 22:40] AGREED: Q36's second half — a mount marker file in `SCOUT_DB`'s directory —
   is WITHDRAWN rather than implemented, because it cannot fire. Inside the volume it disappears with
   the database it was meant to outlive; outside it, it lives in the image layer and resets on the
   container recreation where the failure happens. The empty seen-set covers the same case.
-- [2026-08-19 22:55] AGREED: `scout run --watch` honours `RENT_WATCH_MAX_PASSES`, and
+- [2026-08-19 22:55] AGREED: `scout run --watch` honours `SCOUT_MAX_PASSES`, and
   `tests/sabotage-check.sh` runs every case under `timeout` (default 300 s, `SABOTAGE_SUITE_TIMEOUT`)
   and counts a suite that never finished as a FAILURE. Found by this change rather than reasoned
   about: sabotaging the Q36 guard let a CLI test that expects a REFUSAL enter the real 15-minute
@@ -1341,7 +1341,7 @@ A changelog that overstates is worse than one that omits, because the next sessi
 - [2026-08-20 04:01] AGREED: a sabotage case whose sed also disables the seam a test relies on is
   REWRITTEN to be surgical, never left to hang and never counted. Applied to
   `the loop stops mid-pass instead of finishing the pass in flight`, which blanked the whole
-  post-pass condition and took `RENT_WATCH_MAX_PASSES` out with it. A `timeout` verdict is
+  post-pass condition and took `SCOUT_MAX_PASSES` out with it. A `timeout` verdict is
   inconclusive, and an inconclusive case in the gate that certifies §1 must not be allowed to
   persist as a permanent FAIL line.
 - [2026-08-20 04:01] AGREED: when a ledger case goes stale because the symbol it pins has been
@@ -1559,7 +1559,7 @@ A changelog that overstates is worse than one that omits, because the next sessi
     executable is the one place that is never a test subject. The cost is one untested line, which
     `tests/test-dotenv-cli.sh` covers by running the real executable in a throwaway root; removing
     the call was verified to turn that suite red, and the restore verified byte-identical.
-  - **The real environment WINS over the file.** `RENT_WATCH_DB=/tmp/throwaway bin/scout run` is how
+  - **The real environment WINS over the file.** `SCOUT_DB=/tmp/throwaway bin/scout run` is how
     a live source is measured without touching the real seen-set, and Compose's `environment:`
     outranks its own `env_file:` the same way. A file that could override the environment would
     silently point a throwaway run at the real database, and the run would look completely normal.
@@ -1730,7 +1730,7 @@ all. Both are defects in the LEDGER, and both are now fixed:
 
    The general lesson, which applies to every future case: **a sabotage that also disables the seam a
    test relies on is measuring the seam.** `Q37`'s pacing constants are real seconds, so any case that
-   can reach `betweenPasses()` in a test must leave `RENT_WATCH_MAX_PASSES` able to do its job.
+   can reach `betweenPasses()` in a test must leave `SCOUT_MAX_PASSES` able to do its job.
 
 Case count is now **295** (296 minus the stale Q36 duplicate). The expected next full result is
 **295 detected, 0 undetected**; the two fixes above are each verified by a filtered run (1/1 and 3/3

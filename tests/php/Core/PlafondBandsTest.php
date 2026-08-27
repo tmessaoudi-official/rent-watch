@@ -2,13 +2,13 @@
 
 declare(strict_types=1);
 
-namespace RentWatch\Tests\Core;
+namespace Scout\Tests\Core;
 
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
-use RentWatch\Core\PlafondBands;
-use RentWatch\Core\Tenure;
+use Scout\Core\PlafondBands;
+use Scout\Core\Tenure;
 
 /**
  * Signal tier 4 — the income-ceiling band, and the measurement that decided its shape.

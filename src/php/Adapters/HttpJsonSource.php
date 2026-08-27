@@ -2,18 +2,18 @@
 
 declare(strict_types=1);
 
-namespace RentWatch\Adapters;
+namespace Scout\Adapters;
 
 use Dom\HTMLDocument;
-use RentWatch\Adapters\Http\HttpClient;
-use RentWatch\Adapters\Http\HttpError;
-use RentWatch\Adapters\Http\HttpRequest;
-use RentWatch\Adapters\Http\Robots;
-use RentWatch\Config\SourceDefinition;
-use RentWatch\Core\SourceHealth;
-use RentWatch\Core\SourceProfile;
-use RentWatch\Core\Tenure;
-use RentWatch\Store\Store;
+use Scout\Adapters\Http\HttpClient;
+use Scout\Adapters\Http\HttpError;
+use Scout\Adapters\Http\HttpRequest;
+use Scout\Adapters\Http\Robots;
+use Scout\Config\SourceDefinition;
+use Scout\Core\SourceHealth;
+use Scout\Core\SourceProfile;
+use Scout\Core\Tenure;
+use Scout\Store\Store;
 
 /**
  * Polls a JSON endpoint and maps it with the source's field map.
@@ -163,7 +163,7 @@ final readonly class HttpJsonSource implements Source
      * The JSON text to parse: the response body, or the text of one element inside it.
      *
      * `embedded_json_selector` is for a page that serves its results as JSON embedded in HTML rather
-     * than as an API response — see {@see \RentWatch\Config\SourceDefinition::$embeddedJsonSelector}.
+     * than as an API response — see {@see \Scout\Config\SourceDefinition::$embeddedJsonSelector}.
      * Everything after this method is the ordinary JSON path, so `items_path`, the field map and
      * `ListingMapper` keep exactly one implementation and hard rule 9 is not re-decided here.
      *
@@ -215,7 +215,7 @@ final readonly class HttpJsonSource implements Source
     }
 
     /**
-     * @return list<\RentWatch\Core\RawListing>
+     * @return list<\Scout\Core\RawListing>
      *
      * @throws SourceError
      */

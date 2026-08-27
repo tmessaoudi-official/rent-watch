@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-namespace RentWatch\Tests\Core;
+namespace Scout\Tests\Core;
 
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
-use RentWatch\Core\Pacer;
+use Scout\Core\Pacer;
 
 /**
  * The Q37 ruling (2026-08-07) in executable form: poll every 15 min ± 5 min of jitter, at least 5 s

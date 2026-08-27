@@ -2,34 +2,34 @@
 
 declare(strict_types=1);
 
-namespace RentWatch\Tests\Adapters;
+namespace Scout\Tests\Adapters;
 
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
-use RentWatch\Adapters\EmailAlertSource;
-use RentWatch\Adapters\Http\CurlHttpClient;
-use RentWatch\Adapters\Http\HttpClient;
-use RentWatch\Adapters\Http\HttpError;
-use RentWatch\Adapters\Http\HttpRequest;
-use RentWatch\Adapters\Http\HttpResponse;
-use RentWatch\Adapters\Http\Robots;
-use RentWatch\Adapters\HttpJsonSource;
-use RentWatch\Adapters\Mail\EmailMessage;
-use RentWatch\Adapters\Mail\FileMailbox;
-use RentWatch\Adapters\Mail\ImapMailbox;
-use RentWatch\Adapters\Mail\Mailbox;
-use RentWatch\Adapters\Mail\MailboxError;
-use RentWatch\Adapters\SourceError;
-use RentWatch\Config\ConfigLoader;
-use RentWatch\Config\FieldMap;
-use RentWatch\Config\SourceDefinition;
-use RentWatch\Core\Notify\ChannelError;
-use RentWatch\Core\Notify\FileTransport;
-use RentWatch\Core\Notify\SendmailTransport;
-use RentWatch\Core\Notify\SmtpTransport;
-use RentWatch\Core\Outcome;
-use RentWatch\Core\Tenure;
-use RentWatch\Store\Store;
+use Scout\Adapters\EmailAlertSource;
+use Scout\Adapters\Http\CurlHttpClient;
+use Scout\Adapters\Http\HttpClient;
+use Scout\Adapters\Http\HttpError;
+use Scout\Adapters\Http\HttpRequest;
+use Scout\Adapters\Http\HttpResponse;
+use Scout\Adapters\Http\Robots;
+use Scout\Adapters\HttpJsonSource;
+use Scout\Adapters\Mail\EmailMessage;
+use Scout\Adapters\Mail\FileMailbox;
+use Scout\Adapters\Mail\ImapMailbox;
+use Scout\Adapters\Mail\Mailbox;
+use Scout\Adapters\Mail\MailboxError;
+use Scout\Adapters\SourceError;
+use Scout\Config\ConfigLoader;
+use Scout\Config\FieldMap;
+use Scout\Config\SourceDefinition;
+use Scout\Core\Notify\ChannelError;
+use Scout\Core\Notify\FileTransport;
+use Scout\Core\Notify\SendmailTransport;
+use Scout\Core\Notify\SmtpTransport;
+use Scout\Core\Outcome;
+use Scout\Core\Tenure;
+use Scout\Store\Store;
 
 /**
  * The network adapters, exercised offline.
@@ -311,7 +311,7 @@ final class NetworkAdaptersTest extends TestCase
     }
 
     /**
-     * `RENT_WATCH_OFFLINE=1` refuses any request to a third-party host.
+     * `SCOUT_OFFLINE=1` refuses any request to a third-party host.
      *
      * Set by `tests/bootstrap.php` for the whole suite. Spec §11 says parser tests run offline, and
      * until 2026-08-19 that held only BY ACCIDENT: every source in the shipped config was disabled,
@@ -322,10 +322,10 @@ final class NetworkAdaptersTest extends TestCase
      */
     public function testTheOfflineSwitchRefusesAThirdPartyRequest(): void
     {
-        self::assertSame('1', getenv('RENT_WATCH_OFFLINE'), 'the bootstrap must set this for every test');
+        self::assertSame('1', getenv('SCOUT_OFFLINE'), 'the bootstrap must set this for every test');
 
         $this->expectException(HttpError::class);
-        $this->expectExceptionMessageMatches('~RENT_WATCH_OFFLINE=1~');
+        $this->expectExceptionMessageMatches('~SCOUT_OFFLINE=1~');
 
         (new CurlHttpClient())->send(new HttpRequest('https://www.inli.fr/locations/offres/x'));
     }
@@ -344,7 +344,7 @@ final class NetworkAdaptersTest extends TestCase
             (new CurlHttpClient())->send(new HttpRequest('http://127.0.0.1:1/never-reached'));
             self::fail('expected the connection to be refused');
         } catch (HttpError $e) {
-            self::assertStringNotContainsString('RENT_WATCH_OFFLINE', $e->getMessage());
+            self::assertStringNotContainsString('SCOUT_OFFLINE', $e->getMessage());
         }
     }
 
@@ -560,8 +560,8 @@ final class NetworkAdaptersTest extends TestCase
         // conventionné is signed by private individual landlords and advertised on exactly these
         // portals; before the Loc'Avantages label existed this classified LIBRE / 50 / MATCH.
         $source = $this->emailSource();
-        $classifier = new \RentWatch\Core\TenureClassifier();
-        $engine = new \RentWatch\Core\CriteriaEngine(ConfigLoader::loadCriteria(self::ROOT . '/config/criteria.json'));
+        $classifier = new \Scout\Core\TenureClassifier();
+        $engine = new \Scout\Core\CriteriaEngine(ConfigLoader::loadCriteria(self::ROOT . '/config/criteria.json'));
 
         $found = false;
         foreach ($source->fetch() as $listing) {
@@ -975,7 +975,7 @@ final class NetworkAdaptersTest extends TestCase
         // TEST-NET-1 (RFC 5737) is deliberate: nothing there is routable, so a failure that is NOT
         // the tripwire's sentence would prove the guard never ran — a connection timeout is exactly
         // what the panel saw before the fix.
-        self::assertSame('1', getenv('RENT_WATCH_OFFLINE'), 'the bootstrap must set this for every test');
+        self::assertSame('1', getenv('SCOUT_OFFLINE'), 'the bootstrap must set this for every test');
 
         $mailbox = new ImapMailbox(
             host: '192.0.2.1',
@@ -987,7 +987,7 @@ final class NetworkAdaptersTest extends TestCase
             $mailbox->fetchRecent(10);
             self::fail('IMAP reached the network from a test');
         } catch (MailboxError $e) {
-            self::assertStringContainsString('RENT_WATCH_OFFLINE', $e->getMessage());
+            self::assertStringContainsString('SCOUT_OFFLINE', $e->getMessage());
             self::assertStringNotContainsString('not-a-real-password', $e->getMessage());
         }
     }

@@ -2,27 +2,27 @@
 
 declare(strict_types=1);
 
-namespace RentWatch\Tests\Core;
+namespace Scout\Tests\Core;
 
 use PHPUnit\Framework\TestCase;
-use RentWatch\Core\Notify\Channel;
-use RentWatch\Core\Notify\ChannelError;
-use RentWatch\Core\Notify\ConsoleChannel;
-use RentWatch\Core\Notify\EmailChannel;
-use RentWatch\Core\Notify\FileTransport;
-use RentWatch\Core\Notify\Formatter;
-use RentWatch\Core\Notify\Notification;
-use RentWatch\Core\Notify\NotificationKind;
-use RentWatch\Core\Notify\Notifier;
-use RentWatch\Core\Notify\NtfyChannel;
-use RentWatch\Core\Notify\Priority;
-use RentWatch\Core\Notify\SendmailTransport;
-use RentWatch\Core\Notify\SmtpTransport;
-use RentWatch\Core\RawListing;
-use RentWatch\Core\Redact;
-use RentWatch\Core\SourceHealth;
-use RentWatch\Core\SourceStatus;
-use RentWatch\Core\Verdict;
+use Scout\Core\Notify\Channel;
+use Scout\Core\Notify\ChannelError;
+use Scout\Core\Notify\ConsoleChannel;
+use Scout\Core\Notify\EmailChannel;
+use Scout\Core\Notify\FileTransport;
+use Scout\Core\Notify\Formatter;
+use Scout\Core\Notify\Notification;
+use Scout\Core\Notify\NotificationKind;
+use Scout\Core\Notify\Notifier;
+use Scout\Core\Notify\NtfyChannel;
+use Scout\Core\Notify\Priority;
+use Scout\Core\Notify\SendmailTransport;
+use Scout\Core\Notify\SmtpTransport;
+use Scout\Core\RawListing;
+use Scout\Core\Redact;
+use Scout\Core\SourceHealth;
+use Scout\Core\SourceStatus;
+use Scout\Core\Verdict;
 
 /**
  * The notification layer — the product's only user-facing output.
@@ -542,7 +542,7 @@ final class NotifyTest extends TestCase
 
     public function testNtfyIsBehindTheOfflineTripwireLikeEveryOtherOutboundPath(): void
     {
-        // `tests/bootstrap.php` sets RENT_WATCH_OFFLINE=1 for the whole suite and calls it "the
+        // `tests/bootstrap.php` sets SCOUT_OFFLINE=1 for the whole suite and calls it "the
         // backstop for the ones that are not given fakes". This channel drives libcurl DIRECTLY, so
         // it never passed CurlHttpClient's funnel — and its default server is a third party while
         // its topic is a documented secret. A review panel set the flag and watched it resolve and
@@ -563,7 +563,7 @@ final class NotifyTest extends TestCase
                 ));
                 self::fail('the offline tripwire did not fire — this channel can reach the network from a test');
             } catch (ChannelError $e) {
-                self::assertStringContainsString('RENT_WATCH_OFFLINE', $e->getMessage());
+                self::assertStringContainsString('SCOUT_OFFLINE', $e->getMessage());
                 self::assertStringNotContainsString($topic, $e->getMessage(), 'the topic must not appear');
                 self::assertStringNotContainsString(
                     rawurlencode($topic),
@@ -592,7 +592,7 @@ final class NotifyTest extends TestCase
             ));
             self::fail('expected a connection failure');
         } catch (ChannelError $e) {
-            self::assertStringNotContainsString('RENT_WATCH_OFFLINE', $e->getMessage());
+            self::assertStringNotContainsString('SCOUT_OFFLINE', $e->getMessage());
         }
     }
 
@@ -619,7 +619,7 @@ final class NotifyTest extends TestCase
             $transport->send('to@example.test', 'subject', 'body', []);
             self::fail('SMTP reached the network from a test');
         } catch (ChannelError $e) {
-            self::assertStringContainsString('RENT_WATCH_OFFLINE', $e->getMessage());
+            self::assertStringContainsString('SCOUT_OFFLINE', $e->getMessage());
             self::assertStringNotContainsString('not-a-real-password', $e->getMessage());
         }
     }
@@ -633,7 +633,7 @@ final class NotifyTest extends TestCase
             (new SendmailTransport())->send('to@example.test', 'subject', 'body', []);
             self::fail('sendmail handed a message to the local MTA from a test');
         } catch (ChannelError $e) {
-            self::assertStringContainsString('RENT_WATCH_OFFLINE', $e->getMessage());
+            self::assertStringContainsString('SCOUT_OFFLINE', $e->getMessage());
         }
     }
 

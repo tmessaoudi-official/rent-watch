@@ -8,7 +8,7 @@
 # PHP, which is the line the whole feature depends on.
 #
 # So this runs the real executable, in a throwaway root of its own, against a `.env` whose
-# RENT_WATCH_DB contains a space — the exact shape that broke under `set -a; . ./.env; set +a`, where
+# SCOUT_DB contains a space — the exact shape that broke under `set -a; . ./.env; set +a`, where
 # bash read it as a one-command prefix and never exported it.
 set -Eeuo pipefail
 
@@ -85,7 +85,7 @@ mkdir -p "$work/a dir with spaces"
 cat > "$work/.env" <<'ENV'
 # a comment, and a blank line follow
 
-RENT_WATCH_DB=a dir with spaces/rw.sqlite3
+SCOUT_DB=a dir with spaces/rw.sqlite3
 ENV
 
 loaded="$(cd "$work" && php bin/scout doctor --source=demo 2>&1 || true)"
@@ -96,15 +96,15 @@ check "…and the shell never ran any of it (no 'command not found')" \
 
 # ── precedence: the real environment outranks the file ────────────────────────────────────────────
 #
-# `RENT_WATCH_DB=/tmp/throwaway bin/scout run` is how a live source is measured without touching the
+# `SCOUT_DB=/tmp/throwaway bin/scout run` is how a live source is measured without touching the
 # real seen-set. A file that could override it would silently redirect that at the real database.
-override="$(cd "$work" && RENT_WATCH_DB='env-wins.sqlite3' php bin/scout doctor --source=demo 2>&1 || true)"
+override="$(cd "$work" && SCOUT_DB='env-wins.sqlite3' php bin/scout doctor --source=demo 2>&1 || true)"
 check "an environment variable outranks the same key in .env" \
   grep -q 'env-wins.sqlite3' <<<"$override"
 
 # ── a malformed .env refuses, loudly, without quoting the line ────────────────────────────────────
 cat > "$work/.env" <<'ENV'
-RENT_WATCH_DB=fine.sqlite3
+SCOUT_DB=fine.sqlite3
 this line is not an assignment hunter2
 ENV
 

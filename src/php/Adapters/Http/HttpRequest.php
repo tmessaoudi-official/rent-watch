@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace RentWatch\Adapters\Http;
+namespace Scout\Adapters\Http;
 
 /** One outbound request. Immutable, so a retry cannot quietly send something different. */
 final readonly class HttpRequest

@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace RentWatch\Core;
+namespace Scout\Core;
 
 /**
  * Q34's daily floor: *has the local `digest_hour` come round again since the last emission?*
@@ -10,7 +10,7 @@ namespace RentWatch\Core;
  * Q34 rules three emission paths for the *à vérifier* rollup. Two were built: automatically at the
  * end of any pass that produced new entries, and on demand via `scout digest`. The third — *"the
  * daily emission stays as a floor for days with nothing new"* — was not. `digest_hour` was parsed
- * into {@see \RentWatch\Config\NotifyPolicy}, printed by `doctor`, and read by nothing else, so a
+ * into {@see \Scout\Config\NotifyPolicy}, printed by `doctor`, and read by nothing else, so a
  * backlog that failed to send simply sat there until somebody typed the command. The digest is §1's
  * only landing zone; a bin nobody drains is the fail-closed rule quietly costing the user listings.
  *

@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace RentWatch\Config;
+namespace Scout\Config;
 
-use RentWatch\Core\MalformedText;
-use RentWatch\Core\Text;
+use Scout\Core\MalformedText;
+use Scout\Core\Text;
 
 /**
  * The developer's criteria: hard disqualifiers, score weights and notification routing.
@@ -198,7 +198,7 @@ final readonly class Criteria
      * regex: match the term where it means what you think it means.
      *
      * Both lists are matched case-insensitively against {@see Text::fold()}ed text, which is why
-     * {@see \RentWatch\Config\ConfigLoader} refuses a pattern containing an accent.
+     * {@see \Scout\Config\ConfigLoader} refuses a pattern containing an accent.
      */
     public function excludedBy(string $title, string $description): ?string
     {

@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace RentWatch\Adapters\Http;
+namespace Scout\Adapters\Http;
 
-use RentWatch\Core\Redact;
+use Scout\Core\Redact;
 
 /**
  * A transport failure — not a non-2xx status, which is an answer.

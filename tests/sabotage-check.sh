@@ -1634,7 +1634,7 @@ run_sabotage "a failing pass is survived in SILENCE (nothing is reported)" \
 
 # Only the `stopping` half is degraded, and the `$maxPasses` half is deliberately left standing.
 #
-# Blanking the whole condition to `if (false)` also disables the bound `RENT_WATCH_MAX_PASSES` relies
+# Blanking the whole condition to `if (false)` also disables the bound `SCOUT_MAX_PASSES` relies
 # on, and that bound is the ONLY thing stopping `ScoutTest`'s bounded `--watch` tests from entering a
 # real `betweenPasses()` wait — 600 to 1200 seconds of genuine sleep. The suite then does not go red,
 # it BLOCKS: measured on 2026-08-19, the full ledger reported this case as
@@ -1712,7 +1712,7 @@ run_sabotage "an enabled html source may ship with no item_selector" \
 # plausible fact, and lets the run through. Nobody sees a stack trace — they see one push per
 # listing in the back catalogue, which on a source like In'li is ninety-two of them at once.
 
-# There is deliberately NO case for `RENT_WATCH_MAX_PASSES` itself. Removing the bound does not make
+# There is deliberately NO case for `SCOUT_MAX_PASSES` itself. Removing the bound does not make
 # a test fail, it makes one BLOCK — which the timeout above reports as inconclusive, correctly, since
 # a suite that never finished never said anything. The hang is the signal; it just is not detection.
 
@@ -2119,7 +2119,7 @@ run_sabotage "the demo fixture ships enabled again (fake listings in a real depl
 # empty" while the file plainly contained one, because bash had read `KEY=a b c` as a one-command
 # prefix and never exported it -- and had EXECUTED `b c`, printing part of a live credential.
 
-# Precedence. `RENT_WATCH_DB=/tmp/throwaway bin/scout run` is how a live source is measured without
+# Precedence. `SCOUT_DB=/tmp/throwaway bin/scout run` is how a live source is measured without
 # touching the real seen-set; a file that could override the environment would silently point that
 # at the real database, and the run would look completely normal.
 run_sabotage "the file overrides the real environment (a throwaway run hits the real store)" \
@@ -2406,7 +2406,7 @@ run_sabotage "an unjudged dedup member is given a manufactured outcome" \
 # "simplify the fallback" edit rewrites the whole constructor call, not one argument of it.
 run_sabotage "a vanished source's listings inherit an eligible tenure from nothing" \
   src/php/Cli/Scout.php \
-  's%^                null,$%                \\RentWatch\\Core\\Tenure::LLI,%; s%^                true,$%                false,%'
+  's%^                null,$%                \\Scout\\Core\\Tenure::LLI,%; s%^                true,$%                false,%'
 
 # One damaged row voiding the whole run. Loud is right; global is not — this is the blast-radius
 # mistake detail hydration already made once, where a single unreadable page stopped every other
@@ -2478,7 +2478,7 @@ run_sabotage "a verdict stored without its snapshot is not reported by the pass"
   's%++\$unencodable;%%'
 
 # ── the offline tripwire covers EVERY outbound path, not just the funnel (2026-08-24) ─────────────
-# `tests/bootstrap.php` calls RENT_WATCH_OFFLINE the backstop for anything not given a fake, and
+# `tests/bootstrap.php` calls SCOUT_OFFLINE the backstop for anything not given a fake, and
 # `NtfyChannel` drives libcurl directly, so it never passed CurlHttpClient's guard. Its default
 # server is a third party and its topic is a documented secret. A review panel set the flag and
 # watched the channel resolve and dial a non-loopback host.

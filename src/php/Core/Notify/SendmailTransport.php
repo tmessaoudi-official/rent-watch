@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace RentWatch\Core\Notify;
+namespace Scout\Core\Notify;
 
 /** PHP's `mail()`, handing off to the host MTA. The right default under Docker with an MTA service. */
 final readonly class SendmailTransport implements MailTransport
@@ -14,7 +14,7 @@ final readonly class SendmailTransport implements MailTransport
 
     /**
      * YES. `mail()` hands the message to a local MTA, which relays it off the machine — which is
-     * also why {@see \RentWatch\Core\Offline} refuses this one outright with no loopback
+     * also why {@see \Scout\Core\Offline} refuses this one outright with no loopback
      * exemption: there is no host to inspect.
      */
     public function reachesRecipient(): bool
@@ -46,7 +46,7 @@ final readonly class SendmailTransport implements MailTransport
         // `mail()` hands the message to the local MTA, which may relay it anywhere — so there is no
         // host to inspect and no loopback exemption to grant. A test that reaches here has already
         // lost control of where the message goes, which is why this refuses unconditionally.
-        $refusal = \RentWatch\Core\Offline::refusalForLocalDelivery('an email');
+        $refusal = \Scout\Core\Offline::refusalForLocalDelivery('an email');
         if ($refusal !== null) {
             throw new ChannelError('email', $refusal);
         }

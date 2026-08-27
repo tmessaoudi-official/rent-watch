@@ -2,18 +2,18 @@
 
 declare(strict_types=1);
 
-namespace RentWatch\Tests\Adapters;
+namespace Scout\Tests\Adapters;
 
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
-use RentWatch\Adapters\EmailAlertSource;
-use RentWatch\Adapters\Mail\FileMailbox;
-use RentWatch\Config\ConfigLoader;
-use RentWatch\Core\Outcome;
-use RentWatch\Core\RawListing;
-use RentWatch\Core\Tenure;
-use RentWatch\Core\TenureClassifier;
-use RentWatch\Store\Store;
+use Scout\Adapters\EmailAlertSource;
+use Scout\Adapters\Mail\FileMailbox;
+use Scout\Config\ConfigLoader;
+use Scout\Core\Outcome;
+use Scout\Core\RawListing;
+use Scout\Core\Tenure;
+use Scout\Core\TenureClassifier;
+use Scout\Store\Store;
 
 /**
  * The first REAL portal alerts, parsed with the shipped `seloger` config.
@@ -46,7 +46,7 @@ final class SelogerFixtureTest extends TestCase
         }
     }
 
-    /** @return array<string,\RentWatch\Core\RawListing> keyed by commune */
+    /** @return array<string,\Scout\Core\RawListing> keyed by commune */
     private function listings(): array
     {
         $this->dbPath = sys_get_temp_dir() . '/rentwatch-slg-' . bin2hex(random_bytes(8)) . '.sqlite3';
@@ -264,7 +264,7 @@ final class SelogerFixtureTest extends TestCase
         $listing = $this->listings()['78700'] ?? null;
         self::assertNotNull($listing);
 
-        $poisoned = new \RentWatch\Core\RawListing(
+        $poisoned = new \Scout\Core\RawListing(
             sourceName: $listing->sourceName,
             externalId: $listing->externalId,
             title: $listing->title,
@@ -328,7 +328,7 @@ final class SelogerFixtureTest extends TestCase
      * `title_pattern` used to require the line to begin with `Appartement|Maison|Studio|Duplex|
      * Loft|Chambre`, which is a guess at what an ESTATE AGENT types. Measured against 72 live cards
      * on 2026-08-26 it missed **27 of them (37.5%)**, and every miss fell back to
-     * {@see \RentWatch\Adapters\Mail\EmailMessage::subject()} — so the stored title of a real flat
+     * {@see \Scout\Adapters\Mail\EmailMessage::subject()} — so the stored title of a real flat
      * read `4 nouvelles annonces : Ile-de-France`.
      *
      * That is not a cosmetic defect. `Criteria::excludeTitlePatterns` is matched against the TITLE
@@ -397,7 +397,7 @@ final class SelogerFixtureTest extends TestCase
      * *a true observation attached to the wrong mechanism* is this repo's named failure and it
      * arrived while writing the fix for an instance of it.
      *
-     * What the subject fallback actually disabled is {@see \RentWatch\Config\Criteria} 's
+     * What the subject fallback actually disabled is {@see \Scout\Config\Criteria} 's
      * TITLE-ONLY set: `^\s*chambre\b` and the parking/box/garage/cave/bureau family. Those are
      * title-scoped deliberately — `3 chambres` in a description is the family flat the criteria are
      * looking for — so they have no second surface to fall back on, and a card wearing

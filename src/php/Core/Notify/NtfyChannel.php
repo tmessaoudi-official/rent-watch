@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace RentWatch\Core\Notify;
+namespace Scout\Core\Notify;
 
 /**
  * Push notification over ntfy — the channel for listings that go within hours.
@@ -96,7 +96,7 @@ final readonly class NtfyChannel implements Channel
 
         // THE OFFLINE TRIPWIRE, and this channel needs its own call because it is not behind the
         // HTTP funnel: it drives libcurl directly (see the CRLF note above, which repeats the same
-        // discipline for the same reason). `tests/bootstrap.php` presents `RENT_WATCH_OFFLINE=1` as
+        // discipline for the same reason). `tests/bootstrap.php` presents `SCOUT_OFFLINE=1` as
         // the backstop for anything not given a fake, and until 2026-08-24 that backstop did not
         // cover the one component whose default server is a third party and whose topic is a
         // documented secret. A review panel showed the flag set and this channel still resolving
@@ -116,7 +116,7 @@ final readonly class NtfyChannel implements Channel
         // Not putting the secret in the string is the fix; masking it afterwards is a race against
         // every transformation the string may undergo. The server is what the operator needs to
         // see, and it is not a credential. The topic is still passed as a literal, as a backstop.
-        $refusal = \RentWatch\Core\Offline::refusalForHost($this->server, 'the ntfy server');
+        $refusal = \Scout\Core\Offline::refusalForHost($this->server, 'the ntfy server');
         if ($refusal !== null) {
             throw new ChannelError($this->name(), $refusal, null, [$this->topic]);
         }

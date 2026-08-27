@@ -2,18 +2,18 @@
 
 declare(strict_types=1);
 
-namespace RentWatch\Tests\Adapters;
+namespace Scout\Tests\Adapters;
 
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
-use RentWatch\Adapters\PacedSource;
-use RentWatch\Adapters\Source;
-use RentWatch\Adapters\SourceError;
-use RentWatch\Core\Pacer;
-use RentWatch\Core\SourceHealth;
-use RentWatch\Core\SourceProfile;
-use RentWatch\Core\SourceStatus;
-use RentWatch\Core\Tenure;
+use Scout\Adapters\PacedSource;
+use Scout\Adapters\Source;
+use Scout\Adapters\SourceError;
+use Scout\Core\Pacer;
+use Scout\Core\SourceHealth;
+use Scout\Core\SourceProfile;
+use Scout\Core\SourceStatus;
+use Scout\Core\Tenure;
 
 /**
  * `PacedSource` is the seam that puts Q37 between the run loop and the network without teaching the

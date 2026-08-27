@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace RentWatch\Config;
+namespace Scout\Config;
 
 /**
  * The score components of `spec/PROJECT_BRIEF.md` §5, with the weights ruled on 2026-08-07.

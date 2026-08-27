@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace RentWatch\Cli;
+namespace Scout\Cli;
 
-use RentWatch\Core\MutableByDesign;
-use RentWatch\Core\Pacer;
+use Scout\Core\MutableByDesign;
+use Scout\Core\Pacer;
 
 /**
  * `scout run --watch`: run a pass, wait out the Q37 cadence, run another, until told to stop.

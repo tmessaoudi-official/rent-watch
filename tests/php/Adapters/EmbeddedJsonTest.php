@@ -2,21 +2,21 @@
 
 declare(strict_types=1);
 
-namespace RentWatch\Tests\Adapters;
+namespace Scout\Tests\Adapters;
 
 use PHPUnit\Framework\Attributes\CoversNothing;
 use PHPUnit\Framework\TestCase;
-use RentWatch\Adapters\Http\HttpClient;
-use RentWatch\Adapters\Http\HttpRequest;
-use RentWatch\Adapters\Http\HttpResponse;
-use RentWatch\Adapters\Http\Robots;
-use RentWatch\Adapters\HttpJsonSource;
-use RentWatch\Adapters\SourceError;
-use RentWatch\Config\ConfigError;
-use RentWatch\Config\ConfigLoader;
-use RentWatch\Config\FieldMap;
-use RentWatch\Config\SourceDefinition;
-use RentWatch\Store\Store;
+use Scout\Adapters\Http\HttpClient;
+use Scout\Adapters\Http\HttpRequest;
+use Scout\Adapters\Http\HttpResponse;
+use Scout\Adapters\Http\Robots;
+use Scout\Adapters\HttpJsonSource;
+use Scout\Adapters\SourceError;
+use Scout\Config\ConfigError;
+use Scout\Config\ConfigLoader;
+use Scout\Config\FieldMap;
+use Scout\Config\SourceDefinition;
+use Scout\Store\Store;
 
 /**
  * `embedded_json_selector` — a JSON payload served inside an HTML page.
