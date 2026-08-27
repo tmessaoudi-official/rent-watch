@@ -76,7 +76,7 @@ printf '\n  .env loading, through the real executable\n\n'
 # happens to match, and the whole file would prove nothing.
 control="$(cd "$work" && php bin/scout doctor --source=demo 2>&1 || true)"
 check "with no .env the CLI still starts (a fresh clone has none)" \
-  grep -q 'rent-watch doctor' <<<"$control"
+  grep -q 'scout doctor' <<<"$control"
 check "…and uses the built-in default database path" \
   grep -q 'state/rent-watch.sqlite3' <<<"$control"
 

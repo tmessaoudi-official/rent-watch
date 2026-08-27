@@ -280,7 +280,7 @@ therefore look enabled and push nameless notifications, which is precisely what 
 forbade. *"Lands"* in that ruling means **deployed**, not committed.
 
 Post-redeploy verification, in this order:
-1. `docker image inspect rent-watch:local --format '{{.Created}}'` — newer than this commit.
+1. `docker image inspect scout:local --format '{{.Created}}'` — newer than this commit.
 2. `docker compose run --rm scout doctor --source=seloger` — inside the deployed image, which also
    proves `IMAP_*` reaches the container environment. If compose does not pass `.env` through,
    seloger looks enabled and never polls: this repo's signature silent failure.

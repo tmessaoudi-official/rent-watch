@@ -65,7 +65,7 @@ final class NtfyChannelWireTest extends TestCase
         // which is the entire behavioural difference the `!!` marker buys — and the notification
         // sent above is `Priority::HIGH`.
         self::assertStringContainsString('Priority: 5', $wire, 'a HIGH push must actually go out as HIGH');
-        self::assertStringContainsString('User-Agent: rent-watch', $wire, 'hard rule 5 holds on this path too');
+        self::assertStringContainsString('User-Agent: scout', $wire, 'hard rule 5 holds on this path too');
         self::assertStringNotContainsStringIgnoringCase('mozilla', $wire);
         self::assertStringContainsString('https://example.test/annonce/1', $wire, 'the body carries the link');
     }

@@ -204,7 +204,7 @@ final readonly class Scout
         $sources = $this->sources($store, $this->onlySources($flags), $criteria, $flags);
         $now = $this->now();
 
-        $this->line('rent-watch doctor · ' . $now);
+        $this->line('scout doctor · ' . $now);
         $this->line('  base    : ' . $this->dbPath() . ' (schéma v' . $store->schemaVersion()
             . ', journal ' . $store->journalMode() . ')');
 

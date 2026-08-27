@@ -268,10 +268,10 @@ final class RobotsResolverTest extends TestCase
             new CountingHttpClient([
                 'https://example.test/robots.txt' => new HttpResponse(
                     200,
-                    "User-agent: *\nDisallow: /\n\nUser-agent: rent-watch\nDisallow: /private/\n",
+                    "User-agent: *\nDisallow: /\n\nUser-agent: scout\nDisallow: /private/\n",
                 ),
             ]),
-            'rent-watch',
+            'scout',
         );
 
         $robots = $resolver->forUrl('https://example.test/annonces');

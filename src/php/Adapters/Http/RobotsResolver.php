@@ -64,7 +64,7 @@ final readonly class RobotsResolver
      */
     public function __construct(
         private readonly HttpClient $client,
-        private readonly string $userAgent = 'rent-watch',
+        private readonly string $userAgent = 'scout',
     ) {}
 
     /**

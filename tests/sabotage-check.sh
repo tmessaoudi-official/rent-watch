@@ -1409,7 +1409,7 @@ run_sabotage "the REMPLACER guard is removed from the adapter itself" \
 
 run_sabotage "the honest User-Agent is dropped for a browser disguise (hard rule 5)" \
   src/php/Adapters/Http/CurlHttpClient.php \
-  "s%USER_AGENT = 'rent-watch%USER_AGENT = 'Mozilla/5.0 rent-watch%"
+  "s%USER_AGENT = 'scout%USER_AGENT = 'Mozilla/5.0 rent-watch%"
 
 run_sabotage "the honest User-Agent constant is BYPASSED at the wiring point" \
   src/php/Adapters/Http/CurlHttpClient.php \

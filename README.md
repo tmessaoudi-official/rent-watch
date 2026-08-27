@@ -1,4 +1,4 @@
-# rent-watch
+# scout
 
 A self-hosted watcher for **rental listings in Île-de-France**. It polls institutional landlords,
 ingests private-portal alert emails over IMAP, classifies every listing by French housing **tenure
@@ -149,7 +149,7 @@ committed and pushed, and the tree was clean and green throughout. Green, pushed
 three different things.
 
 ```bash
-docker tag rent-watch:local rent-watch:pre-<what-you-are-leaving>   # rollback, one retag away
+docker tag scout:local rent-watch:pre-<what-you-are-leaving>   # rollback, one retag away
 docker compose build                                                # BEFORE stopping: a failed
                                                                     #   build must not leave you down
 sqlite3 state/rent-watch.sqlite3 ".backup /tmp/mig-rehearse.sqlite3"

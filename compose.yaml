@@ -17,7 +17,7 @@ services:
   scout:
     build:
       context: .
-    image: rent-watch:local
+    image: scout:local
     # `no-new-privileges` because nothing here ever needs to escalate, and the image already runs as
     # a non-root user. Cheap, and it closes a class of surprise from a future base-image change.
     security_opt:

@@ -50,13 +50,13 @@ final readonly class Robots
         return new self([], null, false, $reason);
     }
 
-    public static function parse(string $body, string $userAgent = 'rent-watch'): self
+    public static function parse(string $body, string $userAgent = 'scout'): self
     {
         $needle = strtolower($userAgent);
         $rules = [];
         $crawlDelay = null;
 
-        // Two passes so a `User-agent: rent-watch` group anywhere in the file beats the wildcard
+        // Two passes so a `User-agent: scout` group anywhere in the file beats the wildcard
         // group, whatever the order. A single pass that took the first matching group would let a
         // `*` block earlier in the file mask a specific one below it.
         foreach ([$needle, '*'] as $target) {

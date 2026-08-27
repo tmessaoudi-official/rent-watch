@@ -22,7 +22,7 @@ use Scout\Core\Offline;
  */
 final readonly class CurlHttpClient implements HttpClient
 {
-    public const string USER_AGENT = 'rent-watch/1.0 (+self-hosted personal listing watcher; contact via repository)';
+    public const string USER_AGENT = 'scout/1.0 (+self-hosted personal listing watcher; contact via repository)';
 
     private const int MAX_REDIRECTS = 3;
 

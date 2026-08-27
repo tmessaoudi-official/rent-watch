@@ -128,7 +128,7 @@ final class ScoutRobotsTest extends TestCase
         }
 
         self::assertStringContainsString(
-            'rent-watch',
+            'scout',
             CurlHttpClient::USER_AGENT,
             'the honest UA the shared client sends on this request',
         );

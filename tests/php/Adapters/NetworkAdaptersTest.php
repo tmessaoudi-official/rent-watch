@@ -70,7 +70,7 @@ final class NetworkAdaptersTest extends TestCase
     #[DataProvider('robotsCases')]
     public function testRobots(string $file, string $path, bool $allowed, string $why): void
     {
-        self::assertSame($allowed, Robots::parse($file, 'rent-watch')->allows($path), $why);
+        self::assertSame($allowed, Robots::parse($file, 'scout')->allows($path), $why);
     }
 
     /** @return iterable<string, array{string,string,bool,string}> */
@@ -119,7 +119,7 @@ final class NetworkAdaptersTest extends TestCase
             '$ anchors the end',
         ];
         yield 'a group naming us beats the wildcard group ABOVE it' => [
-            "User-agent: *\nDisallow: /\n\nUser-agent: rent-watch\nDisallow: /admin",
+            "User-agent: *\nDisallow: /\n\nUser-agent: scout\nDisallow: /admin",
             '/annonces',
             true,
             'a single pass taking the first matching group would let the `*` block mask ours',
@@ -264,7 +264,7 @@ final class NetworkAdaptersTest extends TestCase
         // contact route is present, and no browser family token appears anywhere.
         $agent = CurlHttpClient::USER_AGENT;
 
-        self::assertStringStartsWith('rent-watch/', $agent);
+        self::assertStringStartsWith('scout/', $agent);
         self::assertStringContainsString('contact', $agent);
 
         foreach (['mozilla', 'chrome', 'chromium', 'safari', 'firefox', 'gecko', 'applewebkit', 'edg/', 'opera'] as $disguise) {

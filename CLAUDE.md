@@ -1,11 +1,11 @@
-# CLAUDE.md — rent-watch
+# CLAUDE.md — scout
 
 > This file holds the RULES for how Claude delivers code here — quality, carefulness, gates, and the
 > eligibility boundary that governs this whole project. The product itself (spec, decisions, open
 > questions) lives in `spec/` and `docs/`. Boundary test before adding anything: *does Claude need this
 > to deliver correct code?* If not, it belongs in `docs/`, not here.
 
-rent-watch is a **self-hosted watcher for rental listings in Île-de-France**. It polls institutional
+scout is a **self-hosted watcher for rental listings in Île-de-France**. It polls institutional
 landlords, ingests private-portal alert emails over IMAP, classifies every listing by French housing
 **tenure type**, filters and scores it against personal criteria, and pushes a notification within
 minutes of publication. Single language, single user, single machine. CLI plus push notifications —
@@ -1611,13 +1611,13 @@ var/claude/                 Reports, review outputs — gitignored scratch (hand
 ## Gotchas & pitfalls
 
 - **A green tree says nothing about what the watcher is running — `src/` is baked into the image.**
-  `compose.yaml` mounts `./config` and `./state`; the code comes from `rent-watch:local`. So a fix
+  `compose.yaml` mounts `./config` and `./state`; the code comes from `scout:local`. So a fix
   can be committed, pushed, CI-green and *still not protecting anyone*. Measured 2026-08-23: the
   deployed watcher was seventeen hours old and predated **all of Phase 2 and 2b** — the §1
   fail-closed hydration gate was built, certified and unarmed in production the whole time, and the
   production database was still at schema v4 while the repo was at v6. Nothing in `git status`,
   `git log` or a passing suite says so. The check is
-  `docker image inspect rent-watch:local --format '{{.Created}}'` against the commit date of the
+  `docker image inspect scout:local --format '{{.Created}}'` against the commit date of the
   last change under `src/`, and `SELECT value FROM schema_meta WHERE key='schema_version'` against
   the repo's current version. Redeploy recipe: `README.md` § Deploying it.
 - **What saved that seventeen hours was two unrelated filters, which is not a defence.** Both live

@@ -136,7 +136,7 @@ final readonly class NtfyChannel implements Channel
             // Identify honestly (CLAUDE.md hard rule 5). This is our own notification server, so it
             // is not a politeness question here — it is consistency with how the project behaves
             // everywhere else, so no code path learns a different habit.
-            CURLOPT_USERAGENT => 'rent-watch (self-hosted listing watcher)',
+            CURLOPT_USERAGENT => 'scout (self-hosted listing watcher)',
         ]);
 
         $response = curl_exec($handle);
