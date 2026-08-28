@@ -42,8 +42,27 @@ trap 'rm -rf "$tmp"' EXIT
 
 printf '\n== does the state backup actually back state up? ==\n\n'
 
+# THE MODE IN GIT, NOT THE MODE ON DISK — and the distinction cost two days of red CI.
+#
+# `core.fileMode=false` is set in this repo, so `chmod +x` is never staged: the working tree can be
+# executable while every fresh clone gets 644. This file was added on 2026-08-26 as 100644 together
+# with the `-x` check below, so the check passed locally from the first minute and failed in CI from
+# the first minute, and the local pass is what made it look like a runner problem.
+#
+# It is not cosmetic. README documents `0 4 * * * cd /srv/rent-watch && tools/backup-state.sh` — a
+# crontab line, invoked with no interpreter — so on a fresh deployment the nightly backup of the one
+# file this project calls UNRECOVERABLE would fail with "Permission denied" into a log nobody reads.
+if git -C "$root" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+  _mode="$(git -C "$root" ls-files -s -- tools/backup-state.sh | awk '{print $1}')"
+  if [[ "$_mode" == 100755 ]]; then
+    ok "the tool is committed EXECUTABLE (git mode, which is what a fresh clone gets)"
+  else
+    no "committed executable (git mode $_mode — a fresh clone, CI and the crontab line all get a non-executable file)"
+  fi
+fi
+
 if [[ ! -x "$tool" ]]; then
-  no "tools/backup-state.sh exists and is executable"
+  no "tools/backup-state.sh exists and is executable (on disk)"
   printf '\n  %d passed, %d failed\n\n' "$_pass" "$_fail"
   exit 1
 fi
