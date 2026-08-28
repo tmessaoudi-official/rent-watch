@@ -113,6 +113,21 @@ jobs:
       # WAL database is torn while opening without complaint. This proves the tool reads its own copy
       # back, refuses rather than writing an empty one, and that two runs in the same second do not
       # overwrite each other (its own first draft did, and a weak assertion hid it).
+      # `sqlite3` is a SYSTEM BINARY and nothing in this repo installs it: composer.json has zero
+      # dependencies, the Dockerfile needs only the PHP extension, and the `extensions:` key above
+      # names the PHP extension `sqlite3` — a different thing. Two files use the CLI, and both are
+      # exercised by the step below. On a rotating `ubuntu-latest` that is a dependency on whatever
+      # the runner image happens to ship this month, which is not a dependency, it is a coincidence.
+      #
+      # `backup-state.sh` already REFUSES loudly when it is missing, so the failure would be
+      # readable rather than mysterious — this step is about the build not depending on it at all.
+      - name: Ensure the sqlite3 CLI is present (backup-state.sh drives SQLite's online backup API through it)
+        run: |
+          if ! command -v sqlite3 >/dev/null 2>&1; then
+            sudo apt-get update -qq && sudo apt-get install -y -qq sqlite3
+          fi
+          sqlite3 --version
+
       - name: State backup produces a copy that reads back
         run: bash tests/test-backup-state.sh
 

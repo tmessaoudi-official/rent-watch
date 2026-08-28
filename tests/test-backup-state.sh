@@ -86,6 +86,35 @@ else
 fi
 chmod 700 "$tmp/ro"
 
+# ── the dependency this script does not declare ──────────────────────────────────────────────────
+#
+# `sqlite3` is a SYSTEM BINARY, and nothing installs it: not composer.json (zero dependencies), not
+# the Dockerfile (the image needs only the PHP extension), and — until 2026-08-28 — not ci.yml
+# either, which named `sqlite3` under `extensions:` where it means the PHP extension, a different
+# thing entirely. Two files in this repo use the CLI: this test and the tool it tests.
+#
+# On a rotating `ubuntu-latest` runner that is a time bomb, and the explosion is unreadable: bash
+# prints `sqlite3: command not found` and the tool answers `la copie en ligne a échoué`, which
+# names the symptom and not the cause. A backup tool that cannot say WHY it produced no backup is
+# the failure this whole file exists to prevent, one level up.
+# A PATH holding everything the tool needs EXCEPT sqlite3 — emptying PATH entirely would hide
+# `bash` too and prove only that a shebang needs an interpreter.
+mkdir -p "$tmp/nosqlite-bin"
+for _b in bash env date find rm sort cut wc mkdir dirname cat; do
+  _p="$(command -v "$_b" 2>/dev/null)" && ln -sf "$_p" "$tmp/nosqlite-bin/$_b"
+done
+without_sqlite3="$(PATH="$tmp/nosqlite-bin" "$tool" "$db" "$tmp/nodep" 2>&1 || true)"
+if grep -qi 'sqlite3' <<<"$without_sqlite3" && grep -qi 'introuvable' <<<"$without_sqlite3"; then
+  ok "a missing sqlite3 names ITSELF, rather than reporting a failed copy"
+else
+  no "a missing sqlite3 names itself (got: $(head -1 <<<"$without_sqlite3"))"
+fi
+if [[ ! -d "$tmp/nodep" ]] || [[ -z "$(find "$tmp/nodep" -name '*.sqlite3' 2>/dev/null)" ]]; then
+  ok "…and it refuses BEFORE writing anything, so no empty file is left behind"
+else
+  no "a missing dependency left a file behind"
+fi
+
 # ── retention ────────────────────────────────────────────────────────────────────────────────────
 #
 # Unbounded backups fill the VPS disk and take the seen-set down with them — the same reasoning that
