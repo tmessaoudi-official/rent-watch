@@ -1511,6 +1511,10 @@ Required coverage, per spec §11 — non-negotiable once `src/` exists:
   timezone, fractional seconds of any width parse, a non-existent date is refused, the DST gap is an
   instant); **health** (every `SourceStatus` member reachable and asserted, every `SourceHealth`
   field asserted — five were once replaceable with constants while the suite stayed green);
+  **feed freshness** (schema v11: a source that keeps REPORTING while its feed has stopped
+  DELIVERING is `FEED_SILENT`, not `OK` — an unknown message date yields no verdict, a future-dated
+  one cannot mask an ageing feed, a failed run records no date, and `BROKEN` names the last message
+  it saw rather than only the empty streak);
   **seen-set** (a listing is new exactly once, and *notified* is a different fact from *seen* — the
   store's two most basic guarantees, and the two that had no category for three rounds; plus schema
   v8's third: WHAT a listing was announced as is a different fact from WHETHER it was, the ordering
@@ -1633,6 +1637,26 @@ var/claude/                 Reports, review outputs — gitignored scratch (hand
   "no harm occurred" as "the rule held"**: ask which mechanism actually did the rejecting, because a
   filter that happens to be upstream today can be widened tomorrow, and Q1–Q3 widened three of them
   in one day.
+- **A COUNT THAT NEVER VARIES IS ITSELF A SIGNAL, and for a month nothing read it.** Measured
+  2026-08-28: `leboncoin` reported a healthy `item_count = 3` on **263 consecutive passes**, every
+  one of them re-reading ONE email dated 26 August that `SEARCH SINCE 7 days` kept matching. Every
+  existing verdict was correct and every one said healthy — the baseline was 3 and the last count was
+  3, so nothing dropped; no run failed, so nothing was flaky; the schedule never stopped, so it was
+  not `STALE`. A source re-reading one frozen message is indistinguishable from a source receiving a
+  steady trickle. It would have self-corrected only when the message fell out of the window, days
+  late and blaming the expiry rather than the silence. `SourceStatus::FEED_SILENT` (schema v11) is
+  the fix, and **the signal is the newest MESSAGE date, never listing novelty** — "no new listing for
+  N days" is also exactly what a quiet market looks like, so it restates hard rule 2's ambiguity
+  instead of resolving it (Logirep returns the same 113 listings every pass by design). `STALE` is
+  the twin from the other end: that one says the WATCHER stopped, this one says the PORTAL did.
+- **`FEED_SILENT_DAYS` must stay STRICTLY under `IMAP_SINCE_DAYS`, and the loader refuses otherwise.**
+  Not a preference — a reachability constraint. The newest message `SEARCH SINCE` can match is at
+  most `IMAP_SINCE_DAYS` old, so at or above the window the count collapses to zero, and the
+  empty-streak rule takes the verdict, before the age can ever reach the threshold: the status is
+  unreachable **by construction**. Same shape as `high_priority_score: 70`, which sat dead for weeks
+  while looking configured. The default of 3 is measured, not chosen — over 14 days Bien'ici fires
+  ~30/day, PAP ~8/day and SeLoger 160 in a week, none ever quiet for a full day, while leboncoin has
+  sent exactly one alert since creation.
 - **`prototype/scout.py` has no tenure classifier at all.** It will happily surface PLAI and PLUS
   listings. It is reference material for the field-mapping and adapter shape only — treat its filtering
   logic as incomplete, not as a baseline to preserve.

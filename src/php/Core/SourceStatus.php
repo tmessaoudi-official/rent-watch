@@ -58,6 +58,28 @@ enum SourceStatus: string
     case BROKEN = 'broken';
 
     /**
+     * The source is working; its FEED has stopped delivering.
+     *
+     * Measured on the live watcher 2026-08-28: `leboncoin` reported `item_count = 3` on 263
+     * consecutive passes off ONE email dated 26 August, which `SEARCH SINCE 7 days` kept matching.
+     * Every other verdict was right and every one said healthy — the baseline is 3 and the last
+     * count is 3, so nothing dropped; no run failed, so nothing is flaky; the schedule never
+     * stopped, so it is not {@see STALE}. A source re-reading one frozen message is
+     * indistinguishable from a source receiving a steady trickle, and that is hard rule 2's shape
+     * arrived at from a direction nothing was watching.
+     *
+     * **`STALE` is the twin, from the other end.** That one says the WATCHER stopped; this one says
+     * the PORTAL did. Both are silent absences and neither produces a failure to notice.
+     *
+     * Derived from the age of the newest MESSAGE the source saw, never from listing novelty:
+     * "no new listing for N days" is also what a quiet rental market looks like — Logirep returns
+     * the same 113 listings on every pass by design — so it would restate the ambiguity rather than
+     * resolve it. Only derivable when the caller supplies both a clock and a threshold, and only
+     * for a source that reports message dates at all.
+     */
+    case FEED_SILENT = 'feed_silent';
+
+    /**
      * Whether this status should reach the user rather than sit in a table.
      *
      * `CLAUDE.md` hard rule 2: "An alert that is computed and never sent is worse than none." This

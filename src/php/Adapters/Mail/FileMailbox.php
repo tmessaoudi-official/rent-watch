@@ -20,6 +20,20 @@ final readonly class FileMailbox implements Mailbox
 {
     public function __construct(private string $directory) {}
 
+    /**
+     * Always `null` — a directory of frozen fixtures is not a feed.
+     *
+     * Deliberate, and asserted, rather than inherited. `MAILBOX_DIR=tests/fixtures/<source> scout
+     * doctor` is a documented workflow and `doctor` passes a real clock, so a `FileMailbox` that
+     * reported its files' `Date` headers would make every fixture run drift into `FEED_SILENT` as
+     * the calendar advances — a gate that goes red on a future date with no code change, which is
+     * the shape of a test nobody can trust. The fixtures are dated 25–26 August and only get older.
+     */
+    public function newestMessageAt(): ?string
+    {
+        return null;
+    }
+
     public function fetchRecent(int $limit = 50): array
     {
         if (!is_dir($this->directory)) {

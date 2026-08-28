@@ -47,7 +47,7 @@ final readonly class Store
      * without complaint and then threw a raw `no such column` at the first sighting. That is the
      * whole argument for this constant existing, demonstrated against itself.
      */
-    public const int SCHEMA_VERSION = 10;
+    public const int SCHEMA_VERSION = 11;
 
     /**
      * How many undelivered digest rows one `scout digest` may carry.
@@ -130,6 +130,15 @@ final readonly class Store
     private function __construct(
         private \PDO $pdo,
         private string $journalModeInUse,
+        /**
+         * How many days of portal silence make a still-producing source {@see SourceStatus::FEED_SILENT}.
+         *
+         * Carried on the store rather than threaded through {@see Source::health()} because every
+         * adapter delegates health here and none of them has an opinion about the threshold — it is
+         * an operator setting, not a property of a source. `null` disables the verdict entirely,
+         * which is what keeps every existing caller and every non-email source unchanged.
+         */
+        private ?int $feedSilentDays = null,
     ) {}
 
     /**
@@ -207,7 +216,7 @@ final readonly class Store
      *
      * @throws \RuntimeException if the containing directory cannot be created
      */
-    public static function open(string $path): self
+    public static function open(string $path, ?int $feedSilentDays = null): self
     {
         if ($path !== ':memory:') {
             $directory = \dirname($path);
@@ -248,7 +257,7 @@ final readonly class Store
         // the migration below fail with "cannot commit transaction - SQL statements in progress".
         $mode?->closeCursor();
 
-        $store = new self($pdo, $journalMode);
+        $store = new self($pdo, $journalMode, $feedSilentDays);
         $store->migrate();
 
         return $store;
@@ -709,6 +718,24 @@ final readonly class Store
 
                 if (!\in_array('destination', $existing, true)) {
                     $this->pdo->exec('ALTER TABLE commute_cache ADD COLUMN destination TEXT');
+                }
+            }
+
+            if ($recorded < 11) {
+                // Additive and re-runnable. Holds the newest MESSAGE date the source saw on that
+                // run, so `health()` can tell "the portal stopped sending" from "the market is
+                // quiet" -- see `SourceStatus::FEED_SILENT`.
+                //
+                // NOT BACKFILLED, and there is nothing to backfill it FROM: a pre-v11 row never
+                // recorded a message date, and inventing one would either manufacture an alert
+                // across the entire historic run log or, worse, manufacture a reassurance. NULL
+                // means "this run did not report a feed date", which is also what every non-email
+                // source and every `FileMailbox` run reports, and it yields no verdict either way
+                // (hard rule 9: unknown is not old).
+                $existing = array_column($this->pdo->query('PRAGMA table_info(source_runs)')->fetchAll(), 'name');
+
+                if (!\in_array('feed_newest_at', $existing, true)) {
+                    $this->pdo->exec('ALTER TABLE source_runs ADD COLUMN feed_newest_at TEXT');
                 }
             }
 
@@ -1328,12 +1355,20 @@ final readonly class Store
         ?string $error,
         string $atIso,
         ?int $durationMs = null,
+        ?string $feedNewestAt = null,
     ): void {
         $epoch = self::epoch($atIso);
 
+        if ($feedNewestAt !== null) {
+            // Validated at WRITE time, beside the caller that produced it. Deferring it to
+            // `health()` would turn an unreadable date into a permanent absence of verdict, which
+            // is the silent direction: the source would look watched and be unwatched.
+            self::epoch($feedNewestAt);
+        }
+
         $statement = $this->pdo->prepare(
-            'INSERT INTO source_runs (source, item_count, ok, error, at, at_epoch, duration_ms)
-             VALUES (:source, :count, :ok, :error, :at, :epoch, :duration)',
+            'INSERT INTO source_runs (source, item_count, ok, error, at, at_epoch, duration_ms, feed_newest_at)
+             VALUES (:source, :count, :ok, :error, :at, :epoch, :duration, :feed)',
         );
         $statement->execute([
             'source' => $sourceName,
@@ -1348,6 +1383,12 @@ final readonly class Store
             'error' => Redact::text($error),
             'at' => $atIso,
             'epoch' => $epoch,
+            // Schema v11. The newest MESSAGE date this run saw, or null when the source does not
+            // report one -- every html/json source, and every FileMailbox run, because a directory
+            // of frozen fixtures is not a feed. Validated here rather than at read time so an
+            // unparseable value is refused loudly at the moment it is written, next to the caller
+            // that produced it, instead of quietly yielding no verdict for ever.
+            'feed' => $feedNewestAt,
         ]);
     }
 
@@ -1843,16 +1884,28 @@ final readonly class Store
         return $rows;
     }
 
-    public function health(string $sourceName, ?string $nowIso = null): SourceHealth
+    public function health(string $sourceName, ?string $nowIso = null, ?int $feedSilentDays = null): SourceHealth
     {
+        $feedSilentDays ??= $this->feedSilentDays;
+
+        if ($feedSilentDays !== null && $feedSilentDays < 1) {
+            // Refused rather than clamped, and refused LOUDLY, because a threshold of zero or below
+            // disables the only signal that distinguishes a dead alert from a quiet market. Same
+            // asymmetry as `HEARTBEAT_HOURS`: an omitted threshold is benign (no verdict), an
+            // explicit unusable one is a configuration error wearing the shape of a setting.
+            throw new \InvalidArgumentException(
+                'feedSilentDays doit valoir au moins 1 jour — 0 désactiverait la détection de flux muet',
+            );
+        }
+
         $statement = $this->pdo->prepare(
             // Insertion order. See below for why it is not the final word.
-            'SELECT id, item_count, ok, error, at, at_epoch FROM source_runs
+            'SELECT id, item_count, ok, error, at, at_epoch, feed_newest_at FROM source_runs
               WHERE source = :source ORDER BY id ASC',
         );
         $statement->execute(['source' => $sourceName]);
 
-        /** @var list<array{item_count:int|string, ok:int|string, error:?string, at:string, at_epoch:int|string}> $runs */
+        /** @var list<array{item_count:int|string, ok:int|string, error:?string, at:string, at_epoch:int|string, feed_newest_at:?string}> $runs */
         $runs = $statement->fetchAll();
 
         if ($runs === []) {
@@ -1907,6 +1960,28 @@ final readonly class Store
         }
 
         $epochs = array_map(static fn (array $run): int => (int) $run['at_epoch'], $runs);
+
+        // Every MESSAGE date any run reported. A row that reported nothing contributes nothing:
+        // unknown is not old (hard rule 9), and that covers every html/json source, every
+        // `FileMailbox` run and every row written before schema v11.
+        //
+        // Kept as a LIST rather than reduced to a maximum here, because the maximum is only
+        // meaningful once a clock exists to judge credibility against. The value is whatever a
+        // portal stamped on its own mail, so one skewed clock — or one message dated 2030 — would
+        // otherwise win the maximum and mask a genuinely ageing feed behind it, permanently.
+        // CLAMPING that date to now is worse than useless: it makes the bogus date read as
+        // perfectly fresh, which is the masking this exists to prevent. Future rows are FILTERED,
+        // exactly as `STALE` already filters forward-skewed run timestamps below.
+        $feedDates = [];
+
+        foreach ($runs as $run) {
+            $reported = $run['feed_newest_at'] ?? null;
+
+            if ($reported !== null && $reported !== '') {
+                $feedDates[] = $reported;
+            }
+        }
+
         $emptyStreak = self::trailingEmptyRuns($runs);
         $rollingMean = self::rollingMeanBefore($runs, \count($runs) - 1);
         [$runsInWindow, $failedInWindow] = self::windowCounts($runs, $nowIso === null ? null : self::epoch($nowIso));
@@ -1948,10 +2023,17 @@ final readonly class Store
             }
 
             if ($baseline > 0.0) {
+                // The last message date is carried into the detail, not just into FEED_SILENT.
+                // This is the half that survives the threshold being wrong: when an email source's
+                // count finally collapses because its window expired, the empty streak dates from
+                // the expiry and the SILENCE dates from days earlier. Naming only the streak is how
+                // the leboncoin case would have been reported on the wrong day and blamed on the
+                // wrong cause.
                 return $health(SourceStatus::BROKEN, sprintf(
-                    '%d runs consécutifs à vide alors que la référence précédente était de %.1f annonces',
+                    '%d runs consécutifs à vide alors que la référence précédente était de %.1f annonces%s',
                     $emptyStreak,
                     $baseline,
+                    $feedDates === [] ? '' : sprintf(' — dernier message du portail : %s', max($feedDates)),
                 ));
             }
         }
@@ -2004,6 +2086,41 @@ final readonly class Store
                 $runsInWindow,
                 self::ROLLING_WINDOW_DAYS,
             ));
+        }
+
+        if ($nowIso !== null && $feedDates !== [] && $feedSilentDays !== null && $lastCount > 0) {
+            // Ahead of WARN_DROP deliberately. A source that is BOTH quieter than its mean and
+            // reading an ageing message is described far better by "the portal stopped sending"
+            // than by "fewer than average": the first names a cause, the second names a symptom.
+            //
+            // Gated on `$lastCount > 0` because at zero the existing verdicts already own the
+            // answer -- the empty-streak rule above knows the baseline and fires BROKEN, which now
+            // carries the message date in its own detail.
+            $now = self::epoch($nowIso);
+            $credible = array_filter($feedDates, static fn (string $at): bool => self::epoch($at) <= $now);
+
+            if ($credible === []) {
+                // Dates WERE reported and not one of them is believable. Saying nothing here would
+                // let a portal with a permanently fast clock disable this verdict for ever, which
+                // is the suppressed direction `Core/Heartbeat` rules against. Mirrors the STALE
+                // branch below, which says the same thing about run timestamps.
+                return $health(SourceStatus::FEED_SILENT, sprintf(
+                    'toutes les dates de message sont dans le futur (la plus récente : %s) — vérifiez l\'horloge du portail',
+                    max($feedDates),
+                ));
+            }
+
+            $feedNewest = max($credible);
+            $silentFor = $now - self::epoch($feedNewest);
+
+            if ($silentFor >= $feedSilentDays * 86400) {
+                return $health(SourceStatus::FEED_SILENT, sprintf(
+                    'le portail n\'a rien envoyé depuis %d jour(s) (dernier message : %s) — %d annonce(s) relues du même courrier',
+                    intdiv($silentFor, 86400),
+                    $feedNewest,
+                    $lastCount,
+                ));
+            }
         }
 
         if ($rollingMean !== null && $rollingMean > 0.0 && $lastCount < $rollingMean * self::DROP_WARNING_RATIO) {

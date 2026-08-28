@@ -34,7 +34,7 @@ use Scout\Store\Store;
  * the scraping route hard rule 4 gates behind an explicit flag, and doing it invisibly from the
  * email path would route around the gate entirely.
  */
-final readonly class EmailAlertSource implements Source
+final readonly class EmailAlertSource implements FeedFreshness, Source
 {
     /**
      * Where a rent lives in an alert. Ordered: the most explicit form wins.
@@ -167,6 +167,19 @@ final readonly class EmailAlertSource implements Source
         }
 
         return $listings;
+    }
+
+    /**
+     * Delegated to the mailbox, which is the only thing here that has seen a `Date` header.
+     *
+     * This class is `readonly` and so cannot cache the value itself — deliberately, because a
+     * source caching a computed result is what `MutableByDesign` exists to keep out. `ImapMailbox`
+     * already IS its connection state and records this during the fetch; `FileMailbox` answers
+     * `null` on purpose, a directory of frozen fixtures being no kind of feed.
+     */
+    public function newestFeedItemAt(): ?string
+    {
+        return $this->mailbox->newestMessageAt();
     }
 
     public function health(?string $nowIso = null): SourceHealth

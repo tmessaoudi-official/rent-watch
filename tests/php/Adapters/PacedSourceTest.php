@@ -6,6 +6,7 @@ namespace Scout\Tests\Adapters;
 
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
+use Scout\Adapters\FeedFreshness;
 use Scout\Adapters\PacedSource;
 use Scout\Adapters\Source;
 use Scout\Adapters\SourceError;
@@ -180,6 +181,39 @@ final class PacedSourceTest extends TestCase
         self::assertSame('2026-08-19T12:00:00Z', $inner->healthCalledWith);
     }
 
+    /**
+     * Feed freshness must survive the wrapper, and NOTHING tested that until the ledger said so.
+     *
+     * **Found by `tests/sabotage-check.sh`, not by review:** replacing the forwarding with
+     * `return null;` left the whole suite green. That is the worst possible shape for this
+     * particular capability — `wrapAll()` wraps every source, and `--watch` is the ONLY mode in
+     * which a feed can go silent unnoticed for days, so a decorator that silently drops it makes
+     * the detection unreachable in exactly the mode it was built for while every unit test on the
+     * inner source keeps passing.
+     */
+    public function testFeedFreshnessSurvivesTheWrapper(): void
+    {
+        $inner = new SpyFreshSource('leboncoin', '2026-08-26T07:33:06Z');
+        $paced = new PacedSource($inner, self::pacer(new CallLog()));
+
+        self::assertSame('2026-08-26T07:33:06Z', $paced->newestFeedItemAt());
+    }
+
+    /**
+     * A source that reports no freshness answers `null`, not an error.
+     *
+     * The counterweight, and it is what stops the guarantee above being satisfied by making
+     * `FeedFreshness` mandatory on `Source` — a contract every implementation has to bypass is not
+     * a contract, which is `Source`'s own docblock. `null` yields no verdict rather than a false one.
+     */
+    public function testASourceWithoutFreshnessIsNotAnError(): void
+    {
+        $log = new CallLog();
+        $paced = new PacedSource(new SpySource('inli', 'a.test', $log), self::pacer($log));
+
+        self::assertNull($paced->newestFeedItemAt());
+    }
+
     public function testWrapAllGivesEverySourceTheSamePacerRatherThanAPrivateWindow(): void
     {
         // `wrapAll` is documented as the ONLY intended way to build these, and it was the one thing
@@ -309,5 +343,54 @@ final class SpySource implements Source
         $this->healthCalledWith = $nowIso;
 
         return new SourceHealth($this->sourceName, SourceStatus::OK);
+    }
+}
+
+/** A source that DOES report feed freshness, so the decorator's forwarding is observable. */
+final class SpyFreshSource implements FeedFreshness, Source
+{
+    public function __construct(
+        private readonly string $sourceName,
+        private readonly ?string $newest,
+    ) {}
+
+    public function newestFeedItemAt(): ?string
+    {
+        return $this->newest;
+    }
+
+    public function name(): string
+    {
+        return $this->sourceName;
+    }
+
+    public function host(): ?string
+    {
+        return null;
+    }
+
+    public function family(): string
+    {
+        return 'private';
+    }
+
+    public function defaultTenure(): ?Tenure
+    {
+        return null;
+    }
+
+    public function profile(): SourceProfile
+    {
+        return new SourceProfile($this->sourceName, 'private', null, false);
+    }
+
+    public function fetch(): array
+    {
+        return [];
+    }
+
+    public function health(?string $nowIso = null): SourceHealth
+    {
+        return new SourceHealth(sourceName: $this->sourceName, status: SourceStatus::OK);
     }
 }

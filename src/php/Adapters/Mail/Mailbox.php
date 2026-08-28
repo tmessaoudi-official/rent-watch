@@ -32,4 +32,20 @@ interface Mailbox
 
     /** Human-readable description of where this reads from, for `doctor`. Never a credential. */
     public function describe(): string;
+
+    /**
+     * The `Date` of the newest message the last {@see fetchRecent()} saw, or `null` if unknown.
+     *
+     * **This is the fact that separates "the portal stopped sending" from "the market is quiet",**
+     * and nothing else in the system carries it. Measured 2026-08-28: `leboncoin` had reported a
+     * healthy `item_count = 3` on 263 consecutive passes, all of them re-reading ONE message dated
+     * 26 August that `SEARCH SINCE 7 days` kept matching. Listing novelty cannot tell those apart —
+     * Logirep returns the same 113 listings every pass by design — but a message date can, because
+     * it is a statement about what the portal SENT rather than an inference about the market.
+     *
+     * `null` before any fetch, and `null` from a mailbox that has no meaningful notion of feed
+     * freshness. It must never be read as "old": {@see SourceStatus::FEED_SILENT} declines to
+     * judge on `null` (hard rule 9).
+     */
+    public function newestMessageAt(): ?string;
 }

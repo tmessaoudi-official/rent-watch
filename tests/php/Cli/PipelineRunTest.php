@@ -1379,14 +1379,14 @@ final class PipelineRunTest extends TestCase
 
     // ---------------------------------------------------------------- schema
 
-    public function testTheSchemaVersionIsTen(): void
+    public function testTheSchemaVersionIsEleven(): void
     {
         // A bare constant assertion, and it earns its place: lowering `SCHEMA_VERSION` makes
         // `migrate()` return early on an EXISTING database, so an older one opens cleanly and then
         // throws `no such column` on the first write. A fresh database hides it entirely, because
         // `CREATE TABLE IF NOT EXISTS` always writes the current DDL.
-        self::assertSame(10, Store::SCHEMA_VERSION);
-        self::assertSame(10, $this->store()->schemaVersion());
+        self::assertSame(11, Store::SCHEMA_VERSION);
+        self::assertSame(11, $this->store()->schemaVersion());
     }
 
     public function testAVersionOneDatabaseIsUpgradedThroughEveryLaterStep(): void
@@ -1404,7 +1404,7 @@ final class PipelineRunTest extends TestCase
         unset($pdo, $store);
 
         $reopened = Store::open((string) $this->dbPath);
-        self::assertSame(10, $reopened->schemaVersion());
+        self::assertSame(11, $reopened->schemaVersion());
 
         // v5's table and v6's column are created by their own migration steps, not by the
         // fresh-database DDL, and this is the only path that proves the difference: a v1 database
@@ -1450,7 +1450,7 @@ final class PipelineRunTest extends TestCase
         $pdo->exec("UPDATE schema_meta SET value = '5' WHERE key = 'schema_version'");
         unset($pdo);
 
-        self::assertSame(10, Store::open($path)->schemaVersion(), 'a re-run migration must not throw');
+        self::assertSame(11, Store::open($path)->schemaVersion(), 'a re-run migration must not throw');
     }
 
     // ---------------------------------------------------------------- helpers

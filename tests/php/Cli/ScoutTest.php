@@ -338,6 +338,70 @@ final class ScoutTest extends TestCase
         self::assertStringContainsString('illisible', $r['out']);
     }
 
+    /**
+     * An unusable `FEED_SILENT_DAYS` is a REFUSAL, and one the user can read.
+     *
+     * **This test exists because `tests/sabotage-check.sh` proved the refusal was dead safety code.**
+     * The guard was written, it was correct, and deleting it left the whole suite green — so nothing
+     * would have noticed the day it stopped being enforced. That is the trap the ledger is for.
+     *
+     * It also pins the exception TYPE by pinning the behaviour: a `ConfigError` is caught at the top
+     * of `run()` and printed as a line, while an `InvalidArgumentException` — which the first
+     * implementation threw — escapes as a stack trace and, worse, skips `recordRefusal()`, the Q27
+     * machinery that makes a startup refusal visible on the next successful beat.
+     */
+    public function testAThresholdAtOrAboveTheImapWindowIsRefused(): void
+    {
+        // The reachability constraint, not a preference. The newest message SEARCH SINCE can match
+        // is at most IMAP_SINCE_DAYS old, so at or above the window the count collapses to zero —
+        // and the empty-streak rule takes the verdict — before the age can ever reach the threshold.
+        // feed_silent would be unreachable BY CONSTRUCTION, the shape that kept `!!` dead at 70.
+        putenv('FEED_SILENT_DAYS=7');
+        putenv('IMAP_SINCE_DAYS=7');
+
+        try {
+            $r = $this->scout(['doctor']);
+        } finally {
+            putenv('FEED_SILENT_DAYS');
+            putenv('IMAP_SINCE_DAYS');
+        }
+
+        self::assertNotSame(0, $r['code'], 'an unreachable threshold must refuse, not warn');
+        self::assertStringContainsString('FEED_SILENT_DAYS', $r['out'] . $r['err']);
+        self::assertStringContainsString('inatteignable', $r['out'] . $r['err']);
+    }
+
+    /** Zero disables the one signal that tells a dead alert from a quiet market, so it is refused. */
+    public function testAThresholdOfZeroIsRefused(): void
+    {
+        putenv('FEED_SILENT_DAYS=0');
+
+        try {
+            $r = $this->scout(['doctor']);
+        } finally {
+            putenv('FEED_SILENT_DAYS');
+        }
+
+        self::assertNotSame(0, $r['code']);
+        self::assertStringContainsString('au moins 1 jour', $r['out'] . $r['err']);
+    }
+
+    /**
+     * The counterweight, and without it the guarantee above is satisfied by refusing everything.
+     *
+     * An unset variable must keep the default and change nothing — the same shape as the
+     * `title_pattern` counterweight, which exists because a rule that only ever refuses is
+     * indistinguishable from a feature that was deleted.
+     */
+    public function testAnUnsetThresholdChangesNothing(): void
+    {
+        putenv('FEED_SILENT_DAYS');
+
+        $r = $this->scout(['doctor']);
+
+        self::assertStringNotContainsString('FEED_SILENT_DAYS', $r['out'] . $r['err']);
+    }
+
     public function testDoctorPrintsTheSchemaVersionAndTheDigestTimezone(): void
     {
         $r = $this->scout(['doctor']);

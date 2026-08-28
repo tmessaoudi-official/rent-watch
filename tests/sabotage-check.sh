@@ -3238,6 +3238,45 @@ run_sabotage "the ntfy wire hardcodes a level instead of sending the notificatio
   src/php/Core/Notify/NtfyChannel.php \
   "s%'Priority: ' \\. \\\$n->priority->ntfyLevel()%'Priority: 3'%"
 
+# ── round 9: a feed can stop DELIVERING while the source keeps REPORTING (2026-08-28) ─────────
+#
+# Measured on the live watcher: `leboncoin` reported item_count = 3 on 263 consecutive passes, every
+# one of them re-reading ONE email dated 26 August. Every existing verdict was correct and every one
+# said healthy. These five cases pin the parts of the fix whose failure is, as usual here, silent.
+
+run_sabotage "a silent feed stops being reported at all (the leboncoin case returns)" \
+  src/php/Store/Store.php \
+  's%if ($silentFor >= $feedSilentDays \* 86400) {%if (false) {%'
+
+# UNKNOWN MUST NOT BECOME OLD. Reading a null feed date as ancient turns the entire pre-v11 run log,
+# every html/json source and the documented MAILBOX_DIR fixture workflow into a permanent alert --
+# hard rule 9 at the health layer, and the noisy direction, which is how an alert becomes furniture.
+run_sabotage "an unknown feed date is read as an ancient one" \
+  src/php/Store/Store.php \
+  's%\$feedDates\[\] = \$reported;%\$feedDates[] = \$reported ?? "1970-01-01T00:00:00Z";%; s%if (\$reported !== null \&\& \$reported !== ..) {%if (true) {%'
+
+# A FUTURE DATE MUST NOT MASK AN AGEING FEED. The verdict reduces reported dates to their maximum,
+# so one portal with a fast clock wins that maximum and reports the feed fresh for ever. Removing the
+# credibility filter is the mutation; the suite must notice.
+run_sabotage "a future-dated message is trusted, masking a silent feed for ever" \
+  src/php/Store/Store.php \
+  's%$credible = array_filter($feedDates, static fn (string $at): bool => self::epoch($at) <= $now);%$credible = $feedDates;%'
+
+# THE THRESHOLD MUST STAY UNDER THE IMAP WINDOW. At or above it the count collapses to zero before
+# the age can reach the threshold, so feed_silent is unreachable BY CONSTRUCTION -- the shape that
+# kept the `!!` marker dead at 70 while looking configured. Deleting the refusal must go red.
+run_sabotage "the unreachable-threshold refusal is dropped (feed_silent becomes dead config)" \
+  src/php/Cli/Scout.php \
+  's%if ($days >= $window) {%if (false) {%'
+
+# THE DECORATOR MUST FORWARD IT. `wrapAll()` wraps every source under --watch, which is the ONLY
+# mode in which a feed can go silent unnoticed for days -- so a decorator that drops the capability
+# makes the detection unreachable in exactly the mode it was built for, while every unit test on the
+# inner source still passes.
+run_sabotage "PacedSource stops forwarding feed freshness (dead under --watch, green in tests)" \
+  src/php/Adapters/PacedSource.php \
+  's%return $this->inner instanceof FeedFreshness ? $this->inner->newestFeedItemAt() : null;%return null;%'
+
 # THE TALLY LIVES HERE, BELOW EVERY CASE, and that position is load-bearing rather than tidy.
 # It sat mid-file twice: once on 2026-08-20 (295 printed for 303 cases) and again from 2026-08-23,
 # when 21 schema-v7 / digest / reclassify cases were appended past it and the headline read 354 for

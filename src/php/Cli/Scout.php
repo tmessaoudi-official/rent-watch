@@ -16,6 +16,7 @@ use Scout\Adapters\Mail\FileMailbox;
 use Scout\Adapters\Mail\ImapMailbox;
 use Scout\Adapters\Mail\Mailbox;
 use Scout\Adapters\PacedSource;
+use Scout\Adapters\FeedFreshness;
 use Scout\Adapters\Source;
 use Scout\Adapters\SourceError;
 use Scout\Config\ConfigError;
@@ -61,6 +62,12 @@ use Scout\Store\Store;
  */
 final readonly class Scout
 {
+    /**
+     * Days of portal silence, absent `FEED_SILENT_DAYS`. See {@see feedSilentDays()} for the
+     * measurement behind the number and for why it must stay under `IMAP_SINCE_DAYS`.
+     */
+    private const int DEFAULT_FEED_SILENT_DAYS = 3;
+
     /**
      * Typed `mixed` because PHP has no `resource` type declaration and a readonly property must be
      * typed. Streams are ARGUMENTS rather than globals so a test can assert on real stdout — this
@@ -306,7 +313,20 @@ final readonly class Scout
             }
 
             $durationMs = (int) round((hrtime(true) - $startedAt) / 1_000_000);
-            $store->recordRun($source->name(), $count, $error === null, $error, $now, $durationMs);
+            // The feed date is recorded HERE too, not only in `Pipeline`. `doctor` writes a real run
+            // row, so omitting it would leave a deployment that only ever runs `doctor` with a
+            // permanently null column — the feed-silence verdict present in the code and unreachable
+            // in practice, which is the shape this whole change exists to remove. Only on the
+            // success path, and only after the fetch: on a failure the mailbox never saw a message.
+            $store->recordRun(
+                $source->name(),
+                $count,
+                $error === null,
+                $error,
+                $now,
+                $durationMs,
+                $error === null && $source instanceof FeedFreshness ? $source->newestFeedItemAt() : null,
+            );
 
             $health = $source->health($now);
             if ($health->status->isAlerting()) {
@@ -1799,7 +1819,77 @@ final readonly class Scout
 
     private function store(): Store
     {
-        return Store::open($this->dbPath());
+        return Store::open($this->dbPath(), self::feedSilentDays());
+    }
+
+    /**
+     * How many days of portal silence make a still-producing source `FEED_SILENT`.
+     *
+     * **The threshold MUST be strictly under the IMAP window, and that is a reachability
+     * constraint rather than a preference.** The newest message `SEARCH SINCE` can match is by
+     * definition at most `IMAP_SINCE_DAYS` old, so while the count is non-zero the feed's age is
+     * BOUNDED by that window: at `FEED_SILENT_DAYS >= IMAP_SINCE_DAYS` the count collapses to zero —
+     * and the existing empty-streak machinery takes the verdict — before the age can ever reach the
+     * threshold. The status would be unreachable *by construction*, which is precisely how
+     * `high_priority_score: 70` sat dead for weeks while looking configured. Refused loudly instead.
+     *
+     * The observable band is `(threshold, window)`. On the defaults, 3 and 7, that is roughly four
+     * days of early warning before the count would have collapsed on its own.
+     *
+     * **The default is MEASURED, not chosen.** Firing cadences over 14 days on the live mailbox,
+     * 2026-08-28: Bien'ici ~30/day with a longest gap of about 4.5 hours, PAP ~8/day, SeLoger 160 in
+     * seven days — none of which has ever been quiet for a day, let alone three — against
+     * `leboncoin`, which has sent exactly ONE alert since its creation. Three days catches leboncoin
+     * and cannot false-fire on the others.
+     *
+     * **Stated cost:** a source firing thirty times a day is only noticed after three days of
+     * silence, which is ~90 missed alerts. The per-source override exists for exactly that and is
+     * the reason this is not a single global constant.
+     */
+    private static function feedSilentDays(): ?int
+    {
+        // Every refusal below is a `ConfigError`, NOT an `InvalidArgumentException`. Only
+        // `ConfigError` is caught at the top of `run()`, so the other would reach the user as a
+        // stack trace and — worse — would skip `recordRefusal()`, the Q27 machinery that makes a
+        // startup refusal visible on the next successful beat. Under Docker the process exits
+        // before any channel exists and its stderr scrolls past in a log nobody reads.
+
+        $raw = getenv('FEED_SILENT_DAYS');
+
+        if ($raw === false || trim((string) $raw) === '') {
+            $days = self::DEFAULT_FEED_SILENT_DAYS;
+        } elseif (preg_match('~^\d+$~', trim((string) $raw)) !== 1) {
+            throw new ConfigError(sprintf(
+                'FEED_SILENT_DAYS doit être un entier de jours, reçu : %s',
+                trim((string) $raw),
+            ));
+        } else {
+            $days = (int) trim((string) $raw);
+        }
+
+        if ($days < 1) {
+            // Refused, not clamped. Zero would disable the only signal that distinguishes a dead
+            // alert from a quiet market — the same asymmetry as `HEARTBEAT_HOURS`, where an omitted
+            // value is benign and an explicit unusable one is a configuration error in the shape of
+            // a setting.
+            throw new ConfigError(
+                'FEED_SILENT_DAYS doit valoir au moins 1 jour — 0 désactiverait la détection de flux muet',
+            );
+        }
+
+        $window = (int) (getenv('IMAP_SINCE_DAYS') ?: 7);
+
+        if ($days >= $window) {
+            throw new ConfigError(sprintf(
+                'FEED_SILENT_DAYS (%d) doit être strictement inférieur à IMAP_SINCE_DAYS (%d) : '
+                . 'au-delà, le compteur retombe à zéro avant que le silence ne soit détectable, '
+                . 'et le statut feed_silent devient inatteignable',
+                $days,
+                $window,
+            ));
+        }
+
+        return $days;
     }
 
     /**

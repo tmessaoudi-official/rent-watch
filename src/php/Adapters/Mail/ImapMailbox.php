@@ -71,6 +71,15 @@ final class ImapMailbox implements Mailbox, MutableByDesign
     private int $tag = 0;
 
     /**
+     * The newest credible `Date` seen by the last fetch, as an ISO-8601 UTC instant.
+     *
+     * Per-fetch state on a class that is already {@see MutableByDesign} for exactly this reason — it
+     * IS its connection, and this is one more thing the connection learned. See
+     * {@see Mailbox::newestMessageAt()} for why the value exists at all.
+     */
+    private ?string $newestMessageAt = null;
+
+    /**
      * @param string|null $fromFilter the source's own `params.from`, pushed INTO the IMAP query.
      *                                See {@see searchCommand()} for why it is not merely a
      *                                post-fetch filter.
@@ -97,6 +106,44 @@ final class ImapMailbox implements Mailbox, MutableByDesign
          */
         private readonly ?\Closure $warn = null,
     ) {}
+
+    public function newestMessageAt(): ?string
+    {
+        return $this->newestMessageAt;
+    }
+
+    /**
+     * Record a message's `Date`, keeping the newest.
+     *
+     * **An UNPARSEABLE date is skipped, never treated as now.** A portal that emits a malformed
+     * header would otherwise refresh the feed's apparent age on every pass and permanently suppress
+     * {@see SourceStatus::FEED_SILENT} — the suppressed direction, which `Core/Heartbeat` rules
+     * against. Skipping degrades to `null`, which yields no verdict rather than a false one.
+     *
+     * Normalised to UTC on the way in so the comparison in `Store::health()` is between instants
+     * rather than between strings: portals stamp their own offsets, and `+0200` sorts before `Z`
+     * on the same instant.
+     */
+    private function noteMessageDate(string $raw): void
+    {
+        $header = EmailMessage::parse($raw)->header('Date');
+
+        if ($header === null || trim($header) === '') {
+            return;
+        }
+
+        try {
+            $at = new \DateTimeImmutable($header);
+        } catch (\Exception) {
+            return;
+        }
+
+        $iso = $at->setTimezone(new \DateTimeZone('UTC'))->format('Y-m-d\TH:i:s\Z');
+
+        if ($this->newestMessageAt === null || $iso > $this->newestMessageAt) {
+            $this->newestMessageAt = $iso;
+        }
+    }
 
     public function describe(): string
     {
@@ -145,9 +192,12 @@ final class ImapMailbox implements Mailbox, MutableByDesign
             }
 
             $messages = [];
+            $this->newestMessageAt = null;
 
             foreach ($sequences as $sequence) {
-                $messages[] = $this->fetchMessage($sequence);
+                $raw = $this->fetchMessage($sequence);
+                $messages[] = $raw;
+                $this->noteMessageDate($raw);
             }
 
             return $messages;

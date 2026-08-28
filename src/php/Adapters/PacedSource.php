@@ -30,7 +30,7 @@ use Scout\Core\Tenure;
  * all of them. A decorator handed its own private pacer would pace nothing useful, which is why
  * `PacedSource::wrapAll()` exists and is the only intended way to build these.
  */
-final readonly class PacedSource implements Source
+final readonly class PacedSource implements FeedFreshness, Source
 {
     public function __construct(
         private Source $inner,
@@ -78,6 +78,19 @@ final readonly class PacedSource implements Source
         $this->pacer->beforeFetch($this->inner->host());
 
         return $this->inner->fetch();
+    }
+
+    /**
+     * Forwarded, because a decorator that silently drops a capability is worse than one that lacks it.
+     *
+     * `wrapAll()` wraps EVERY source, so without this the `--watch` loop — the only mode where a
+     * feed can go silent unnoticed for days — would be exactly the mode in which the detection was
+     * unreachable. An inner source that reports no freshness answers `null`, which yields no
+     * verdict rather than a false one.
+     */
+    public function newestFeedItemAt(): ?string
+    {
+        return $this->inner instanceof FeedFreshness ? $this->inner->newestFeedItemAt() : null;
     }
 
     public function name(): string

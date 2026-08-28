@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Scout\Cli;
 
+use Scout\Adapters\FeedFreshness;
 use Scout\Adapters\Source;
 use Scout\Adapters\SourceError;
 use Scout\Config\Criteria;
@@ -130,7 +131,16 @@ final readonly class Pipeline
                 // would make source health a measure of the rental market rather than of the
                 // adapter, and a drifted selector on a source whose matches are usually zero would
                 // become undetectable — which is the exact failure §8 exists for.
-                $this->store->recordRun($source->name(), count($listings), true, null, $nowIso, $durationMs);
+                // The feed date is read only on the SUCCESS path, and only after `fetch()` — before
+                // one there is nothing to report, and on a failure the mailbox never got far enough
+                // to see a message. Writing a stale value into a failed run would let the previous
+                // pass's freshness vouch for a pass that fetched nothing.
+                $feedNewestAt = $source instanceof FeedFreshness ? $source->newestFeedItemAt() : null;
+                // Kept on ONE line on purpose. `tests/sabotage-check.sh` matches this call by its
+                // literal prefix up to `true`, and a multi-line reformat silently rots that
+                // expression into matching nothing — the exact way a `markNotified()` signature
+                // change rotted one on 2026-08-24, reporting coverage the ledger no longer had.
+                $this->store->recordRun($source->name(), count($listings), true, null, $nowIso, $durationMs, $feedNewestAt);
                 $itemsParsed += count($listings);
 
                 foreach ($listings as $listing) {

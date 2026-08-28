@@ -44,7 +44,7 @@ final class StoreEvidenceTest extends TestCase
 
     public function testAFreshStoreIsAtTheCurrentSchemaVersion(): void
     {
-        self::assertSame(10, Store::SCHEMA_VERSION, 'v7 added listings.evidence_json and listings.outcome; v8 added listings.notified_as; v9 added the commute_cache table; v10 added its destination fingerprint');
+        self::assertSame(11, Store::SCHEMA_VERSION, 'v7 added listings.evidence_json and listings.outcome; v8 added listings.notified_as; v9 added the commute_cache table; v10 added its destination fingerprint; v11 added source_runs.feed_newest_at');
         self::assertSame(Store::SCHEMA_VERSION, $this->store->schemaVersion());
     }
 
