@@ -139,7 +139,7 @@ nothing errors, the source simply looks like a quiet market.
 ## Checklist
 
 - [ ] **Alcopa** — capture; does it carry a closing time?
-- [ ] **Alcopa** — calendar reminder ~24/09 to renew the alert before it expires on 27/09
+- [x] **Alcopa** — calendar reminder ~24/09 to renew the alert before it expires on 27/09 — **set 2026-08-28**
 - [ ] **leboncoin `Voitures`** — capture; how many cards for a subject counting 58?
 - [ ] **leboncoin `vous propose`** — `From:` header first, then capture
 - [ ] **ParuVendu** — capture the first one; is the search name in the subject?
