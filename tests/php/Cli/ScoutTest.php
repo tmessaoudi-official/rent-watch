@@ -387,19 +387,45 @@ final class ScoutTest extends TestCase
     }
 
     /**
-     * The counterweight, and without it the guarantee above is satisfied by refusing everything.
+     * THE DEFAULT THRESHOLD REACHES THE STORE WITH NO ENVIRONMENT SET, end to end.
      *
-     * An unset variable must keep the default and change nothing — the same shape as the
-     * `title_pattern` counterweight, which exists because a rule that only ever refuses is
-     * indistinguishable from a feature that was deleted.
+     * **This is the counterweight, and the weak version of it was itself the hole.** The first
+     * draft only asserted that an unset variable printed no error — an absence, which stays true
+     * however thoroughly the feature is disconnected. Trace the coverage without this test: the two
+     * refusal tests above pin only that `feedSilentDays()` is CALLED, and every `Store` test passes
+     * the threshold EXPLICITLY. So deleting `$feedSilentDays ??= $this->feedSilentDays;` from
+     * `Store::health()` left the whole suite green while making `FEED_SILENT` unreachable in
+     * production under default config — dead config for the third time, inside the change built to
+     * kill exactly that shape.
+     *
+     * Nothing is put in the environment on purpose. The run's own fresh row reports no feed date
+     * (the fixture source is not a `FeedFreshness`), so the seeded one still decides — which is the
+     * `null`-contributes-nothing rule doing its job as a side effect.
      */
-    public function testAnUnsetThresholdChangesNothing(): void
+    public function testTheDefaultThresholdReachesTheStoreWithNoEnvironmentSet(): void
     {
         putenv('FEED_SILENT_DAYS');
 
-        $r = $this->scout(['doctor']);
+        // Anchored on the harness's FIXED clock (2026-08-07T12:00+02:00), not on wall time. A first
+        // draft used `now`, which is four days AHEAD of that clock — so the run reported
+        // "toutes les dates de message sont dans le futur" instead. Wrong branch, right machinery:
+        // it proved the future-date guard end to end by accident.
+        $store = \Scout\Store\Store::open((string) $this->dbPath);
 
-        self::assertStringNotContainsString('FEED_SILENT_DAYS', $r['out'] . $r['err']);
+        $store->recordRun(
+            'fixture_demo',
+            3,
+            true,
+            null,
+            '2026-08-07T11:59:00+02:00',
+            feedNewestAt: '2026-08-03T09:00:00+02:00',
+        );
+
+        unset($store);
+        $r = $this->scout(['doctor', '--source=fixture_demo']);
+
+        self::assertStringContainsString('feed_silent', $r['out']);
+        self::assertStringContainsString("n'a rien envoyé depuis", $r['out']);
     }
 
     public function testDoctorPrintsTheSchemaVersionAndTheDigestTimezone(): void

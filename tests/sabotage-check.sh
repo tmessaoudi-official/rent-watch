@@ -3273,6 +3273,14 @@ run_sabotage "the unreachable-threshold refusal is dropped (feed_silent becomes 
 # mode in which a feed can go silent unnoticed for days -- so a decorator that drops the capability
 # makes the detection unreachable in exactly the mode it was built for, while every unit test on the
 # inner source still passes.
+# THE DEFAULT MUST REACH THE STORE. This is the third dead-config shape inside the change built to
+# kill it: the CLI refusal tests pin only that feedSilentDays() is CALLED, and every Store test
+# passes the threshold EXPLICITLY -- so dropping the merge left feed_silent unreachable in
+# production under default config while the whole suite stayed green.
+run_sabotage "the configured threshold never reaches health() (feed_silent dead by default)" \
+  src/php/Store/Store.php \
+  's%\$feedSilentDays ??= \$this->feedSilentDays;%%'
+
 run_sabotage "PacedSource stops forwarding feed freshness (dead under --watch, green in tests)" \
   src/php/Adapters/PacedSource.php \
   's%return $this->inner instanceof FeedFreshness ? $this->inner->newestFeedItemAt() : null;%return null;%'

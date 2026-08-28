@@ -24,6 +24,16 @@ namespace Scout\Adapters;
  * purpose: that is also exactly what a quiet rental market looks like, so it restates the ambiguity
  * instead of resolving it. Logirep legitimately returns the same 113 listings on every pass.
  *
+ * **STATED COST, and the mailbox already holds the counterexample.** This reports that the sender
+ * sent SOMETHING, not that the ALERT fired. `params.from` scopes a source to one address, and a
+ * portal uses that address for more than alerts: `leboncoin`'s only other message in fourteen days
+ * is a `Nouvel appareil détecté` account notice, which matches the filter and would have refreshed
+ * this date. So an account notice or a marketing mail can mask alert silence for as long as it
+ * keeps arriving. Tightening it to "the newest message that actually YIELDED a listing" is the
+ * obvious next step and is deliberately not taken yet — it would make the signal depend on the
+ * parser, so a parser regression would then present as a silent feed rather than as a broken one,
+ * and those need different fixes.
+ *
  * @see \Scout\Core\SourceStatus::FEED_SILENT for the verdict this feeds
  */
 interface FeedFreshness
