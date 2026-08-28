@@ -627,10 +627,12 @@ not a listing.
    the scrub command, what each capture must ANSWER, and the five rules for alerts not yet created.
    This is THE gate:
    the email parser was written blind once and cost four defects the day a real message reached it,
-   behind 1 886 green tests. Priority order: the leboncoin `Voitures : 58 nouveaux résultats`
-   message **specifically** — it answers whether the alert carries all 58 cards or a truncated few,
-   which decides how much `card_separator` work it needs — then `vous propose`, Autohero, Alcopa,
-   Agorastore.
+   behind 1 886 green tests. **The priority order lives in that runbook's own table and is NOT
+   restated here** — an order written twice is an order that drifts, and this one did: the list that
+   stood here until 2026-08-28 put Autohero third and Alcopa fourth, contradicting the
+   `[2026-08-27 21:55]` ruling two screens above it. Alcopa is FIRST (its capture decides whether the
+   email route is admissible at all, which the lot page left open) and Autohero is LAST (its polling
+   payload is already confirmed complete, so its alert is a convenience rather than the route).
 3. ~~**A calendar reminder for ~24/09** — renew the Alcopa alert.~~ **DONE 2026-08-28** (developer set it). The reminder is the only mechanism: there is no Alcopa source block and no expiry key in the schema, so `doctor` cannot warn. Deferred to the first car source block.
 4. **Confirm the two leboncoin filters actually exist as FILTERS** (`Voitures` → car label,
    `à louer` → rent label), not merely as labels. The one-message ingestion cost accepted at 02:10
