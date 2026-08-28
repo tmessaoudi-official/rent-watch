@@ -99,6 +99,8 @@ until a separate go. A ruling on what a thing will be called is not a ruling tha
 - [2026-08-28 00:20] NOTED: **this is the THIRD subject template, and 19:46 set the ceiling at three.** `Voitures` + `à louer` + `vous propose` exhausts the tolerance for a vocabulary-shaped filter. A FOURTH template does not get added to the list — at that point leboncoin moves to a structural discriminator (a dedicated alias for that portal alone, or a body-level match). Three misses is a pattern, not an accident.
 - [2026-08-28 00:20] AGREED: the `vous propose` Gmail filter is STILL not written, and the reason is unchanged by knowing the sender — filtering it now moves it out of the inbox into a folder nothing reads, BEFORE a capture exists. Filter after the `.eml`, not before.
 - [2026-08-27 19:46] NOTED: **Agorastore's price-only alert is tolerable and should be category-scoped if the form allows it.** The site disposes of every category of public-sector asset, so a price-only alert is mostly non-vehicles, and noise costs `SourceHealth` its credibility — that baseline is measured on listings FETCHED, not on matches. Its robots is `Allow: *`, so polling is the real route either way and the alert is a bonus.
+- [2026-08-28 16:05] DONE (developer): **the Alcopa renewal reminder is set** for ~24/09/2026, three days before the 27/09/2026 expiry. This closes the only dated item in this file. The reminder is the ONLY mechanism that exists — verified the same minute, `grep -niE "alcopa|expires|expiry|valid_until" config/sources.json` returns **nothing**: there is no Alcopa source block, no car source block at all, and no expiry key anywhere in the schema.
+- [2026-08-28 16:05] AGREED: the proposal to print the expiry from the config block via `scout doctor` is **DEFERRED to the first car source block**, not built now. Two reasons, and the second is the stronger: it has **no consumer today** (designing a config field for a source that does not exist is the blind-config class this repo has a measured price for), and **Alcopa may never be enabled** — it is recorded UNRESOLVED, its one fetched lot page carried no price and no closing time, rule 2 of the auction ruling refuses such a source fail-closed, and decision 10's default is *auctions out, for now*. When a car source block does land, `alert_expires` is nearly free and is GENERAL — any portal alert can expire, so it belongs on the `email_alert` schema rather than on this one row.
 
 ## What is still owed BY the developer
 
@@ -629,7 +631,7 @@ not a listing.
    message **specifically** — it answers whether the alert carries all 58 cards or a truncated few,
    which decides how much `card_separator` work it needs — then `vous propose`, Autohero, Alcopa,
    Agorastore.
-3. **A calendar reminder for ~24/09** — renew the Alcopa alert.
+3. ~~**A calendar reminder for ~24/09** — renew the Alcopa alert.~~ **DONE 2026-08-28** (developer set it). The reminder is the only mechanism: there is no Alcopa source block and no expiry key in the schema, so `doctor` cannot warn. Deferred to the first car source block.
 4. **Confirm the two leboncoin filters actually exist as FILTERS** (`Voitures` → car label,
    `à louer` → rent label), not merely as labels. The one-message ingestion cost accepted at 02:10
    lives in exactly that gap.
