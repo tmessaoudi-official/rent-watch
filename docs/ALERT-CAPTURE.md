@@ -148,5 +148,6 @@ nothing errors, the source simply looks like a quiet market.
 - [x] **Agorastore** — captured and read 2026-08-28. **Vehicles only** (`Votre recherche : Voiture`), so no scoping work is needed. But zero prices and zero closing times — same rule-2 refusal as Alcopa — but for the EMAIL ROUTE ONLY: its API host api.auctelia.com is open, so a hydration route could still supply the closing time. It does carry real lot references
 - [ ] **Autohero** — capture when convenient
 - [ ] **CapCar** — is the make selector multi-select? (browser only; robots disallows the path)
-- [ ] Confirm the two leboncoin filters exist as **filters**, not just labels
+- [x] **La Centrale** — read 2026-08-28. Richest fields of any car alert (price, mileage, seller type, departement) but **3 cards for a stated 904**, one opaque link host shared with the furniture, an ellipsised title, and no commune. Polling is refused by ruling, so there is no second route
+- [ ] Confirm the two leboncoin filters exist as **filters**, not just labels — **PARTLY ANSWERED 2026-08-28: no leboncoin car alert is in `car-watch/portails` over 30 days, so the `Voitures` filter is not routing there.** Remaining candidates are the INBOX and two personal folders, which were not read
 - [ ] Verify every alert against Part D rules 1, 2 and 4
