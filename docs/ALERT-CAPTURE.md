@@ -27,15 +27,17 @@ alert is a convenience rather than the route.
 
 | # | Source | Domain | Status | The question this capture answers |
 |---|---|---|---|---|
-| 1 | **Alcopa Auction** | car | alert live, **expires 27/09** | **Does the alert carry a CLOSING TIME?** The lot page does not. Rule 2 of the auction ruling refuses a source that publishes none — so this capture decides whether the email route is admissible at all |
+| 1 | ~~**Alcopa Auction**~~ | car | **EMAIL ROUTE REFUSED 2026-08-28** | **Does the alert carry a CLOSING TIME?** The lot page does not. Rule 2 of the auction ruling refuses a source that publishes none — so this capture decides whether the email route is admissible at all |
 | 2 | **leboncoin — `Voitures : …`** | car | alert live | **Does the message carry all the cards its subject counts, or only the first few?** The subject said `58 nouveaux résultats`. This decides how much `card_separator` work it needs |
 | 3 | **leboncoin — `… vous propose …`** | car? | arriving, unrouted | **Who sends it** (the `From:` header) and **is it one ad per message?** Different sender → a `From:` filter. Same sender → a third positive subject match. The subject looks like the PAP shape, which would make it its own source block |
 | 4 | **ParuVendu** | rent | alert created 2026-08-27 | **Is the saved-search name in the subject?** If yes, the Gmail filter matches a discriminator you control and is self-tripwiring. If no, it falls back to the sender |
-| 5 | **Agorastore** | car | alert live, price-filter only | **Is the feed all categories or vehicles only?** Decides whether an ingest-side category discriminator is needed at all |
+| 5 | **Agorastore** | car | alert live, **vehicles-only confirmed 2026-08-28** | **Is the feed all categories or vehicles only?** Decides whether an ingest-side category discriminator is needed at all |
 | 6 | **Autohero** | car | alert live | Nothing urgent — polling is confirmed readable and complete. Capture it when convenient |
 
-**Not yet created, and deliberately:** La Centrale and AutoScout24 (the recommended starting set's
-other two), CapCar (blocked on whether its make selector is multi-select), Interencheres (needs no
+**CORRECTED 2026-08-28 — La Centrale and AutoScout24 alerts DO exist.** Reading the mailbox found La
+Centrale firing (`904 nouveaux véhicules correspondent à votre recherche`, with real prices) and
+AutoScout24's saved search confirmed (no alert fired yet). Still not created:
+CapCar (blocked on whether its make selector is multi-select), Interencheres (needs no
 alert — its route is polling), Carizy (offers none, and is refused anyway).
 
 ---
@@ -138,12 +140,12 @@ nothing errors, the source simply looks like a quiet market.
 
 ## Checklist
 
-- [ ] **Alcopa** — capture; does it carry a closing time?
+- [x] **Alcopa** — captured and read 2026-08-28. **It does NOT carry a closing time**, nor a price, nor a per-lot link, and it shows 3 of 108 results. **Email route REFUSED** under rule 2 of the auction ruling. Polling route still UNRESOLVED
 - [x] **Alcopa** — calendar reminder ~24/09 to renew the alert before it expires on 27/09 — **set 2026-08-28**
 - [ ] **leboncoin `Voitures`** — capture; how many cards for a subject counting 58?
 - [ ] **leboncoin `vous propose`** — `From:` header first, then capture
-- [ ] **ParuVendu** — capture the first one; is the search name in the subject?
-- [ ] **Agorastore** — capture; all categories or vehicles only? And scope the alert if the form allows
+- [x] **ParuVendu** — read 2026-08-28. **The search name is NOT in the subject** — it carries the CRITERIA instead (`🚗 25 nouvelles annonces - Voiture d'occasion / Jusqu'à 30 000 € / A partir de 2019 / Jusqu'à 100 000 km`), so the filter falls back to the sender `info@paruvendu.fr` — which serves the RENT alert too, and the rent alert is currently landing in the car label because of it
+- [x] **Agorastore** — captured and read 2026-08-28. **Vehicles only** (`Votre recherche : Voiture`), so no scoping work is needed. But zero prices and zero closing times — same rule-2 refusal as Alcopa — but for the EMAIL ROUTE ONLY: its API host api.auctelia.com is open, so a hydration route could still supply the closing time. It does carry real lot references
 - [ ] **Autohero** — capture when convenient
 - [ ] **CapCar** — is the make selector multi-select? (browser only; robots disallows the path)
 - [ ] Confirm the two leboncoin filters exist as **filters**, not just labels
