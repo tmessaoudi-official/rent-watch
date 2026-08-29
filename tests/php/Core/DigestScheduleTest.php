@@ -39,7 +39,7 @@ final class DigestScheduleTest extends TestCase
     #[DataProvider('impossibleHours')]
     public function testAnHourOutsideTheClockIsRefused(int $hour): void
     {
-        // Loud, like HEARTBEAT_HOURS. `digest_hour: 24` is somebody meaning midnight and getting
+        // Loud, like RENT_HEARTBEAT_HOURS. `digest_hour: 24` is somebody meaning midnight and getting
         // silence, and a floor that never fires is indistinguishable from one that has nothing to
         // say — which is the ambiguity this whole class exists to remove.
         $this->expectException(\InvalidArgumentException::class);
@@ -85,7 +85,7 @@ final class DigestScheduleTest extends TestCase
 
     public function testAnUnusableZoneIsALoudRefusal(): void
     {
-        // Same rule as HEARTBEAT_HOURS: absent is ordinary and takes the default, present-but-broken
+        // Same rule as RENT_HEARTBEAT_HOURS: absent is ordinary and takes the default, present-but-broken
         // is somebody meaning something. Falling back silently would put the floor two hours out on
         // a deployment whose operator believed they had configured it.
         $this->expectException(\InvalidArgumentException::class);

@@ -169,7 +169,7 @@ Cityloger skews to the intermediate and libre stock this project is looking for.
 > headline number was right and its explanation was invented, which is worse than being wrong twice:
 > a true number attached to a false cause stops anyone looking. **Never generalise one source's
 > measurement to the tree** — `scout run --seed -v --source=<name>` on a throwaway
-> `SCOUT_DB` prints every rejection with its reason and costs one poll.
+> `RENT_SCOUT_DB` prints every rejection with its reason and costs one poll.
 
 **The notification carries the postcode, the departement, the floor and the lift** (phase 1,
 2026-08-22). Headline: `82/100 — Sartrouville 78500 · T4 88 m² · 1450 € CC`; first reason line:
@@ -201,7 +201,7 @@ Three mechanisms replaced the single gate, and each closes a hole the others ope
   only expensive moment — In'li's ~174 listings are all novel at once, and at Q37 pacing that is a
   three-hour pass. The backlog drains over several passes. **An explicit `0` is REFUSED at load**,
   because a `detail_map` that can never run is a disabled feature dressed as a configured one; an
-  OMITTED budget defaults, because a slow cold start is benign. Same asymmetry as `HEARTBEAT_HOURS`.
+  OMITTED budget defaults, because a slow cold start is benign. Same asymmetry as `RENT_HEARTBEAT_HOURS`.
   This refusal is the successor to *"a `detail_map` with no gate REFUSES"*, which retired with the
   gate — replaced, not deleted.
 - **PRIORITY decides who gets a short budget, and rank 0 is *not yet in the seen-set*.** Ranked any
@@ -277,7 +277,7 @@ widening to all eight departements while dropping the surface floor to 50 m² an
 > eight of the old matches quoted 1258–1669 € CC, so the ceiling alone kills every one of them — a
 > first draft of the Q2 entry reasoned exactly that far and wrote *"the live yield is zero"*. The
 > other two changes had opened a pool the old criteria never looked at. **Never predict a yield from
-> the previous filter's matches**; `scout run --once --seed` on a throwaway `SCOUT_DB` costs
+> the previous filter's matches**; `scout run --once --seed` on a throwaway `RENT_SCOUT_DB` costs
 > one poll. Two live consequences worth knowing: nearly every match is OUTSIDE the ranked communes
 > (91/93/94 — Les Ulis, Aulnay, Pierrefitte, Vitry — with Dourdan and Dammarie-les-Lys scoring
 > highest), because there is nothing under 1200 € CC in the Boucle de Seine; and scores ran
@@ -911,11 +911,11 @@ the vehicle set** — a `tests/test-vehicle-guard.sh` is owed, recorded there.
 `src/phorj/` is **ON INDEFINITE HOLD** (developer ruling, 2026-08-19) — not blocked, deprioritised.
 Do not start it; `docs/PHORJ-REQUIREMENTS.md` remains the record of what it would need.
 
-**Q27's LIVENESS SIGNAL IS LIVE (2026-08-22), and it was ruled but unbuilt.** `HEARTBEAT_HOURS` sat
+**Q27's LIVENESS SIGNAL IS LIVE (2026-08-22), and it was ruled but unbuilt.** `HEARTBEAT_HOURS` (today `RENT_HEARTBEAT_HOURS`) sat
 in `.env.example` read by no code at all: `NotificationKind::HEARTBEAT` existed, but only
 `test-notify` used it, so a watcher that died at 03:00 was indistinguishable from one watching a
 quiet market until somebody thought to look. `scout run --watch` now emits a LOW-priority beat
-every `HEARTBEAT_HOURS` (default 24) — **whether or not anything matched**, which is the
+every `RENT_HEARTBEAT_HOURS` (default 24) — **whether or not anything matched**, which is the
 entire point — carrying passes completed, listings notified and sources OK. **The startup beat is
 `isDue()`-gated, not unconditional** (`Scout::runCommand()`, the startup `isDue()` check — cited by LINE for one round, and the line moved twice; a symbol survives an edit above it): the marker is on the mounted volume, so a
 restart inside the interval sends nothing, and only a cold start — no marker — beats immediately.
@@ -926,7 +926,7 @@ DEPLOYED image can reach the user, run `docker compose run --rm scout test-notif
 pure policy (clock injected; a cold start is due, an unreadable marker is due, a marker in the
 FUTURE is due — the bias is always one beat too many, never one suppressed), and the marker lives at
 `state/heartbeat.txt`, on Q8's mounted volume, so it survives the container being replaced. An
-unusable `HEARTBEAT_HOURS` is a **loud refusal at startup**, not a silent fallback: `0` would
+unusable `RENT_HEARTBEAT_HOURS` is a **loud refusal at startup**, not a silent fallback: `0` would
 disable the one signal that distinguishes a dead watcher from a quiet market.
 
 **Its health figure counts what the run WATCHES, not what the config enables** (fixed 2026-08-22,
@@ -1670,7 +1670,7 @@ var/claude/                 Reports, review outputs — gitignored scratch (hand
   `ok` with real counts. **The counterweight run is the load-bearing half of that sentence:** a
   verdict that fires on every source is indistinguishable from one that fires on none, and only a
   pass showing both outcomes at once separates them.
-- **`FEED_SILENT_DAYS` should stay under `IMAP_SINCE_DAYS` — and `doctor` WARNS, it does not refuse.**
+- **`RENT_FEED_SILENT_DAYS` should stay under `IMAP_SINCE_DAYS` — and `doctor` WARNS, it does not refuse.**
   This shipped as a hard startup refusal on 2026-08-28 and was demoted the next day, because **both
   of its legs broke under review**. Its premise was *"the newest message `SEARCH SINCE` can match is
   by definition at most `IMAP_SINCE_DAYS` old"*, which is **false**: `SEARCH SINCE` filters on
@@ -1798,7 +1798,7 @@ var/claude/                 Reports, review outputs — gitignored scratch (hand
 `.env.example` is the agreed SHAPE of the configuration rather than live settings.
 `.env.example` is the committed template and lists every key: the dedicated alert mailbox's IMAP
 host/user/password, the notification channel token (ntfy / Telegram / SMTP), the IDFM/PRIM API key,
-`RFR_N2` if income-eligibility checking is enabled (Q6), and `SCOUT_DB`. Keep the two in sync —
+`RFR_N2` if income-eligibility checking is enabled (Q6), and `RENT_SCOUT_DB`. Keep the two in sync —
 a key added to `.env` and not to the template is invisible to the next deployment.
 
 **Adapter error text is a secrets channel, and the guard is already in place.** An exception from an
@@ -1810,7 +1810,7 @@ into a user-facing detail, so `Scout\Core\Redact` masks it at that single funnel
 Stateful data that must not be casually deleted (the container-era `BLAST-RADIUS.md` that
 documented this left with `scripts/claude-bootstrap/` on 2026-08-18 — this list is now the record):
 
-- the seen-set / listings DB (`SCOUT_DB`, default `state/rent-watch.sqlite3` — deliberately NOT
+- the seen-set / listings DB (`RENT_SCOUT_DB`, default `state/rent-watch.sqlite3` — deliberately NOT
   under `var/`, which this file documents as container-lifetime scratch) — deleting it makes the next
   run **re-notify everything**
 - price history — a rent drop is a notification-worthy event; the history is not reconstructible

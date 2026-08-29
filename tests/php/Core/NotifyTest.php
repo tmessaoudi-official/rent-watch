@@ -323,12 +323,12 @@ final class NotifyTest extends TestCase
 
     public function testNoUsableChannelIsAFatalRefusal(): void
     {
-        $notifier = new Notifier([$this->brokenChannel('ntfy', 'NTFY_TOPIC is not set')]);
+        $notifier = new Notifier([$this->brokenChannel('ntfy', 'RENT_NTFY_TOPIC is not set')]);
 
         $problem = $notifier->fatalProblem();
         self::assertNotNull($problem);
         self::assertStringContainsString('found and never delivered', (string) $problem);
-        self::assertStringContainsString('NTFY_TOPIC is not set', (string) $problem);
+        self::assertStringContainsString('RENT_NTFY_TOPIC is not set', (string) $problem);
     }
 
     public function testAnEmptyChannelListIsAlsoFatal(): void
@@ -541,7 +541,7 @@ final class NotifyTest extends TestCase
         $problem = (new NtfyChannel(''))->check();
 
         self::assertNotNull($problem);
-        self::assertStringContainsString('NTFY_TOPIC', (string) $problem);
+        self::assertStringContainsString('RENT_NTFY_TOPIC', (string) $problem);
         self::assertStringContainsString('secret', (string) $problem);
     }
 

@@ -112,6 +112,21 @@
   the Q36 refusal — the guard working, loudly, on an unseeded car store. The flag now lives in the
   service's `entrypoint`, so every verb after the service name is a car verb.
 
+- [2026-08-29 23:10] AGREED (developer, verbatim: *"adapt the env vars … to be really split into
+  rent watch and car watch … like only rent watch exists in this app … cover everything"*): **every
+  domain-bound key is prefixed.** `SCOUT_DB` → `RENT_SCOUT_DB`, `IMAP_MAILBOX` → `RENT_IMAP_MAILBOX`,
+  `NTFY_TOPIC` → `RENT_NTFY_TOPIC`, `HEARTBEAT_HOURS` → `RENT_HEARTBEAT_HOURS`, `FEED_SILENT_DAYS` →
+  `RENT_FEED_SILENT_DAYS`, beside `CAR_SCOUT_DB`, `CAR_IMAP_MAILBOX`, `CAR_NTFY_TOPIC`,
+  `CAR_HEARTBEAT_HOURS`, `CAR_FEED_SILENT_DAYS`. Account-level (`IMAP_HOST/USER/PASSWORD`,
+  `IMAP_SINCE_DAYS`, `IMAP_MAX_MESSAGES`, `SMTP_*`, `NTFY_SERVER`, `TZ`) and tool-level
+  (`SCOUT_OFFLINE`, `SCOUT_MAX_PASSES`, `SCOUT_BACKUP_KEEP`) keys stay shared; `MAILBOX_DIR` stays
+  the shared OFFLINE seam (a test sets it per run). The old rent names are refused at startup by
+  `LegacyEnv`, the RENT_WATCH_* rule applied again. Applied as one word-anchored rewrite over 36
+  files, then by hand where a shared message would otherwise name the wrong domain's key
+  (`Heartbeat`, `NtfyChannel`), and in this machine's `.env` in place. Historical prose keeps the
+  old spelling (`HEARTBEAT_HOURS` "sat in .env.example read by no code" is a 2026-08-22 fact).
+  `tools/backup-state.sh` backs up BOTH stores when called without an argument.
+
 ## Formal Plan
 
 1. `Vehicle/VehicleListing` + `VehicleSnapshot` (reflection-covered encoder), TDD.

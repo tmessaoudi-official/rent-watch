@@ -129,8 +129,8 @@ check "a duplicated key is reported (env_file takes the LAST occurrence)" \
 
 # ── (b) a getenv() the template does not declare ─────────────────────────────────────────────────
 check "a setting read by getenv() and missing from the template is reported" \
-  fires_with getenv 'HEARTBEAT_HOURS is read by getenv' \
-  bash -c 'sed -i "/^HEARTBEAT_HOURS=/d" "$1/.env.example"' _
+  fires_with getenv 'RENT_HEARTBEAT_HOURS is read by getenv' \
+  bash -c 'sed -i "/^RENT_HEARTBEAT_HOURS=/d" "$1/.env.example"' _
 
 # ── (c) a ${VAR} compose substitutes that the template does not declare ──────────────────────────
 # Its own direction because a compose substitution has NO getenv() to find it by: Compose resolves

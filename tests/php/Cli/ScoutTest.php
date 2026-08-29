@@ -38,7 +38,7 @@ final class ScoutTest extends TestCase
     protected function setUp(): void
     {
         $this->dbPath = sys_get_temp_dir() . '/rentwatch-cli-' . bin2hex(random_bytes(8)) . '.sqlite3';
-        putenv('SCOUT_DB=' . $this->dbPath);
+        putenv('RENT_SCOUT_DB=' . $this->dbPath);
         // `--watch` never returns on its own. Every test here that reaches it expects to be stopped
         // BEFORE the loop starts, so if that expectation is ever wrong the test would block rather
         // than fail — and block the suite, and the sabotage ledger behind it. One pass is enough to
@@ -48,9 +48,9 @@ final class ScoutTest extends TestCase
 
     protected function tearDown(): void
     {
-        putenv('SCOUT_DB');
+        putenv('RENT_SCOUT_DB');
         putenv('SCOUT_MAX_PASSES');
-        putenv('NTFY_TOPIC');
+        putenv('RENT_NTFY_TOPIC');
         putenv('NTFY_SERVER');
         putenv('SMTP_TO');
         putenv('SMTP_TRANSPORT');
@@ -258,7 +258,7 @@ final class ScoutTest extends TestCase
         // any store column when nothing is enabled.
         $root = $this->fixtureRoot(enabled: true);
 
-        // The suite pins `SCOUT_DB` in setUp, and that is the store `doctor` will open.
+        // The suite pins `RENT_SCOUT_DB` in setUp, and that is the store `doctor` will open.
         $store = Store::open((string) $this->dbPath);
         $listing = new RawListing(
             sourceName: 'cdc_habitat',
@@ -356,17 +356,17 @@ final class ScoutTest extends TestCase
      */
     public function testAThresholdAtOrAboveTheImapWindowIsReportedNotRefused(): void
     {
-        putenv('FEED_SILENT_DAYS=7');
+        putenv('RENT_FEED_SILENT_DAYS=7');
         putenv('IMAP_SINCE_DAYS=7');
 
         try {
             $r = $this->scout(['doctor', '--source=fixture_demo']);
         } finally {
-            putenv('FEED_SILENT_DAYS');
+            putenv('RENT_FEED_SILENT_DAYS');
             putenv('IMAP_SINCE_DAYS');
         }
 
-        self::assertStringContainsString('FEED_SILENT_DAYS', $r['out'] . $r['err']);
+        self::assertStringContainsString('RENT_FEED_SILENT_DAYS', $r['out'] . $r['err']);
         self::assertStringContainsString('bande observable', $r['out'] . $r['err']);
     }
 
@@ -393,12 +393,12 @@ final class ScoutTest extends TestCase
     /** Zero disables the one signal that tells a dead alert from a quiet market, so it is refused. */
     public function testAThresholdOfZeroIsRefused(): void
     {
-        putenv('FEED_SILENT_DAYS=0');
+        putenv('RENT_FEED_SILENT_DAYS=0');
 
         try {
             $r = $this->scout(['doctor']);
         } finally {
-            putenv('FEED_SILENT_DAYS');
+            putenv('RENT_FEED_SILENT_DAYS');
         }
 
         self::assertNotSame(0, $r['code']);
@@ -423,7 +423,7 @@ final class ScoutTest extends TestCase
      */
     public function testTheDefaultThresholdReachesTheStoreWithNoEnvironmentSet(): void
     {
-        putenv('FEED_SILENT_DAYS');
+        putenv('RENT_FEED_SILENT_DAYS');
 
         // Anchored on the harness's FIXED clock (2026-08-07T12:00+02:00), not on wall time. A first
         // draft used `now`, which is four days AHEAD of that clock — so the run reported
@@ -1148,7 +1148,7 @@ final class ScoutTest extends TestCase
         // Built from CONFIG, not injected — the warning asks `hasRemoteChannel()`, which is about
         // what the configuration produced. `ntfy` is the channel that counts; the topic is enough
         // for `check()` to pass, and the send failing is irrelevant to whether the warning fires.
-        putenv('NTFY_TOPIC=rent-watch-test');
+        putenv('RENT_NTFY_TOPIC=rent-watch-test');
         putenv('NTFY_SERVER=http://127.0.0.1:1');
         $root = $this->fixtureRootWithChannels(['console', 'ntfy']);
         $this->scoutIn($root, ['run', '--seed']);

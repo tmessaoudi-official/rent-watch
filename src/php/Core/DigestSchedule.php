@@ -81,7 +81,7 @@ final readonly class DigestSchedule
      * `date_default_timezone_set()` answers a bad zone name with `false` and a Notice, keeps the
      * zone it already had, and lets the process run on. Measured, not assumed.
      *
-     * Same asymmetry {@see Heartbeat::fromEnv()} applies to `HEARTBEAT_HOURS`, for the same reason:
+     * Same asymmetry {@see Heartbeat::fromEnv()} applies to `RENT_HEARTBEAT_HOURS`, for the same reason:
      * a missing value is the ordinary case, while a broken one is somebody who meant something, and
      * guessing which thing puts the floor hours out on a deployment whose operator believes they
      * configured it.

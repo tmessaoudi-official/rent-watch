@@ -10,7 +10,7 @@ namespace Scout\Core;
  * The failure this exists for is the one the whole project is shaped around. `scout run --watch`
  * emits nothing on a quiet evening, and it emits nothing when it is dead — a crashed loop, a killed
  * container, a VPS that rebooted — so the two are **byte-identical from the outside**. Q27's ruling
- * is that silence must be made meaningful: a low-priority heartbeat every `HEARTBEAT_HOURS`
+ * is that silence must be made meaningful: a low-priority heartbeat every `RENT_HEARTBEAT_HOURS`
  * regardless of whether anything matched, so that silence for longer than that is itself the signal.
  *
  * Pure, and takes its clock as an argument, because the whole point is behaviour across hours and a
@@ -23,7 +23,7 @@ namespace Scout\Core;
  */
 final readonly class Heartbeat
 {
-    /** Q27's default, applied when `HEARTBEAT_HOURS` is absent. */
+    /** Q27's default, applied when `RENT_HEARTBEAT_HOURS` is absent. */
     public const int DEFAULT_INTERVAL_HOURS = 24;
 
     /**
@@ -35,7 +35,7 @@ final readonly class Heartbeat
     public function __construct(public int $intervalHours = self::DEFAULT_INTERVAL_HOURS)
     {
         if ($intervalHours < 1) {
-            throw new \InvalidArgumentException('HEARTBEAT_HOURS must be at least 1 hour, got ' . $intervalHours);
+            throw new \InvalidArgumentException('RENT_HEARTBEAT_HOURS / CAR_HEARTBEAT_HOURS must be at least 1 hour, got ' . $intervalHours);
         }
     }
 
@@ -58,7 +58,7 @@ final readonly class Heartbeat
 
         if (preg_match('/^\d+$/', $raw) !== 1) {
             throw new \InvalidArgumentException(
-                'HEARTBEAT_HOURS doit être un nombre entier d\'heures, reçu `' . $raw . '`',
+                'RENT_HEARTBEAT_HOURS / CAR_HEARTBEAT_HOURS doit être un nombre entier d\'heures, reçu `' . $raw . '`',
             );
         }
 

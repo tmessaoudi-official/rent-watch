@@ -28,7 +28,7 @@ require $autoload;
 // Before this existed, `.env` was inert outside Docker and the documented workaround was
 // `set -a; . ./.env; set +a` — the SHELL, which executes the file rather than reading it. See
 // `Scout\Config\DotEnv` for what that cost on 2026-08-22. The real environment still wins over
-// the file, so `SCOUT_DB=/tmp/throwaway bin/scout run` behaves as it always did.
+// the file, so `RENT_SCOUT_DB=/tmp/throwaway bin/scout run` behaves as it always did.
 try {
     Scout\Config\DotEnv::load(dirname(__DIR__) . '/.env');
 } catch (Scout\Config\ConfigError $e) {

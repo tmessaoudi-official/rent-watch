@@ -1891,7 +1891,7 @@ final readonly class Store
         if ($feedSilentDays !== null && $feedSilentDays < 1) {
             // Refused rather than clamped, and refused LOUDLY, because a threshold of zero or below
             // disables the only signal that distinguishes a dead alert from a quiet market. Same
-            // asymmetry as `HEARTBEAT_HOURS`: an omitted threshold is benign (no verdict), an
+            // asymmetry as `RENT_HEARTBEAT_HOURS`: an omitted threshold is benign (no verdict), an
             // explicit unusable one is a configuration error wearing the shape of a setting.
             throw new \InvalidArgumentException(
                 'feedSilentDays doit valoir au moins 1 jour — 0 désactiverait la détection de flux muet',

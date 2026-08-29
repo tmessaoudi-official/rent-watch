@@ -52,7 +52,7 @@ final readonly class NtfyChannel implements Channel
     public function check(): ?string
     {
         if (trim($this->topic) === '') {
-            return 'NTFY_TOPIC is not set. Treat the topic as a secret — anyone who knows it can read every notification';
+            return 'the ntfy topic is not set (RENT_NTFY_TOPIC or CAR_NTFY_TOPIC, per domain). Treat the topic as a secret — anyone who knows it can read every notification';
         }
         if (trim($this->server) === '' || preg_match('~^https?://~i', $this->server) !== 1) {
             return 'NTFY_SERVER must be an http(s) URL, got ' . var_export($this->server, true);

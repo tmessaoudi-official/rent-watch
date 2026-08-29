@@ -17,7 +17,7 @@ use Scout\Tests\Support\DeliveringChannel;
  * {@see \Scout\Tests\Core\HeartbeatTest} proves the interval arithmetic. This proves the thing
  * that arithmetic is for: that `scout run --watch` actually emits the beat, that it emits it
  * **whether or not anything matched**, and that it does not emit one per pass. Before this suite
- * existed, `HEARTBEAT_HOURS` was documented in `.env.example` and read by no code at all — the beat
+ * existed, `RENT_HEARTBEAT_HOURS` was documented in `.env.example` and read by no code at all — the beat
  * existed only as a `NotificationKind` used by the manual `test-notify` one-shot, so a watcher that
  * died at 03:00 was indistinguishable from one watching a quiet market until somebody thought to
  * look.
@@ -50,8 +50,8 @@ final class ScoutHeartbeatTest extends TestCase
     protected function tearDown(): void
     {
         putenv('SCOUT_MAX_PASSES');
-        putenv('HEARTBEAT_HOURS');
-        putenv('SCOUT_DB');
+        putenv('RENT_HEARTBEAT_HOURS');
+        putenv('RENT_SCOUT_DB');
 
         foreach ($this->roots as $root) {
             self::removeTree($root);
@@ -250,17 +250,17 @@ final class ScoutHeartbeatTest extends TestCase
         // Refused before the loop, deliberately. Discovering a bad value on the first due beat would
         // mean discovering it a day into an unattended run — and by then the operator has already
         // concluded the market is quiet.
-        putenv('HEARTBEAT_HOURS=0');
+        putenv('RENT_HEARTBEAT_HOURS=0');
 
         $r = $this->watch();
 
         self::assertNotSame(0, $r['code']);
-        self::assertStringContainsString('HEARTBEAT_HOURS', $r['out'] . $r['err']);
+        self::assertStringContainsString('RENT_HEARTBEAT_HOURS', $r['out'] . $r['err']);
     }
 
     public function testAShorterIntervalIsHonoured(): void
     {
-        putenv('HEARTBEAT_HOURS=1');
+        putenv('RENT_HEARTBEAT_HOURS=1');
         $root = $this->tempRoot();
         file_put_contents($root . '/state/heartbeat.txt', '2026-08-22T10:30:00+02:00');
 
@@ -276,7 +276,7 @@ final class ScoutHeartbeatTest extends TestCase
         // A startup refusal reaches nobody: the process exits before any channel is used, and under
         // Docker its stderr scrolls past in a log nobody is reading.
         $root = $this->tempRoot();
-        file_put_contents($root . '/state/last-refusal.txt', '2026-08-21T22:00:00+02:00 — canal ntfy sans NTFY_TOPIC');
+        file_put_contents($root . '/state/last-refusal.txt', '2026-08-21T22:00:00+02:00 — canal ntfy sans RENT_NTFY_TOPIC');
 
         $r = $this->watchIn($root);
 
@@ -292,7 +292,7 @@ final class ScoutHeartbeatTest extends TestCase
     {
         // The producing half. An empty seen-set is Q36's refusal and is the easiest to provoke.
         $root = $this->tempRoot();
-        putenv('SCOUT_DB=' . $root . '/state/rent-watch.sqlite3');
+        putenv('RENT_SCOUT_DB=' . $root . '/state/rent-watch.sqlite3');
 
         $r = $this->scoutIn($root, ['run', '--once']);
 
@@ -313,7 +313,7 @@ final class ScoutHeartbeatTest extends TestCase
         // one. Here the bad value is a mailbox URL with a password in it, the shape somebody
         // actually pastes into a config file by mistake.
         $root = $this->tempRoot(['min_rooms' => 'imap://user:hunter2@mail.example.test/INBOX']);
-        putenv('SCOUT_DB=' . $root . '/state/rent-watch.sqlite3');
+        putenv('RENT_SCOUT_DB=' . $root . '/state/rent-watch.sqlite3');
 
         $r = $this->scoutIn($root, ['run', '--once']);
 
@@ -696,7 +696,7 @@ final class ScoutHeartbeatTest extends TestCase
         // The override exists because this helper used to set the path unconditionally, which
         // silently discarded the one a test had just chosen — the unwritable-store test then
         // exercised a perfectly good database and failed for a reason unrelated to its subject.
-        putenv('SCOUT_DB=' . ($db ?? $root . '/state/rent-watch.sqlite3'));
+        putenv('RENT_SCOUT_DB=' . ($db ?? $root . '/state/rent-watch.sqlite3'));
 
         $code = (new Scout($root, $out, $err, self::NOW, null, self::compose($out, $delivering)))->run($argv);
         rewind($out);

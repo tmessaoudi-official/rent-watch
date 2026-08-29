@@ -115,8 +115,8 @@ final class HeartbeatTest extends TestCase
      * A value somebody exported meaning something, which cannot be honoured.
      *
      * It REFUSES rather than falling back to the default. Silently defaulting would leave an
-     * operator who typed `HEARTBEAT_HOURS=0` believing liveness is off, and an operator who typed
-     * `HEARTBEAT_HOURS=6h` believing it is six hours — while the process does neither. This is the
+     * operator who typed `RENT_HEARTBEAT_HOURS=0` believing liveness is off, and an operator who typed
+     * `RENT_HEARTBEAT_HOURS=6h` believing it is six hours — while the process does neither. This is the
      * same posture `SCOUT_MAX_PASSES` takes and the same one the config loader takes on an
      * unknown key.
      */

@@ -1928,7 +1928,7 @@ run_sabotage "a marker in the future suppresses liveness until the clock catches
   src/php/Core/Heartbeat.php \
   's%if ($last > $now) {%if (false) {%'
 
-run_sabotage "HEARTBEAT_HOURS=0 silently disables liveness instead of refusing" \
+run_sabotage "RENT_HEARTBEAT_HOURS=0 silently disables liveness instead of refusing" \
   src/php/Core/Heartbeat.php \
   's%if ($intervalHours < 1) {%if (false) {%'
 
@@ -2119,7 +2119,7 @@ run_sabotage "the demo fixture ships enabled again (fake listings in a real depl
 # empty" while the file plainly contained one, because bash had read `KEY=a b c` as a one-command
 # prefix and never exported it -- and had EXECUTED `b c`, printing part of a live credential.
 
-# Precedence. `SCOUT_DB=/tmp/throwaway bin/scout run` is how a live source is measured without
+# Precedence. `RENT_SCOUT_DB=/tmp/throwaway bin/scout run` is how a live source is measured without
 # touching the real seen-set; a file that could override the environment would silently point that
 # at the real database, and the run would look completely normal.
 run_sabotage "the file overrides the real environment (a throwaway run hits the real store)" \
@@ -2374,7 +2374,7 @@ run_sabotage "a promotion is written to the store before the channel confirms" \
   's%^            if (!\$notifier->delivered(\$failures)) {$%            if (false) {%'
 
 # And the ordering that makes the refusal cheap. Building the notifier AFTER the loop means a deploy
-# whose NTFY_TOPIC is not yet set re-judges everything, then refuses — consuming the whole promotable
+# whose RENT_NTFY_TOPIC is not yet set re-judges everything, then refuses — consuming the whole promotable
 # backlog in one run while printing a message about an environment variable.
 run_sabotage "the notifier is not checked until after every row has been re-judged" \
   src/php/Cli/Scout.php \

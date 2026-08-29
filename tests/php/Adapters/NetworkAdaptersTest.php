@@ -803,7 +803,7 @@ final class NetworkAdaptersTest extends TestCase
     /**
      * A window of zero days would match nothing and read as a quiet market for ever.
      *
-     * Same asymmetry as `HEARTBEAT_HOURS`: the safe direction is one day too many.
+     * Same asymmetry as `RENT_HEARTBEAT_HOURS`: the safe direction is one day too many.
      */
     public function testANonPositiveImapWindowIsClampedRatherThanObeyed(): void
     {

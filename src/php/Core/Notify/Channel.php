@@ -25,7 +25,7 @@ interface Channel
     /**
      * Is this channel usable right now?
      *
-     * Returns `null` when it is, or a human-readable reason when it is not — *"NTFY_TOPIC is not
+     * Returns `null` when it is, or a human-readable reason when it is not — *"RENT_NTFY_TOPIC is not
      * set"*, not `false`. The caller prints it, and a boolean would make the message someone else's
      * problem to invent.
      */

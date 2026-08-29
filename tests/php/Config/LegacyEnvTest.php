@@ -13,7 +13,7 @@ use Scout\Config\LegacyEnv;
  * The `RENT_WATCH_*` → `SCOUT_*` rename must not fail SILENTLY.
  *
  * The hazard is specific and lives outside git: the deployed `.env` on the host is not in the
- * repo, so a rename applied here and not there leaves `RENT_WATCH_DB` set and `SCOUT_DB` unset.
+ * repo, so a rename applied here and not there leaves `RENT_WATCH_DB` set and `RENT_SCOUT_DB` unset.
  * `dbPath()` would then fall back to its default, `Store::open()` would create a brand-new empty
  * database, and the watcher would look healthy while knowing nothing. Q36's flood guard stops the
  * re-notification of the entire market — that is the safe half — but it stops the WATCHER, and
@@ -32,7 +32,7 @@ final class LegacyEnvTest extends TestCase
 {
     public function testAnEnvironmentWithNoLegacyNamesPasses(): void
     {
-        LegacyEnv::check(['SCOUT_DB' => 'state/x.sqlite3', 'TZ' => 'Europe/Paris']);
+        LegacyEnv::check(['RENT_SCOUT_DB' => 'state/x.sqlite3', 'TZ' => 'Europe/Paris']);
         $this->assertTrue(true, 'no exception is the assertion');
     }
 
@@ -50,10 +50,16 @@ final class LegacyEnvTest extends TestCase
      */
     public static function legacyNames(): iterable
     {
-        yield 'db' => ['RENT_WATCH_DB', 'SCOUT_DB'];
+        yield 'db' => ['RENT_WATCH_DB', 'RENT_SCOUT_DB'];
         yield 'offline' => ['RENT_WATCH_OFFLINE', 'SCOUT_OFFLINE'];
         yield 'max passes' => ['RENT_WATCH_MAX_PASSES', 'SCOUT_MAX_PASSES'];
         yield 'backup keep' => ['RENT_WATCH_BACKUP_KEEP', 'SCOUT_BACKUP_KEEP'];
+        // The domain split of 2026-08-29: an unprefixed rent key is refused, naming its RENT_ successor.
+        yield 'db, unprefixed' => ['SCOUT_DB', 'RENT_SCOUT_DB'];
+        yield 'mailbox, unprefixed' => ['IMAP_MAILBOX', 'RENT_IMAP_MAILBOX'];
+        yield 'topic, unprefixed' => ['NTFY_TOPIC', 'RENT_NTFY_TOPIC'];
+        yield 'heartbeat, unprefixed' => ['HEARTBEAT_HOURS', 'RENT_HEARTBEAT_HOURS'];
+        yield 'feed silence, unprefixed' => ['FEED_SILENT_DAYS', 'RENT_FEED_SILENT_DAYS'];
     }
 
     #[\PHPUnit\Framework\Attributes\DataProvider('legacyNames')]
@@ -88,7 +94,7 @@ final class LegacyEnvTest extends TestCase
     {
         $this->expectException(ConfigError::class);
 
-        LegacyEnv::check(['RENT_WATCH_DB' => 'old.sqlite3', 'SCOUT_DB' => 'new.sqlite3']);
+        LegacyEnv::check(['RENT_WATCH_DB' => 'old.sqlite3', 'RENT_SCOUT_DB' => 'new.sqlite3']);
     }
 
     /**
@@ -121,7 +127,7 @@ final class LegacyEnvTest extends TestCase
             LegacyEnv::checkProcess();
             self::fail('checkProcess must see a legacy name in the real environment');
         } catch (ConfigError $e) {
-            self::assertStringContainsString('SCOUT_DB', $e->getMessage());
+            self::assertStringContainsString('RENT_SCOUT_DB', $e->getMessage());
         } finally {
             putenv('RENT_WATCH_DB');
             unset($_ENV['RENT_WATCH_DB'], $_SERVER['RENT_WATCH_DB']);
@@ -170,7 +176,7 @@ final class LegacyEnvTest extends TestCase
         copy(\dirname(__DIR__, 3) . '/config/sources.json', $root . '/config/sources.json');
 
         putenv('RENT_WATCH_MAX_PASSES=1');
-        putenv('SCOUT_DB=' . $root . '/state/db.sqlite3');
+        putenv('RENT_SCOUT_DB=' . $root . '/state/db.sqlite3');
 
         try {
             $out = fopen('php://memory', 'r+');
@@ -188,7 +194,7 @@ final class LegacyEnvTest extends TestCase
             );
         } finally {
             putenv('RENT_WATCH_MAX_PASSES');
-            putenv('SCOUT_DB');
+            putenv('RENT_SCOUT_DB');
             unset($_ENV['RENT_WATCH_MAX_PASSES'], $_SERVER['RENT_WATCH_MAX_PASSES']);
             @unlink($root . '/state/last-refusal.txt');
             @unlink($root . '/state/db.sqlite3');

@@ -9,7 +9,7 @@ namespace Scout\Config;
  *
  * The repo was renamed on 2026-08-27. Four environment variables travelled with it, and they are
  * the ONE piece of that rename that can hurt, for a reason that has nothing to do with the code:
- * **the deployed `.env` on the host is not in git.** Rename here, forget there, and `SCOUT_DB` is
+ * **the deployed `.env` on the host is not in git.** Rename here, forget there, and `RENT_SCOUT_DB` is
  * unset while `RENT_WATCH_DB` still holds the real path — at which point `dbPath()` takes its
  * default, `Store::open()` creates a brand-new empty database, and the watcher is looking at
  * nothing. Q36's flood guard catches the second half of that (it refuses to notify while the
@@ -46,10 +46,20 @@ final class LegacyEnv
      * @var array<string, string>
      */
     public const MAP = [
-        'RENT_WATCH_DB' => 'SCOUT_DB',
+        'RENT_WATCH_DB' => 'RENT_SCOUT_DB',
         'RENT_WATCH_OFFLINE' => 'SCOUT_OFFLINE',
         'RENT_WATCH_MAX_PASSES' => 'SCOUT_MAX_PASSES',
         'RENT_WATCH_BACKUP_KEEP' => 'SCOUT_BACKUP_KEEP',
+        // THE DOMAIN SPLIT (2026-08-29). With a second domain in the tool, an unprefixed key can
+        // only mean "the rent one", which is the assumption the developer refused: "like only rent
+        // watch exists in this app". Every domain-bound key is RENT_* or CAR_*; the account-level
+        // ones (IMAP_HOST/USER/PASSWORD, SMTP_*, NTFY_SERVER, IMAP_SINCE_DAYS, IMAP_MAX_MESSAGES)
+        // and the tool-level ones (SCOUT_OFFLINE, SCOUT_MAX_PASSES, SCOUT_BACKUP_KEEP) stay shared.
+        'SCOUT_DB' => 'RENT_SCOUT_DB',
+        'IMAP_MAILBOX' => 'RENT_IMAP_MAILBOX',
+        'NTFY_TOPIC' => 'RENT_NTFY_TOPIC',
+        'HEARTBEAT_HOURS' => 'RENT_HEARTBEAT_HOURS',
+        'FEED_SILENT_DAYS' => 'RENT_FEED_SILENT_DAYS',
     ];
 
     /**
@@ -99,7 +109,7 @@ final class LegacyEnv
             throw ConfigError::at(
                 $old,
                 sprintf(
-                    'ce nom a été remplacé par %s lors du renommage du 2026-08-27. '
+                    'ce nom a été remplacé par %s (renommage du 2026-08-27, puis séparation rent/car du 2026-08-29). '
                     . 'Renommez la ligne dans le `.env` DÉPLOYÉ (celui de l\'hôte, absent de git) '
                     . 'et supprimez l\'ancienne — la lire silencieusement laisserait les deux '
                     . 'orthographes valides indéfiniment.',

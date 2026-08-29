@@ -61,7 +61,7 @@ final class FeedFreshnessTest extends TestCase
      *
      * 9 August 2026 is a Sunday. `new \DateTimeImmutable('Fri, 09 Aug 2026 08:00:00 +0200')` applies
      * `Fri` as a relative modifier and returns **14 August** — five days forward. The observable
-     * band is `IMAP_SINCE_DAYS − FEED_SILENT_DAYS`, four days on the defaults, so a +5 shift ages
+     * band is `IMAP_SINCE_DAYS − RENT_FEED_SILENT_DAYS`, four days on the defaults, so a +5 shift ages
      * the message out of the search window before the shifted date can reach the threshold: the
      * verdict is closed by its own input. `createFromFormat` alone does NOT catch this either; only
      * the round-trip comparison does.

@@ -51,7 +51,7 @@ final class ScoutReclassifyTest extends TestCase
             self::removeTree($root);
         }
         $this->roots = [];
-        putenv('SCOUT_DB');
+        putenv('RENT_SCOUT_DB');
     }
 
     public function testAnImprovedVerdictIsRecordedAndAPromotionIsNotified(): void
@@ -238,7 +238,7 @@ final class ScoutReclassifyTest extends TestCase
         // the one that cannot be rescued by the pipeline either: a still-published listing is
         // re-judged next pass, but these commands exist for the listing that has since delisted.
         $root = $this->tempRoot(['notify' => ['channels' => ['ntfy']]]);
-        putenv('NTFY_TOPIC=rent-watch-test');
+        putenv('RENT_NTFY_TOPIC=rent-watch-test');
         putenv('NTFY_SERVER=http://127.0.0.1:1');
 
         $key = $this->seed($root, $this->intermediateListing('H-8'), tenure: 'UNKNOWN', outcome: 'DIGEST');
@@ -256,7 +256,7 @@ final class ScoutReclassifyTest extends TestCase
         // channel must find and announce it. That channel has to be one that genuinely REACHES a
         // recipient — it was `console` until round 7, then `email` over a file transport until
         // round 8, and neither delivers anything, so the retry proved itself either way.
-        putenv('NTFY_TOPIC');
+        putenv('RENT_NTFY_TOPIC');
         putenv('NTFY_SERVER');
         $second = $this->scout($root, ['reclassify'], $this->delivering());
 
@@ -269,12 +269,12 @@ final class ScoutReclassifyTest extends TestCase
     public function testAnUnusableChannelRefusesBeforeAnyRowIsTouched(): void
     {
         // The refusal has to come FIRST. Built after the loop — as it was until 2026-08-24 — a
-        // deploy whose NTFY_TOPIC is not yet filled in re-judged everything, rewrote every verdict,
+        // deploy whose RENT_NTFY_TOPIC is not yet filled in re-judged everything, rewrote every verdict,
         // and only then discovered it had nowhere to send: one run consumed the entire promotable
         // backlog while printing a message about an environment variable. `run`, `digest` and
         // `test-notify` all refuse before doing the work; this was the one verb that did not.
         $root = $this->tempRoot(['notify' => ['channels' => ['ntfy']]]);
-        putenv('NTFY_TOPIC');
+        putenv('RENT_NTFY_TOPIC');
         putenv('NTFY_SERVER');
 
         $key = $this->seed($root, $this->intermediateListing('K-1'), tenure: 'UNKNOWN', outcome: 'DIGEST');
@@ -299,7 +299,7 @@ final class ScoutReclassifyTest extends TestCase
         // channel would refuse the one command whose whole purpose is to look before touching
         // anything — and would do it on the machine least likely to have a channel configured yet.
         $root = $this->tempRoot(['notify' => ['channels' => ['ntfy']]]);
-        putenv('NTFY_TOPIC');
+        putenv('RENT_NTFY_TOPIC');
         putenv('NTFY_SERVER');
 
         $this->seed($root, $this->intermediateListing('K-2'), tenure: 'UNKNOWN', outcome: 'DIGEST');
@@ -710,7 +710,7 @@ final class ScoutReclassifyTest extends TestCase
         self::assertIsResource($out);
         self::assertIsResource($err);
 
-        putenv('SCOUT_DB=' . $root . '/state/rent-watch.sqlite3');
+        putenv('RENT_SCOUT_DB=' . $root . '/state/rent-watch.sqlite3');
 
         $code = (new Scout($root, $out, $err, self::NOW, null, self::compose($out, $delivering)))->run($argv);
         rewind($out);

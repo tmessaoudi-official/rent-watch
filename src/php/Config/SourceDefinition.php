@@ -157,7 +157,7 @@ final readonly class SourceDefinition
          * key gives a slow cold start, which is benign and self-correcting. Writing `0` means
          * hydrate nothing, ever, while the source's health stays green and its digest stays
          * plausible — the silent shape — so the loader REFUSES it, exactly as an unusable
-         * `HEARTBEAT_HOURS` is a loud startup refusal rather than a quiet fallback.
+         * `RENT_HEARTBEAT_HOURS` is a loud startup refusal rather than a quiet fallback.
          *
          * This REPLACES the older invariant that a `detail_map` without a gate refuses. Novelty is
          * the gate now, supplied by the run rather than configured, so there is no longer a gate to
@@ -170,7 +170,7 @@ final readonly class SourceDefinition
         public int $rateLimitMs = 2000,
         /**
          * This source's own feed-silence threshold in days, or `null` for the global
-         * `FEED_SILENT_DAYS`. One number cannot serve a portal firing thirty alerts a day and one
+         * `RENT_FEED_SILENT_DAYS`. One number cannot serve a portal firing thirty alerts a day and one
          * firing weekly: under the global three days the first is noticed ~90 alerts late, and a
          * global one day would alarm on the second every week. Only an `email_alert` source can
          * carry it — nothing else reports a feed date (refused at load otherwise).

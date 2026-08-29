@@ -520,7 +520,10 @@ final class TenureCorpusTest extends TestCase
 
         sort($exempt);
         self::assertSame(
-            ['ImapMailbox', 'Pacer', 'Reader', 'WatchLoop'],
+            // IndexSize (2026-08-29): the one mutable cell a readonly SitemapVehicleSource holds —
+            // how many lots its index listed last time, written by index() and read by health.
+            // A counter whose update IS its mechanism, never handed to a caller as a result.
+            ['ImapMailbox', 'IndexSize', 'Pacer', 'Reader', 'WatchLoop'],
             $exempt,
             'the MutableByDesign set changed. Every entry must be a non-value-object whose mutation '
             . 'IS its mechanism and which is never handed to a caller as a result — argue it here',

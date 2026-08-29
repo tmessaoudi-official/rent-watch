@@ -569,7 +569,6 @@ if compose.exists():
 #     them. A gate that fires on cases the repo has already reasoned about gets ignored within a
 #     week — see this script's own preamble, which was written after exactly that.
 DECLARED_UNREAD = {
-    'IDFM_API_KEY': 'transit enrichment, spec §6 milestone 8 — not built',
     'RFR_N2': 'income-eligibility checking, Q6 — ruled off by default',
     # Not a gap and not a plan: Q9 rules the channels console/ntfy/email, and these are left
     # commented so that filling them in cannot produce silence. An unsupported name in

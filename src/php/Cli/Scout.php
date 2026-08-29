@@ -58,7 +58,7 @@ use Scout\Store\Store;
 final readonly class Scout
 {
     /**
-     * Days of portal silence, absent `FEED_SILENT_DAYS`. See {@see feedSilentDays()} for the
+     * Days of portal silence, absent `RENT_FEED_SILENT_DAYS`. See {@see feedSilentDays()} for the
      * measurement behind the number and for why it must stay under `IMAP_SINCE_DAYS`.
      */
     private const int DEFAULT_FEED_SILENT_DAYS = 3;
@@ -676,7 +676,7 @@ final readonly class Scout
             rand: static fn (int $min, int $max): int => random_int($min, $max),
         );
 
-        // Q27. Built BEFORE the loop so an unusable HEARTBEAT_HOURS refuses at startup rather than
+        // Q27. Built BEFORE the loop so an unusable RENT_HEARTBEAT_HOURS refuses at startup rather than
         // on the first beat — which, on the default, would be a day into an unattended run.
         //
         // Converted to a REFUSAL rather than allowed to propagate: a bad env value is an ordinary,
@@ -685,7 +685,7 @@ final readonly class Scout
         // successful start reports it, which is the case Q27's refusal note exists for — an operator
         // who typo'd this in a compose file would otherwise see nothing at all.
         try {
-            $heartbeat = Heartbeat::fromEnv(($raw = getenv('HEARTBEAT_HOURS')) === false ? null : $raw);
+            $heartbeat = Heartbeat::fromEnv(($raw = getenv('RENT_HEARTBEAT_HOURS')) === false ? null : $raw);
 
             // Q34's daily floor, built here for the same reason and refusing at the same moment: an
             // unusable `digest_hour` or `TZ` must stop the watcher at startup, not a day into an
@@ -1280,7 +1280,7 @@ final readonly class Scout
 
         // THE NOTIFIER IS BUILT BEFORE ANY ROW IS TOUCHED, and that ordering is the fix to a defect
         // a review panel proved on 2026-08-24. It used to be constructed after the loop: a deploy
-        // whose `NTFY_TOPIC` was not yet filled in ran the whole re-judge, rewrote every verdict,
+        // whose `RENT_NTFY_TOPIC` was not yet filled in ran the whole re-judge, rewrote every verdict,
         // and only then hit `fatalProblem()` — consuming the entire promotable backlog in one run
         // while printing a message about an environment variable. Refuse before the work, as
         // `run`, `digest` and `test-notify` all do.
@@ -1947,7 +1947,7 @@ final readonly class Scout
 
     private function dbPath(): string
     {
-        $configured = getenv('SCOUT_DB');
+        $configured = getenv('RENT_SCOUT_DB');
 
         return is_string($configured) && trim($configured) !== ''
             ? $configured
@@ -1965,7 +1965,7 @@ final readonly class Scout
      * **The threshold MUST be strictly under the IMAP window, and that is a reachability
      * constraint rather than a preference.** The newest message `SEARCH SINCE` can match is by
      * definition at most `IMAP_SINCE_DAYS` old, so while the count is non-zero the feed's age is
-     * BOUNDED by that window: at `FEED_SILENT_DAYS >= IMAP_SINCE_DAYS` the count collapses to zero —
+     * BOUNDED by that window: at `RENT_FEED_SILENT_DAYS >= IMAP_SINCE_DAYS` the count collapses to zero —
      * and the existing empty-streak machinery takes the verdict — before the age can ever reach the
      * threshold. The status would be unreachable *by construction*, which is precisely how
      * `high_priority_score: 70` sat dead for weeks while looking configured. Refused loudly instead.
@@ -1994,13 +1994,13 @@ final readonly class Scout
         // startup refusal visible on the next successful beat. Under Docker the process exits
         // before any channel exists and its stderr scrolls past in a log nobody reads.
 
-        $raw = getenv('FEED_SILENT_DAYS');
+        $raw = getenv('RENT_FEED_SILENT_DAYS');
 
         if ($raw === false || trim((string) $raw) === '') {
             $days = self::DEFAULT_FEED_SILENT_DAYS;
         } elseif (preg_match('~^\d+$~', trim((string) $raw)) !== 1) {
             throw new ConfigError(sprintf(
-                'FEED_SILENT_DAYS doit être un entier de jours, reçu : %s',
+                'RENT_FEED_SILENT_DAYS doit être un entier de jours, reçu : %s',
                 trim((string) $raw),
             ));
         } else {
@@ -2009,11 +2009,11 @@ final readonly class Scout
 
         if ($days < 1) {
             // Refused, not clamped. Zero would disable the only signal that distinguishes a dead
-            // alert from a quiet market — the same asymmetry as `HEARTBEAT_HOURS`, where an omitted
+            // alert from a quiet market — the same asymmetry as `RENT_HEARTBEAT_HOURS`, where an omitted
             // value is benign and an explicit unusable one is a configuration error in the shape of
             // a setting.
             throw new ConfigError(
-                'FEED_SILENT_DAYS doit valoir au moins 1 jour — 0 désactiverait la détection de flux muet',
+                'RENT_FEED_SILENT_DAYS doit valoir au moins 1 jour — 0 désactiverait la détection de flux muet',
             );
         }
 
@@ -2048,7 +2048,7 @@ final readonly class Scout
      * `doctor` DIAGNOSES, it does not refuse. Direct precedent in this same class: an unusable `TZ`
      * is reported by `doctor` as a line and refused only by `run`.
      */
-    private static function feedSilentWindowNote(?int $days, string $label = 'FEED_SILENT_DAYS'): ?string
+    private static function feedSilentWindowNote(?int $days, string $label = 'RENT_FEED_SILENT_DAYS'): ?string
     {
         $window = (int) (getenv('IMAP_SINCE_DAYS') ?: 7);
 
@@ -2365,7 +2365,7 @@ final readonly class Scout
             host: $host,
             user: (string) (getenv('IMAP_USER') ?: ''),
             password: (string) (getenv('IMAP_PASSWORD') ?: ''),
-            folder: (string) (getenv('IMAP_MAILBOX') ?: 'INBOX'),
+            folder: (string) (getenv('RENT_IMAP_MAILBOX') ?: 'INBOX'),
             port: (int) (getenv('IMAP_PORT') ?: 993),
             fromFilter: \is_string($from) && $from !== '' ? $from : null,
             sinceDays: (int) (getenv('IMAP_SINCE_DAYS') ?: 7),
@@ -2450,7 +2450,7 @@ final readonly class Scout
         // with its own prefix, From default and ntfy topic, and two copies of this logic is how
         // one drifts. The unknown-name refusal — hard rule 2's "computed and never sent" — lives
         // there now, still as a separate one-line guard a sabotage can remove.
-        return ChannelFactory::build($name, $this->out, $this->rootDir);
+        return ChannelFactory::build($name, $this->out, $this->rootDir, '[rent-watch]', 'rent-watch@localhost', (string) (getenv('RENT_NTFY_TOPIC') ?: ''));
     }
 
     /**

@@ -503,7 +503,7 @@ final class ConfigTest extends TestCase
      * A per-source `feed_silent_days` — the override the car-domain plan argued for on 2026-08-28:
      * a portal firing thirty alerts a day is only noticed after the GLOBAL three days of silence,
      * ~90 missed alerts, while leboncoin needs those three days because it fires once a week.
-     * One number cannot serve both. Absent, the global `FEED_SILENT_DAYS` applies unchanged, which
+     * One number cannot serve both. Absent, the global `RENT_FEED_SILENT_DAYS` applies unchanged, which
      * is what keeps every shipped block byte-identical.
      */
     public function testFeedSilentDaysIsAcceptedOnAnEmailAlertSourceAndCarriedOnTheDefinition(): void
@@ -522,7 +522,7 @@ final class ConfigTest extends TestCase
     {
         $sources = ConfigLoader::sourcesFromArray(self::minimalSource(['type' => 'email_alert']));
 
-        self::assertNull($sources['demo']->feedSilentDays, 'null means "use FEED_SILENT_DAYS", not 0');
+        self::assertNull($sources['demo']->feedSilentDays, 'null means "use RENT_FEED_SILENT_DAYS", not 0');
     }
 
     /** `0` would disable the one verdict that tells a dead alert from a quiet market — same refusal as the env var. */
@@ -1499,7 +1499,7 @@ final class ConfigTest extends TestCase
      *
      * Omitting the key is NOT refused and must not be: it defaults, and the cost of the default is
      * a slow cold start, which is benign and self-correcting. The asymmetry is the point, and it is
-     * the same one an unusable HEARTBEAT_HOURS gets.
+     * the same one an unusable RENT_HEARTBEAT_HOURS gets.
      */
     public function testADetailMapWithAZeroBudgetIsRefused(): void
     {

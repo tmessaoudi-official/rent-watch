@@ -58,7 +58,7 @@ final class ScoutDigestFloorTest extends TestCase
     {
         putenv('SCOUT_MAX_PASSES');
         putenv('TZ');
-        putenv('SCOUT_DB');
+        putenv('RENT_SCOUT_DB');
 
         foreach ($this->roots as $root) {
             $this->rmrf($root);
@@ -244,7 +244,7 @@ final class ScoutDigestFloorTest extends TestCase
 
     public function testAnUnusableTimezoneRefusesAtStartupRatherThanMisfiringForever(): void
     {
-        // Same rule as HEARTBEAT_HOURS, and for a sharper reason: a silently-defaulted zone puts the
+        // Same rule as RENT_HEARTBEAT_HOURS, and for a sharper reason: a silently-defaulted zone puts the
         // floor two hours out in summer on a deployment whose operator believes they configured it,
         // and nothing about that looks wrong from outside.
         $root = $this->tempRoot();
@@ -298,7 +298,7 @@ final class ScoutDigestFloorTest extends TestCase
         self::assertIsResource($out);
         self::assertIsResource($err);
 
-        putenv('SCOUT_DB=' . $root . '/state/rent-watch.sqlite3');
+        putenv('RENT_SCOUT_DB=' . $root . '/state/rent-watch.sqlite3');
 
         $notifier = new Notifier([new ConsoleChannel($out), new DeliveringChannel()]);
         $code = (new Scout($root, $out, $err, self::NOW, null, $notifier))->run(['run', '--watch']);

@@ -229,7 +229,7 @@ final readonly class VehicleScout
             }),
             rand: static fn (int $min, int $max): int => random_int($min, $max),
         );
-        $heartbeat = Heartbeat::fromEnv(($raw = getenv('HEARTBEAT_HOURS')) === false ? null : $raw);
+        $heartbeat = Heartbeat::fromEnv(($raw = getenv('CAR_HEARTBEAT_HOURS')) === false ? null : $raw);
         $maxPasses = $this->maxPasses();
         $passes = 0;
         $notified = 0;
@@ -296,7 +296,8 @@ final readonly class VehicleScout
         $this->line('  scout --domain=car test-notify            vérifie le canal du car-watch');
         $this->line('');
         $this->line('  config : config/car/criteria.json (+ criteria.local.json), config/car/sources.json');
-        $this->line('  env    : CAR_SCOUT_DB, CAR_IMAP_MAILBOX, CAR_NTFY_TOPIC (les identifiants IMAP/SMTP sont partagés)');
+        $this->line('  env    : CAR_SCOUT_DB, CAR_IMAP_MAILBOX, CAR_NTFY_TOPIC, CAR_HEARTBEAT_HOURS, CAR_FEED_SILENT_DAYS');
+        $this->line('           (les identifiants IMAP/SMTP, NTFY_SERVER, IMAP_SINCE_DAYS et IMAP_MAX_MESSAGES sont partagés)');
 
         return $code;
     }
@@ -316,7 +317,21 @@ final readonly class VehicleScout
 
     private function store(): VehicleStore
     {
-        return VehicleStore::open($this->dbPath());
+        return VehicleStore::open($this->dbPath(), $this->feedSilentDays());
+    }
+
+    /** `CAR_FEED_SILENT_DAYS` — the car domain's global feed-silence threshold; a source block's own `feed_silent_days` outranks it. */
+    private function feedSilentDays(): int
+    {
+        $raw = getenv('CAR_FEED_SILENT_DAYS');
+        if ($raw === false || trim($raw) === '') {
+            return 3;
+        }
+        if (!ctype_digit(trim($raw)) || (int) $raw < 1) {
+            throw ConfigError::at('CAR_FEED_SILENT_DAYS', 'doit être un entier de jours ≥ 1 — 0 désactiverait la détection de flux muet, reçu ' . var_export($raw, true));
+        }
+
+        return (int) $raw;
     }
 
     private function dbPath(): string
@@ -336,7 +351,7 @@ final readonly class VehicleScout
         }
         $channels = [];
         foreach ($criteria->notify->channels as $name) {
-            $channels[] = ChannelFactory::build($name, $this->out, $this->rootDir, '[car-watch]', 'car-watch@localhost', 'CAR_NTFY_TOPIC');
+            $channels[] = ChannelFactory::build($name, $this->out, $this->rootDir, '[car-watch]', 'car-watch@localhost', (string) (getenv('CAR_NTFY_TOPIC') ?: ''));
         }
 
         return new Notifier($channels);

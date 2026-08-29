@@ -62,8 +62,8 @@ final class ScoutDigestTest extends TestCase
             self::removeTree($root);
         }
         $this->roots = [];
-        putenv('SCOUT_DB');
-        putenv('NTFY_TOPIC');
+        putenv('RENT_SCOUT_DB');
+        putenv('RENT_NTFY_TOPIC');
         putenv('NTFY_SERVER');
     }
 
@@ -166,7 +166,7 @@ final class ScoutDigestTest extends TestCase
         // `ntfy` against a closed loopback port: `check()` passes, `send()` fails at the socket. No
         // third-party host is contacted, which the offline guarantee requires.
         $root = $this->tempRoot(['notify' => ['channels' => ['ntfy']]]);
-        putenv('NTFY_TOPIC=rent-watch-test');
+        putenv('RENT_NTFY_TOPIC=rent-watch-test');
         putenv('NTFY_SERVER=http://127.0.0.1:1');
 
         $key = $this->seedDigestRow($root, new RawListing(
@@ -338,7 +338,7 @@ final class ScoutDigestTest extends TestCase
         self::assertIsResource($out);
         self::assertIsResource($err);
 
-        putenv('SCOUT_DB=' . $root . '/state/rent-watch.sqlite3');
+        putenv('RENT_SCOUT_DB=' . $root . '/state/rent-watch.sqlite3');
 
         $code = (new Scout($root, $out, $err, self::NOW, null, self::compose($out, $delivering)))->run($argv);
         rewind($out);

@@ -387,7 +387,7 @@ final class ConfigLoader
         // it — only `email_alert` reports a feed date, so on `html`/`json` the key would be a
         // configured feature that never runs, the `detail_budget_per_pass: 0` shape. And refused
         // at 0 for the reason the env var is: 0 disables the one verdict that tells a dead alert
-        // from a quiet market. Absent means the global `FEED_SILENT_DAYS`, which is what keeps
+        // from a quiet market. Absent means the global `RENT_FEED_SILENT_DAYS`, which is what keeps
         // every shipped block byte-identical.
         $feedSilentDays = $r->optInt('feed_silent_days', null);
 
@@ -672,7 +672,7 @@ final class ConfigLoader
                 // feature's clothes: a detail_map that never runs leaves a mixed-tenure source
                 // resolving UNKNOWN for ever while its health stays green and its count looks
                 // right. Omitting the key is fine and defaults; writing 0 is refused. Same
-                // reasoning as an unusable HEARTBEAT_HOURS being a loud startup refusal.
+                // reasoning as an unusable RENT_HEARTBEAT_HOURS being a loud startup refusal.
                 if ($detailMap !== null && $detailBudget === 0) {
                     throw ConfigError::at(
                         $where . '.detail_budget_per_pass',

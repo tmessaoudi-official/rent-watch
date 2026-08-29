@@ -4,7 +4,7 @@
 #
 #     tools/backup-state.sh [<database>] [<destination-dir>]
 #
-# Defaults: `$SCOUT_DB` or `state/rent-watch.sqlite3`, into `state/backups/`.
+# Defaults: `$RENT_SCOUT_DB` or `state/rent-watch.sqlite3`, into `state/backups/`.
 #
 # **`cp` IS THE WRONG TOOL AND THE REASON IS SILENT.** The watcher holds the database open in WAL
 # mode, so a byte copy taken mid-transaction is torn — and a torn SQLite file OPENS WITHOUT
@@ -24,7 +24,15 @@ set -euo pipefail
 _keep="${SCOUT_BACKUP_KEEP:-7}"
 
 _root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-_db="${1:-${SCOUT_DB:-$_root/state/rent-watch.sqlite3}}"
+_db="${1:-${RENT_SCOUT_DB:-$_root/state/rent-watch.sqlite3}}"
+# BOTH DOMAINS when called bare (2026-08-29): the car store is the same kind of unrecoverable state.
+# Recursion with an explicit path, so each store gets its own verified copy under its own name.
+if [[ $# -eq 0 ]]; then
+  _car="${CAR_SCOUT_DB:-$_root/state/car-watch.sqlite3}"
+  [[ "$_car" = /* ]] || _car="$_root/$_car"
+  if [[ -f "$_car" ]]; then "$0" "$_car"; fi
+fi
+_base="$(basename "$_db" .sqlite3)"
 _dest="${2:-$_root/state/backups}"
 
 die() {
@@ -49,11 +57,11 @@ mkdir -p "$_dest" 2>/dev/null || die "destination non créable : $_dest"
 # the moment that matters — the manual copy taken just before a redeploy would overwrite the
 # automatic one taken seconds earlier, leaving one copy where the operator believed there were two.
 _stamp="$(date +%Y%m%dT%H%M%S)"
-_out="$_dest/rent-watch.$_stamp.sqlite3"
+_out="$_dest/$_base.$_stamp.sqlite3"
 _n=0
 while [[ -e "$_out" ]]; do
   _n=$((_n + 1))
-  _out="$_dest/rent-watch.$_stamp-$_n.sqlite3"
+  _out="$_dest/$_base.$_stamp-$_n.sqlite3"
 done
 
 # `.backup` rather than `.dump`: it produces a real database file, so the restore is a move rather
@@ -69,16 +77,16 @@ if [[ "$_integrity" != "ok" ]]; then
   die "la copie ne passe pas integrity_check ($_integrity) — supprimée plutôt que gardée"
 fi
 
-_rows="$(sqlite3 "$_out" 'SELECT COUNT(*) FROM listings;' 2>/dev/null || echo '?')"
+_rows="$(sqlite3 "$_out" 'SELECT COUNT(*) FROM listings;' 2>/dev/null || sqlite3 "$_out" 'SELECT COUNT(*) FROM vehicle_listings;' 2>/dev/null || echo '?')"
 
 # Prune OLDEST-FIRST. Keeping the oldest N would be worse than keeping none: the copy wanted after a
 # bad migration is the most recent good one, and a retention rule that discards it is a trap wearing
 # the costume of a safety net.
-mapfile -t _all < <(find "$_dest" -maxdepth 1 -name 'rent-watch.*.sqlite3' -printf '%T@ %p\n' \
+mapfile -t _all < <(find "$_dest" -maxdepth 1 -name "$_base.*.sqlite3" -printf '%T@ %p\n' \
   | sort -rn | cut -d' ' -f2-)
 if ((${#_all[@]} > _keep)); then
   for _old in "${_all[@]:$_keep}"; do rm -f "$_old"; done
 fi
 
 printf 'backup-state: %s (%s annonces, integrity ok, %d copie(s) conservée(s))\n' \
-  "$_out" "$_rows" "$(find "$_dest" -maxdepth 1 -name 'rent-watch.*.sqlite3' | wc -l)"
+  "$_out" "$_rows" "$(find "$_dest" -maxdepth 1 -name "$_base.*.sqlite3" | wc -l)"

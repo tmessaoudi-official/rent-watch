@@ -84,7 +84,7 @@ final class RedactTest extends TestCase
         yield 'SMTP_PASSWORD' => ['SMTP_PASSWORD=hunter2 rejeté', ['hunter2']];
         yield 'TELEGRAM_BOT_TOKEN' => ['TELEGRAM_BOT_TOKEN=7488291044:AAH9xQkL2mNp0RtVuWxYz1234 invalide', ['AAH9xQkL2mNp0RtVuWxYz1234']];
         yield 'IDFM_API_KEY' => ['IDFM_API_KEY=Zx9QpLm4Nn2Kk8Jj refusé (401)', ['Zx9QpLm4Nn2Kk8Jj']];
-        yield 'NTFY_TOPIC' => ['NTFY_TOPIC=rw-a8f3k2p9qz introuvable', ['rw-a8f3k2p9qz']];
+        yield 'RENT_NTFY_TOPIC' => ['RENT_NTFY_TOPIC=rw-a8f3k2p9qz introuvable', ['rw-a8f3k2p9qz']];
 
         // A single-quoted value matched NOTHING: the unquoted class excludes `'`, so the pattern
         // failed outright. `var_export()` on a config array is the likeliest way a credential

@@ -252,7 +252,7 @@ Q9 rules every channel optional and `console` always available, so the stack sta
 can and cannot reach rather than refusing to parse. A channel is turned on in **two** places and
 neither alone is enough: it is listed under `notify.channels`, and its credentials are in `.env`. A
 channel listed without its credentials is **disabled loudly** at startup (`⚠ canal ntfy désactivé :
-NTFY_TOPIC is not set…`) — never silently, because hard rule 2 counts an alert computed and never
+the ntfy topic is not set (RENT_NTFY_TOPIC or CAR_NTFY_TOPIC, per domain)…`) — never silently, because hard rule 2 counts an alert computed and never
 sent as worse than no alert at all.
 
 > **⚠ `console` is not a channel, and neither is `email` over `SMTP_TRANSPORT=file`.** Both write
@@ -287,7 +287,7 @@ the test suite try to push somewhere real.
 Install the ntfy app, subscribe to a topic, and put the same topic in `.env`:
 
 ```bash
-NTFY_TOPIC=rw-<something long and random>     # openssl rand -hex 16
+RENT_NTFY_TOPIC=rw-<something long and random>     # openssl rand -hex 16
 NTFY_SERVER=https://ntfy.sh
 ```
 
@@ -357,7 +357,7 @@ ls -t var/outbox | head -1     # `file` transport: the message that was written 
 > `command not found`. A value containing backticks would have been executed.
 >
 > The parser takes values literally — no expansion, no substitution — and **the real environment
-> still wins**, so `SCOUT_DB=/tmp/throwaway bin/scout run` works as before. A line that is not
+> still wins**, so `RENT_SCOUT_DB=/tmp/throwaway bin/scout run` works as before. A line that is not
 > `KEY=VALUE` is a startup refusal naming the line NUMBER and never the line, because this file
 > holds credentials.
 

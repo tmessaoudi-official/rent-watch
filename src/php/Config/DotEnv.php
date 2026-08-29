@@ -38,7 +38,7 @@ namespace Scout\Config;
  *   substitution, no escape processing. Matching single or double quotes wrapping the whole value
  *   are stripped, which is the only way to keep meaningful trailing whitespace.
  * - **The real environment WINS.** A variable already set is never overwritten, so
- *   `SCOUT_DB=/tmp/throwaway bin/scout run` still works, Compose's `environment:` still
+ *   `RENT_SCOUT_DB=/tmp/throwaway bin/scout run` still works, Compose's `environment:` still
  *   outranks its own `env_file:`, and CI is never quietly overridden by a file on disk.
  *
  * ## What it will not do

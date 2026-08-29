@@ -125,7 +125,7 @@ final class ImapMailbox implements Mailbox, MutableByDesign
      * literal dates too.
      *
      * That is not a cosmetic error, it closes the verdict: the observable band is
-     * `IMAP_SINCE_DAYS − FEED_SILENT_DAYS`, four days on the defaults, so a +5-day shift ages the
+     * `IMAP_SINCE_DAYS − RENT_FEED_SILENT_DAYS`, four days on the defaults, so a +5-day shift ages the
      * message out of the search window — collapsing the count, which the verdict gates on — before
      * the shifted date can ever reach the threshold. One bad header suppresses `FEED_SILENT` on
      * that source for ever, which is the failure this whole feature exists to remove.

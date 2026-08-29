@@ -34,12 +34,15 @@ final class ChannelFactory
         string $rootDir,
         string $subjectPrefix = '[rent-watch]',
         string $fromDefault = 'rent-watch@localhost',
-        string $ntfyTopicEnv = 'NTFY_TOPIC',
+        string $ntfyTopic = '',
     ): Channel {
+        // The topic arrives as a VALUE, read by the caller from its own domain's key
+        // (`RENT_NTFY_TOPIC` / `CAR_NTFY_TOPIC`), so each read is a literal `getenv()` the drift
+        // gate can see and the factory knows nothing about domains.
         $channel = match ($name) {
             'console' => new ConsoleChannel($out),
             'ntfy' => new NtfyChannel(
-                (string) (getenv($ntfyTopicEnv) ?: ''),
+                $ntfyTopic,
                 (string) (getenv('NTFY_SERVER') ?: 'https://ntfy.sh'),
             ),
             'email' => new EmailChannel(

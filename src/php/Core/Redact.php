@@ -39,7 +39,7 @@ final readonly class Redact
         'signature', 'token',
         // `docs/OPEN-QUESTIONS.md` Q9 calls the ntfy topic a secret in as many words — anyone who
         // knows it reads the notifications. It sat in the ambiguous list, which accepts only `=`,
-        // so `{"topic":"…"}` from an HTTP client went through while `NTFY_TOPIC=…` was masked.
+        // so `{"topic":"…"}` from an HTTP client went through while `RENT_NTFY_TOPIC=…` was masked.
         'topic',
     ];
 
