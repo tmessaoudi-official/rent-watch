@@ -277,6 +277,12 @@ repo and must not be written from memory (`CLAUDE.md` hard rule 1). The tier exi
 band table is injectable, and it ships with zero bands — so it produces no signal until real figures
 are sourced. A test asserts exactly that. Invented numbers would be worse than an honest gap.
 
+> **SUPERSEDED 2026-08-26 — tier 4 is ARMED.** The figures were fetched from two dated official
+> publications and committed in `Core/PlafondBands`; see `docs/plans/plafonds-tier-4.plan.md`. What
+> they showed is the part worth reading there: the assumed two-sided rule does not survive the real
+> tables, so the tier concludes in ONE direction only. [Noted here 2026-08-29 — this paragraph had
+> described the empty scaffold as current for three days after it was filled.]
+
 ### Outcome
 
 `Outcome` is derived from tenure + confidence + the source profile, and is the only thing the rest of

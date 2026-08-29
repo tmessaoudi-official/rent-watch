@@ -251,6 +251,11 @@ this deploy rests on the 1731-case unit suite plus the five targeted cases verif
 Nightly CI covers the ledger. Deploying on that evidence was the right trade — waiting left a §1 hole
 armed-in-repo and absent-in-production for hours — but it is stated rather than implied.
 
+> **CERTIFIED BY EXECUTION since — noted 2026-08-29.** The full ledger has completed end to end
+> several times over this code: nightly CI green on 2026-08-27 (87 min) and 2026-08-28 (75 min),
+> and a local full run on 2026-08-28 at **506 detected, 0 undetected**
+> (`var/claude/sabotage-ledger-20260828.log`). The UNCERTIFIED note above is history, not status.
+
 - [2026-08-23 15:48] DONE: Phase 2/2b deployed; v4→v6 migrated in production, rehearsed first, backed up twice.
 - [2026-08-23 15:52] VERIFIED: 53/54 notified In'li rows correct, 1 over-confident, 0 social-housing false positives; the PLS pair was stopped by `min_surface_m2`, not by tenure.
 

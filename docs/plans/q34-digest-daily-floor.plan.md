@@ -126,3 +126,11 @@ the reason the window stays open. Verified against the database rather than infe
 
 **The cheap production check for the first real firing** is `ls state/digest.txt` after 08:00 Paris.
 Its absence before then is not a fault.
+
+> **Checked 2026-08-29, three mornings later: still no marker, and still correct.** The undelivered
+> backlog is 0 (`SELECT COUNT(*) FROM listings WHERE outcome='DIGEST' AND notified_at IS NULL`), and
+> the watcher log shows why — the EVENT-driven path drains each digest row the pass it appears in
+> (`[DIGEST] À vérifier : 1 annonce(s)` at 17:32 UTC that day), so 08:00 has never found anything
+> pending. The floor has therefore not yet been observed firing in production; the evidence that it
+> would is `DigestScheduleTest` plus the ledger, and the observable stays the marker. A floor that
+> never needs to fire is the designed outcome, not a defect to chase.

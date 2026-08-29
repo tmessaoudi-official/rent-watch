@@ -28,11 +28,11 @@ alert is a convenience rather than the route.
 | # | Source | Domain | Status | The question this capture answers |
 |---|---|---|---|---|
 | 1 | ~~**Alcopa Auction**~~ | car | **EMAIL ROUTE REFUSED 2026-08-28** | **Does the alert carry a CLOSING TIME?** The lot page does not. Rule 2 of the auction ruling refuses a source that publishes none — so this capture decides whether the email route is admissible at all |
-| 2 | **leboncoin — `Voitures : …`** | car | alert live | **Does the message carry all the cards its subject counts, or only the first few?** The subject said `58 nouveaux résultats`. This decides how much `card_separator` work it needs |
-| 3 | **leboncoin — `… vous propose …`** | car? | arriving, unrouted | **Who sends it** (the `From:` header) and **is it one ad per message?** Different sender → a `From:` filter. Same sender → a third positive subject match. The subject looks like the PAP shape, which would make it its own source block |
+| 2 | **leboncoin — `Voitures : …`** | car | alert live, **NOT ROUTING** — 0 leboncoin messages among 52 in the label on 2026-08-29 | **Does the message carry all the cards its subject counts, or only the first few?** The subject said `58 nouveaux résultats`. This decides how much `card_separator` work it needs |
+| 3 | **leboncoin — `… vous propose …`** | car | sender measured (`no.reply@leboncoin.fr`, n=2), `.eml` still in the INBOX | ~~Who sends it~~ **is it one ad per message?** The subject shape (n=2) says yes — `<seller> vous propose <title> à <price> € à <commune> (<CP>)` — so it is its own source block, PAP-shaped. The `.eml` confirms or refutes that |
 | 4 | **ParuVendu** | rent | alert created 2026-08-27 | **Is the saved-search name in the subject?** If yes, the Gmail filter matches a discriminator you control and is self-tripwiring. If no, it falls back to the sender |
 | 5 | **Agorastore** | car | alert live, **vehicles-only confirmed 2026-08-28** | **Is the feed all categories or vehicles only?** Decides whether an ingest-side category discriminator is needed at all |
-| 6 | **Autohero** | car | alert live | Nothing urgent — polling is confirmed readable and complete. Capture it when convenient |
+| 6 | **Autohero** | car | **CAPTURED 2026-08-29** — two alerts, ONE car per message, the car named in the subject (*"Est-ce bien la MG ZS que vous cherchiez ?"*) | Answered by the capture: the alert is a single-vehicle suggestion, not a digest — structurally the PAP shape, and the only car alert with that shape. Polling stays the route; the alert is corpus |
 
 **CORRECTED 2026-08-28 — La Centrale and AutoScout24 alerts DO exist.** Reading the mailbox found La
 Centrale firing (`904 nouveaux véhicules correspondent à votre recherche`, with real prices) and
@@ -146,7 +146,9 @@ nothing errors, the source simply looks like a quiet market.
 - [ ] **leboncoin `vous propose`** — `From:` header first, then capture
 - [x] **ParuVendu** — read 2026-08-28. **The search name is NOT in the subject** — it carries the CRITERIA instead (`🚗 25 nouvelles annonces - Voiture d'occasion / Jusqu'à 30 000 € / A partir de 2019 / Jusqu'à 100 000 km`), so the filter falls back to the sender `info@paruvendu.fr` — which serves the RENT alert too, and the rent alert is currently landing in the car label because of it
 - [x] **Agorastore** — captured and read 2026-08-28. **Vehicles only** (`Votre recherche : Voiture`), so no scoping work is needed. But zero prices and zero closing times — same rule-2 refusal as Alcopa — but for the EMAIL ROUTE ONLY: its API host api.auctelia.com is open, so a hydration route could still supply the closing time. It does carry real lot references
-- [ ] **Autohero** — capture when convenient
+- [x] **Autohero** — captured 2026-08-29 (n=2): one car per message, subject names it. Raw in `var/claude/captures/car-watch-portails/`, not yet scrubbed into `tests/fixtures/`
+- [ ] **ParuVendu RENT → car label** — still misrouted on 2026-08-29 (07:30 on the 28th AND the 29th, n=3). The mechanism is ruled (filter on the saved-search NAME, which the subject does not carry — so on the RENT subject `🏠 Nouvelles annonces location` instead); the Gmail filter is an operator action and is not written
+- [ ] **AutoScout24** — no alert has fired as of 2026-08-29; only the confirmation (27 Aug) and a newsletter from a different sender (`mails.autoscout24.fr`). Worth one look at the saved search's frequency setting (Part D rule 2)
 - [ ] **CapCar** — is the make selector multi-select? (browser only; robots disallows the path)
 - [x] **La Centrale** — read 2026-08-28. Richest fields of any car alert (price, mileage, seller type, departement) but **3 cards for a stated 904**, one opaque link host shared with the furniture, an ellipsised title, and no commune. Polling is refused by ruling, so there is no second route
 - [ ] Confirm the two leboncoin filters exist as **filters**, not just labels — **PARTLY ANSWERED 2026-08-28: no leboncoin car alert is in `car-watch/portails` over 30 days, so the `Voitures` filter is not routing there.** Remaining candidates are the INBOX and two personal folders, which were not read

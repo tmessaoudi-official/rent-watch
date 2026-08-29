@@ -31,6 +31,13 @@ discovered one at a time.
 > certification round — is the only row still open, and the standing conclusion at the foot of this
 > file is that it may not terminate while every round reviews the previous round's repairs. Reading
 > that conclusion is a prerequisite to running another round.
+>
+> **CORRECTED 2026-08-29: A4 is NOT open — it was CLOSED by developer ruling on 2026-08-25**
+> (§ "A4 IS CLOSED", *"Redeploy and stop certifying"*), a day BEFORE the status line above was
+> written, and the two were never reconciled. Likewise "the two Bucket B inputs" in that ruling's
+> text predates B2 and B3 closing on the 26th: **B4 (AL'in) is the only input left in this file.**
+> A status header that contradicts a ruling further down the same file is exactly the drift
+> `/rw-repair` exists for, and it stood for three days.
 
 | # | Item | Size | Where it is recorded |
 |---|---|---|---|

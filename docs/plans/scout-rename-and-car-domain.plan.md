@@ -27,6 +27,14 @@ until a separate go. A ruling on what a thing will be called is not a ruling tha
 
 **`STATUS: Designed — not yet implemented.`**
 
+> **Header corrected 2026-08-29 — this line is half-stale.** The RENAME half is DONE, in-repo
+> (`f810274`, `34c65f0`, 2026-08-27) and out-of-repo (verified on disk 2026-08-29: the checkout is
+> `/stack/projects/scout`, the remote is `tmessaoudi-official/scout.git`, the memory directory moved,
+> the deployed image is `scout:local` and its heartbeat wrote `state/heartbeat.txt` at 23:28 on the
+> 28th — a real push over the renamed deployment, which is the `test-notify` evidence line 84 said
+> `doctor` could not give). The CAR-DOMAIN half is exactly as stated: designed, ruled, and not one
+> line of code — `grep -ci vehicle src/ config/` is 0.
+
 ## Decisions Log
 
 - [2026-08-26 20:35] AGREED (developer, `AskUserQuestion` result, recovered from transcript `53d224a9`): the car watcher is built as a **second domain inside this repo** — `Vehicle*` modules beside the housing ones, its own SQLite file and its own config, with the generic machinery shared **byte-identical**. The recommendation given was that a separate repo duplicates ~6 000 lines against the developer's own no-duplication ruling, and that a shared Composer package is hostile in this environment specifically: the container 403s on `codeload.github.com`, which is why this project has zero runtime dependencies at all.
@@ -159,6 +167,32 @@ until a separate go. A ruling on what a thing will be called is not a ruling tha
 - [2026-08-29 11:29] DEPLOYED, and the verdict fired on the source it was built for. The deployed image was 2026-08-27T23:42, twenty-two commits behind; `docker compose build && up -d` put `918891b` in production, and the seen-set migrated **v10 -> v11** on first start. `scout doctor` against the live tree: `leboncoin` reports **`feed_silent`** -- *"le portail n'a rien envoye depuis 3 jour(s) (dernier message : 2026-08-26T05:33:06Z) -- 3 annonce(s) relues du meme courrier"*. That is the blind spot of 2026-08-28 stated back in one line, by the deployed watcher, unprompted.
 - [2026-08-29 11:29] VERIFIED, because the dangerous outcome of this change was never the missing verdict but a FALSE one: all seven other sources report `ok` with real counts on the same run (`inli` 177, `cdc_habitat` 208, `cityloger` 53, `seloger` 309, `bienici` 180, `pap` 28, `logirep` 105). The three other email sources are the ones that could have gone silent wrongly, and none did. A verdict that fires everywhere is indistinguishable from a verdict that fires nowhere, and only the counterweight run separates them.
 - [2026-08-29 11:24] NOTED: the pre-deploy backup was taken with `tools/backup-state.sh`, not `cp` -- 1479 annonces, integrity ok, read back before it reported success. The watcher holds the database open in WAL and a torn byte copy opens without complaint, so the failure would have been found at restore. The manual rollback backup from the accidental migration (`state/rent-watch.sqlite3.bak.1787982`) is now superseded and can be deleted once the watcher has run a full day on v11.
+- [2026-08-29 20:00] MEASURED — **the `car-watch/portails` label re-read with the same scratch tool
+  (`var/claude/fetch-car-mailbox.php`, `EXAMINE`, folder overridden in the constructor): 52 messages
+  over 30 days**, raw copies in gitignored `var/claude/captures/car-watch-portails/`. The 16:40
+  read of the 28th had been CLOBBERED on disk by the later rent fetch (only the three La Centrale
+  files survived), so this is the first time every car payload is on disk at once. What changed
+  since the 28th, per sender: **Autohero's alert HAS FIRED — twice** (`info@n.autohero.com`,
+  *"Est-ce bien la MG ZS que vous cherchiez ?"* / *"… la Volkswagen T-Roc …"*, 28 and 29 Aug),
+  ONE car per message named in the subject — a shape no other car alert has, and structurally the
+  PAP / `vous propose` one; **ParuVendu's car alert fired 13 times in 48 h** (25, 93, 1339, 366, 37,
+  51, 780, 133, 24, 31, 42 …), confirming the two-hour cadence and the decision it needs;
+  **La Centrale** sent a second daily digest (`1071 nouveaux véhicules`) plus a marketing template
+  (*"Votre prochaine voiture est peut-être ici…"*) from the SAME sender, so `params.from` alone
+  admits furniture here too; **Agorastore** and **Alcopa** each sent a second alert, byte-shape
+  unchanged; and **ParuVendu's RENT alert landed in the car label again, twice** (07:30 on both
+  days) — the sender-routing hazard measured on the 28th persists and is now n=3. **Still absent:
+  any leboncoin message (0 of 52) and any AutoScout24 alert** (only its newsletter from
+  `mails.autoscout24.fr`, which is not the saved-search sender). Items 2 and 4 of § "What is left"
+  are therefore unchanged and remain the developer's.
+- [2026-08-29 20:00] NOTED, and it is the same failure class as the leboncoin count: **the nightly
+  sabotage ledger was CUT OFF at 90 minutes on 2026-08-29 and told nobody.** The job's own
+  `timeout-minutes: 90` (set when 315 cases took 22 min) was outgrown — 75 min on the 28th, 87 on
+  the 27th, 527 cases now — and GitHub records a timeout as `cancelled`, on which `if: failure()`
+  does not fire. Fixed the same evening: budget 240, notice on `failure() || cancelled()`, both
+  pinned by `tests/test-ci-workflow.sh` (red first, for the stated reason). Consequence for this
+  file: every `src/` commit since `5af1e30` — the whole feed-silence set — is judged by the ledger
+  only from tonight's nightly onward. UNCERTIFIED-BY-EXECUTION until it completes.
 
 ## What is still owed BY the developer
 

@@ -102,6 +102,11 @@ that can only fail once it is polling is a source that fails in production.
 - [2026-08-25 21:50] AGREED: `tools/scrub-eml.php` verifies that the address is not RECOVERABLE,
   not merely not present — decoding base64url runs and quoted-printable before it looks.
 - [2026-08-25 21:50] AGREED: `params.from` is refused at load for an ENABLED `email_alert` source.
+- [2026-08-29 20:30] VERIFIED in code, since this file carried only AGREED lines and no record that
+  either P0-shaped ruling landed: `tools/scrub-eml.php::recoverableForms()` decodes every base64url
+  run and the quoted-printable form before it looks (pinned by `tests/test-scrub-eml.sh`), and
+  `ConfigLoader` throws `ConfigError` at `<source>.params.from` for an enabled `email_alert` with no
+  sender. **This plan is CLOSED**; the photo-less-card chimera stays a stated non-blocker.
 - [2026-08-25 21:50] AGREED: the agency selection mail (*"L'agence … a sélectionné pour vous ces
   annonces"*) and the *"Cette annonce peut également vous intéresser"* suggestion card are both
   ingested as ordinary listings. Over-inclusion costs a rejected row; under-inclusion costs a flat.

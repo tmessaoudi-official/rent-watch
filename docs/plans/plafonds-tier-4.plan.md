@@ -102,3 +102,11 @@ a local ledger run is ~5 h on this debug build. `gh` is not installed here, so t
 `workflow_dispatch` route was unavailable; the judge is therefore the **03:00 UTC nightly**. What was
 run: the 8 new cases individually (all detected), `test-sabotage-applies.sh` over all 481 expressions,
 and the full 2 023-test suite.
+
+> **The nightly judged it — noted 2026-08-29.** Green nightlies on 2026-08-27 and 2026-08-28 and a
+> local full run on the 28th (506/0, `var/claude/sabotage-ledger-20260828.log`) all include this
+> change. Then on 2026-08-29 the nightly was CUT OFF at 90 minutes by its own `timeout-minutes` —
+> a budget the ledger had outgrown — and the notice step did not fire, because a timeout is a
+> `cancelled` job and the step was gated on `failure()`. Both fixed the same day
+> (`.github/workflows/ci.yml`, pinned by `tests/test-ci-workflow.sh`). Nothing about tier 4 was
+> in question; the judge was.

@@ -16,7 +16,7 @@ for the product, and **every constraint in it is a ruling**, not a draft to be i
 before touching anything under `src/`.
 
 Status: **milestone 1 is functionally complete against a frozen payload.** The pure core, the store
-(schema v8), the config layer, the adapter contract, the criteria engine, dedup, the notification
+(schema v11 as of 2026-08-28), the config layer, the adapter contract, the criteria engine, dedup, the notification
 layer and the `scout` CLI all exist. What is missing is a NETWORK adapter, and that is blocked on an
 input rather than a decision. As of 2026-08-07 there is a PHP 8.5
 implementation of `models` + `tenure` under `src/php/Core/`, a 130-case language-neutral classifier

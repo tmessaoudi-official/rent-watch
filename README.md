@@ -14,17 +14,26 @@ Single language, single user, single machine. CLI plus push notifications — **
 
 ## Status
 
-**It runs. Six sources are live: four institutional landlords and two private portals.**
+**It runs. Eight sources are live: four institutional landlords and four private portals.**
+
+> **Corrected 2026-08-29.** This section said *six* sources and *schema v8* from 2026-08-25, and
+> listed the transit layer and classifier tier 4 as "genuinely absent" — all four claims had been
+> false since 2026-08-26, when leboncoin and PAP went live (sources #7 and #8), `src/php/Enrich/`
+> landed with the IDFM/PRIM commute component, and the `plafonds` figures were fetched and armed.
+> The store is at **schema v11** (v9 commute cache, v10 destination fingerprint, v11 feed
+> freshness). The per-source detail lives in `CLAUDE.md`; this page is the summary and it drifted.
 
 > That paragraph replaced one saying *"the pure core and the store are built, nothing else is —
 > there is no adapter, no notification channel and no CLI yet"*, which had been false for weeks.
 > `.env.example`'s own header carries the ruling: a stale *"this is only a sketch"* notice on a live
 > thing is worse than no notice at all.
 
-`scout run --watch` polls **In'li, CDC Habitat, Cityloger, Logirep, SeLoger and Bien'ici** on the Q37 cadence,
-hydrates detail pages behind a novelty gate, classifies every listing by tenure, scores it, and
-pushes what matches. `doctor`, `dump`, `run --once/--seed/--watch`, `test-notify`, `digest` and
-`reclassify` all work end to end. The store is at schema v8.
+`scout run --watch` polls **In'li, CDC Habitat, Cityloger, Logirep, SeLoger, Bien'ici, leboncoin
+and PAP** on the Q37 cadence, hydrates detail pages behind a novelty gate, classifies every listing
+by tenure, enriches it with a door-to-door commute, scores it, and pushes what matches. `doctor`,
+`dump`, `run --once/--seed/--watch`, `test-notify`, `digest` and `reclassify` all work end to end.
+The store is at schema v11, and `doctor` now also says when a portal's feed has gone silent behind a
+steady count (`FEED_SILENT`, 2026-08-28).
 
 **SeLoger went live on 2026-08-25** — the first Tier B portal and the first source that is not a
 landlord. It ingests alert emails over IMAP rather than scraping, which is hard rule 4's primary
@@ -53,9 +62,11 @@ before sending and those criteria mirror `criteria.json`.
 > away. It now decodes before it looks. `tests/test-scrub-eml.sh` is the must-strip / must-refuse /
 > must-stay-quiet proof.
 
-**What is genuinely absent:** the transit/geo enrichment layer (`src/php/Enrich/`, no code at all),
-AL'in (needs an authenticated capture), classifier tier 4 (needs the `plafonds` figures), and
-`src/phorj/` (on indefinite hold).
+**What is genuinely absent, as of 2026-08-29:** AL'in (needs an authenticated capture, and is parked
+on a §1 question — see `docs/plans/scout-rename-and-car-domain.plan.md`), a VPS host to deploy to
+(the watcher runs on the developer's machine), the second domain — a car watcher, designed and ruled
+in that same plan but not built — and `src/phorj/` (on indefinite hold). The transit layer and tier 4
+were absent when this paragraph was first written and are not any more.
 
 | Path | What it is |
 |---|---|
@@ -370,16 +381,22 @@ is blocked on a mailbox, an endpoint capture or a phorj module that does not exi
 
 1. **Core skeleton** — models ✅, SQLite store ✅ (seen-set, price history, run log, source health),
    config loading, CLI, one notification channel. Proven end-to-end with a fake source.
-2. **Tenure classifier + tests.** ✅ **Done in PHP**, against a 123-case corpus (115 synthetic, 8 captured) — spec §4's
-   *real* listing texts are still outstanding and are blocked on capturing a payload. The phorj port
-   waits on `Core.Imap`, an HTML parser and `sleep` (see `docs/PHORJ-REQUIREMENTS.md`). Before any
-   real source; everything depends on it.
-3. **In'li adapter** — highest-value single source, and pure LLI, so it exercises the happy path.
-4. **Health monitoring + `scout doctor`.** Before adding breadth, or breakage goes unnoticed.
-5. **CDC Habitat** — first mixed-tenure source; validates the classifier against reality.
-6. **Email-alert adapter + one private portal.**
-7. **Remaining institutional sources.**
-8. **Cross-portal dedup, transit enrichment, scoring refinement.**
+2. **Tenure classifier + tests.** ✅ **Done in PHP**, against a 130-case corpus (122 synthetic, 8
+   captured — the captures arrived with the live sources from 2026-08-20; append, never renumber).
+   Tier 4 (`plafonds` bands) armed 2026-08-26. The phorj port waits on `Core.Imap`, an HTML parser
+   and `sleep` (see `docs/PHORJ-REQUIREMENTS.md`). Before any real source; everything depends on it.
+3. **In'li adapter** ✅ live 2026-08-19 — and hydrating its detail pages proved it is NOT pure LLI.
+4. **Health monitoring + `scout doctor`.** ✅ — `SourceHealth`, the Q27 heartbeat (2026-08-22) and
+   `FEED_SILENT` (2026-08-28), which is the one verdict the original design could not express.
+5. **CDC Habitat** ✅ live 2026-08-20 — the first mixed-tenure source.
+6. **Email-alert adapter + one private portal.** ✅ SeLoger 2026-08-25, then Bien'ici, leboncoin
+   and PAP within a day of each other. Every one was shaped by a real message, never by a guess.
+7. **Remaining institutional sources.** ✅ as far as the catalogue allows: Cityloger and Logirep are
+   live; every other row in `docs/SOURCES.md` Track 1 is measured dead or refused, and AL'in is the
+   one input still owed.
+8. **Cross-portal dedup, transit enrichment, scoring refinement.** ✅ schema v4 group (2026-08-19),
+   `Enrich/NavitiaCommute` (2026-08-26), commute curve + `high_priority_score` calibration the same
+   day.
 
 ## Planned CLI
 

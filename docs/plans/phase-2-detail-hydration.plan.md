@@ -160,7 +160,9 @@ One In'li detail page fetched (`/location-appartement-les-ulis-91940/PRV-054595`
 The description contains ***plus*ieurs stations** — the furniture failure class that has cost this
 repo three fixes. Classified both ways: `LLI 50bp` via source-default with *"aucun signal dans
 l'annonce"* either way, so the prose route holds on real In'li text and `plusieurs` did not read as
-`PLUS`. That is now worth a corpus capture.
+`PLUS`. That is now worth a corpus capture. *[Done — it is
+`inli-001-captured-description-containing-plusieurs` in `tests/fixtures/tenure/corpus.json`; this
+sentence stood as an open item after the capture landed. Noted 2026-08-29.]*
 
 ### The `DetailCache` interface is DROPPED
 

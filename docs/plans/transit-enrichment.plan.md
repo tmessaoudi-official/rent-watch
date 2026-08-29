@@ -63,4 +63,9 @@ The ties this creates below the ceiling are theoretical: nothing in the affordab
 
 - [2026-08-26 16:40] FIXED, raised at the 6C gate: **the cache had no destination fingerprint.** Keyed on `(commune, postcode)` alone, it would answer with the journey to a PREVIOUS address for ever the day the destination changed — plausible numbers, confident reasons, nothing expiring, and failures deliberately not cached. Schema v10 adds `commute_cache.destination`, a SHA-1 of the address (hashed rather than stored, because it is personal and store rows end up in diagnostics and backups); a mismatch reads as *not cached*, so the commune re-resolves lazily. Exactly the schema-v6 detail-map fingerprint on a new surface.
 - [2026-08-26 16:40] NOTED: the sabotage for it targets the FINGERPRINT, not the SQL. Removing the `WHERE … destination = :d` clause leaves `:d` bound and unused, so the suite would go red on a PDO error rather than on the guarantee — red for an unrelated reason proves nothing. A constant key is the same defect with no crash to hide behind.
+- [2026-08-29 20:30] VERIFIED, because this plan alone carried no deploy section: the commute
+  component IS in production. The deployed `scout:local` image is dated 2026-08-29T09:24Z, newer
+  than the last commit touching `src/` (`c8ab19c`, 07:27Z), and the production store reports
+  `schema_version = 11`, which is past the v9 `commute_cache` and v10 fingerprint this plan
+  introduced. Same two checks CLAUDE.md § Gotchas prescribes after the seventeen-hour incident.
 - [2026-08-26 16:40] VERIFIED: the reference departure cannot go stale. `onePass()` builds the Pipeline — and therefore the planner and its `nextWeekdayAt('08:30')` — inside the watch loop's per-pass closure, so it is recomputed every pass rather than frozen at watcher startup.

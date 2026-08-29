@@ -28,7 +28,7 @@ failures are silent, and they are cheapest to get right before anything depends 
 | The run loop (fetch → classify → criteria → dedup → store → notify) | **done**, `src/php/Cli/Pipeline.php` |
 | `scout run --watch` | **done** — `Core/Pacer` holds the Q37 cadence, `Adapters/PacedSource` applies it, `Cli/WatchLoop` survives a pass that throws |
 | Q27 liveness — heartbeat + `state/last-refusal.txt` | **done**, `src/php/Core/Heartbeat.php`. The beat counts the sources the run WATCHES, not the ones the config enables |
-| Live sources | **four**: In'li, CDC Habitat, Cityloger, Logirep. `fixture_demo` is the fifth `enabled` entry and is not a landlord |
+| Live sources | ~~**four**: In'li, CDC Habitat, Cityloger, Logirep. `fixture_demo` is the fifth `enabled` entry and is not a landlord~~ **EIGHT as of 2026-08-26** — those four plus SeLoger (#5, 2026-08-25), Bien'ici (#6), leboncoin (#7) and PAP (#8); `fixture_demo` is `enabled: false` since 2026-08-22. This row stood at "four" for a week after it stopped being true [corrected 2026-08-29] |
 
 ## Settled — the config file format
 
@@ -121,15 +121,15 @@ fifth institutional source of the same kind does not move it.
 | Item | Effort | Blocked on | Milestone |
 |---|---|---|---|
 | ~~**A push channel actually configured** (ntfy or SMTP)~~ **DONE 2026-08-22** | was **S** | — ntfy is configured in the gitignored `criteria.local.json` and the deployed container's own heartbeat was read back off the topic on 2026-08-23. It was indeed the highest-leverage item on the page | 6 |
-| First real `email_alert` portal | **M** — the adapter exists; a parser has to be shaped to a real message | IMAP credentials + one real alert email | 6 |
+| ~~First real `email_alert` portal~~ **DONE 2026-08-25** | was **M** | — the credentials and two SeLoger alerts arrived the same day; shaping the parser to them cost four MIME defects behind 1 886 green tests (`docs/plans/seloger-email-alert.plan.md`). Three more portals followed within 36 h | 6 |
 | ~~A source whose stock overlaps the criteria~~ **DONE 2026-08-22** | was **?** | — resolved by the first of the two remedies it named: Q1/Q2/Q3 widened the criteria to all of Île-de-France at `min_rooms: 3` / `≥50 m²` / `≤1200 € CC`, and the live yield went 0 → **83 of 478** | 5/7 |
-| `PlafondBands` tier-4 figures | **S** — ~150 lines of data + tests. A11 Toit et Joie's `/Plafonds-de-ressources` carries the PLAI/PLUS/PLS half for IdF but states **no year**, so it is a pointer, not a figure | the `plafonds` tables per zone/household | 2 |
-| `Enrich/transit` + `Enrich/geo` | **M** — not started | IDFM/PRIM API key | 8 |
+| ~~`PlafondBands` tier-4 figures~~ **DONE 2026-08-26** (`docs/plans/plafonds-tier-4.plan.md` — fetched from two dated official publications; the figures REFUTED the rule everyone expected, so the tier concludes in one direction only) | was **S** — ~150 lines of data + tests. A11 Toit et Joie's `/Plafonds-de-ressources` carries the PLAI/PLUS/PLS half for IdF but states **no year**, so it is a pointer, not a figure | the `plafonds` tables per zone/household | 2 |
+| ~~`Enrich/transit` + `Enrich/geo`~~ **DONE 2026-08-26** | was **M** | — `Enrich/NavitiaCommute` over the IDFM/PRIM API, cached per commune (schema v9/v10); the key arrived and was shadowed for its first hour by a duplicate `.env` line (`docs/plans/transit-enrichment.plan.md`). `geo` was not needed: the API geocodes the commune itself | 8 |
 | ~~Retire `icf_novedis` + `seqens` from `config/sources.json`~~ **DONE 2026-08-23** | was **S** | — both blocks removed; `docs/SOURCES.md` keeps the A2/A5 measurements and the corpus keeps its own labels. `ConfigTest::testTheMeasuredDeadEndsAreNotShippedAsPlaceholders()` stops either name returning as a `REMPLACER` placeholder, and Q20 in `docs/OPEN-QUESTIONS.md` records that this ended as its own option 3 for a reason option 3 never gave | — |
-| Real corpus texts replacing the 114 synthetic | **M** — 6 captured so far; append, never renumber | more live sources | 2 |
+| Real corpus texts replacing the synthetic ones | **M** — 8 captured of 130 as of 2026-08-29 (was "6 of 120" here); append, never renumber. Still open in the sense spec §4 means: ≥30 real texts | more live sources, and every new source's first payload | 2 |
 | Classifier performance | **S** | ~~nothing~~ **DONE 2026-08-23** — letterless fast path, ~36 → ~25 ms/listing on the real Logirep payload. The `~155 ms` this row used to quote did not reproduce; see the Decisions Log | — |
 | `src/phorj/` port of the pure core | **L** | three phorj builds; **on indefinite hold** | — |
-| Final MAXIMAL certification round | **M** — 3 lenses, two consecutive clean rounds, frozen commit | the above landing | — |
+| ~~Final MAXIMAL certification round~~ **CLOSED BY RULING 2026-08-25** | was **M** | — *"Redeploy and stop certifying"*, `docs/plans/finish-everything.plan.md` § A4, after eight rounds in which every round reviewed the previous round's repairs. Later work is certified per change (3C/6C) and by one panel at each milestone boundary, per the economize ruling | — |
 
 ### Wall-clock, in sessions of the size worked on 2026-08-19
 
