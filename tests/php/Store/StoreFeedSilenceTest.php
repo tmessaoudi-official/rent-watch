@@ -212,15 +212,20 @@ final class StoreFeedSilenceTest extends TestCase
      */
     public function testTheNewestFeedDateIsChosenByInstantNotByString(): void
     {
-        $newerInstant = '2026-08-29T11:00:00+00:00';
-        $olderInstant = '2026-08-29T22:00:00+14:00'; // 08:00Z — three hours EARLIER, sorts later
+        // THE SPREAD HAS TO CROSS THE THRESHOLD, and a first version of this test missed that: its
+        // two dates were three hours apart against a one-day threshold, so the correct answer and
+        // the broken one were BOTH `OK` and the sabotage went undetected. The offsets have to be
+        // pushed to the ends of the range (-12:00 and +14:00, 26 hours apart) so the lexical pick
+        // lands on the far side of the threshold from the true one.
+        $newerInstant = '2026-08-29T23:00:00-12:00'; // 2026-08-30T11:00Z — ONE HOUR old
+        $olderInstant = '2026-08-30T00:00:00+14:00'; // 2026-08-29T10:00Z — 26 HOURS old, sorts LATER
 
-        $this->store->recordRun('portalX', 3, true, null, '2026-08-29T11:30:00Z', feedNewestAt: $newerInstant);
-        $this->store->recordRun('portalX', 3, true, null, '2026-08-29T11:40:00Z', feedNewestAt: $olderInstant);
+        $this->store->recordRun('portalX', 3, true, null, '2026-08-30T11:30:00Z', feedNewestAt: $newerInstant);
+        $this->store->recordRun('portalX', 3, true, null, '2026-08-30T11:40:00Z', feedNewestAt: $olderInstant);
 
-        $health = $this->store->health('portalX', '2026-08-29T12:00:00Z', 1);
+        $health = $this->store->health('portalX', '2026-08-30T12:00:00Z', 1);
 
-        self::assertSame(SourceStatus::OK, $health->status, 'the feed is one hour old, not a day silent');
+        self::assertSame(SourceStatus::OK, $health->status, 'the feed is one hour old, not 26 hours silent');
     }
 
     /**

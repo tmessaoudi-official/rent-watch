@@ -110,6 +110,39 @@ final class FeedFreshnessTest extends TestCase
     }
 
     /**
+     * A fetch RESETS the remembered date before it does anything else — including a fetch that fails.
+     *
+     * **Testable offline precisely because the reset is the first statement**, ahead of `connect()`:
+     * the offline tripwire throws a moment later, by which time the reset has already happened. So
+     * the guarantee is observable without a socket, which is what made the earlier "untestable"
+     * excuse wrong here too.
+     *
+     * The defect it pins: two `return []` paths — an empty mailbox, and a `SEARCH` matching nothing
+     * in the window — sit above where the reset used to be, and a mailbox instance is built once per
+     * source and reused across every `--watch` pass. So a pass that fetched NOTHING kept the
+     * previous pass's date and reported it as its own, which is exactly what `Pipeline` documents
+     * must never happen while guarding only the exception path. It was harmless only because
+     * `Store::health()` gates on `$lastCount > 0` in a different file — one mechanism accidentally
+     * protected by another, this repo's own named trap.
+     */
+    public function testAFetchForgetsThePreviousFetchsDate(): void
+    {
+        $box = new ImapMailbox('h.test', 'u', 'p');
+        (new \ReflectionMethod(ImapMailbox::class, 'noteMessageDate'))
+            ->invoke($box, self::message('Wed, 26 Aug 2026 07:33:06 +0200'));
+
+        self::assertNotNull($box->newestMessageAt(), 'precondition: a date is remembered');
+
+        try {
+            $box->fetchRecent(5);
+        } catch (\Throwable) {
+            // The offline tripwire, or a refused connection. Either way the reset ran first.
+        }
+
+        self::assertNull($box->newestMessageAt(), 'a fetch must not inherit the previous one\'s date');
+    }
+
+    /**
      * `FileMailbox` reports `null`, and this is the assertion its docblock claimed to have.
      *
      * **Load-bearing today, not hypothetically.** The committed fixtures are dated 25–26 August and
