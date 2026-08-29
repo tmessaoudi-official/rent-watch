@@ -122,6 +122,25 @@ check "a RED ledger opens an issue (hard rule 2: the alert must reach a human)" 
 check "…and that path really calls issues.create" \
   has "github.rest.issues.create("
 
+# THE NOTICE MUST ALSO FIRE WHEN THE LEDGER IS KILLED BY ITS OWN BUDGET. On 2026-08-29 the nightly
+# ran for exactly 90 minutes — the `timeout-minutes` then in force — and GitHub recorded the job as
+# `cancelled`, not `failure`. `if: failure()` is false on a cancellation, so the notice step was
+# SKIPPED and the timeout reached nobody: hard rule 2's shape inside the alerting job itself. The
+# ledger had grown 258 -> 527 cases in ten days (75 min on the 28th, 87 min on the 27th, 90+ on the
+# 29th), so this was a budget outgrown, not a hang — and a budget outgrown silently is worse than a
+# hang, because a hang at least looks wrong. Stated cost of `cancelled()`: a manual cancel opens a
+# spurious issue, which is this repo's stated bias — one beat too many, never one suppressed.
+red_if_line="$(grep -n -A1 'A red ledger must reach a human' "$wf" | grep -m1 'if:' | sed 's/^[0-9]*-//')"
+check "the red-ledger notice fires on a CANCELLED job too (a timeout is a cancellation)" \
+  bash -c 'grep -qE "cancelled\(\)" <<<"$1"' _ "$red_if_line"
+
+# And the budget itself: measured 75 / 87 / 90+ minutes on three consecutive nightlies, so a floor
+# of 180 is what stops a "tidy-up" back to the old value from silently disabling the nightly again.
+# Read from the sabotage JOB, positionally — the fast job's 15-minute budget must not satisfy this.
+ledger_budget="$(awk '/^  sabotage:/{f=1} f && /timeout-minutes:/{print $2; exit}' "$wf")"
+check "the ledger job's budget is at least 180 minutes (it ran 90 and was cut off on 2026-08-29)" \
+  test "${ledger_budget:-0}" -ge 180
+
 # The other direction, and the reason it was added: an alert nobody retracts becomes furniture, so
 # the next real red lands on a board that already reads RED. Issues #1 and #2 stood open for days
 # after the regression they reported was fixed and pushed.
