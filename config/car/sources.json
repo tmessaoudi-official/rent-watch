@@ -1,0 +1,45 @@
+{
+  "_comment": "The car domain's sources — docs/plans/car-domain-first-slice.plan.md. Two adapter types: email_alert (a portal's saved-search mail, every reader a POSITIONAL pattern anchored on the card's own layout, never a body-wide scan — the alert quotes the subscriber's search criteria above the cards, the PAP trap) and sitemap_jsonld (a sitemap indexes lot pages carrying a schema.org Vehicle block; a lot page is fetched only for an id not yet in the car seen-set, behind lot_budget_per_pass).",
+  "sources": {
+    "paruvendu": {
+      "_why": "Source #1 of the car domain. Measured 2026-08-29 on 15+ real alerts: text/html only, ~one message every 2 h, and each carries THREE cards for the tens or hundreds its subject counts — the source SAMPLES its feed (stated cost). No location and no seller type on the card. The same sender also sends the RENT alert and marketing, so subject_pattern is the source's scope beside `from`.",
+      "enabled": true,
+      "family": "portal",
+      "type": "email_alert",
+      "feed_silent_days": 1,
+      "params": {
+        "from": "info@paruvendu.fr",
+        "link_host": "paruvendu.fr/a/voiture-occasion/",
+        "subject_pattern": "~Voiture d'occasion~u",
+        "card_separator": "Voir l'annonce",
+        "price_pattern": "~^\\h*(\\d[\\d\\h]*)\\h*€\\h*$~mu",
+        "facts_pattern": "~^\\h*(?<body>.+?)\\h*-\\h*(?<fuel>Essence|Diesel|Hybride rechargeable|Hybride|Électrique|Electrique|GPL|Bioéthanol|[^\\n-]+?)\\h*-\\h*Année\\h+(?<year>\\d{4})\\h*-\\h*(?<km>\\d[\\d\\h]*)\\h*km~mu",
+        "make_model_pattern": "~/voiture-occasion/([^/]+)/([^/]+)/~"
+      }
+    },
+    "autohero": {
+      "_why": "Source #2, the one that proves the HTTP path. Measured 2026-08-27 and 2026-08-29: robots open, /fr/sitemap_search.xml lists ~3 400 lots as /fr/<make>-<model>/id/<uuid>/, and a lot page carries ONE application/ld+json block of @type Vehicle with price, brand, model, body, first registration (YYYY-MM), fuel, transmission, mileage ('136 278 KMT') and sku. A reseller: fixed price, delivered nationally, no location field at all — decision 6 is inert here by measurement.",
+      "enabled": true,
+      "family": "dealer",
+      "type": "sitemap_jsonld",
+      "url": "https://www.autohero.com/fr/sitemap_search.xml",
+      "item_url_pattern": "~^https://www\\.autohero\\.com/fr/[^/]+/id/([0-9a-f-]{36})/?$~",
+      "lot_budget_per_pass": 50,
+      "rate_limit_ms": 2000,
+      "map": {
+        "ref": "sku",
+        "title": "name",
+        "description": "description",
+        "price": "offers.price",
+        "url": "offers.url",
+        "make": "brand",
+        "model": "model",
+        "body": "bodyType",
+        "first_registered": "dateVehiclefirstregistered",
+        "fuel": "vehicleEngine.fuelType",
+        "gearbox": "vehicleTransmission",
+        "mileage": "mileageFromOdometer"
+      }
+    }
+  }
+}

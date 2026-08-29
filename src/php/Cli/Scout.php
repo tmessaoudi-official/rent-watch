@@ -30,16 +30,10 @@ use Scout\Core\DigestSchedule;
 use Scout\Core\Heartbeat;
 use Scout\Core\ListingSnapshot;
 use Scout\Core\Notify\Channel;
-use Scout\Core\Notify\ConsoleChannel;
-use Scout\Core\Notify\EmailChannel;
-use Scout\Core\Notify\FileTransport;
 use Scout\Core\Notify\Formatter;
 use Scout\Core\Notify\MailTransport;
 use Scout\Core\Notify\Notifier;
-use Scout\Core\Notify\NtfyChannel;
 use Scout\Core\Notify\Priority;
-use Scout\Core\Notify\SendmailTransport;
-use Scout\Core\Notify\SmtpTransport;
 use Scout\Core\Pacer;
 use Scout\Core\RawListing;
 use Scout\Core\Redact;
@@ -145,6 +139,13 @@ final readonly class Scout
     /** @param list<string> $argv command-line arguments, WITHOUT the program name */
     public function run(array $argv): int
     {
+        // THE SECOND DOMAIN (2026-08-29). `--domain=car` anywhere on the line hands the whole
+        // command to the car CLI, with the same injected seams; nothing else on this path changes.
+        if (in_array('--domain=car', $argv, true)) {
+            return (new VehicleScout($this->rootDir, $this->out, $this->err, $this->nowIso, $this->http, $this->notifier))
+                ->run(array_values(array_filter($argv, static fn (string $a): bool => $a !== '--domain=car')));
+        }
+
         $command = $argv[0] ?? 'help';
         $flags = array_slice($argv, 1);
 
@@ -2445,36 +2446,11 @@ final readonly class Scout
 
     private function buildChannel(string $name): ?Channel
     {
-        $channel = match ($name) {
-            'console' => new ConsoleChannel($this->out),
-            'ntfy' => new NtfyChannel(
-                (string) (getenv('NTFY_TOPIC') ?: ''),
-                (string) (getenv('NTFY_SERVER') ?: 'https://ntfy.sh'),
-            ),
-            'email' => new EmailChannel(
-                (string) (getenv('SMTP_TO') ?: ''),
-                (string) (getenv('SMTP_FROM') ?: 'rent-watch@localhost'),
-                '[rent-watch]',
-                $this->buildMailTransport(),
-            ),
-            default => null,
-        };
-
-        // An unknown channel name is NOT silently dropped. A typo in `notify.channels` that yielded
-        // nothing would be a channel the developer believes is enabled and is not — the "computed
-        // and never sent" failure hard rule 2 calls worse than no alert at all.
-        //
-        // Written as a separate guard rather than a `default => throw` inside the match, so that a
-        // sabotage can remove it in one line and see the suite go red. As a multi-line throw-arm it
-        // could only be broken into a PHP parse error, which proves nothing about the guarantee.
-        if ($channel === null) {
-            throw ConfigError::at(
-                'criteria.json.notify.channels',
-                'canal inconnu : ' . var_export($name, true) . ' (connus : console, ntfy, email)',
-            );
-        }
-
-        return $channel;
+        // ONE factory for both domains (2026-08-29): the car CLI builds the same three channels
+        // with its own prefix, From default and ntfy topic, and two copies of this logic is how
+        // one drifts. The unknown-name refusal — hard rule 2's "computed and never sent" — lives
+        // there now, still as a separate one-line guard a sabotage can remove.
+        return ChannelFactory::build($name, $this->out, $this->rootDir);
     }
 
     /**
@@ -2491,25 +2467,7 @@ final readonly class Scout
      */
     private function buildMailTransport(): MailTransport
     {
-        $kind = strtolower((string) (getenv('SMTP_TRANSPORT') ?: ''));
-        $host = (string) (getenv('SMTP_HOST') ?: '');
-
-        if ($kind === '') {
-            $kind = $host !== '' ? 'smtp' : 'sendmail';
-        }
-
-        return match ($kind) {
-            'file' => new FileTransport((string) (getenv('MAIL_OUTBOX') ?: $this->rootDir . '/var/outbox')),
-            'smtp' => new SmtpTransport(
-                host: $host,
-                port: (int) (getenv('SMTP_PORT') ?: 587),
-                user: (string) (getenv('SMTP_USER') ?: ''),
-                password: (string) (getenv('SMTP_PASSWORD') ?: ''),
-                from: (string) (getenv('SMTP_FROM') ?: 'rent-watch@localhost'),
-                security: strtolower((string) (getenv('SMTP_SECURITY') ?: 'starttls')),
-            ),
-            default => new SendmailTransport(),
-        };
+        return ChannelFactory::mailTransport($this->rootDir);
     }
 
     private function now(): string

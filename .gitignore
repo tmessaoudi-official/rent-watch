@@ -95,3 +95,6 @@ Thumbs.db
 *.orig
 *.rej
 *.log
+
+# the car domain's personal overrides, like config/criteria.local.json
+config/car/criteria.local.json

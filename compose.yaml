@@ -69,3 +69,36 @@ services:
       options:
         max-size: 10m
         max-file: "5"
+
+  # THE CAR DOMAIN (2026-08-29): the same image, its own database in the same mounted volume
+  # (`state/car-watch.sqlite3`), its own heartbeat marker and push topic (`CAR_NTFY_TOPIC`). Seed it
+  # first, for the same Q36 reason as the rent watcher — and here the seed is load-bearing rather
+  # than hygiene: Autohero's sitemap is ~3 400 lots, and an unseeded first pass would push them all.
+  #
+  #     docker compose run --rm car-scout doctor
+  #     docker compose run --rm car-scout run --once --seed
+  #     docker compose up -d car-scout
+  car-scout:
+    image: scout:local
+    command: ["--domain=car", "run", "--watch"]
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp
+    user: "${RW_UID:-1000}:${RW_GID:-1000}"
+    volumes:
+      - ./state:/app/state
+      - ./config:/app/config:ro
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      TZ: ${TZ:-Europe/Paris}
+    restart: unless-stopped
+    stop_grace_period: 5m
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "5"

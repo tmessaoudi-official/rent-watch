@@ -1,0 +1,26 @@
+{
+  "_comment": "The car domain's criteria — decisions 5–11 of docs/plans/scout-rename-and-car-domain.plan.md. ONE hard ceiling (the displayed price), a geography filter that acts only on a STATED location, and score components for everything else. A gitignored criteria.local.json beside this file overrides field by field. Unknown keys are refused.",
+  "_max_price_eur": "Decision 5: 0–30 000 € on the DISPLAYED price — wide on purpose, the score discriminates.",
+  "max_price_eur": 30000,
+  "_postcode_prefixes": "Decision 6: Île-de-France, settable to any set (empty = national). INERT on the first two sources — neither ParuVendu's card nor Autohero's page carries a location — and an unknown location never rejects (hard rule 9).",
+  "postcode_prefixes": ["75", "77", "78", "91", "92", "93", "94", "95"],
+  "_body_rank": "Decision 11: a RANK, the commune_rank mechanism — ranked bodies score by position, an unranked one scores 0 and is still notified.",
+  "body_rank": ["suv", "break", "berline"],
+  "_peak_age_years": "Decision 7: ≤ 5 years and ≤ 80 000 km are SCORE PEAKS, never disqualifiers; the portal saved searches are set wider (7 y / 100 000 km) so near-misses arrive and are ranked.",
+  "peak_age_years": 5,
+  "peak_mileage_km": 80000,
+  "_weights": "Sum to 100. price: lower is better, linear from the ceiling. age/mileage: full marks up to the peak, 0 at twice it. gearbox: automatic (decision 11). fuel: petrol/hybrid/electric over diesel — a PREFERENCE, never a ZFE claim. body: by rank.",
+  "weights": {"price": 25, "age": 20, "mileage": 20, "gearbox": 10, "fuel": 10, "body": 15},
+  "_exclude_patterns": "Extra exclusions over the folded text, beside the non-configurable §1 vehicle set in VehicleClassifier. Empty on purpose: the ParuVendu alert is already 'Voiture d'occasion'.",
+  "exclude_patterns": [],
+  "notify": {
+    "_channels": "Same channel names as the rent side; built by the same factory, with the [car-watch] prefix.",
+    "channels": ["console"],
+    "_high_priority_score": "Ships at 70 and is calibrated after a week of real scores, exactly as the rent side's was on 2026-08-26.",
+    "high_priority_score": 70,
+    "price_drop_min_eur": 300,
+    "price_drop_min_pct": 3.0,
+    "_source_alert_cooldown_hours": "One alert per (source, status) per cooldown — the rent side's rule, same default.",
+    "source_alert_cooldown_hours": 12
+  }
+}

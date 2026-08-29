@@ -512,6 +512,43 @@ Then check four things, in this order, before writing a field map:
 
 Worked example with all four answered: `docs/SOURCES.md` § *B1 SeLoger*.
 
+## The car domain — `scout --domain=car`
+
+**Built 2026-08-29, first slice.** A second domain inside the same tool: used cars in Île-de-France,
+on its own database (`state/car-watch.sqlite3`), its own config (`config/car/`), its own heartbeat
+marker and its own push topic (`CAR_NTFY_TOPIC`), with the generic machinery — mailboxes, HTTP
+client, robots, channels, pacer, watch loop, the run-log/health half of the store — shared
+byte-identical. Every ruling it implements is in
+`docs/plans/scout-rename-and-car-domain.plan.md`; the build record is
+`docs/plans/car-domain-first-slice.plan.md`.
+
+Two sources, both built against a real payload read the same day:
+
+- **ParuVendu** (`email_alert`) — the portal's saved-search mail, ~every two hours. **It samples its
+  feed**: each message carries THREE cards for the tens or hundreds its subject counts (stated
+  cost). Every reader is positional on the card's own layout, because the alert quotes the
+  subscriber's search criteria above the cards — the PAP trap.
+- **Autohero** (`sitemap_jsonld`) — a reseller whose sitemap indexes ~3 400 lot pages carrying a
+  schema.org `Vehicle` block. The sitemap is the index; a lot page is fetched only for an id not
+  yet in the seen-set, behind `lot_budget_per_pass`. **Seed before watching**: the seed records the
+  whole index without fetching a lot, and an unseeded run refuses (Q36's car analog).
+
+What never surfaces: `VEI`, `VGE` / procédure VE, gagé / opposition, pour pièces, épave, sans carte
+grise, CT non fourni / non roulant — and `accidenté`, réparé or not, a risk-appetite ruling and the
+first line to relax, by a commit. **The classifier reads negations first**: *jamais accidenté*,
+*non gagé*, *aucun accident* are what an honest ad says, and a bare scan would reject the good ads
+and keep the silent ones. Price (≤ 30 000 €, the one hard ceiling) and a STATED location outside
+Île-de-France reject; age, mileage, gearbox, fuel and body are score components and never reject.
+Neither first-slice source states a location, so the geography filter is inert on both by
+measurement.
+
+```bash
+docker compose run --rm car-scout doctor                  # sources, seen-set, channels
+docker compose run --rm car-scout run --once --seed       # mandatory before --watch
+docker compose up -d car-scout
+MAILBOX_DIR=tests/fixtures/paruvendu CAR_SCOUT_DB=:memory: php bin/scout --domain=car dump paruvendu   # offline
+```
+
 ## Legal posture
 
 - Email-alert (IMAP) ingestion is the **primary** path for private portals — within ToS, no bot to

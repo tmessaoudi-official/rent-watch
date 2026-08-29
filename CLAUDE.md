@@ -894,6 +894,20 @@ configures no pattern is bit-for-bit unchanged. Three rules travel with it:
 > the plausible band, a valid IdF postcode, and a town 250 km away. They are excluded by
 > `params.from`, and would be refused again by the no-information floor. Both layers earn their keep.
 
+**THE CAR DOMAIN EXISTS AS OF 2026-08-29 — `scout --domain=car`, `src/php/Vehicle/`,
+`config/car/`.** A second domain, not a parameterisation of the rent path: `VehicleListing`,
+`VehicleClassifier` (the §1 vehicle set, non-overridable, NEGATION READ FIRST because every term
+arrives negated in honest copy), `VehicleCriteria` + `VehicleScorer` (one hard ceiling, one
+stated-location filter, everything else a clamped score component), `VehicleStore` (own tables on
+its own file, composing the housing `Store` for runs/health/alerts), two adapters (`VehicleEmailSource`
+with positional card readers; `SitemapVehicleSource`, the detail-hydration pattern applied to a whole
+source), `VehiclePipeline`, `VehicleFormatter`, `Cli/VehicleScout`. The rent path changed in two
+places only: the `--domain=car` dispatch line and `Cli/ChannelFactory`, extracted so both CLIs build
+channels from one place. First slice: ParuVendu (email, samples its feed — 3 cards per message) and
+Autohero (sitemap + JSON-LD, seed before watching). Rulings: `docs/plans/scout-rename-and-car-domain.plan.md`;
+build record: `docs/plans/car-domain-first-slice.plan.md`. **The §1 tripwire hook does not cover
+the vehicle set** — a `tests/test-vehicle-guard.sh` is owed, recorded there.
+
 `src/phorj/` is **ON INDEFINITE HOLD** (developer ruling, 2026-08-19) — not blocked, deprioritised.
 Do not start it; `docs/PHORJ-REQUIREMENTS.md` remains the record of what it would need.
 

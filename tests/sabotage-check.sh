@@ -1372,7 +1372,7 @@ run_sabotage "the scraping opt-in gate is removed (hard rule 4 / Q26)" \
   's%if (\$definition->requiresScrapingOptIn() \&\& !\$this->scrapingAllowed(\$argv)) {%if (false) {%'
 
 run_sabotage "an unknown notification channel name is silently dropped" \
-  src/php/Cli/Scout.php \
+  src/php/Cli/ChannelFactory.php \
   's%if (\$channel === null) {%if (false) {%'
 
 run_sabotage "the freshness bonus is given to every listing forever" \
@@ -3476,6 +3476,61 @@ run_sabotage "the source no longer leads a match title" \
 run_sabotage "the source no longer leads a rent-drop title" \
   src/php/Core/Notify/Formatter.php \
   "s%title: \$listing->sourceName . ' · ' . (\$nowQualifies%title: '' . (\$nowQualifies%"
+
+# ── THE CAR DOMAIN (2026-08-29) ────────────────────────────────────────────────────────────────
+#
+# The vehicle §1 set arrives NEGATED in honest copy. Cutting the negation window rejects every good
+# ad that says "jamais accidenté" — over-rejection, invisible by definition.
+run_sabotage "the vehicle classifier stops reading negations (every honest ad rejects itself)" \
+  src/php/Vehicle/VehicleClassifier.php \
+  "s%private const string NEGATION_BEFORE = '~(?:\\\\b(?:jamais|non|pas|aucun|aucune|sans|ni|zero|0)\\\\b)%private const string NEGATION_BEFORE = '~(?:\\\\bzzznever\\\\b)%"
+
+run_sabotage "accidenté leaves the vehicle exclusion set (decision 9 undone without a commit saying so)" \
+  src/php/Vehicle/VehicleClassifier.php \
+  "s%        'accidenté' => '~\\\\baccident(?:e|ee|es|ees|s)?\\\\b~u',%        'accidenté' => '~\\\\bzzznever\\\\b~u',%"
+
+run_sabotage "the price ceiling stops being a hard line (a 30 001 € car is pushed)" \
+  src/php/Vehicle/VehicleScorer.php \
+  's%if ($car->priceEur !== null \&\& $car->priceEur > $criteria->maxPriceEur) {%if (false) {%'
+
+run_sabotage "an unknown location rejects a car (hard rule 9 inverted on the car side)" \
+  src/php/Vehicle/VehicleCriteria.php \
+  "s%        if (\$this->postcodePrefixes === \[\] || \$postcode === null || trim(\$postcode) === '') {%        if (\$this->postcodePrefixes === []) {%"
+
+# The phantom-drop loop, rebuilt on the car side: every hop of the observation time.
+run_sabotage "the car pipeline records every sighting at the pass time (a re-read older card is a drop again)" \
+  src/php/Vehicle/VehiclePipeline.php \
+  's%$this->store->record($car, $car->observedAt ?? $nowIso);%$this->store->record($car, $nowIso);%'
+
+run_sabotage "the car store treats an older sighting as current" \
+  src/php/Vehicle/VehicleStore.php \
+  "s%            \$isCurrent = \$isNew || \$epoch >= (int) \$row\['seen_epoch'\];%            \$isCurrent = true;%"
+
+run_sabotage "the car snapshot drops the observation time" \
+  src/php/Vehicle/VehicleSnapshot.php \
+  "s%            'observedAt' => \$listing->observedAt,%%"
+
+run_sabotage "the car email adapter stamps cards at the pass time (the message date is dropped)" \
+  src/php/Vehicle/VehicleEmailSource.php \
+  's%            observedAt: $message->sentAt(),%            observedAt: null,%'
+
+# Q36, the car analog, and the seed that makes it safe.
+run_sabotage "the car seed no longer marks the market as notified (the next pass pushes it all)" \
+  src/php/Vehicle/VehiclePipeline.php \
+  's%                    $this->store->markNotified($sighting->dedupKey, $nowIso);%                    /* seed marks nothing */%'
+
+run_sabotage "the car CLI runs on an empty seen-set (the whole Autohero catalogue would push at once)" \
+  src/php/Cli/VehicleScout.php \
+  's%        if (!$seed \&\& $store->isSeenSetEmpty()) {%        if (false) {%'
+
+# The sitemap source's whole economics: fetch only what the seen-set does not know.
+run_sabotage "the sitemap source ignores the seen-set (every pass re-fetches the whole catalogue)" \
+  src/php/Vehicle/SitemapVehicleSource.php \
+  's%            if (isset($known\[$id\])) {%            if (false) {%'
+
+run_sabotage "the sitemap source stops checking robots.txt for lot pages" \
+  src/php/Vehicle/SitemapVehicleSource.php \
+  's%            $this->refuseUnlessAllowed($url);%            /* unchecked */%'
 
 # The replay runs the source UNTHROTTLED. With the throttle kept, In'li's 2 s × 20 simulated detail
 # fetches is 40+ s of sleeping to answer a file (43 s measured) — a repair tool nobody reaches for.

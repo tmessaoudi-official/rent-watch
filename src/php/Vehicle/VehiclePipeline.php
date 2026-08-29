@@ -1,0 +1,146 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Scout\Vehicle;
+
+use Scout\Adapters\FeedFreshness;
+use Scout\Adapters\SourceError;
+use Scout\Core\Notify\Notifier;
+use Scout\Core\Redact;
+
+/**
+ * fetch → classify → judge → record → notify, for cars. The rent pipeline's shape with what the car
+ * domain does not have removed (no digest, no cross-portal clustering yet) and what it learnt kept:
+ *
+ * - a source that throws is ONE failed source, recorded as such, never an empty pass (hard rule 3);
+ * - every listing is recorded at ITS observation time (`observedAt`, or the pass time), so a
+ *   re-read older message is a superseded sighting and never a price drop;
+ * - `--seed` marks everything currently published as seen and notified WITHOUT pushing — and for
+ *   a sitemap source it records the whole INDEX without fetching a single lot page;
+ * - a match is pushed once and marked per listing; a failed send leaves it unmarked for the retry;
+ * - health alerts on every alerting status, once per cooldown, and one recovery notice.
+ */
+final readonly class VehiclePipeline
+{
+    public function __construct(
+        private readonly VehicleCriteria $criteria,
+        private readonly VehicleStore $store,
+        private readonly Notifier $notifier,
+        private readonly VehicleClassifier $classifier = new VehicleClassifier(),
+        private readonly VehicleScorer $scorer = new VehicleScorer(),
+        private readonly VehicleFormatter $formatter = new VehicleFormatter(),
+    ) {}
+
+    /** @param list<VehicleSource> $sources */
+    public function runOnce(array $sources, string $nowIso, bool $seedOnly = false): VehicleRunResult
+    {
+        $now = new \DateTimeImmutable($nowIso);
+        [$year, $month] = [(int) $now->format('Y'), (int) $now->format('n')];
+
+        $sourcesRun = $sourcesFailed = $itemsParsed = $matches = $rejectedCount = $priceDrops = $notified = $undelivered = 0;
+        $errors = $rejected = [];
+
+        foreach ($sources as $source) {
+            $started = microtime(true);
+            try {
+                $listings = $seedOnly && $source instanceof SitemapVehicleSource ? $source->seedIndex() : $source->fetch();
+                ++$sourcesRun;
+            } catch (SourceError $e) {
+                ++$sourcesFailed;
+                $errors[] = $source->name() . ' : ' . Redact::text($e->getMessage());
+                $this->store->runs()->recordRun($source->name(), 0, false, $e->getMessage(), $nowIso, (int) ((microtime(true) - $started) * 1000));
+                continue;
+            } catch (\Throwable $e) {
+                ++$sourcesFailed;
+                $errors[] = $source->name() . ' : ' . Redact::text($e::class . ': ' . $e->getMessage());
+                $this->store->runs()->recordRun($source->name(), 0, false, $e::class . ': ' . $e->getMessage(), $nowIso, (int) ((microtime(true) - $started) * 1000));
+                continue;
+            }
+            $feedNewestAt = $source instanceof FeedFreshness ? $source->newestFeedItemAt() : null;
+            $this->store->runs()->recordRun($source->name(), count($listings), true, null, $nowIso, (int) ((microtime(true) - $started) * 1000), $feedNewestAt);
+            $itemsParsed += count($listings);
+
+            foreach ($listings as $car) {
+                $sighting = $this->store->record($car, $car->observedAt ?? $nowIso);
+
+                if ($seedOnly) {
+                    $this->store->markNotified($sighting->dedupKey, $nowIso);
+                    continue;
+                }
+
+                $verdict = $this->scorer->judge($car, $this->classifier->classify($car), $this->criteria, $year, $month);
+                if ($sighting->isCurrent) {
+                    $this->store->recordVerdict($sighting->dedupKey, $verdict, $car);
+                }
+
+                if ($verdict->outcome === VehicleOutcome::REJECT) {
+                    ++$rejectedCount;
+                    $rejected[] = sprintf('écartée %s:%s — %s', $car->sourceName, $car->externalId, implode(' ; ', $verdict->reasons));
+                    continue;
+                }
+                ++$matches;
+
+                if (!$this->store->wasNotified($sighting->dedupKey)) {
+                    $failures = $this->notifier->send($this->formatter->match($car, $verdict));
+                    if ($this->notifier->delivered($failures)) {
+                        ++$notified;
+                        $this->store->markNotified($sighting->dedupKey, $nowIso);
+                    } else {
+                        ++$undelivered;
+                    }
+                    continue;
+                }
+
+                if ($sighting->isPriceDrop && $sighting->previousPriceEur !== null && $sighting->priceEur !== null
+                    && $this->criteria->notify->isNotableDrop($sighting->previousPriceEur, $sighting->priceEur)) {
+                    ++$priceDrops;
+                    $failures = $this->notifier->send($this->formatter->priceDrop($car, $sighting->previousPriceEur, $sighting->priceEur));
+                    if ($this->notifier->delivered($failures)) {
+                        ++$notified;
+                    } else {
+                        ++$undelivered;
+                    }
+                }
+            }
+        }
+
+        $undelivered += $this->alertOnHealth($sources, $nowIso);
+
+        return new VehicleRunResult(
+            sourcesRun: $sourcesRun, sourcesFailed: $sourcesFailed, itemsParsed: $itemsParsed, matches: $matches,
+            rejectedCount: $rejectedCount, priceDrops: $priceDrops, notified: $notified, undelivered: $undelivered,
+            errors: $errors, rejected: $rejected,
+        );
+    }
+
+    /** @param list<VehicleSource> $sources */
+    private function alertOnHealth(array $sources, string $nowIso): int
+    {
+        $undelivered = 0;
+        $cooldown = $this->criteria->notify->sourceAlertCooldownHours;
+        $runs = $this->store->runs();
+
+        foreach ($sources as $source) {
+            $health = $source->health($nowIso);
+            if (!$health->status->isAlerting()) {
+                if ($runs->clearAlerts($source->name())) {
+                    if (!$this->notifier->delivered($this->notifier->send($this->formatter->sourceRecovered($health)))) {
+                        ++$undelivered;
+                    }
+                }
+                continue;
+            }
+            if (!$runs->shouldAlert($source->name(), $health->status->value, $nowIso, $cooldown)) {
+                continue;
+            }
+            if ($this->notifier->delivered($this->notifier->send($this->formatter->sourceHealth($health)))) {
+                $runs->markAlerted($source->name(), $health->status->value, $nowIso);
+            } else {
+                ++$undelivered;
+            }
+        }
+
+        return $undelivered;
+    }
+}
