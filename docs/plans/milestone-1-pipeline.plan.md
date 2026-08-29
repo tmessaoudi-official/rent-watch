@@ -1935,6 +1935,31 @@ the machine for its duration**; the cost of forgetting that is the whole ~5 h, n
   the bienici key **435 → 2 rows** (`1122 → 1146`, `rent_cc` 1122 → 1146) and the seloger key
   **59 → 2 rows** (`1138 → 1108`, `rent_cc` 1138 → 1108) — the real rise and the real drop, each
   once. Verified by query after the write.
+- [2026-08-29 21:20] REFUTED BY THE FIRST LIVE PASS, and the reason is this repo's oldest lesson
+  in a new coat: the fixed watcher fired **the same phantom drop** and wrote one row to each
+  repaired key. The fix was deployed and the dates parsed; `Pipeline::enrich()` rebuilt the
+  listing field by field and DROPPED `observedAt` — on the one machine where commute is ON,
+  production, while every test (commute OFF) stayed green. `RawListing::mergedWith()`'s own
+  comment had named that trap. **A test that reproduces the production sequence on a path
+  production does not take proves the sequence, not the production.**
+- [2026-08-29 21:18] FIXED (`201c52c`): `RawListing::withCommute()` is a clone-with inside the
+  class, so every property travels; the loop is replayed WITH a planner, and a reflection guard
+  gives every constructor parameter a non-default value and asserts enrichment changes
+  `commuteMinutes` and nothing else. Rebuilt at 19:18 UTC, restarted, the two keys repaired a
+  second time (3 → 2 rows each). The next pass is the verdict.
+- [2026-08-29 21:35] VERIFIED on the deployed watcher's first live pass after `201c52c`: **no drop
+  line, both repaired keys still at 2 rows**, 8 sources / 1174 listings / 386 matches, and one
+  genuinely new match pushed with the source leading its title (`bienici · 34/100 — Draveil 91210
+  · T3 60 m² · 1167 € CC`). The loop is closed where it was running, not only where it was tested.
+- [2026-08-29 21:50] SABOTAGE ROUND on the evening's cases, filtered: **16 detected, 1 undetected —
+  and the undetected one was a WEAK TEST, not weak code.** *"the agency copy is pushed as well as
+  the direct route"* cut the branch for an agency copy arriving on a LATER pass than its already-
+  pushed direct route, and no test reached it: the same-pass test marks the twin before its turn,
+  the later-arrival test covers the reverse order. `testAnAgencyCopyArrivingAfterTheDirectRouteIs
+  MarkedNotPushed` reaches it (no second push, the copy marked, `twinsSuppressed = 1`), and the
+  case is detected on re-run: **17 / 17**. A guarantee whose branch no test reaches is dead safety
+  code until something reaches it — the SeLoger title lesson, a third time. The full 547-case
+  ledger is the nightly's, now that its budget fits it.
 - [2026-08-25 15:55] AGREED: `.claude/hooks/tenure-guard.sh` neutralises the literal `text/plain`
   before its patterns run. `plai` is a substring of `text/plain` and `allow` is a substring of
   `Disallow`, so ANY robots.txt test puts an "inclusion keyword" within eighty characters of a

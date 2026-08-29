@@ -1695,7 +1695,15 @@ var/claude/                 Reports, review outputs — gitignored scratch (hand
   (an email's `Date`, strict-parsed by `EmailMessage::sentAt()`, `null` for polling adapters) is
   now what the pipeline hands `Store::record()`, the snapshot round-trips it, and a detail merge
   keeps the CARD's. Ten ledger cases pin the chain hop by hop, because every hop is a place it can
-  be quietly dropped.
+  be quietly dropped. **And one hop WAS dropped after the fix shipped green:** `Pipeline::enrich()`
+  rebuilt the listing field by field and forgot the new property — on the one machine where commute
+  is ON, production — so the deployed fix fired the same phantom drop on its first live pass while
+  2 192 tests (commute OFF) passed. Now `RawListing::withCommute()` is a clone-with and a reflection
+  guard asserts enrichment changes nothing else. **Two rules from it: never copy a `RawListing`
+  field by field (clone-with inside the class carries tomorrow's property too), and a pipeline fix
+  is not done until the DEPLOYED watcher's first live pass says so — commute is the production-only
+  path, and a test that reproduces the sequence on a path production does not take proves the
+  sequence, not the production.**
 - **A room is a NOUN, not a POSITION.** `^\s*chambre\b` was the first cut of the coliving
   exclusion and three live titles defeated it in one week — a leading emoji (`✅ Chambre 10 min RER
   B`, pushed as a match at 20:04 on 2026-08-29), an adjective (`Confortable chambre individuelle`),

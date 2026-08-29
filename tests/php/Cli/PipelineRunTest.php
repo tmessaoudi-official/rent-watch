@@ -536,6 +536,29 @@ final class PipelineRunTest extends TestCase
         self::assertStringContainsString('seloger', implode("\n", $matches[1]->reasons), 'and it says which push it follows');
     }
 
+    /**
+     * The other arrival order — and the branch the ledger found UNREACHED (2026-08-29): the direct
+     * route was pushed alone, and the agency copy appears on a LATER pass. It must be marked and
+     * not pushed; the same-pass test never reaches this branch because the twin is marked before
+     * its turn comes. Both counters say so: no second push, one copy withheld.
+     */
+    public function testAnAgencyCopyArrivingAfterTheDirectRouteIsMarkedNotPushed(): void
+    {
+        $store = $this->store();
+        $channel = new RecordingChannel();
+        $pipeline = $this->pipeline($store, new Notifier([$channel]));
+        [$direct, $agency] = $this->twins();
+        $both = [new FakeSource('cdc_habitat', [$direct]), new FakeSource('seloger', [$agency], family: 'private')];
+
+        $pipeline->runOnce([new FakeSource('cdc_habitat', [$direct])], '2026-08-07T12:00:00+02:00');
+        $second = $pipeline->runOnce($both, '2026-08-07T12:15:00+02:00');
+        $pipeline->runOnce($both, '2026-08-07T12:30:00+02:00');
+
+        self::assertCount(1, $this->ofKind($channel, NotificationKind::MATCH), 'the agency copy of an announced flat is never pushed');
+        self::assertTrue($store->wasNotifiedAs($store->dedupKey($agency), 'MATCH'), 'marked, so it cannot be pushed later either');
+        self::assertSame(1, $second->twinsSuppressed, 'and the pass says a copy was withheld');
+    }
+
     /** Positive evidence only: two flats that merely share a track pair are two pushes. */
     public function testTwoDifferentFlatsOnTwoTracksAreTwoPushes(): void
     {
