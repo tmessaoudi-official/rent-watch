@@ -262,6 +262,47 @@ final class PipelineRunTest extends TestCase
         self::assertGreaterThanOrEqual(0, (int) $duration);
     }
 
+    /**
+     * The pipeline must WRITE the feed date it just read from the source.
+     *
+     * **Found by `tests/sabotage-check.sh`, not by review or by any other test.** Replacing the
+     * `$feedNewestAt = …` line with `null` left the whole suite green: `FeedFreshnessTest` proves
+     * the source hands a date to the store when called directly, and `StoreFeedSilenceTest` proves
+     * the store judges such rows correctly — but nothing proved the pipeline is the thing that
+     * carries one to the other. That is one link of a five-link chain, and the certification panel
+     * had already shown the other four were cuttable the same way.
+     *
+     * Column-level, deliberately: asserting the verdict would pass on a row whose date came from
+     * anywhere, and it is the WRITE that was deletable.
+     */
+    public function testThePipelineRecordsTheFeedDateItReadFromTheSource(): void
+    {
+        $store = $this->store();
+        $this->pipeline($store)->runOnce(
+            [new FreshFakeSource('fresh', '2026-08-26T05:33:06Z', [$this->listing()])],
+            self::NOW,
+        );
+
+        $recorded = (new \PDO('sqlite:' . (string) $this->dbPath))
+            ->query("SELECT feed_newest_at FROM source_runs WHERE source = 'fresh'")
+            ->fetchColumn();
+
+        self::assertSame('2026-08-26T05:33:06Z', $recorded);
+    }
+
+    /** A source that reports no freshness writes NULL — unknown is not old (hard rule 9). */
+    public function testASourceWithoutFreshnessRecordsNoFeedDate(): void
+    {
+        $store = $this->store();
+        $this->pipeline($store)->runOnce([new FakeSource('fake', listings: [$this->listing()])], self::NOW);
+
+        $recorded = (new \PDO('sqlite:' . (string) $this->dbPath))
+            ->query("SELECT feed_newest_at FROM source_runs WHERE source = 'fake'")
+            ->fetchColumn();
+
+        self::assertNull($recorded);
+    }
+
     // ---------------------------------------------------------------- notification gating
 
     public function testAMatchIsNotMarkedNotifiedWhenNoChannelConfirmed(): void
@@ -1475,6 +1516,57 @@ final class PipelineRunTest extends TestCase
 }
 
 /** A source the test drives: fixed listings, a fixed failure, or a fixed health verdict. */
+/** A `FakeSource` that also reports feed freshness, so the pipeline's WRITE of it is observable. */
+final readonly class FreshFakeSource implements \Scout\Adapters\FeedFreshness, Source
+{
+    /** @param list<RawListing> $listings */
+    public function __construct(
+        private string $name,
+        private ?string $newest,
+        private array $listings = [],
+    ) {}
+
+    public function newestFeedItemAt(): ?string
+    {
+        return $this->newest;
+    }
+
+    public function name(): string
+    {
+        return $this->name;
+    }
+
+    public function family(): string
+    {
+        return 'private';
+    }
+
+    public function host(): ?string
+    {
+        return null;
+    }
+
+    public function defaultTenure(): ?Tenure
+    {
+        return null;
+    }
+
+    public function profile(): SourceProfile
+    {
+        return new SourceProfile($this->name, 'private', null, false);
+    }
+
+    public function fetch(): array
+    {
+        return $this->listings;
+    }
+
+    public function health(?string $nowIso = null): SourceHealth
+    {
+        return new SourceHealth(sourceName: $this->name, status: SourceStatus::OK);
+    }
+}
+
 final readonly class FakeSource implements Source
 {
     /** @param list<RawListing> $listings */

@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Scout\Cli;
 
-use Scout\Adapters\FeedFreshness;
+use Scout\Adapters\FeedDate;
 use Scout\Adapters\Source;
 use Scout\Adapters\SourceError;
 use Scout\Config\Criteria;
@@ -135,7 +135,7 @@ final readonly class Pipeline
                 // one there is nothing to report, and on a failure the mailbox never got far enough
                 // to see a message. Writing a stale value into a failed run would let the previous
                 // pass's freshness vouch for a pass that fetched nothing.
-                $feedNewestAt = $source instanceof FeedFreshness ? $source->newestFeedItemAt() : null;
+                $feedNewestAt = FeedDate::of($source);
                 // Kept on ONE line on purpose. `tests/sabotage-check.sh` matches this call by its
                 // literal prefix up to `true`, and a multi-line reformat silently rots that
                 // expression into matching nothing — the exact way a `markNotified()` signature

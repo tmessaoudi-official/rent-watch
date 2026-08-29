@@ -3321,11 +3321,17 @@ run_sabotage "FileMailbox starts reporting fixture dates as feed freshness" \
 # THE PIPELINE and THE DOCTOR are the two writers. Either one silently stops populating the column.
 run_sabotage "the pipeline stops recording the feed date it just read" \
   src/php/Cli/Pipeline.php \
-  's%\$feedNewestAt = \$source instanceof FeedFreshness ? \$source->newestFeedItemAt() : null;%$feedNewestAt = null;%'
+  's%\$feedNewestAt = FeedDate::of(\$source);%$feedNewestAt = null;%'
 
-run_sabotage "doctor stops recording the feed date (a cron-doctor deployment never populates it)" \
-  src/php/Cli/Scout.php \
-  's%\$error === null \&\& \$source instanceof FeedFreshness ? \$source->newestFeedItemAt() : null,%null,%'
+# BOTH WRITERS, in one place. `Pipeline` and `doctor` each had their own copy of this expression and
+# both were replaceable with `null` while the suite stayed green. Only the pipeline's could be
+# pinned: observing doctor's needs an email_alert source whose mailbox reports a date, and the only
+# offline mailbox is FileMailbox, which returns null on purpose and must keep doing so. A test that
+# cannot exist is not a reason to leave code untested -- it is a reason not to duplicate it, so the
+# two sites were collapsed onto FeedDate::of() and the pipeline's coverage now covers both.
+run_sabotage "the shared feed-date reader stops asking the source (both writers at once)" \
+  src/php/Adapters/FeedDate.php \
+  's%return \$source instanceof FeedFreshness ? \$source->newestFeedItemAt() : null;%return null;%'
 
 # THE ZERO-COUNT GATE. Widening it lets FEED_SILENT preempt the empty-streak BROKEN verdict that
 # owns the zero case.

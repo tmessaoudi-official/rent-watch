@@ -16,7 +16,7 @@ use Scout\Adapters\Mail\FileMailbox;
 use Scout\Adapters\Mail\ImapMailbox;
 use Scout\Adapters\Mail\Mailbox;
 use Scout\Adapters\PacedSource;
-use Scout\Adapters\FeedFreshness;
+use Scout\Adapters\FeedDate;
 use Scout\Adapters\Source;
 use Scout\Adapters\SourceError;
 use Scout\Config\ConfigError;
@@ -335,7 +335,7 @@ final readonly class Scout
                 $error,
                 $now,
                 $durationMs,
-                $error === null && $source instanceof FeedFreshness ? $source->newestFeedItemAt() : null,
+                $error === null ? FeedDate::of($source) : null,
             );
 
             $health = $source->health($now);
