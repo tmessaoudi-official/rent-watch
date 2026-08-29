@@ -127,6 +127,40 @@
   old spelling (`HEARTBEAT_HOURS` "sat in .env.example read by no code" is a 2026-08-22 fact).
   `tools/backup-state.sh` backs up BOTH stores when called without an argument.
 
+- [2026-08-29 23:40] AGREED (developer, verbatim: *"Cover everything. every word every namespace,
+  file… it must be generic scout with namespaces prefixed env vars for each domain! we will
+  probably add more domains so it must be clean and future proof"*) — **THE GENERIC-SCOUT
+  RESTRUCTURING**, designed here before a file moves:
+  - **Namespaces per domain over a generic core.** `Scout\Core` keeps only what no domain owns
+    (`Text`, `Redact`, `Pacer`, `Heartbeat`, `SourceHealth`, `SourceStatus`, `MalformedText`,
+    `MutableByDesign`, `Offline`, `Notify\*` channels/transports/`Notifier`/`Notification`);
+    `Scout\Adapters` keeps `Http\*`, `Mail\*`, `SourceError`, `FeedFreshness`; `Scout\Config` keeps
+    `Reader`, `ConfigError`, `DotEnv`, `LegacyEnv`; `Scout\Cli` keeps `WatchLoop`, `ChannelFactory`
+    and gains the GENERIC dispatcher `Scout\Cli\Scout` + `Scout\Cli\Domains` (the registry: a new
+    domain is one entry). Everything housing-bound moves to **`Scout\Rent\`** — the tenure
+    classifier and corpus reader, criteria/engine/verdict, dedup, `RawListing`/snapshot,
+    `Department`, `PlafondBands`, `Prose`, `DigestSchedule`, `Outcome`, `SourceProfile`, the
+    `Formatter`, `Store\*`, `Config\{Criteria,FieldMap,NotifyPolicy,Weights,SourceDefinition,
+    ConfigLoader}`, `Adapters\{Source,HtmlSource,Html\*,HttpJsonSource,EmailAlertSource,
+    FixtureSource,ListingMapper,Payload,PacedSource,FeedDate}`, `Enrich\*`, and the rent CLI
+    (`Scout\Rent\Cli\RentScout`, `Pipeline`, `RunResult`, `DigestBatch`). The car domain becomes
+    **`Scout\Car\`** (class names keep their `Vehicle` noun; the CLI is `Scout\Car\Cli\CarScout`).
+    Tests follow the same shape: `tests/php/{Core,Rent,Car,Adapters,Config,Cli}`.
+  - **`bin/scout <verb>` needs a domain**: `--domain=rent` / `--domain=car`; without one it lists
+    the registry and exits 2. Compose services carry the flag in their ENTRYPOINT.
+  - **Config per domain**: `config/rent/{criteria,sources}.json` (+ `criteria.local.json`) and
+    `config/car/…`. **Fixtures per domain**: `tests/fixtures/rent/<source>` and
+    `tests/fixtures/car/<source>`, the tenure corpus under `tests/fixtures/rent/tenure/`.
+  - **State markers per domain**: `state/rent-heartbeat.txt`, `state/rent-digest.txt`,
+    `state/rent-last-refusal.txt` (the car side already has `car-heartbeat.txt`), with a one-time
+    rename of the old unprefixed files at startup so a redeploy does not beat or re-digest.
+  - **Method**: one scripted move (`git mv`) with an explicit old→new map of every class and
+    path; the FQCNs, `use` lines, `::class` strings, quoted `Scout\\Core\\X` test strings, file
+    paths in the ledger / hooks / agents / skills / docs are rewritten from that map; the suite
+    (2 287), the ledger apply-sweep (559 expressions), the drift gate and a filtered ledger are
+    the certification, and both watchers are redeployed after. Historical plan text keeps its
+    old spellings and paths.
+
 ## Formal Plan
 
 1. `Vehicle/VehicleListing` + `VehicleSnapshot` (reflection-covered encoder), TDD.
