@@ -74,7 +74,7 @@ final class NotifyTest extends TestCase
         // testTheHeadlineNamesThePostcodeAsWellAsTheCommune, which owns that decision. What this
         // test is about is unchanged and is the reason it keeps its own name: the source's TITLE is
         // still absent, and still must be.
-        self::assertSame('82/100 — Sartrouville 78500 · T4 88 m² · 1450 € CC', $n->title);
+        self::assertSame('inli · 82/100 — Sartrouville 78500 · T4 88 m² · 1450 € CC', $n->title);
         self::assertStringNotContainsString('SUPERBE', $n->title);
     }
 
@@ -89,7 +89,7 @@ final class NotifyTest extends TestCase
             Verdict::matched(82, ['mention explicite « LLI »'], true),
         );
 
-        self::assertSame('82/100 — Sartrouville 78500 · T4 88 m² · 1450 € CC', $n->title);
+        self::assertSame('inli · 82/100 — Sartrouville 78500 · T4 88 m² · 1450 € CC', $n->title);
     }
 
     public function testTheFactsLineNamesTheDepartmentAndWhatIsKnownAboutTheBuilding(): void
@@ -141,7 +141,7 @@ final class NotifyTest extends TestCase
             Verdict::matched(50, [], true),
         );
 
-        self::assertSame('50/100 — Bordeaux 33000 · T4 88 m² · 1450 € CC', $n->title);
+        self::assertSame('inli · 50/100 — Bordeaux 33000 · T4 88 m² · 1450 € CC', $n->title);
         foreach ($n->reasons as $reason) {
             self::assertStringNotContainsString('(33)', $reason, 'an unknown departement is omitted, never guessed');
         }
@@ -237,6 +237,7 @@ final class NotifyTest extends TestCase
         // full match — and the reduction is only 15 €, which sits below BOTH rent-change
         // thresholds. Treating it as an ordinary price tweak loses the flat.
         $n = (new Formatter())->rentDrop($this->listing(), 1810, 1795, true);
+        self::assertStringStartsWith('inli · ', $n->title, 'the source leads every listing title, drops included (2026-08-29)');
 
         self::assertSame(Priority::HIGH, $n->priority);
         self::assertStringContainsString('PASSE SOUS LE PLAFOND', $n->title);

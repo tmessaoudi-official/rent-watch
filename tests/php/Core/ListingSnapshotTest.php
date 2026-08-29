@@ -121,6 +121,20 @@ final class ListingSnapshotTest extends TestCase
      * anyone remembering this test exists. Same technique as the classifier's letter invariant: if
      * this goes red, add the field to the encoder — never relax the assertion.
      */
+    /**
+     * `observedAt` — the message date an email listing was observed at (2026-08-29) — survives the
+     * round trip, and its absence decodes to null rather than to a fabricated "now". A re-judged
+     * snapshot re-recorded at the pass time would be the phantom-drop loop a second way.
+     */
+    public function testTheObservationTimeSurvivesTheRoundTrip(): void
+    {
+        $dated = new RawListing(sourceName: 'bienici', externalId: 'x', observedAt: '2026-08-26T18:31:09Z');
+        $undated = new RawListing(sourceName: 'bienici', externalId: 'x');
+
+        self::assertSame('2026-08-26T18:31:09Z', ListingSnapshot::decode(ListingSnapshot::encode($dated))->observedAt);
+        self::assertNull(ListingSnapshot::decode(ListingSnapshot::encode($undated))->observedAt);
+    }
+
     public function testEncoderCoversEveryConstructorParameter(): void
     {
         $parameters = (new \ReflectionClass(RawListing::class))->getConstructor()?->getParameters() ?? [];

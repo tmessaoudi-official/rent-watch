@@ -72,7 +72,7 @@ and a catalogue that only records the first will keep proposing work that cannot
 | Access | HTTP JSON endpoints (mostly welcome it) | Email alert over IMAP (mostly 403 a plain client) |
 | Mailbox | its own | its own |
 | Notification | its own | its own |
-| Seen-set / dedup | **per track** — a flat listed by In'li AND on SeLoger is two findings, not a duplicate, because the application route differs | |
+| Seen-set / dedup | **per track** — a flat listed by In'li AND on SeLoger is two findings, not a duplicate, because the application route differs. **AMENDED 2026-08-29 (developer ruling): two findings, ONE push.** Identities and histories stay per track; cross-track twins are linked for notification only — the first seen is pushed naming both routes, the twin is marked notified instead of pushed, and an institutional copy arriving after the private one is still pushed once as the direct route. Measured before the ruling: 43 flats pushed twice | |
 
 The split is a first-class concept, not a filter flag: two mailboxes, two notification targets, two
 digests, and `--track intermediate|private|both` on every command.

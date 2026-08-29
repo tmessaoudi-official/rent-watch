@@ -130,7 +130,7 @@ final class ImapMailbox implements Mailbox, MutableByDesign
      * the shifted date can ever reach the threshold. One bad header suppresses `FEED_SILENT` on
      * that source for ever, which is the failure this whole feature exists to remove.
      *
-     * {@see parseRfc2822()} is therefore strict by ROUND-TRIP, the same technique `Store::epoch()`
+     * {@see EmailMessage::parseRfc2822()} is therefore strict by ROUND-TRIP, the same technique `Store::epoch()`
      * uses and for the same reason. `createFromFormat(RFC2822)` alone is NOT sufficient — it also
      * yields 14 August for the header above and `getLastErrors()` reports nothing; only re-formatting
      * the result and comparing it to the input catches it.
@@ -143,19 +143,13 @@ final class ImapMailbox implements Mailbox, MutableByDesign
      */
     private function noteMessageDate(string $raw): void
     {
-        $header = EmailMessage::parse($raw)->header('Date');
+        // ONE parser for a message's date — `EmailMessage::sentAt()`, which listings now carry as
+        // their observation time too. Two strict parsers of the same header is how they drift.
+        $iso = EmailMessage::parse($raw)->sentAt();
 
-        if ($header === null || trim($header) === '') {
+        if ($iso === null) {
             return;
         }
-
-        $at = self::parseRfc2822($header);
-
-        if ($at === null) {
-            return;
-        }
-
-        $iso = $at->setTimezone(new \DateTimeZone('UTC'))->format('Y-m-d\TH:i:s\Z');
 
         if ($this->newestMessageAt === null || $iso > $this->newestMessageAt) {
             $this->newestMessageAt = $iso;
@@ -177,20 +171,10 @@ final class ImapMailbox implements Mailbox, MutableByDesign
      */
     private static function parseRfc2822(string $header): ?\DateTimeImmutable
     {
-        // Folded headers arrive unfolded by `EmailMessage`, but a trailing comment such as
-        // `+0200 (CEST)` is common and is not part of any mask. Stripped before matching rather
-        // than accepted by a looser mask, so what is compared is still the whole string.
-        $value = trim(preg_replace('~\s*\([^()]*\)\s*$~', '', trim($header)) ?? trim($header));
-
-        foreach (['D, d M Y H:i:s O', 'd M Y H:i:s O', 'D, d M Y H:i:s T', 'd M Y H:i:s T'] as $mask) {
-            $parsed = \DateTimeImmutable::createFromFormat($mask, $value);
-
-            if ($parsed !== false && $parsed->format($mask) === $value) {
-                return $parsed;
-            }
-        }
-
-        return null;
+        // MOVED to `EmailMessage::parseRfc2822()` on 2026-08-29, when listings started carrying the
+        // same date as their observation time: two strict parsers of one header is how they drift.
+        // Kept as a one-line delegate so this class's docblock above still points at a real method.
+        return EmailMessage::parseRfc2822($header);
     }
 
     public function describe(): string

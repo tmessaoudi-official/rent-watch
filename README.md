@@ -408,17 +408,26 @@ scout run --watch [-v]        # loop: every 15 min ± 5 of jitter, paced per hos
 scout test-notify             # verify the notification channel
 scout digest [--dry-run]      # emit the pending "à vérifier" rollup, on demand
 scout reclassify [--dry-run]  # re-judge stored UNKNOWN verdicts against today's classifier
-scout replay <source>         # alias of `dump` — see the amendment below
+scout replay <source>         # alias of `dump` — takes a SOURCE NAME
+scout replay <source> --file=<payload>   # a frozen page through that source's own field map, offline
 ```
 
-`scout replay` is an ALIAS OF `dump`, and takes a SOURCE NAME — not a fixture path. This line said
-`<fixture>` for as long as the verb existed, and `scout replay tests/fixtures/inli/search.html`
-answers *"source inconnue"* and exits 2. A three-way disagreement, since the verb was also absent
-from `scout help` entirely: the spec asked for one thing, the code did another, and the tool's own
-help denied the verb existed. Documented as it behaves rather than quietly dropped — for a
-`type: fixture` source `dump` IS a replay against a saved payload, which is most of what the spec
-asked for. Building the fixture-path form is recorded as outstanding in
-`spec/PROJECT_BRIEF.md`.
+`scout replay <source>` bare is an ALIAS OF `dump`, and takes a SOURCE NAME — not a fixture path.
+This line said `<fixture>` for as long as the verb existed, and `scout replay
+tests/fixtures/inli/search.html` answers *"source inconnue"* and exits 2. A three-way disagreement,
+since the verb was also absent from `scout help` entirely: the spec asked for one thing, the code
+did another, and the tool's own help denied the verb existed.
+
+**`--file=<payload>` is the half the spec actually asked for, built 2026-08-29.** It runs a frozen
+page through a NETWORK source's own adapter and field map — gate, hydration, classifier, the same
+path a real `dump` takes — with **no request made**: the client answers the search URL (and its
+paginated forms) with the file, `/robots.txt` with 404 (= allow), and everything else with 404, so
+a `detail_map` is never handed the search page as a listing's detail page. It runs against a
+**throwaway database** — `dump` hydrates through the detail cache, so a replay against the real store
+would record one fetch-failure row per listing for pages nobody fetched — and **unthrottled**, since
+there is no host to protect (with `rate_limit_ms` kept, In'li's replay spent 43 s asleep). An
+`email_alert` source is refused with the seam that already exists for it: `MAILBOX_DIR=<dir of .eml>
+scout dump <source>`.
 
 `scout digest` reads the STORE, not the last pass, and that is the difference that makes it worth
 having: the pipeline already re-offers an undelivered digest entry next run, but only while the ad

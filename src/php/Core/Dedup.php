@@ -69,6 +69,29 @@ final class Dedup
             return null;
         }
 
+        return $this->sameFlatReason($a, $b);
+    }
+
+    /**
+     * Is this the same flat on the OTHER track — and therefore two findings that deserve ONE push?
+     *
+     * Developer ruling, 2026-08-29, amending the two-tracks rule rather than reversing it: 43 flats
+     * had been pushed twice, once from the landlord and once from the agency copy on SeLoger or
+     * Bien'ici. Identities, groups and histories stay per track — this method never feeds
+     * {@see cluster()} — it answers only the notification question, with exactly the same
+     * positive-evidence bar as {@see duplicateReason()}. Same track is a duplicate, not a twin.
+     */
+    public function twinReason(RawListing $a, RawListing $b, string $familyA, string $familyB): ?string
+    {
+        if ($a->sourceName === $b->sourceName || $familyA === $familyB) {
+            return null;
+        }
+
+        return $this->sameFlatReason($a, $b);
+    }
+
+    private function sameFlatReason(RawListing $a, RawListing $b): ?string
+    {
         // Location must AGREE POSITIVELY. Two unknown communes are not a match — they are two
         // unknowns, and treating them as equal is the over-merge that hides a flat.
         $communeA = $a->commune === null ? null : \Scout\Config\Criteria::communeKey($a->commune);

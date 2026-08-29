@@ -45,6 +45,27 @@ final class DedupTest extends TestCase
         return (new Dedup())->duplicateReason($a, $b, $fa, $fb);
     }
 
+    /**
+     * A TWIN across tracks is recognised, and still never merged (developer ruling, 2026-08-29:
+     * "two findings, ONE push"). `duplicateReason()` keeps refusing across families — identities,
+     * groups and histories stay per track — while `twinReason()` answers the notification-only
+     * question with the same positive-evidence bar. Same track is not a twin: that pair is a
+     * duplicate, and duplicates are the other method's job.
+     */
+    public function testATwinAcrossTracksIsRecognisedButNeverMerged(): void
+    {
+        $direct = $this->listing('cdc_habitat', 'c1');
+        $agency = $this->listing('seloger', 's1');
+
+        self::assertNull($this->reason($direct, $agency, 'institutional', 'private'), 'identities stay per track');
+        self::assertNotNull((new Dedup())->twinReason($direct, $agency, 'institutional', 'private'));
+        self::assertNull((new Dedup())->twinReason($direct, $agency, 'private', 'private'), 'same track: a duplicate, not a twin');
+        self::assertNull(
+            (new Dedup())->twinReason($direct, $this->listing('seloger', 's2', rentCc: 1700), 'institutional', 'private'),
+            'the same positive-evidence bar: a rent that disagrees is a different flat',
+        );
+    }
+
     // ---------------------------------------------------------------- must merge
 
     public function testTheSameFlatOnTwoPrivatePortalsIsOneFinding(): void

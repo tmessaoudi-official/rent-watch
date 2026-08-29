@@ -115,6 +115,12 @@ fifth institutional source of the same kind does not move it.
 > verdict. It fails closed both ways — neither state is a match — so it is logged here rather than
 > chased. Diagnose with `scout run --once -v --source=cityloger` on a throwaway `SCOUT_DB` if
 > it outlives the current stock.
+>
+> **It did not — measured 2026-08-29.** Three consecutive `run --once -v --source=cityloger`
+> passes on a read-verified COPY of the production store (warm detail cache, channels forced to
+> console in a scratch tree) were byte-identical: 53 analysed, 1 match, 0 à vérifier, 52 rejected,
+> the same 52 with the same reasons every pass. The flip was a property of the 22 August stock
+> and the pre-hydration state, and it is closed as not reproducible rather than as explained.
 
 ### Remaining items
 
@@ -1877,6 +1883,51 @@ the machine for its duration**; the cost of forgetting that is the whole ~5 h, n
   the reverse — polling a site whose real rules we never read — is not. Verified against the four
   live sources first: In'li, CDC Habitat, Cityloger and Logirep all serve `text/plain`, so nothing
   in production changes.
+- [2026-08-29 22:40] FOUND, four production defects reported by the developer and each MEASURED
+  before any fix — the notification folder (825 mails in 30 days, read over IMAP) and the store:
+  1. **Phantom rent drops, in a LOOP.** Bien'ici re-sent one Ozoir flat a day later at a HIGHER
+     rent (1122 → 1146); both messages sit in the 7-day window, every pass re-reads both, stamps
+     both with the PASS time, and the store — whose stale-sighting guard keys on the observation
+     time — records 1146 then 1122 and fires *Baisse de loyer* every 15 min: **429 history rows,
+     128 emails**; a SeLoger key (Bussy) the same, 53 rows. Root cause: email listings carry no
+     observation time, so the guard that exists for exactly this never receives the message date.
+  2. **Rooms still notified** — `✅ Chambre 10 min RER B…` at 20:04 tonight: `^\s*chambre\b` is
+     defeated by a leading emoji and misses *chambre individuelle* / *chambres dans appartement*.
+     A replacement trialled over all 1 593 stored titles catches 48 room rentals (old: 36) with
+     zero false positives.
+  3. **The source is invisible in the title**, and the developer prioritises by source.
+  4. **Cross-track twins pushed twice**: 43 pairs (10 CDC↔SeLoger, 18 Bien'ici↔CDC, 7 In'li↔SeLoger…),
+     which is the 2026-08-06 *two tracks* ruling working as written.
+- [2026-08-29 22:45] AGREED (developer, `AskUserQuestion`): **two findings, ONE push.** Cross-track
+  twins keep separate identities and histories but are linked for notification: the first seen is
+  pushed naming both routes, the twin is marked notified rather than pushed, and an institutional
+  copy arriving AFTER the private one is still pushed once, flagged as the direct route — the
+  better route is never hidden. Rejected: a full merge (loses the per-route seen-set) and
+  annotate-only (noise unchanged). `docs/SOURCES.md` § TWO TRACKS amended in the same change.
+- [2026-08-29 23:30] FIXED, all four, failing test first for each and a ledger case per hop:
+  1. `RawListing::observedAt` — an email's `Date` via `EmailMessage::sentAt()` (the strict parser
+     moved out of `ImapMailbox`, which now delegates: two strict parsers of one header is how they
+     drift), handed to `Store::record()` by the pipeline, round-tripped by the snapshot, kept by the
+     detail merge. `PipelineRunTest` replays the Ozoir sequence in both message orders: no drop,
+     history `[1122, 1146]`; the counterweight proves a genuinely newer lower rent still notifies.
+  2. `exclude_title_patterns`: the room noun with count lookbehinds; six table cases.
+  3. `Formatter::headline()` and the drop title lead with the source.
+  4. `Dedup::twinReason()` + the pipeline's direct-first sort and twin marking; `Formatter::match()`
+     names the other route with its link; `RunResult::twinsSuppressed` and the pass summary say
+     when a copy was withheld. Four pipeline tests cover same-pass (either order), later-arriving
+     direct route (pushed once, never again), and two different flats (two pushes).
+  **Stated cost of 1:** a message whose `Date` does not parse strictly is observed "now" — today's
+  behaviour, and the direction that cannot lose a genuinely new card; a portal with unreadable
+  dates is a portal on which this guard does not act. **Not done, and it is the developer's call:**
+  the 482 garbage history rows already in the production store. They are real appended changes as
+  the store defines them; deleting them is a data repair, not a fix.
+- [2026-08-29 23:50] AGREED (developer, `AskUserQuestion`): **repair the two keys, collapse the
+  oscillation.** Backup first (`tools/backup-state.sh`, read-verified), dry run printed, then a
+  one-off script scoped to the two dedup keys: keep each history up to and including the first
+  sighting of the NEWER rent, delete every later row, and set `listings.rent_cc` to that newer
+  rent (the loop left the OLDER value as current). Rejected: leaving them (a history showing an
+  oscillation that never happened) and a store-wide sweep (a wider write on production data for
+  a third instance nobody has found).
 - [2026-08-25 15:55] AGREED: `.claude/hooks/tenure-guard.sh` neutralises the literal `text/plain`
   before its patterns run. `plai` is a substring of `text/plain` and `allow` is a substring of
   `Disallow`, so ANY robots.txt test puts an "inclusion keyword" within eighty characters of a

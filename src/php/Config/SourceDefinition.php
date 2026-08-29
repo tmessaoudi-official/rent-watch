@@ -168,7 +168,28 @@ final readonly class SourceDefinition
         public bool $legalRisk = false,
         public ?string $fixture = null,
         public int $rateLimitMs = 2000,
+        /**
+         * This source's own feed-silence threshold in days, or `null` for the global
+         * `FEED_SILENT_DAYS`. One number cannot serve a portal firing thirty alerts a day and one
+         * firing weekly: under the global three days the first is noticed ~90 alerts late, and a
+         * global one day would alarm on the second every week. Only an `email_alert` source can
+         * carry it — nothing else reports a feed date (refused at load otherwise).
+         */
+        public ?int $feedSilentDays = null,
     ) {}
+
+    /**
+     * The same source with its request throttle removed — for `scout replay --file`, where the
+     * "requests" are answered from a frozen file and there is no host to protect. The adapter's
+     * `rate_limit_ms` sleeps between fetches whatever the client answers, so a replay of a
+     * `detail_map` source spent 2 s × 20 simulated detail fetches sleeping (measured: 43 s for one
+     * dump). Everything else — the field map, the gate, the budget — stays byte-identical, which is
+     * the point of replaying through the real adapter.
+     */
+    public function unthrottled(): self
+    {
+        return clone($this, ['rateLimitMs' => 0]);
+    }
 
     /** The slice the tenure classifier needs. */
     public function profile(): SourceProfile

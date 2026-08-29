@@ -92,6 +92,9 @@ This plan closes that half only. It does not touch the two built paths.
 - **The existing `scout digest` tests must pass UNCHANGED.** If the extraction needs one edited, the
   extraction changed behaviour.
 - **DST** (P2): one test pinning the due-instant for an hour inside the Paris spring-forward gap.
+  *[Exists — `DigestScheduleTest::testAnHourInsideTheSpringForwardGapStillResolves`, plus the
+  autumn repeated hour, whose expectation was corrected by measurement. Noted 2026-08-29; this line
+  read as open for three days after the tests landed.]*
 
 ### Sabotage cases
 

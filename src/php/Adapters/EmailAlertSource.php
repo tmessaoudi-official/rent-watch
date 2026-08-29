@@ -184,7 +184,10 @@ final readonly class EmailAlertSource implements FeedFreshness, Source
 
     public function health(?string $nowIso = null): SourceHealth
     {
-        return $this->store->health($this->name(), $nowIso);
+        // The source's OWN threshold rides through here — the one funnel `doctor`, the pipeline
+        // and the heartbeat all read — so a per-source `feed_silent_days` cannot be honoured by
+        // one caller and ignored by another. `null` leaves the store's global threshold in force.
+        return $this->store->health($this->name(), $nowIso, $this->definition->feedSilentDays);
     }
 
     /** Where the alert must have come from, matched against the source's configured `params.from`. */
@@ -266,6 +269,7 @@ final readonly class EmailAlertSource implements FeedFreshness, Source
                 rentHc: $this->definition->map->chargesIncluded === false ? self::rentIn($body) : null,
                 surfaceM2: $this->surfaceIn($body),
                 rooms: $this->roomsIn($body),
+                observedAt: $message->sentAt(),
             );
         }
 
@@ -457,6 +461,11 @@ final readonly class EmailAlertSource implements FeedFreshness, Source
             postcode: $postcode,
             rentCc: $this->definition->map->chargesIncluded === true ? $rent : null,
             rentHc: $this->definition->map->chargesIncluded === false ? $rent : null,
+            // WHEN this card was observed is when its message was SENT, not when the pass read it.
+            // A portal re-sends yesterday's card, the window keeps both, and without this the store
+            // saw two fresh sightings per pass — 1146 then 1122, "a drop", every 15 minutes
+            // (2026-08-29, 429 history rows). With it, the older card is a superseded observation.
+            observedAt: $message->sentAt(),
             surfaceM2: $surface,
             rooms: $rooms,
         );
@@ -663,10 +672,15 @@ final readonly class EmailAlertSource implements FeedFreshness, Source
      */
     private function communeIn(string $body): ?string
     {
-        $configured = $this->matchParam('commune_pattern', $body);
-
-        if ($configured !== null) {
-            return $configured;
+        // A CONFIGURED pattern is the whole answer: on a miss it yields `null`, never the
+        // vocabulary scan. Falling back restored the prototype's over-match ("proche Dourdan" in a
+        // Mormant card reads as Dourdan) AND gave a broken pattern an alibi — a listing in an
+        // unranked town rather than a failed extraction. The three numeric/title readers already
+        // behaved this way; this was the last positional reader that did not (2026-08-29).
+        // Measured before the change: zero fallback hits over every fixture, capture and the
+        // live mailbox, so no stored row changes identity.
+        if (trim((string) ($this->definition->params['commune_pattern'] ?? '')) !== '') {
+            return $this->matchParam('commune_pattern', $body);
         }
 
         $folded = \Scout\Core\Text::fold($body);

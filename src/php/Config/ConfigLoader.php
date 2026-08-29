@@ -383,6 +383,31 @@ final class ConfigLoader
         $fixture = $r->optString('fixture', null);
         $rateLimitMs = $r->optInt('rate_limit_ms', 2000, 0, 600000) ?? 2000;
 
+        // A per-source silence threshold (2026-08-29). Refused on any source that cannot ACT on
+        // it — only `email_alert` reports a feed date, so on `html`/`json` the key would be a
+        // configured feature that never runs, the `detail_budget_per_pass: 0` shape. And refused
+        // at 0 for the reason the env var is: 0 disables the one verdict that tells a dead alert
+        // from a quiet market. Absent means the global `FEED_SILENT_DAYS`, which is what keeps
+        // every shipped block byte-identical.
+        $feedSilentDays = $r->optInt('feed_silent_days', null);
+
+        if ($feedSilentDays !== null) {
+            if ($type !== 'email_alert') {
+                throw ConfigError::at(
+                    $where . '.feed_silent_days',
+                    'seule une source email_alert rapporte une date de flux — sur une source `' . $type
+                        . '` ce seuil ne pourrait jamais agir (fonctionnalité désactivée déguisée en configurée)',
+                );
+            }
+
+            if ($feedSilentDays < 1) {
+                throw ConfigError::at(
+                    $where . '.feed_silent_days',
+                    'doit valoir au moins 1 jour — 0 désactiverait la détection de flux muet',
+                );
+            }
+        }
+
         $headers = self::stringMap($r->optObject('headers'));
         $params = self::stringMap($r->optObject('params'));
 
@@ -695,6 +720,7 @@ final class ConfigLoader
             legalRisk: $legalRisk,
             fixture: $fixture,
             rateLimitMs: $rateLimitMs,
+            feedSilentDays: $feedSilentDays,
         );
     }
 

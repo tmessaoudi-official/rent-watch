@@ -295,6 +295,11 @@ replay against a saved payload; what is NOT built is replaying an arbitrary fixt
 network source's field map, which is the useful half for developing a map offline. Outstanding, not
 withdrawn — unlike `--since`, nothing about it is unsound.
 
+**Amended 2026-08-29: that half is BUILT — `scout replay <source> --file=<payload>`.** A frozen page
+through a network source's own adapter and field map, offline by construction (`/robots.txt` → 404 =
+allow, the search URL and its pages → the file, everything else → 404), against a throwaway store,
+unthrottled. `README.md` § Planned CLI carries the rules and why each one exists.
+
 **Amended 2026-08-24 on `--since`, which is REFUSED rather than built.** Q35 named it, and its
 staleness mechanism is a classifier version stored with the verdict — a column that does not exist.
 Answering it against `last_seen_at` would substitute a different mechanism for the ruled one while

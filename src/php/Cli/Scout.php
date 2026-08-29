@@ -8,6 +8,7 @@ use Scout\Adapters\EmailAlertSource;
 use Scout\Adapters\FixtureSource;
 use Scout\Adapters\Http\CurlHttpClient;
 use Scout\Adapters\Http\HttpClient;
+use Scout\Adapters\Http\ReplayHttpClient;
 use Scout\Adapters\Http\Robots;
 use Scout\Adapters\Http\RobotsResolver;
 use Scout\Adapters\HtmlSource;
@@ -163,7 +164,7 @@ final readonly class Scout
                 'digest' => $this->digest($flags),
                 'reclassify' => $this->reclassify($flags),
                 'test-notify' => $this->testNotify(),
-                'replay' => $this->dump($flags),
+                'replay' => $this->replay($flags),
                 'help', '--help', '-h' => $this->help(0),
                 // `$this->fail(...) ?? $this->help(2)` was the first shape and it was WRONG: `fail()`
                 // returns an int, never null, so `??` short-circuited and the usage was never
@@ -292,6 +293,19 @@ final readonly class Scout
             $this->warn($windowNote);
         }
 
+        // The same advice per source: a `feed_silent_days` at or past the IMAP window has exactly
+        // the collapse the global one has, and a source-level number is easier to set past the
+        // window because nothing beside it says what the window is.
+        foreach (ConfigLoader::loadSources($this->rootDir . '/config/sources.json') as $definition) {
+            if ($definition->feedSilentDays === null) {
+                continue;
+            }
+            $note = self::feedSilentWindowNote($definition->feedSilentDays, 'feed_silent_days de ' . $definition->name);
+            if ($note !== null) {
+                $this->warn($note);
+            }
+        }
+
         // `en --watch` is not a detail. The floor lives in the watch loop, so a cron-driven `--once`
         // deployment gets the two event-driven paths and no floor — and a line promising a daily
         // rollup to an operator who runs `--once` repeats the hard-rule-2 shape this line was
@@ -380,33 +394,137 @@ final readonly class Scout
      *
      * @param list<string> $flags
      */
-    private function dump(array $flags): int
+    /**
+     * `scout replay <source> [--file=<payload>]`.
+     *
+     * Bare, it is the alias of `dump` it has always been. With `--file`, it is the half spec §10
+     * asked for and the alias never delivered: a frozen page run through a NETWORK source's own
+     * adapter and field map, with no request made — what developing a map from a captured page
+     * needs, and what `dump` against a live source cannot give (it polls).
+     *
+     * Two things make it safe rather than merely convenient. The client is a {@see ReplayHttpClient}
+     * (search URL → the payload, `/robots.txt` → 404 = allow, everything else → 404), so the replay
+     * is offline by construction and a `detail_map` is never handed the search page as a detail
+     * page. And the store is a THROWAWAY: `dump` hydrates through the detail cache, so a replay
+     * against the real database would record one fetch-failure row per listing for pages nobody
+     * fetched — a repair tool leaving damage in the thing it was diagnosing.
+     *
+     * An `email_alert` source is refused with the seam that already exists for it: `MAILBOX_DIR`.
+     *
+     * @param list<string> $flags
+     */
+    private function replay(array $flags): int
     {
-        $name = null;
+        $file = null;
         foreach ($flags as $flag) {
-            if (!str_starts_with($flag, '-')) {
-                $name = $flag;
-                break;
+            if (str_starts_with($flag, '--file=')) {
+                $file = substr($flag, \strlen('--file='));
             }
         }
+
+        if ($file === null || $file === '') {
+            return $this->dump($flags);
+        }
+
+        $name = self::firstBareArgument($flags);
+        if ($name === null) {
+            return $this->fail('usage : scout replay <source> --file=<charge utile figée>');
+        }
+
+        $definitions = ConfigLoader::loadSources($this->rootDir . '/config/sources.json');
+        if (!isset($definitions[$name])) {
+            return $this->fail('source inconnue : ' . $name . ' (connues : ' . implode(', ', array_keys($definitions)) . ')');
+        }
+        $definition = $definitions[$name];
+
+        if ($definition->type === 'email_alert') {
+            return $this->fail('--file ne s\'applique qu\'aux sources html/json : pour une source email_alert, '
+                . 'relisez un dossier de .eml avec MAILBOX_DIR=<dossier> scout dump ' . $name);
+        }
+        if ($definition->type === 'fixture') {
+            return $this->fail('la source ' . $name . ' est de type `fixture` : `scout dump ' . $name
+                . '` relit déjà sa charge utile figée (--file est pour les sources html/json)');
+        }
+
+        $searchUrl = $definition->url ?? $definition->baseUrl;
+        if ($searchUrl === null) {
+            return $this->fail('la source ' . $name . ' ne déclare ni url ni base_url — rien à servir en relecture');
+        }
+
+        $path = str_starts_with($file, '/') ? $file : $this->rootDir . '/' . $file;
+        $body = @file_get_contents($path);
+        if ($body === false) {
+            return $this->fail('fichier illisible : ' . $file);
+        }
+
+        $client = new ReplayHttpClient(
+            $searchUrl,
+            $body,
+            $definition->type === 'json' ? 'application/json' : 'text/html; charset=utf-8',
+        );
+
+        // A sibling instance over the replay client: this class is readonly, so the client cannot
+        // be swapped on `$this`, and `dump` on the sibling is the SAME code path a real dump takes —
+        // gate, hydration, classifier — which is the point.
+        $replay = new self($this->rootDir, $this->out, $this->err, $this->nowIso, $client, $this->notifier);
+
+        return $replay->dump(
+            [$name],
+            Store::open(':memory:'),
+            '— relecture de ' . $file . ' à travers la source ' . $name
+                . ' (aucune requête réseau ; pages de détail : 404 simulé ; base de données jetable) —',
+            // Unthrottled: the adapter sleeps `rate_limit_ms` between fetches whatever answers
+            // them, and there is no host here to protect — 43 s of sleeping for one dump, measured.
+            $definition->unthrottled(),
+        );
+    }
+
+    /** @param list<string> $flags */
+    private static function firstBareArgument(array $flags): ?string
+    {
+        foreach ($flags as $flag) {
+            if (!str_starts_with($flag, '-')) {
+                return $flag;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * @param list<string> $flags
+     * @param ?Store       $store  a replay's throwaway store; `null` is the real one
+     * @param ?string      $banner printed once the source is resolved, so a replay says it is one
+     * @param ?SourceDefinition $override the definition to build instead of the configured one — a
+     *                                    replay's unthrottled copy; `null` is the configured block
+     */
+    private function dump(array $flags, ?Store $store = null, ?string $banner = null, ?SourceDefinition $override = null): int
+    {
+        $name = self::firstBareArgument($flags);
 
         if ($name === null) {
             return $this->fail('usage : scout dump <source>');
         }
 
-        $store = $this->store();
+        $store ??= $this->store();
         $definitions = ConfigLoader::loadSources($this->rootDir . '/config/sources.json');
 
         if (!isset($definitions[$name])) {
             return $this->fail('source inconnue : ' . $name . ' (connues : ' . implode(', ', array_keys($definitions)) . ')');
         }
 
+        if ($banner !== null) {
+            $this->line($banner);
+        }
+
+        $definition = $override ?? $definitions[$name];
+
         // `dump` builds the gate too: a dump that hydrated nothing would show a different listing
         // than a run does, which makes it useless for the one job it has — seeing what the pipeline
         // will see.
-        $source = $this->buildSource($definitions[$name], $store, $this->criteria());
+        $source = $this->buildSource($definition, $store, $this->criteria());
         if ($source === null) {
-            return $this->fail('la source ' . $name . ' est de type `' . $definitions[$name]->type
+            return $this->fail('la source ' . $name . ' est de type `' . $definition->type
                 . '`, pour lequel aucun adaptateur n\'existe encore');
         }
 
@@ -601,7 +719,13 @@ final readonly class Scout
         // because the built list is the thing the loop will iterate: any future reason a source is
         // dropped between config and loop is then reflected here for free, rather than silently
         // reintroducing the mismatch this replaced.
-        $watched = array_map(static fn (Source $source): string => $source->name(), $sources);
+        // Keyed by name, holding the SOURCE — the beat reads health through `$source->health()`,
+        // the same funnel `doctor` and the pipeline use, so a per-source `feed_silent_days` is
+        // honoured in one place rather than re-derived at every call site (2026-08-29).
+        $watched = [];
+        foreach ($sources as $source) {
+            $watched[$source->name()] = $source;
+        }
 
         // Read and CLEARED once, here. Q27: "the next successful start can report what happened
         // while it was down." Clearing it at startup rather than after sending means a refusal is
@@ -752,13 +876,15 @@ final readonly class Scout
         $matchesOut = $result->notified;
 
         $this->line(sprintf(
-            '%d source(s), %d annonce(s) analysées · %d correspondance(s), %d à vérifier, %d écartée(s), %d doublon(s)',
+            '%d source(s), %d annonce(s) analysées · %d correspondance(s), %d à vérifier, %d écartée(s), %d doublon(s)%s',
             $result->sourcesRun,
             $result->itemsParsed,
             $result->matches,
             $result->digested,
             $result->rejectedCount,
             $result->duplicates,
+            // Only when it happened: a permanent ", 0 doublon(s) inter-pistes" is noise on every pass.
+            $result->twinsSuppressed > 0 ? sprintf(', %d copie(s) d\'agence non poussée(s) (bien déjà annoncé par sa voie directe)', $result->twinsSuppressed) : '',
         ));
 
         if ($seed) {
@@ -1615,7 +1741,7 @@ final readonly class Scout
      * The marker is written only after a successful send. A heartbeat that failed to deliver must
      * not mark itself done, or a broken channel would be papered over by its own bookkeeping.
      */
-    /** @param list<string> $watched the sources this run actually polls — see below */
+    /** @param array<string, Source> $watched the sources this run actually polls, by name — see below */
     private function beat(
         Notifier $notifier,
         Store $store,
@@ -1666,8 +1792,8 @@ final readonly class Scout
         // asked it to watch, and a health line that always reads "4 broken" is a line its reader
         // learns to skip.
         $ok = 0;
-        foreach ($watched as $name) {
-            if ($store->health($name, $now)->status === SourceStatus::OK) {
+        foreach ($watched as $source) {
+            if ($source->health($now)->status === SourceStatus::OK) {
                 ++$ok;
             }
         }
@@ -1921,7 +2047,7 @@ final readonly class Scout
      * `doctor` DIAGNOSES, it does not refuse. Direct precedent in this same class: an unusable `TZ`
      * is reported by `doctor` as a line and refused only by `run`.
      */
-    private static function feedSilentWindowNote(?int $days): ?string
+    private static function feedSilentWindowNote(?int $days, string $label = 'FEED_SILENT_DAYS'): ?string
     {
         $window = (int) (getenv('IMAP_SINCE_DAYS') ?: 7);
 
@@ -1930,9 +2056,10 @@ final readonly class Scout
         }
 
         return sprintf(
-            'FEED_SILENT_DAYS (%d) >= IMAP_SINCE_DAYS (%d) — un flux muet fera surtout retomber le '
+            '%s (%d) >= IMAP_SINCE_DAYS (%d) — un flux muet fera surtout retomber le '
             . 'compteur à zéro (statut broken) avant d\'atteindre le seuil ; la bande observable est '
             . '(seuil, fenêtre). Baissez le seuil ou augmentez la fenêtre.',
+            $label,
             $days,
             $window,
         );
@@ -2405,7 +2532,9 @@ final readonly class Scout
             '',
             '  scout doctor                  état, durée et volume de chaque source',
             '  scout dump <source>           première annonce brute + field map appliqué
-  scout replay <source>         alias de `dump` (prend un NOM de source, pas un fichier)',
+  scout replay <source>         alias de `dump` (prend un NOM de source, pas un fichier)
+  … --file=<charge utile>       relit un fichier figé à travers le field map d\'une source html/json,
+                                sans réseau et sans toucher la base (email_alert : MAILBOX_DIR)',
             '  scout run --once [-v]         une passe complète',
             '  scout run --seed              amorce le seen-set sans notifier',
             '  scout run --watch [-v]        boucle : 15 min ± 5 de jitter (Q37)',

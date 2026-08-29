@@ -24,9 +24,28 @@ use Scout\Core\Verdict;
  */
 final readonly class Formatter
 {
-    public function match(RawListing $listing, Verdict $verdict, array $duplicates = []): Notification
+    /**
+     * @param list<string> $duplicates same-track copies absorbed into this cluster (`source:id`)
+     * @param list<array{source: string, url: ?string, direct: bool, pushed: bool}> $twins the same
+     *        flat on the OTHER track (2026-08-29 ruling: two findings, one push). `direct` is the
+     *        twin's route; `pushed` says the twin was already announced, in which case this push is
+     *        the direct route arriving after the agency copy — the one second push the ruling keeps
+     */
+    public function match(RawListing $listing, Verdict $verdict, array $duplicates = [], array $twins = [], bool $listingIsDirect = false): Notification
     {
         $reasons = $verdict->reasons;
+
+        // The OTHER ROUTE, first: it changes what the reader does with the push. Both links travel,
+        // because the ruling's whole point is that the better route is never hidden.
+        foreach ($twins as $twin) {
+            $route = $twin['direct'] ? 'voie directe, candidature au bailleur' : 'agence / portail';
+            $link = $twin['url'] === null ? '' : ' : ' . $twin['url'];
+            if ($twin['pushed'] && $listingIsDirect) {
+                array_unshift($reasons, '⚑ voie directe — ce bien a déjà été notifié via ' . $twin['source'] . $link);
+            } else {
+                array_unshift($reasons, 'aussi sur ' . $twin['source'] . ' (' . $route . ')' . $link);
+            }
+        }
 
         // Context first, because it answers "where is this?" before "why did it match?". Everything
         // on it was ALREADY extracted and simply never displayed, which is why it costs no request
@@ -70,7 +89,7 @@ final readonly class Formatter
         return new Notification(
             kind: NotificationKind::RENT_DROP,
             priority: $nowQualifies ? Priority::HIGH : Priority::NORMAL,
-            title: ($nowQualifies ? 'PASSE SOUS LE PLAFOND' : 'Baisse de loyer')
+            title: $listing->sourceName . ' · ' . ($nowQualifies ? 'PASSE SOUS LE PLAFOND' : 'Baisse de loyer')
                 . ' — ' . ($listing->commune ?? 'commune inconnue')
                 . ' · ' . $currentCc . ' € CC',
             reasons: array_values(array_filter([
@@ -232,7 +251,10 @@ final readonly class Formatter
 
         $headline = implode(' · ', $parts);
 
-        return $score === null ? $headline : $score . '/100 — ' . $headline;
+        // THE SOURCE LEADS. Developer ruling, 2026-08-29: "I want the source visible in the
+        // title/subject so I know what's more priority, by the source." On a phone the title is
+        // what is read first, and which portal a flat came from is what decides how fast to act.
+        return $listing->sourceName . ' · ' . ($score === null ? $headline : $score . '/100 — ' . $headline);
     }
 
     /**

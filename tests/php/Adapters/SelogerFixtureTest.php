@@ -440,13 +440,13 @@ final class SelogerFixtureTest extends TestCase
         );
 
         self::assertSame(
-            '^\s*chambre\b',
+            '(?<![0-9])(?<![0-9]\s)(?<!une\s)(?<!deux\s)(?<!trois\s)(?<!quatre\s)(?<!cinq\s)(?<!six\s)\bchambres?\b',
             $criteria->excludedBy($withCardTitle->title, $withCardTitle->description),
             'the card\'s own title reaches the title-only rule',
         );
 
         self::assertNotSame(
-            '^\s*chambre\b',
+            '(?<![0-9])(?<![0-9]\s)(?<!une\s)(?<!deux\s)(?<!trois\s)(?<!quatre\s)(?<!cinq\s)(?<!six\s)\bchambres?\b',
             $criteria->excludedBy($withSubject->title, $withSubject->description),
             'and the subject line does not — which is what the fallback was costing on 27 of 72 '
                 . 'live cards measured 2026-08-26',

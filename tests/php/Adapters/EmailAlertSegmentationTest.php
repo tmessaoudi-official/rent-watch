@@ -429,6 +429,39 @@ final class EmailAlertSegmentationTest extends TestCase
         self::assertSame('Dourdan', $listings[0]->commune ?? null, 'found by the ranked vocabulary');
     }
 
+    /**
+     * A configured `commune_pattern` that MISSES yields `null` — never the vocabulary scan.
+     *
+     * Until 2026-08-29 this was the one positional reader that still fell back: `title_pattern`,
+     * `surface_pattern` and `rooms_pattern` all yield `null` on a miss, for the reason the PAP plan
+     * states — falling back restores the defect AND gives it an alibi. Here the alibi was *"a
+     * listing in an unranked town"*: a broken pattern read as a quiet geography rather than as a
+     * broken extraction, and the card Mormant-whose-copy-says-Dourdan would have come back as
+     * Dourdan, the prototype's documented over-match, with nothing saying the pattern had failed.
+     *
+     * Blast radius MEASURED before the change, not reasoned about: over the four shipped fixture
+     * sets, the 2026-08-28 raw captures and the LIVE mailbox (388 SeLoger cards, 194 Bien'ici,
+     * 30 PAP, 3 leboncoin) the fallback branch fired on ZERO cards — every commune came from the
+     * pattern or from nowhere — so no stored row changes identity and SeLoger's content key is
+     * untouched. The unconfigured counterweight above is what keeps the other sources byte-identical.
+     */
+    public function testAConfiguredPatternThatMissesYieldsNullNotTheVocabularyScan(): void
+    {
+        $params = self::shippedParams();
+        $params['commune_pattern'] = '~^NEVER-MATCHES-\d{99}$~m';
+
+        $listings = $this->source(self::body([
+            self::cardWithoutQuartier('915', 'Appartement À Louer', '3 pièces . 52,37 m²', 'Dourdan', '91410'),
+        ]), $params)->fetch();
+
+        self::assertCount(1, $listings, 'the card still yields a listing — the postcode locates it');
+        self::assertNull(
+            $listings[0]->commune,
+            'a configured pattern that misses must read as an extraction failure (null), not fall '
+            . 'back to the ranked vocabulary and answer "Dourdan" as though the pattern had worked',
+        );
+    }
+
     // ------------------------------------------------------------ identity on the segmented path
 
     /**

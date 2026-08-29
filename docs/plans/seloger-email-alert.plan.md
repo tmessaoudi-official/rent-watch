@@ -497,4 +497,11 @@ reaches it.
 - [2026-08-26 09:40] AGREED: a listing title is read from its POSITION in the portal's layout, never from a vocabulary of dwelling nouns — the vocabulary form missed 27 of 72 live SeLoger cards and an agency writes the title, not the portal.
 - [2026-08-26 09:45] AGREED: a CONFIGURED `title_pattern` that misses yields `''` and never the message subject; a source configuring NO pattern keeps subject semantics, because there the subject is the documented answer rather than a substitute for one.
 - [2026-08-26 09:50] AGREED: `\bcoliving\b` joins `exclude_patterns`; the meublé patterns are NOT widened until the negation shapes (`non meublé`) are checked, per the lift-negation precedent.
+- [2026-08-29 21:30] NOTED: **that check was done and the widening landed the same evening
+  (`8357d9b`, 2026-08-26 21:12)** — `exclude_title_patterns` carries
+  `^(?!.*\b(?:non|pas|sans)\b[^\n]{0,15}meuble).*\bmeuble`, a negative lookahead for the negation
+  shapes. Measured on the production store on the 29th: 89 titles contain `meubl`, ONE reads
+  `non meublé`, and all 89 are `REJECT` — including `MEUBLE - RUE WAGRAM` and `Beau 3P MEUBLÉ 59m²`,
+  the two escapes this entry named. The entry above was read as open for three days after it
+  closed; recorded so the next reader does not re-do the measurement.
 - [2026-08-26 09:55] AGREED: after a source goes live, its stored titles are audited against production with a GROUP BY — this defect was invisible to the suite and visible in one query.

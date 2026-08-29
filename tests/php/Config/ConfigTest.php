@@ -497,6 +497,56 @@ final class ConfigTest extends TestCase
         self::assertFalse($sources['demo']->requiresScrapingOptIn());
     }
 
+    // ---------------------------------------------------------------- feed_silent_days, per source
+
+    /**
+     * A per-source `feed_silent_days` — the override the car-domain plan argued for on 2026-08-28:
+     * a portal firing thirty alerts a day is only noticed after the GLOBAL three days of silence,
+     * ~90 missed alerts, while leboncoin needs those three days because it fires once a week.
+     * One number cannot serve both. Absent, the global `FEED_SILENT_DAYS` applies unchanged, which
+     * is what keeps every shipped block byte-identical.
+     */
+    public function testFeedSilentDaysIsAcceptedOnAnEmailAlertSourceAndCarriedOnTheDefinition(): void
+    {
+        $sources = ConfigLoader::sourcesFromArray(self::minimalSource([
+            'type' => 'email_alert',
+            'feed_silent_days' => 1,
+            'params' => ['from' => 'alerts@portal.test', 'link_host' => 'portal.test'],
+            'map' => ['ref' => 'url', 'charges_included' => true],
+        ]));
+
+        self::assertSame(1, $sources['demo']->feedSilentDays);
+    }
+
+    public function testAnAbsentFeedSilentDaysLeavesTheGlobalThresholdInForce(): void
+    {
+        $sources = ConfigLoader::sourcesFromArray(self::minimalSource(['type' => 'email_alert']));
+
+        self::assertNull($sources['demo']->feedSilentDays, 'null means "use FEED_SILENT_DAYS", not 0');
+    }
+
+    /** `0` would disable the one verdict that tells a dead alert from a quiet market — same refusal as the env var. */
+    public function testFeedSilentDaysBelowOneIsRefused(): void
+    {
+        $this->expectException(ConfigError::class);
+        $this->expectExceptionMessageMatches('~feed_silent_days.*au moins 1|au moins 1.*feed_silent_days~s');
+
+        ConfigLoader::sourcesFromArray(self::minimalSource(['type' => 'email_alert', 'feed_silent_days' => 0]));
+    }
+
+    /**
+     * Only a source that REPORTS a feed date can act on the threshold. On an `html` or `json`
+     * source the key would be a configured feature that never runs — the `detail_budget_per_pass: 0`
+     * shape — so it is refused at load rather than accepted and ignored.
+     */
+    public function testFeedSilentDaysOnASourceThatCannotActOnItIsRefused(): void
+    {
+        $this->expectException(ConfigError::class);
+        $this->expectExceptionMessageMatches('~feed_silent_days.*email_alert|email_alert.*feed_silent_days~s');
+
+        ConfigLoader::sourcesFromArray(self::minimalSource(['type' => 'json', 'feed_silent_days' => 2]));
+    }
+
     public function testPollingAnInstitutionalLandlordIsNotGated(): void
     {
         $sources = ConfigLoader::sourcesFromArray(self::minimalSource(['type' => 'json']));
@@ -951,6 +1001,50 @@ final class ConfigTest extends TestCase
             'Lumineux, proche RER.',
             false,
             'and in a title too, when it is a count rather than the property type at the front',
+        ];
+
+        // A ROOM IS A NOUN, NOT A POSITION (2026-08-29). `^\s*chambre\b` was the first cut, and it
+        // read the room as the FIRST WORD of the title. Three live titles defeated it in one week —
+        // a leading emoji, an adjective, a plural mid-sentence — and the last was pushed as a match
+        // at 20:04 on the day this was written. Measured over all 1 593 stored titles: the
+        // replacement catches 48 room rentals (the anchored form: 36) and zero flats, because a
+        // flat COUNTS its bedrooms ("3 chambres", "Trois chambres", "2 chambres") while a room
+        // rental NAMES one. That count is what the lookbehinds protect.
+        yield 'a room rental behind a leading emoji is excluded' => [
+            '✅ Chambre 10 min RER B TGV Massy Palaiseau',
+            '725 €/mois charges comprises. 5 pièces . 79 m².',
+            true,
+            'the anchor ^\s*chambre saw the emoji first and let the room through, at 20:04 on 2026-08-29',
+        ];
+        yield 'a room rental behind an adjective is excluded' => [
+            'Confortable chambre individuelle',
+            '1 125 €/mois charges comprises. 4 pièces . 80 m².',
+            true,
+            'the room is not the first word, and the flat\'s 4 pièces / 80 m² pass every numeric filter',
+        ];
+        yield 'rooms in the plural, mid-title, are excluded' => [
+            'Belles chambres dans appartement lumineux 53m²',
+            '630 €/mois charges comprises. 4 pièces . 53 m².',
+            true,
+            '630 € for one room of a 53 m² flat — the coliving shape a fourth way',
+        ];
+        yield 'a house counting its bedrooms is wanted' => [
+            'Maison 3 chambres au haras du château de abondant',
+            '1 100 €/mois charges comprises. 4 pièces . 79 m².',
+            false,
+            'a digit before the noun is a count, and a count is what a family flat states',
+        ];
+        yield 'a duplex counting its bedrooms is wanted' => [
+            'Duplex 2 chambres rénové 50m2',
+            'Proche gare.',
+            false,
+            'same count, different property type',
+        ];
+        yield 'a count written in words is still a count' => [
+            'Trois chambres et un bureau, Houilles',
+            'Lumineux.',
+            false,
+            '"Trois chambres" is how a French agent writes 3 chambres; folding lowercases it before the pattern runs',
         ];
 
         yield 'a parking space for rent is excluded' => [

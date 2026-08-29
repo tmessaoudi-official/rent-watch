@@ -542,6 +542,14 @@ grounded in a measurement rather than in prose.
   nothing is deployed.** The watcher runs on the developer's own machine, so it stops when that box
   sleeps; the heartbeat already makes that loud rather than silent, so this is convenience, not a
   §1 or hard-rule-2 gap. Deploying needs a host, which is an input.
+- [2026-08-29 21:30] DONE — **`scout replay <source> --file=<payload>`, the unbuilt half.** A frozen
+  page through a network source's own adapter and field map, offline by construction
+  (`Adapters/Http/ReplayHttpClient`: search URL and its pages → the file, `/robots.txt` → 404 =
+  allow, everything else → 404 so a `detail_map` never selects from the search page), against a
+  throwaway `:memory:` store, and UNTHROTTLED — the first cut kept `rate_limit_ms` and one In'li
+  replay spent **43 s asleep** across 20 simulated detail fetches. Four ledger cases pin the four
+  rules; `README.md` § Planned CLI and `spec/PROJECT_BRIEF.md` §10 are amended in the same change.
+  This was the only WORK item left in this file; B4 (AL'in) is the only input.
 
 ### The measurement that changed the second decision, and refuted two documented claims
 

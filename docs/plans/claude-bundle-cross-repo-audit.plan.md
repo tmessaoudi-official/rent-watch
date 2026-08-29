@@ -167,6 +167,12 @@ This is the actionable half when the developer runs this exercise on the sibling
    legitimate audit with no terminal to unblock it. **All four siblings are already correct here**;
    rent-watch was the outlier. `drift-scan.sh` now asserts `deny` is empty so it cannot creep back.
 
+> **SCOPE RULING 2026-08-29 (developer, `AskUserQuestion`): the port-OUT items below are OUT OF
+> SCOPE for scout sessions.** Each sibling (stack, phorj, pdfturbo, twes-in) owns its own port, in
+> its own session, against its own `CLAUDE.md`. The two decisions under "Open — needs a ruling"
+> remain open; they were not ruled. For scout itself this file has been closed since 2026-08-06
+> ("Two items, both applied. Nothing else.").
+
 ## Open — needs a ruling
 
 1. **Adopt stack's `claude-setup/<bundle>.tar.gz`?** stack commits the 517 KB scrubbed bundle so it can

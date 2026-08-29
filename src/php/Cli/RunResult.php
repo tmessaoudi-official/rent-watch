@@ -26,6 +26,8 @@ final readonly class RunResult
         public int $digested = 0,
         public int $rejectedCount = 0,
         public int $duplicates = 0,
+        /** Agency copies of a flat announced through its direct route — marked, not pushed (2026-08-29). */
+        public int $twinsSuppressed = 0,
         public int $rentDrops = 0,
         public int $undelivered = 0,
         /**

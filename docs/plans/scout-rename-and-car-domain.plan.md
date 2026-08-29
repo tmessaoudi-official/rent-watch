@@ -193,6 +193,57 @@ until a separate go. A ruling on what a thing will be called is not a ruling tha
   pinned by `tests/test-ci-workflow.sh` (red first, for the stated reason). Consequence for this
   file: every `src/` commit since `5af1e30` — the whole feed-silence set — is judged by the ledger
   only from tonight's nightly onward. UNCERTIFIED-BY-EXECUTION until it completes.
+- [2026-08-29 21:30] BUILT, additive, with the default noted rather than ruled: **`feed_silent_days`
+  PER SOURCE**, the override the `[2026-08-28 17:10]` entry argued for and the `[… 18:00]`
+  correction said did not exist. A top-level int on an `email_alert` block (not a `params` entry —
+  those are a string map), absent = the global `FEED_SILENT_DAYS`, so every shipped block is
+  byte-identical; refused at 0 and on any type that reports no feed date. It reaches the store
+  through ONE funnel, `EmailAlertSource::health()`, and the heartbeat now reads health through the
+  source rather than `Store::health()` by name — the old shape would have counted a source healthy
+  on the very pass `doctor` called it silent. `doctor` gives a per-source value the same
+  `>= IMAP_SINCE_DAYS` advice. No shipped source sets it yet: ParuVendu's ~2 h cadence is the
+  obvious first consumer, and that cadence is the decision this file still owes.
+- [2026-08-29 22:00] MEASURED, and it CLOSES the Alcopa polling route the `[2026-08-28 16:40]`
+  entry left UNRESOLVED: **every live-auction surface on `alcopa-auction.fr` is a JavaScript
+  shell.** `sitemap.sales.xml` lists ONE sale (12808, in five languages); its page
+  (`/vente-encheres-en-ligne/12808`, 194 KB) renders `<h1>JavaScript requis</h1>`, carries **zero
+  `€`**, no `clôture` / *se termine* / *fin de vente*, and links no lot at all — the lots and the
+  auction state arrive client-side, which is the FIRST of the three explanations that entry named.
+  `/calendrier-des-ventes` (223 KB) is the same shell: no dates, no times, no sale links. So the
+  only server-rendered surface is the lot page already measured on the 27th, with make, model and
+  mileage and **neither a price nor a closing time** — and rule 1 of the auction ruling needs a
+  price (estimate, reserve or current bid) as much as rule 2 needs a closing time. **Alcopa is
+  REFUSED on both routes**, the email one for the fields it omits and the polling one for being
+  unreadable — the Carizy shape, not a §1 verdict, and reversible only by a readable surface
+  appearing. The 27/09 renewal reminder is now optional on both counts. Three requests, honest UA,
+  spaced.
+- [2026-08-29 22:00] MEASURED, one level down the Agorastore route, and it is NOT closed: the API
+  host is confirmed open (`api.auctelia.com/robots.txt` → `Disallow: /sentry` only; its root
+  answers `302 → www.auctelia.com`), but the alert's lot links are **opaque tracking redirects**
+  (`email.alerts.agorastore.fr/c/<token>`, the SeLoger shape — never followed at ingest), and the
+  Nuxt `commons/app` bundle (404 KB) carries **no API path strings and no `auctelia` literal**: the
+  endpoints live in the LAZY page chunks (`/_nuxt/pages/…`), one level further than the documented
+  bundle rule reaches in a single fetch. Next step, deferred to the car build because it is only
+  worth taking if the domain is built: fetch the search page's own chunk and read the lot-list and
+  lot-detail paths off it, then confirm ONE lot carries a price and a closing time. Until then
+  Agorastore's row reads *email refused, API route OPEN and UNMEASURED*.
+- [2026-08-29 22:20] AGREED (developer, `AskUserQuestion`): **THIS IS THE GO — first slice.** The
+  2026-08-26 *"don't implement yet"* hold is lifted for the Vehicle domain as ruled (own SQLite, own
+  config, generic machinery shared byte-identical), starting with the two sources that have BOTH a
+  real payload and a readable route: **ParuVendu car** (email, 15+ captures) and **Autohero**
+  (polling, `sitemap_search.xml` + schema.org `Vehicle` JSON-LD). La Centrale and the leboncoin car
+  templates follow once their captures / routing exist. Rejected: everything at once (larger blast
+  radius before anything is proven live) and keeping the hold.
+- [2026-08-29 22:25] AGREED (developer, `AskUserQuestion`): **ParuVendu car — ingest ALL, score-rank,
+  NO cap**, the rent side's uncapped match path unchanged: every card judged, only matches push,
+  each marked per listing. The §1 vehicle set and the price/age/mileage criteria are the reducers;
+  a noisy first week is answered at the PORTAL filter (reversible), never by a silent cap.
+  `feed_silent_days: 1` on the block, so a dead alert is noticed within a day. Rejected: a per-pass
+  push cap (a value chosen before any volume is measured) and newest-message-only (loses cards).
+  **In the same answer the developer reported four production defects on the RENT side, which
+  take precedence over the car build**: colocation listings notified; the same flat notified from
+  CDC Habitat AND SeLoger (CDC advertises on SeLoger); *baisse de prix* notifications with no
+  actual reduction; and the SOURCE must be visible in the notification title. Investigation first.
 
 ## What is still owed BY the developer
 
@@ -338,7 +389,7 @@ fetch; do not re-derive them.
 |---|---|---|---|
 | `www.autohero.com` | 200 | disallows only `/myhero/`, `/inspection/`, `/checkout/`, `/identify`, `/center`, `/unsubscribe/` | **OPEN AND READABLE — confirmed 2026-08-27, the only one of the three that is.** `/fr/sitemap_search.xml` = **3 453 vehicles**; a lot page is 640 KB server-rendered carrying a schema.org `Vehicle` JSON-LD block with price, mileage, registration date, fuel, transmission and body type. Reads through the existing `embedded_json_selector`. Fixed price, delivered, national — and the payload has **no location field**, so decision 6's geography filter is measurably inert here |
 | `www.agorastore.fr` | 200 | `Allow: *` | **WIDE OPEN — but the site itself is a Nuxt SPA** (measured 2026-08-27: zero `€` on the homepage). Its `<head>` names `api.auctelia.com`, whose robots is `User-agent: *` / `Disallow: /sentry` — so the data host is open and discovered. Public-sector and fleet disposals, open to individuals |
-| `www.alcopa-auction.fr` | 200 | `Disallow: /*.pdf$`, `/calendrier/` | **OPEN, lot pages READABLE, verdict UNRESOLVED** (measured 2026-08-27). `sitemap.items-fr.xml` = **5 839 lots**; one lot page is 84 KB server-rendered with make/model/saleroom/`38 656 KM` — and **no price and no closing time**, which rule 2 of the auction ruling refuses fail-closed. Reason unmeasured: client-side auction state, login gate, or a lot not in an active sale. Check one from `sitemap.sales.xml` before ruling |
+| `www.alcopa-auction.fr` | 200 | `Disallow: /*.pdf$`, `/calendrier/` | **REFUSED on both routes — RESOLVED 2026-08-29: the sale pages and the calendar are JavaScript shells (`JavaScript requis`), so no price and no closing time is readable anywhere; see the log.** Previously: **OPEN, lot pages READABLE, verdict UNRESOLVED** (measured 2026-08-27). `sitemap.items-fr.xml` = **5 839 lots**; one lot page is 84 KB server-rendered with make/model/saleroom/`38 656 KM` — and **no price and no closing time**, which rule 2 of the auction ruling refuses fail-closed. Reason unmeasured: client-side auction state, login gate, or a lot not in an active sale. Check one from `sitemap.sales.xml` before ruling |
 | `www.leparking.fr` | 200 | only `/tools/`, `/extlink/`, `/tag/` | **WIDE OPEN**, and a **meta-search** across many portals — breadth in one adapter. ⚠️ It is an AGGREGATOR, so the Jinka caveat applies in full: a truncated description can lose a `VEI` the original ad carried. Needs its own §1 evaluation before it is trusted |
 
 ### Refused, with the reason

@@ -52,6 +52,52 @@ final readonly class EmailMessage
         return $id === null ? null : trim($id, '<> ');
     }
 
+    /**
+     * When this message was sent, as a UTC ISO-8601 instant — or null when its `Date` is absent or
+     * does not parse STRICTLY.
+     *
+     * This is the observation time of every listing the message carries (2026-08-29). A portal
+     * re-sends yesterday's card, the IMAP window keeps both messages, and a listing observed "at
+     * the pass time" on every pass is a fresh sighting every pass — which is how one Bien'ici flat
+     * produced 429 alternating price-history rows and 128 phantom *Baisse de loyer* emails. The
+     * store already orders sightings by their instant; it only ever lacked the instant.
+     *
+     * Strict by round-trip, because `new \DateTimeImmutable` is a relative-expression parser that
+     * moves a mismatched weekday FORWARD (`Fri, 09 Aug` → the 14th), and forward is precisely the
+     * wrong direction here: a stale card would read as the newest one. A misparse is null, "now" —
+     * today's behaviour, and the direction that cannot lose a genuinely new card.
+     */
+    public function sentAt(): ?string
+    {
+        $header = $this->header('date');
+
+        if ($header === null || trim($header) === '') {
+            return null;
+        }
+
+        return self::parseRfc2822($header)?->setTimezone(new \DateTimeZone('UTC'))->format('Y-m-d\TH:i:s\Z');
+    }
+
+    /**
+     * RFC 2822 `Date`, parsed strictly: the value must re-format to itself under the mask that
+     * accepted it. Shared with the feed-freshness reader in {@see ImapMailbox}, which learnt this
+     * rule first (a `Fri, 09 Aug 2026` recorded as 14 August closed a FEED_SILENT verdict).
+     */
+    public static function parseRfc2822(string $header): ?\DateTimeImmutable
+    {
+        $value = trim(preg_replace('~\s*\([^()]*\)\s*$~', '', trim($header)) ?? trim($header));
+
+        foreach (['D, d M Y H:i:s O', 'd M Y H:i:s O', 'D, d M Y H:i:s T', 'd M Y H:i:s T'] as $mask) {
+            $parsed = \DateTimeImmutable::createFromFormat($mask, $value);
+
+            if ($parsed !== false && $parsed->format($mask) === $value) {
+                return $parsed;
+            }
+        }
+
+        return null;
+    }
+
     public static function parse(string $raw): self
     {
         // Normalise line endings first. A message that mixes CRLF and LF — common once it has passed

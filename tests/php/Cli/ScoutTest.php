@@ -604,7 +604,10 @@ final class ScoutTest extends TestCase
         self::assertSame(0, $r['code'], $r['err']);
         // The high-priority match, with its score, its commune, its rent and its reasons — the
         // shape that has to be readable on a lock screen.
-        self::assertStringContainsString('!! [MATCH] 75/100 — Sartrouville 78500 · T4 88 m² · 1450 € CC', $r['out']);
+        // THE SOURCE LEADS THE TITLE (developer ruling, 2026-08-29: "I want the source visible in
+        // the title/subject so I know what's more priority, by the source"). On a phone the title
+        // is what is read first, and which portal a flat came from decides how fast to act on it.
+        self::assertStringContainsString('!! [MATCH] fixture_demo · 75/100 — Sartrouville 78500 · T4 88 m² · 1450 € CC', $r['out']);
         self::assertStringContainsString('champ structuré financement = « LLI »', $r['out']);
         self::assertStringContainsString('1450 € CC — 350 € sous le plafond', $r['out']);
         self::assertStringContainsString('https://example.test/annonces/demo-0001', $r['out']);
@@ -1249,6 +1252,81 @@ final class ScoutTest extends TestCase
         $byPath = $this->scout(['replay', 'tests/fixtures/fixture_demo/search.json']);
         self::assertSame(2, $byPath['code'], 'a fixture PATH is not what this verb takes');
         self::assertStringContainsString('source inconnue', $byPath['err']);
+    }
+
+    /**
+     * `scout replay <source> --file=<payload>` — the half spec §10 asked for and the alias never
+     * delivered: a frozen payload run through a NETWORK source's own field map, with no request
+     * made. `dump` against In'li polls In'li; this reads the fixture as though In'li had answered
+     * with it, which is what onboarding a source from a captured page needs.
+     *
+     * Three guarantees, each of which the obvious implementation gets wrong:
+     *  - no network at all — the suite runs `SCOUT_OFFLINE=1`, so a stray request throws;
+     *  - the field map that runs is the SOURCE'S (`inli` maps `ref` from the card link, so the
+     *    first listing's externalId is the fixture's first card, not the demo source's);
+     *  - NOTHING is written to the real store. `dump` hydrates through the detail cache, and a
+     *    replay whose detail pages cannot be fetched would otherwise record a failure row per
+     *    listing in the production database for pages nobody fetched.
+     */
+    public function testReplayWithAFileRunsAFrozenPayloadThroughANetworkSourcesFieldMap(): void
+    {
+        $started = microtime(true);
+        $r = $this->scout(['replay', 'inli', '--file=tests/fixtures/inli/search.html']);
+        $elapsed = microtime(true) - $started;
+
+        self::assertSame(0, $r['code'], $r['err']);
+        // In'li's block carries `rate_limit_ms: 2000` and a `detail_map` with a budget of 20, so a
+        // replay that kept the throttle sleeps ≥ 40 s answering a file (43 s measured). There is no
+        // host to protect; the replay must run the source UNTHROTTLED. Twenty seconds is a 2x
+        // margin under the sabotaged floor, and an order of magnitude over the real cost.
+        self::assertLessThan(20.0, $elapsed, 'the replay kept the adapter\'s rate limit and slept through 20 simulated fetches');
+        self::assertStringContainsString('après application du field map', $r['out']);
+        self::assertMatchesRegularExpression('~externalId\s+\S+~', $r['out'], 'the source\'s own ref mapping ran');
+        self::assertStringContainsString('inli', $r['out']);
+
+        self::assertSame(
+            0,
+            Store::open($this->dbPath)->detailFailureCount('inli'),
+            'a replay must leave no trace in the real store — its detail pages were never fetched',
+        );
+    }
+
+    /**
+     * `doctor` gives a per-source `feed_silent_days` the same advice the global one gets: at or
+     * past `IMAP_SINCE_DAYS` the count collapses to zero (broken) before the threshold is ever
+     * reached, so the verdict cannot fire. A diagnostic, never a refusal — same ruling as the
+     * global one on 2026-08-29. Counterweight in the same root: a threshold inside the window says
+     * nothing.
+     */
+    public function testDoctorWarnsWhenASourcesOwnThresholdReachesTheImapWindow(): void
+    {
+        $block = static fn (int $days): array => [
+            'enabled' => true,
+            'family' => 'private',
+            'type' => 'email_alert',
+            'mixed_tenure' => true,
+            'feed_silent_days' => $days,
+            'params' => ['from' => 'alerts@portal.test', 'link_host' => 'portal.test'],
+            'map' => ['ref' => 'url', 'charges_included' => true],
+        ];
+        $root = $this->tempRoot([], ['tooslow' => $block(7), 'fine' => $block(2)]);
+
+        $r = $this->scoutIn($root, ['doctor']);
+
+        self::assertStringContainsString('feed_silent_days de tooslow (7) >= IMAP_SINCE_DAYS (7)', $r['err']);
+        self::assertStringNotContainsString('feed_silent_days de fine', $r['err'], 'inside the window: no advice');
+    }
+
+    /** An email source's payloads are `.eml` files, and that seam already exists: say which. */
+    public function testReplayWithAFileOnAnEmailSourceNamesTheMailboxSeam(): void
+    {
+        $r = $this->scout(['replay', 'seloger', '--file=tests/fixtures/seloger/2026-08-25-001-alert.eml']);
+
+        self::assertSame(2, $r['code']);
+        // Both words, because "ni MAILBOX_DIR ni IMAP_HOST" is what an unconfigured mailbox already
+        // says — a refusal that does not name the flag it is refusing would pass on that alone.
+        self::assertStringContainsString('--file', $r['err']);
+        self::assertStringContainsString('MAILBOX_DIR', $r['err']);
     }
 
     /** @param list<string> $channels */

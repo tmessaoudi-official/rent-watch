@@ -184,6 +184,28 @@ final readonly class Pipeline
         $clustered = $this->dedup->cluster($harvested);
         $duplicates = count($harvested) - count($clustered);
 
+        // TWO TRACKS, ONE PUSH (developer ruling, 2026-08-29). Clusters stay per track — the sort
+        // and the map below never merge anything — but the DIRECT route is judged first, so when
+        // a landlord's listing and its agency copy arrive in the same pass the landlord's is the
+        // one pushed and the copy is marked; and each survivor knows its twins on the other track,
+        // found by the same positive-evidence bar as clustering. `usort` is stable in PHP 8, so
+        // within a track the harvest order (the pacer's shuffle) is untouched.
+        usort($clustered, static fn (array $a, array $b): int => ($a['family'] === 'institutional' ? 0 : 1) <=> ($b['family'] === 'institutional' ? 0 : 1));
+
+        /** @var array<int, list<array{listing: RawListing, family: string}>> $twinsOf keyed on the survivor's object id */
+        $twinsOf = [];
+        foreach ($clustered as $i => $one) {
+            foreach ($clustered as $j => $other) {
+                if ($i === $j || $this->dedup->twinReason($one['listing'], $other['listing'], $one['family'], $other['family']) === null) {
+                    continue;
+                }
+                $twinsOf[spl_object_id($one['listing'])][] = ['listing' => $other['listing'], 'family' => $other['family']];
+            }
+        }
+        $twinsSuppressed = 0;
+        /** @var array<int, string> $keyOf dedup key of every recorded member, by object id */
+        $keyOf = [];
+
         // EVERY member is recorded and classified here, not just the survivor the loop below
         // iterates. Until schema v4 the pipeline clustered first and recorded only survivors, so an
         // absorbed duplicate had no row at all — and `listings.group_key` on top of that would only
@@ -207,7 +229,10 @@ final readonly class Pipeline
 
             foreach ($cluster['members'] as $member) {
                 $classification = $this->classifier->classify($member, $this->profileFor($sources, $member));
-                $sighting = $this->store->record($member, $member->effectiveRentCc(), $nowIso);
+                // The SOURCE'S observation time when it states one (an email's `Date`), the pass
+                // time otherwise. The store orders sightings by this instant, and that ordering is
+                // the whole defence against a re-read older card manufacturing a rent drop.
+                $sighting = $this->store->record($member, $member->effectiveRentCc(), $member->observedAt ?? $nowIso);
                 $captured = $this->store->recordVerdict(
                     $sighting->dedupKey,
                     $classification->tenure->value,
@@ -238,6 +263,7 @@ final readonly class Pipeline
                 }
 
                 $observed[spl_object_id($member)] = ['sighting' => $sighting, 'classification' => $classification];
+                $keyOf[spl_object_id($member)] = $sighting->dedupKey;
                 $memberKeys[] = $sighting->dedupKey;
             }
 
@@ -431,11 +457,56 @@ final readonly class Pipeline
                 continue;
             }
 
-            $failures = $this->notifier->send($this->formatter->match($listing, $verdict, $cluster['duplicates']));
+            // THE OTHER TRACK (2026-08-29). A twin already pushed means this flat has been
+            // announced: an agency copy of it is marked and not pushed, while the DIRECT route is
+            // pushed once anyway, saying whose push it follows — the better route is never hidden
+            // (the 2026-08-06 ruling), and the mark above stops it ever being pushed again. A twin
+            // not yet pushed rides along in this push, with its link, and is marked — unless IT is
+            // the direct route, which announces itself when its turn comes (never in this pass:
+            // the clusters are sorted direct-first, so that turn has already been).
+            $isDirect = $cluster['family'] === 'institutional';
+            $twins = [];
+            $announcedByTwin = false;
+            foreach ($twinsOf[spl_object_id($listing)] ?? [] as $twin) {
+                $twinKey = $keyOf[spl_object_id($twin['listing'])] ?? null;
+                $pushed = $twinKey !== null && $this->store->wasNotifiedAs($twinKey, 'MATCH');
+                $announcedByTwin = $announcedByTwin || $pushed;
+                $twins[] = [
+                    'source' => $twin['listing']->sourceName,
+                    'url' => $twin['listing']->url,
+                    'direct' => $twin['family'] === 'institutional',
+                    'pushed' => $pushed,
+                    'key' => $twinKey,
+                ];
+            }
+
+            if ($announcedByTwin && !$isDirect) {
+                $this->store->markNotified($sighting->dedupKey, $nowIso, 'MATCH');
+                ++$twinsSuppressed;
+
+                continue;
+            }
+
+            $failures = $this->notifier->send($this->formatter->match(
+                $listing,
+                $verdict,
+                $cluster['duplicates'],
+                array_map(
+                    static fn (array $t): array => ['source' => $t['source'], 'url' => $t['url'], 'direct' => $t['direct'], 'pushed' => $t['pushed']],
+                    $twins,
+                ),
+                $isDirect,
+            ));
 
             if ($this->notifier->delivered($failures)) {
                 ++$notified;
                 $this->store->markNotified($sighting->dedupKey, $nowIso, 'MATCH');
+                foreach ($twins as $twin) {
+                    if (!$twin['pushed'] && !$twin['direct'] && $twin['key'] !== null) {
+                        $this->store->markNotified($twin['key'], $nowIso, 'MATCH');
+                        ++$twinsSuppressed;
+                    }
+                }
             } else {
                 // Left un-notified ON PURPOSE, so the next run retries. Marking it notified here is
                 // the hole Q28 closes: the run reports success, the listing is recorded as sent, and
@@ -531,6 +602,7 @@ final readonly class Pipeline
             digested: $digested,
             rejectedCount: $rejectedCount,
             duplicates: $duplicates,
+            twinsSuppressed: $twinsSuppressed,
             rentDrops: $rentDrops,
             undelivered: $undelivered,
             notified: $notified,

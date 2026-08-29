@@ -1946,7 +1946,7 @@ run_sabotage "a startup refusal is written to disk unredacted (a credential leak
 # "1/5 source(s) en bon état" while one source was deliberately scoped and four were never polled.
 run_sabotage "the beat counts CONFIGURED sources again (a scoped watcher invents faults)" \
   src/php/Cli/Scout.php \
-  's%foreach ($watched as $name) {%foreach ($this->sourceNames() as $name) {%'
+  "s%count(\$watched) . ' source(s) en bon état';%count(\$this->sourceNames()) . ' source(s) en bon état';%"
 
 # And the other direction, which is why the fix is not just "count fewer". Drop the disclosure and a
 # deployment carrying a forgotten `--source` reports a flawless 1/1 for ever while the landlords it
@@ -2849,7 +2849,15 @@ run_sabotage "only the first rent-shaped figure in a card is considered" \
 # the shape of failure that has an alibi: `null` reads as "an unranked town", not as "broken".
 run_sabotage "the laid-out commune is ignored in favour of the vocabulary scan" \
   src/php/Adapters/EmailAlertSource.php \
-  "s%        \$configured = \$this->matchParam('commune_pattern', \$body);%        \$configured = null;%"
+  "s%            return \$this->matchParam('commune_pattern', \$body);%            return null;%"
+
+# The reverse cut, and the one that has an alibi (2026-08-29): a configured pattern that MISSES
+# falling back to the vocabulary scan reads as "a listing in an unranked town", never as a broken
+# extraction — and restores the prototype's "proche Dourdan" over-match on the way. Every other
+# positional reader already yields null on a miss; this one was the last to fall back.
+run_sabotage "a configured commune_pattern that misses falls back to the vocabulary scan again" \
+  src/php/Adapters/EmailAlertSource.php \
+  "s%            return \$this->matchParam('commune_pattern', \$body);%            if ((\$c = \$this->matchParam('commune_pattern', \$body)) !== null) { return \$c; }%"
 
 # The other direction: the vocabulary fallback deleted. A source with no commune_pattern -- every
 # email source that existed before this one -- silently stops naming any commune at all.
@@ -2876,7 +2884,7 @@ run_sabotage "a robots body starting with a markup character is trusted" \
 # neither `coloc` nor `colocation` appears anywhere in them [measured 2026-08-25].
 run_sabotage "the coliving-room title pattern is dropped from the criteria" \
   config/criteria.json \
-  "s%^    .\\^..s\\*chambre..b.,$%%"
+  's%^    "(?<!\[0-9\])(?<!\[0-9\].*chambres?.*$%%'
 
 # ── Bien'ici: the second email portal, and the first keyed on a real listing id ──────────────────
 #
@@ -3304,12 +3312,12 @@ run_sabotage "EmailAlertSource stops delegating freshness to its mailbox (all em
 # band, closing the verdict on that source for ever.
 run_sabotage "the Date header is parsed permissively again (a bad weekday shifts it forward)" \
   src/php/Adapters/Mail/ImapMailbox.php \
-  's%\$at = self::parseRfc2822(\$header);%$at = @new \\DateTimeImmutable($header) ?: null;%'
+  's%$iso = EmailMessage::parse($raw)->sentAt();%$iso = (new \\DateTimeImmutable((string) EmailMessage::parse($raw)->header(\x27Date\x27)))->setTimezone(new \\DateTimeZone(\x27UTC\x27))->format(\x27c\x27);%'
 
 # THE ROUND-TRIP is what makes the parse strict; createFromFormat alone accepts the bad weekday and
 # reports no error.
 run_sabotage "the date parse drops its round-trip check (strictness becomes theatre)" \
-  src/php/Adapters/Mail/ImapMailbox.php \
+  src/php/Adapters/Mail/EmailMessage.php \
   's%if (\$parsed !== false \&\& \$parsed->format(\$mask) === \$value) {%if ($parsed !== false) {%'
 
 # FileMailbox reporting a real date reddens the documented MAILBOX_DIR workflow as the calendar
@@ -3363,6 +3371,111 @@ run_sabotage "ImapMailbox keeps a stale feed date across a fetch that returned n
 # 375. A tally that excludes the newest cases is worse than no tally — those are exactly the ones
 # nobody has confidence in yet, and CLAUDE.md and the plan files quote this number as authoritative.
 # `tests/test-ci-workflow.sh` pins the position, so appending below it is now a red build.
+# ── per-source feed_silent_days and `scout replay --file` (2026-08-29) ──────────────────────────
+#
+# THE PER-SOURCE THRESHOLD RIDES THROUGH ONE FUNNEL. `EmailAlertSource::health()` is the only place
+# a source's own `feed_silent_days` reaches the store, and doctor, the pipeline and the heartbeat
+# all read health through the source. Dropping the argument there re-installs the global threshold
+# for every caller at once, and the suite must say so.
+run_sabotage "a per-source feed_silent_days is ignored by the source's own health()" \
+  src/php/Adapters/EmailAlertSource.php \
+  's%return $this->store->health($this->name(), $nowIso, $this->definition->feedSilentDays);%return $this->store->health($this->name(), $nowIso);%'
+
+# Both load-time refusals share one guard: a threshold on a source that cannot act on it (html/json
+# report no feed date), and a threshold of 0, which disables the verdict. Disabling the guard accepts
+# both — a configured feature that never runs, and a switched-off one that looks configured.
+run_sabotage "feed_silent_days is accepted on a source that can never act on it, and at 0" \
+  src/php/Config/ConfigLoader.php \
+  's%        if ($feedSilentDays !== null) {%        if (false) {%'
+
+# `scout replay --file` — three guarantees, each a silent failure without its case.
+#
+# The replay's store is a THROWAWAY. `dump` hydrates through the detail cache, so against the real
+# database a replay records one fetch-failure row per listing, for pages nobody fetched, in the
+# store it was diagnosing.
+run_sabotage "scout replay --file writes its simulated detail failures into the real store" \
+  src/php/Cli/Scout.php \
+  "s%            Store::open(':memory:'),%            \$this->store(),%"
+
+# The replay client, not the real one. The suite runs SCOUT_OFFLINE=1, so this one is caught by the
+# offline tripwire — but only because a test runs replay against a real source block at all.
+run_sabotage "scout replay --file polls the real host instead of the frozen file" \
+  src/php/Cli/Scout.php \
+  's%new self($this->rootDir, $this->out, $this->err, $this->nowIso, $client, $this->notifier)%new self($this->rootDir, $this->out, $this->err, $this->nowIso, $this->http, $this->notifier)%'
+
+# `/robots.txt` must be ABSENT (404 = allow), never the payload: HTML handed to the robots parser
+# fails closed under the 2026-08-25 SPA rule, and the replay refuses itself.
+run_sabotage "the replay client serves the payload as robots.txt, so the replay refuses itself" \
+  src/php/Adapters/Http/ReplayHttpClient.php \
+  "s%        if (str_ends_with(\$path, '/robots.txt')) {%        if (false) {%"
+
+# And a detail page is NOT the search page. The fallthrough 404 is what stops a detail_map from
+# selecting a listing's title out of the results page — plausible, and wrong.
+run_sabotage "the replay client answers a detail-page URL with the search payload" \
+  src/php/Adapters/Http/ReplayHttpClient.php \
+  "s%        if (str_starts_with(\$request->url, \$this->prefix)) {%        if (true) {%"
+
+# ── the four production defects of 2026-08-29 ──────────────────────────────────────────────────
+#
+# THE PHANTOM-DROP LOOP. One Bien'ici flat re-sent a day later at a HIGHER rent, both messages in
+# the window, both stamped at the pass time: 1146 then 1122, "a drop", every fifteen minutes — 429
+# history rows, 128 emails. The observation time travels adapter → listing → snapshot → pipeline →
+# store, and each hop is a place it can be quietly dropped.
+run_sabotage "an email listing is observed at the pass time again (the adapter drops the message date)" \
+  src/php/Adapters/EmailAlertSource.php \
+  's%            observedAt: $message->sentAt(),%            observedAt: null,%'
+
+run_sabotage "the pipeline records every sighting at the pass time (the observation time is ignored)" \
+  src/php/Cli/Pipeline.php \
+  's%$member->observedAt ?? $nowIso%$nowIso%'
+
+run_sabotage "the snapshot drops the observation time (a re-judged row would be re-dated to now)" \
+  src/php/Core/ListingSnapshot.php \
+  "s%            'observedAt' => \$listing->observedAt,%%"
+
+# Lenient parsing moves a mismatched weekday FORWARD, and forward is the wrong direction here: a
+# stale card reading as the newest one is the loop with the arithmetic reversed.
+run_sabotage "sentAt() parses leniently (a mismatched weekday is advanced instead of refused)" \
+  src/php/Adapters/Mail/EmailMessage.php \
+  's%return self::parseRfc2822($header)?->setTimezone%return (new \\DateTimeImmutable($header))->setTimezone%'
+
+# TWO TRACKS, ONE PUSH. Identities stay per track (the 2026-08-06 ruling); only the push is shared.
+run_sabotage "cross-track copies are MERGED into one identity (the two-tracks ruling reversed)" \
+  src/php/Core/Dedup.php \
+  's%        if ($familyA !== $familyB) {%        if (false) {%'
+
+run_sabotage "a same-track pair is reported as a twin (a duplicate wearing the twin label)" \
+  src/php/Core/Dedup.php \
+  's%        if ($a->sourceName === $b->sourceName || $familyA === $familyB) {%        if ($a->sourceName === $b->sourceName) {%'
+
+run_sabotage "the agency copy is pushed as well as the direct route (43 flats pushed twice again)" \
+  src/php/Cli/Pipeline.php \
+  's%            if ($announcedByTwin \&\& !$isDirect) {%            if (false) {%'
+
+run_sabotage "the direct route is no longer judged first, so source order decides which copy is pushed" \
+  src/php/Cli/Pipeline.php \
+  "s%usort(\$clustered, static fn (array \$a, array \$b): int => (\$a\['family'\] === 'institutional' ? 0 : 1) <=> (\$b\['family'\] === 'institutional' ? 0 : 1));%usort(\$clustered, static fn (array \$a, array \$b): int => 0);%"
+
+# A ROOM IS A NOUN, NOT A POSITION. The anchored form let three live titles through in a week.
+run_sabotage "the room pattern is anchored at the start of the title again (an emoji defeats it)" \
+  config/criteria.json \
+  's%\\\\bchambres?\\\\b"%^\\\\s*chambre\\\\b"%'
+
+# THE SOURCE LEADS THE TITLE — the developer's own ordering signal.
+run_sabotage "the source no longer leads a match title" \
+  src/php/Core/Notify/Formatter.php \
+  "s%\$listing->sourceName . ' · ' . (\$score === null%'' . (\$score === null%"
+
+run_sabotage "the source no longer leads a rent-drop title" \
+  src/php/Core/Notify/Formatter.php \
+  "s%title: \$listing->sourceName . ' · ' . (\$nowQualifies%title: '' . (\$nowQualifies%"
+
+# The replay runs the source UNTHROTTLED. With the throttle kept, In'li's 2 s × 20 simulated detail
+# fetches is 40+ s of sleeping to answer a file (43 s measured) — a repair tool nobody reaches for.
+run_sabotage "scout replay --file keeps the adapter's rate limit and sleeps through simulated fetches" \
+  src/php/Cli/Scout.php \
+  's%            $definition->unthrottled(),%            $definition,%'
+
 printf '\n  %d sabotage(s) detected, %d undetected\n' "$pass" "$fail"
 
 if [[ -n "$_filter" ]]; then

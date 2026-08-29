@@ -1670,7 +1670,12 @@ var/claude/                 Reports, review outputs — gitignored scratch (hand
   it does not refuse**, exactly as it already does for an unusable `TZ`. The guidance survives the
   refusal: the observable band is `(threshold, window)`. The default of 3 is measured, not chosen —
   over 14 days Bien'ici fires ~30/day, PAP ~8/day and SeLoger 160 in a week, none ever quiet for a
-  full day, while leboncoin has sent exactly one alert since creation.
+  full day, while leboncoin has sent exactly one alert since creation. **Since 2026-08-29 the
+  threshold is also settable PER SOURCE** — `feed_silent_days` on an `email_alert` block, refused
+  at 0 and on any type that reports no feed date — and it reaches the store through exactly ONE
+  funnel, `EmailAlertSource::health()`, which `doctor`, the pipeline and the heartbeat all read
+  (the beat used to read `Store::health()` by name and would have counted a source healthy on the
+  very pass `doctor` called it silent). `doctor` gives a per-source value the same window advice.
 - **A `Date:` header needs a STRICT parser, and `new \DateTimeImmutable` is not one.** It is a
   *relative-expression* parser: it misparses far more often than it throws, and every misparse moves
   the instant FORWARD. `Date: Fri, 09 Aug 2026` — where 9 August is a Sunday — has `Fri` applied as a
@@ -1679,6 +1684,35 @@ var/claude/                 Reports, review outputs — gitignored scratch (hand
   days. The fix is strictness **by round-trip** — parse, re-format with the same mask, require
   equality — which is what `Store::epoch()` has done since its own scar. `createFromFormat` alone is
   NOT sufficient: it also returns 14 August and reports no error.
+- **AN EMAIL LISTING IS OBSERVED WHEN ITS MESSAGE WAS SENT, not when the pass read it** — and for a
+  month it was not, which produced the loudest defect this tool has had. Measured 2026-08-29 from
+  the notification folder (825 mails in 30 days): Bien'ici re-sent one Ozoir flat a day later at a
+  HIGHER rent (1122 → 1146); both messages stayed in the 7-day IMAP window, every pass re-read both
+  and stamped both at the pass time, and the store — whose *"a stale sighting manufactures no
+  drop"* guard keys on the observation instant — recorded "1146 then 1122, a drop" every fifteen
+  minutes: **429 alternating history rows, 128 *Baisse de loyer* emails** for one flat, 53 rows for
+  a SeLoger one. Every guard for this existed; it never received the date. `RawListing::observedAt`
+  (an email's `Date`, strict-parsed by `EmailMessage::sentAt()`, `null` for polling adapters) is
+  now what the pipeline hands `Store::record()`, the snapshot round-trips it, and a detail merge
+  keeps the CARD's. Ten ledger cases pin the chain hop by hop, because every hop is a place it can
+  be quietly dropped.
+- **A room is a NOUN, not a POSITION.** `^\s*chambre\b` was the first cut of the coliving
+  exclusion and three live titles defeated it in one week — a leading emoji (`✅ Chambre 10 min RER
+  B`, pushed as a match at 20:04 on 2026-08-29), an adjective (`Confortable chambre individuelle`),
+  a plural mid-title. The pattern now matches `chambre(s)` anywhere UNLESS a count precedes it (a
+  digit or un/deux/trois/quatre/cinq/six): a flat COUNTS its bedrooms, a room rental NAMES one.
+  Measured over all 1 593 stored titles before shipping: 48 room rentals caught (anchored: 36),
+  zero flats. **Trial a pattern over the store before shipping it** — `SELECT title FROM listings`
+  is one query and it is the only corpus of real titles this project has.
+- **Two tracks, ONE push (developer ruling, 2026-08-29).** The 2026-08-06 rule that a landlord's
+  listing and its agency copy on SeLoger/Bien'ici are two findings STANDS — identities, groups and
+  histories stay per track, `Dedup::duplicateReason()` still refuses across families — but 43 flats
+  had been pushed twice, so `Dedup::twinReason()` links cross-track twins for NOTIFICATION only,
+  with the same positive-evidence bar. Clusters are judged direct-route first; the push names the
+  other route with its link; the agency copy is marked, not pushed; and a direct route arriving
+  AFTER the agency copy is still pushed once, saying whose push it follows — the better route is
+  never hidden. **The source now leads every listing title** (`seloger · 44/100 — …`), because the
+  developer prioritises by source and the title is what a phone shows first.
 - **`prototype/scout.py` has no tenure classifier at all.** It will happily surface PLAI and PLUS
   listings. It is reference material for the field-mapping and adapter shape only — treat its filtering
   logic as incomplete, not as a baseline to preserve.

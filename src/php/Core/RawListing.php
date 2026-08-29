@@ -94,6 +94,14 @@ final readonly class RawListing
          * switched off. It is never "far": hard rule 9, and the component is simply not scored.
          */
         public ?int $commuteMinutes = null,
+        /**
+         * When the SOURCE says this observation was made — an email's `Date`, as a UTC ISO-8601
+         * instant — or null for "when the pass read it" (every polling adapter). The store orders
+         * sightings by this instant, and that ordering is the whole defence against a re-read
+         * older card manufacturing a rent drop (2026-08-29: one Bien'ici flat, re-sent a day later
+         * at a higher rent, produced 429 alternating history rows and 128 phantom emails).
+         */
+        public ?string $observedAt = null,
     ) {}
 
     /**
@@ -141,6 +149,9 @@ final readonly class RawListing
             // reflection guard cannot catch it: that guard checks the snapshot ENCODER, not the
             // merge. The trap arms itself the day the order changes.
             commuteMinutes: $any($this->commuteMinutes, $detail->commuteMinutes),
+            // The CARD's observation time: a detail page fetched now says nothing about when the
+            // listing was observed, and a detail merge must not re-date an old card to the pass.
+            observedAt: $this->observedAt,
         );
     }
 

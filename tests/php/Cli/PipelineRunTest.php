@@ -351,6 +351,188 @@ final class PipelineRunTest extends TestCase
         ), '"a listing is new exactly once" is the store\'s most basic guarantee');
     }
 
+    // ---------------------------------------------------------------- the observation time (2026-08-29)
+
+    /**
+     * THE PHANTOM-DROP LOOP, replayed exactly. Bien'ici sent one Ozoir flat on 26 August at 1122 €
+     * and again on 27 August at 1146 €. Both messages stay inside the IMAP window, so every pass
+     * re-reads both — newest first, then the older one — and with both stamped at the PASS time the
+     * store recorded "1146, then 1122: a drop" every fifteen minutes: 429 history rows, 128 emails.
+     *
+     * With each listing carrying its message's date, the older card is a SUPERSEDED observation
+     * (the store's own word for it), whatever order the adapter yields it in.
+     */
+    public function testAReSentOlderCardIsNotARentDropHoweverManyTimesItIsReRead(): void
+    {
+        $store = $this->store();
+        $channel = new RecordingChannel();
+        $pipeline = $this->pipeline($store, new Notifier([$channel]));
+        $older = $this->dated('ozoir', 1122, '2026-08-26T18:31:09Z');
+        $newer = $this->dated('ozoir', 1146, '2026-08-27T13:34:25Z');
+
+        $pipeline->runOnce([new FakeSource('bienici', [$older])], '2026-08-26T19:00:00Z');
+        foreach (['2026-08-27T14:00:00Z', '2026-08-27T14:15:00Z', '2026-08-27T14:30:00Z'] as $now) {
+            $pipeline->runOnce([new FakeSource('bienici', [$newer, $older])], $now);
+        }
+        // And the other order — a mailbox that yields oldest first must reach the same state.
+        $pipeline->runOnce([new FakeSource('bienici', [$older, $newer])], '2026-08-27T14:45:00Z');
+
+        self::assertCount(0, $this->ofKind($channel, NotificationKind::RENT_DROP), '1122 was the rent BEFORE 1146, not after it');
+        self::assertSame([1122, 1146], $store->priceHistory($store->dedupKey($newer)), 'changes only: one rise, no oscillation');
+    }
+
+    /** The counterweight: a genuinely NEWER lower rent is still the event this project exists for. */
+    public function testAGenuinelyNewerLowerRentIsStillADrop(): void
+    {
+        $store = $this->store();
+        $channel = new RecordingChannel();
+        $pipeline = $this->pipeline($store, new Notifier([$channel]));
+
+        $pipeline->runOnce([new FakeSource('bienici', [$this->dated('ozoir', 1300, '2026-08-26T18:31:09Z')])], '2026-08-26T19:00:00Z');
+        $pipeline->runOnce([new FakeSource('bienici', [$this->dated('ozoir', 1100, '2026-08-27T13:34:25Z')])], '2026-08-27T14:00:00Z');
+
+        self::assertCount(1, $this->ofKind($channel, NotificationKind::RENT_DROP));
+    }
+
+    /** A listing with no observation time is observed NOW — the polling adapters' case, unchanged. */
+    public function testAnUndatedListingIsObservedAtThePassTime(): void
+    {
+        $store = $this->store();
+        $pipeline = $this->pipeline($store);
+
+        $pipeline->runOnce([new FakeSource('fake', [$this->listing()])], '2026-08-07T12:00:00+02:00');
+
+        $stored = $store->priceHistory($store->dedupKey($this->listing()));
+        self::assertSame([1450], $stored);
+    }
+
+    // ---------------------------------------------------------------- two tracks, ONE push (2026-08-29)
+
+    /**
+     * Developer ruling, 2026-08-29: a flat on both tracks is two findings and ONE push. Identities
+     * and histories stay per track (`Dedup::duplicateReason()` still refuses across families); the
+     * push names both routes and carries both links, and the twin is marked notified rather than
+     * pushed. Measured before the ruling: 43 flats pushed twice.
+     */
+    public function testAFlatOnBothTracksIsPushedOnceNamingBothRoutes(): void
+    {
+        $store = $this->store();
+        $channel = new RecordingChannel();
+        $pipeline = $this->pipeline($store, new Notifier([$channel]));
+        [$direct, $agency] = $this->twins();
+
+        $pipeline->runOnce([
+            new FakeSource('cdc_habitat', [$direct]),
+            new FakeSource('seloger', [$agency], family: 'private'),
+        ], '2026-08-07T12:00:00+02:00');
+
+        $matches = $this->ofKind($channel, NotificationKind::MATCH);
+        self::assertCount(1, $matches, 'one flat, one push');
+        self::assertSame('cdc_habitat', $matches[0]->sourceName, 'the direct route is the one pushed when both are in hand');
+        self::assertStringContainsString('seloger', implode("\n", $matches[0]->reasons), 'the push names the other route');
+        self::assertStringContainsString('https://seloger.test/s1', implode("\n", $matches[0]->reasons), 'and carries its link');
+        self::assertTrue($store->wasNotifiedAs($store->dedupKey($agency), 'MATCH'), 'the twin is marked, not pushed');
+    }
+
+    /** Source ORDER must not decide which route is pushed — the direct route is preferred whichever came first in the pass. */
+    public function testTheDirectRouteIsPreferredWhateverTheSourceOrder(): void
+    {
+        $store = $this->store();
+        $channel = new RecordingChannel();
+        $pipeline = $this->pipeline($store, new Notifier([$channel]));
+        [$direct, $agency] = $this->twins();
+
+        $pipeline->runOnce([
+            new FakeSource('seloger', [$agency], family: 'private'),
+            new FakeSource('cdc_habitat', [$direct]),
+        ], '2026-08-07T12:00:00+02:00');
+
+        $matches = $this->ofKind($channel, NotificationKind::MATCH);
+        self::assertCount(1, $matches);
+        self::assertSame('cdc_habitat', $matches[0]->sourceName);
+    }
+
+    /**
+     * The one accepted second push: the direct route arriving AFTER the agency copy was already
+     * pushed. Hiding it would hide the better route, which is what the 2026-08-06 ruling forbade;
+     * it is pushed once, says it is the direct route of a flat already seen, and never again.
+     */
+    public function testTheDirectRouteArrivingLaterIsStillPushedOnceAsTheDirectRoute(): void
+    {
+        $store = $this->store();
+        $channel = new RecordingChannel();
+        $pipeline = $this->pipeline($store, new Notifier([$channel]));
+        [$direct, $agency] = $this->twins();
+        $agencyOnly = [new FakeSource('seloger', [$agency], family: 'private')];
+        $both = [new FakeSource('seloger', [$agency], family: 'private'), new FakeSource('cdc_habitat', [$direct])];
+
+        $pipeline->runOnce($agencyOnly, '2026-08-07T12:00:00+02:00');
+        $pipeline->runOnce($both, '2026-08-07T12:15:00+02:00');
+        $pipeline->runOnce($both, '2026-08-07T12:30:00+02:00');
+
+        $matches = $this->ofKind($channel, NotificationKind::MATCH);
+        self::assertCount(2, $matches, 'agency first, then the direct route once — and never a third');
+        self::assertSame(['seloger', 'cdc_habitat'], array_map(static fn (Notification $n): string => $n->sourceName, $matches));
+        self::assertStringContainsString('voie directe', implode("\n", $matches[1]->reasons));
+        self::assertStringContainsString('seloger', implode("\n", $matches[1]->reasons), 'and it says which push it follows');
+    }
+
+    /** Positive evidence only: two flats that merely share a track pair are two pushes. */
+    public function testTwoDifferentFlatsOnTwoTracksAreTwoPushes(): void
+    {
+        $store = $this->store();
+        $channel = new RecordingChannel();
+        $pipeline = $this->pipeline($store, new Notifier([$channel]));
+        [$direct, $agency] = $this->twins();
+        $elsewhere = new RawListing(
+            sourceName: 'seloger', externalId: 's9', title: 'Appartement T4', description: '4 pieces de 88 m2.',
+            url: 'https://seloger.test/s9', commune: 'Houilles', postcode: '78800',
+            rentCc: $agency->rentCc, surfaceM2: $agency->surfaceM2, rooms: $agency->rooms,
+        );
+
+        $pipeline->runOnce([
+            new FakeSource('cdc_habitat', [$direct]),
+            new FakeSource('seloger', [$elsewhere], family: 'private'),
+        ], '2026-08-07T12:00:00+02:00');
+
+        self::assertCount(2, $this->ofKind($channel, NotificationKind::MATCH));
+    }
+
+    /** @return array{RawListing, RawListing} the same Sartrouville T4 on the direct and the agency route */
+    private function twins(): array
+    {
+        $direct = new RawListing(
+            sourceName: 'cdc_habitat', externalId: 'c1', title: '4 pièces - 2ème étage - 88m²',
+            description: '4 pieces de 88 m2, logement intermediaire.', fields: ['financement' => 'LLI'],
+            url: 'https://cdc.test/c1', commune: 'Sartrouville', postcode: '78500',
+            rentCc: 1450, surfaceM2: 88.0, rooms: 4,
+        );
+        $agency = new RawListing(
+            sourceName: 'seloger', externalId: 's1', title: 'Appartement T4',
+            description: 'Beau 4 pieces de 88 m2, proche gare.', fields: ['financement' => 'LLI'],
+            url: 'https://seloger.test/s1', commune: 'Sartrouville', postcode: '78500',
+            rentCc: 1450, surfaceM2: 88.0, rooms: 4,
+        );
+
+        return [$direct, $agency];
+    }
+
+    private function dated(string $id, int $rentCc, string $observedAt): RawListing
+    {
+        return new RawListing(
+            sourceName: 'bienici', externalId: $id, title: 'Appartement 3 pièces 66 m²',
+            description: '3 pieces de 66 m2.', fields: ['financement' => 'LLI'],
+            url: 'https://bienici.test/' . $id, commune: 'Sartrouville', postcode: '78500',
+            rentCc: $rentCc, surfaceM2: 88.0, rooms: 4, observedAt: $observedAt,
+        );
+    }
+
+    /** @return list<Notification> */
+    private function ofKind(RecordingChannel $channel, NotificationKind $kind): array
+    {
+        return array_values(array_filter($channel->sent, static fn (Notification $n): bool => $n->kind === $kind));
+    }
+
     // ---------------------------------------------------------------- health alerting (Q29)
 
     public function testEveryAlertingStatusIsRoutedNotJustBroken(): void
@@ -1576,6 +1758,7 @@ final readonly class FakeSource implements Source
         private ?\Throwable $throw = null,
         private ?SourceHealth $health = null,
         private bool $mixedTenure = false,
+        private string $family = 'institutional',
     ) {}
 
     public function name(): string
@@ -1585,7 +1768,7 @@ final readonly class FakeSource implements Source
 
     public function family(): string
     {
-        return 'institutional';
+        return $this->family;
     }
 
     /** No network in this fake, so no host — and therefore no Q37 pacing. */
@@ -1601,7 +1784,7 @@ final readonly class FakeSource implements Source
 
     public function profile(): SourceProfile
     {
-        return new SourceProfile($this->name, 'institutional', $this->defaultTenure(), $this->mixedTenure);
+        return new SourceProfile($this->name, $this->family === 'private' ? 'private' : 'institutional', $this->defaultTenure(), $this->mixedTenure);
     }
 
     public function fetch(): array

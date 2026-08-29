@@ -107,4 +107,13 @@ and *"the rightmost separator is the decimal point"* would read it as 1 €.
 - [2026-08-26 13:45] AGREED: a configured numeric pattern that MISSES yields `null`, never the generic scan — the `cardTitle()` rule. The counterweight (an unconfigured source still uses the scan) is asserted, because without it the guarantee is satisfied by removing the feature.
 - [2026-08-26 13:50] FIXED, found by the failing test rather than by review: `title_pattern` was inert on every non-segmented email source. Pre-existing, and it would have made `exclude_title_patterns` unreachable on PAP exactly as it was on SeLoger for a month.
 - [2026-08-26 14:05] NOTED: the n=1 risk lasted about three hours. The second alert is frozen as `002` and pins the dot-as-thousands rent case. Append a third; never renumber.
+- [2026-08-29 21:30] DONE, as its own task: **a configured `commune_pattern` that misses now yields
+  `null`**, like the title and the two numeric readers. Blast radius MEASURED before the change
+  rather than reasoned about — the fallback branch was instrumented in a scratch copy and run over
+  the four fixture sets, the 2026-08-28 captures and the LIVE mailbox (388 SeLoger cards, 194
+  Bien'ici, 30 PAP, 3 leboncoin): **zero fallback hits**, every commune came from the pattern or
+  from nowhere. So no stored row changes identity and SeLoger's content key is untouched. Pinned by
+  `EmailAlertSegmentationTest::testAConfiguredPatternThatMissesYieldsNullNotTheVocabularyScan`
+  and a ledger case in each direction; the unconfigured counterweight keeps the other sources
+  byte-identical.
 - [2026-08-26 14:10] NOTED: `communeIn()` still FALLS BACK to the vocabulary scan when a configured `commune_pattern` misses, unlike the title and the two new numeric readers. Pre-existing and deliberately left alone — changing it touches `seloger`, `bienici` and `leboncoin` at once, and the compile-check is the guard the loader documents for it. Worth revisiting as its own task.

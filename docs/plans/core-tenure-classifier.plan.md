@@ -153,6 +153,18 @@ store, no notify.
   (forcing every route to DIGEST fails it on every surface) and blind to the one-rule-over-reaching
   kind, which is the shape that has actually occurred. Its payload is one benign string; widening
   that is open work, not a solved problem.
+  **Widened 2026-08-29** — `SurfaceMatrixTest::testACapturedEligibleTextStillMatchesOnEveryProseSurface`
+  crosses every CAPTURED corpus case whose expected verdict is MATCH (real listing copy carrying
+  `au plus près`, `plusieurs`, `bailleur social`, `En savoir plus →` as ordinary French) with the four
+  PROSE surfaces, read from the corpus so a new capture widens it unasked. Prose surfaces only, by
+  design: a structured field reads with the identifier discipline on purpose. **What it detects was
+  MEASURED, not assumed, and a first draft of this note got it wrong** (it claimed the collocation
+  cut turned the cells red before the run came back green). Seven of the ledger's prose-rule cuts
+  were applied one at a time in scratch copies: six leave all twenty cells green — they are held by
+  other tests — and ONE turns four cells red, *the prose doubt floor goes case-INsensitive*, the cut
+  that digests the adverb `plus` in real copy (`au plus près`, `En savoir plus`). So the net this
+  adds is the adverb class on captured text, on every prose surface; it is breadth beside the
+  ledger, not a replacement for it.
 
   The metric itself, measured at each commit in the sequence — this is the durable record, because
   commit `457446e` states the last figure as 29.6% and that is wrong:

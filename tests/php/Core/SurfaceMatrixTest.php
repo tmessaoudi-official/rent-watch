@@ -135,6 +135,71 @@ final class SurfaceMatrixTest extends TestCase
     }
 
     /**
+     * THE WIDENED COUNTERWEIGHT: every CAPTURED eligible text, through every PROSE surface.
+     *
+     * The counterweight above feeds one benign string with no vocabulary at all, so it can only
+     * catch BLANKET over-rejection — a rule that rejects everything. The over-rejection this repo
+     * has actually paid for is the other kind: ONE rule over-reaching on ordinary French. `au plus
+     * près` read as PLUS (CDC, 14 of 16 listings digested), `plusieurs` (In'li, 4 of 40 live
+     * matches demoted), `bailleur social` on an explicitly intermediate listing (Cityloger),
+     * `En savoir plus →` in a portal's own template (SeLoger). Each was found in production, and
+     * a single-string counterweight cannot find any of them.
+     *
+     * So this one crosses the corpus's CAPTURED cases whose expected verdict is MATCH — real
+     * listing copy that carries excluded vocabulary as ordinary French — with the four PROSE
+     * surfaces, and asserts every cell still matches. Prose surfaces only, and that is a design
+     * boundary rather than a narrowing: a structured field is read with the identifier discipline
+     * on purpose, so `financement: "… bailleur social"` conflicting a verdict is the rule working.
+     * The structured cells keep the plain counterweight above.
+     *
+     * The texts are read from the corpus rather than copied here, so a capture appended tomorrow
+     * widens this net without anyone remembering to.
+     */
+    #[DataProvider('everyProseSurfaceForEveryCapturedEligibleText')]
+    public function testACapturedEligibleTextStillMatchesOnEveryProseSurface(
+        string $surface,
+        callable $build,
+        string $caseId,
+        string $text,
+    ): void {
+        $result = (new TenureClassifier())->classify($build($text), self::worstCaseSource());
+
+        self::assertSame(
+            Outcome::MATCH,
+            $result->outcome,
+            sprintf(
+                "captured eligible text %s stopped matching on the %s surface.\n"
+                . "reasons[]: %s\n"
+                . 'A rule is over-reaching on ordinary French that a real listing emitted. Fix the '
+                . 'rule; do not relabel the capture and do not drop the surface.',
+                $caseId,
+                $surface,
+                implode(' | ', $result->reasons()) ?: '(none)',
+            ),
+        );
+    }
+
+    /** @return iterable<string, array{string, callable, string, string}> */
+    public static function everyProseSurfaceForEveryCapturedEligibleText(): iterable
+    {
+        $prose = ['title', 'description', 'title/description join', '_text, the whole card'];
+        $surfaces = self::surfaces();
+
+        foreach (Corpus::load()['cases'] as $case) {
+            if (($case['provenance'] ?? null) !== 'captured' || ($case['expect']['outcome'] ?? null) !== 'MATCH') {
+                continue;
+            }
+            $text = trim((string) ($case['description'] ?? ''));
+            if ($text === '') {
+                continue;
+            }
+            foreach ($prose as $surface) {
+                yield $case['id'] . ' × ' . $surface => [$surface, $surfaces[$surface], $case['id'], $text];
+            }
+        }
+    }
+
+    /**
      * The counterweight runs over every surface EXCEPT the two that are doubts by construction.
      *
      * A non-scalar field value is unreadable whatever it contains, so digesting it is the rule
@@ -416,7 +481,11 @@ final class SurfaceMatrixTest extends TestCase
 
             // `sourceName` is the source profile's identity, not listing text; the profile itself is
             // the matrix's worst case and is asserted separately.
-            if (in_array($parameter->getName(), ['sourceName'], true)) {
+            // `observedAt` is an ISO-8601 instant the ADAPTER derives from a `Date` header
+            // (2026-08-29); no listing text ever reaches it, and the classifier never reads it —
+            // it is when the listing was seen, not what it says. Excluded by name like the source
+            // name, so the check keeps its teeth for the next string that IS text.
+            if (in_array($parameter->getName(), ['sourceName', 'observedAt'], true)) {
                 continue;
             }
 
