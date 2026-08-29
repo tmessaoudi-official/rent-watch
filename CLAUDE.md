@@ -1649,6 +1649,13 @@ var/claude/                 Reports, review outputs — gitignored scratch (hand
   N days" is also exactly what a quiet market looks like, so it restates hard rule 2's ambiguity
   instead of resolving it (Logirep returns the same 113 listings every pass by design). `STALE` is
   the twin from the other end: that one says the WATCHER stopped, this one says the PORTAL did.
+  **Confirmed in production 2026-08-29**, which is the half a design note usually lacks: on the
+  first `doctor` run after the redeploy `leboncoin` reported `feed_silent` — *"le portail n'a rien
+  envoyé depuis 3 jour(s) (dernier message : 2026-08-26T05:33:06Z) — 3 annonce(s) relues du même
+  courrier"* — while the other seven sources, including the three other email ones, all reported
+  `ok` with real counts. **The counterweight run is the load-bearing half of that sentence:** a
+  verdict that fires on every source is indistinguishable from one that fires on none, and only a
+  pass showing both outcomes at once separates them.
 - **`FEED_SILENT_DAYS` should stay under `IMAP_SINCE_DAYS` — and `doctor` WARNS, it does not refuse.**
   This shipped as a hard startup refusal on 2026-08-28 and was demoted the next day, because **both
   of its legs broke under review**. Its premise was *"the newest message `SEARCH SINCE` can match is
