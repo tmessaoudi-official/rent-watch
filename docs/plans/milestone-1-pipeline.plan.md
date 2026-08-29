@@ -1928,6 +1928,13 @@ the machine for its duration**; the cost of forgetting that is the whole ~5 h, n
   rent (the loop left the OLDER value as current). Rejected: leaving them (a history showing an
   oscillation that never happened) and a store-wide sweep (a wider write on production data for
   a third instance nobody has found).
+- [2026-08-29 21:12] DEPLOYED then REPAIRED, in that order because the loop was still writing two
+  rows every fifteen minutes until the fix ran: `c8c69e9` built as `scout:local` at 19:09 UTC and
+  started; backup taken first with `tools/backup-state.sh`. Then
+  `var/claude/repair-oscillation-20260829.php --apply` (gitignored scratch, dry run shown before):
+  the bienici key **435 → 2 rows** (`1122 → 1146`, `rent_cc` 1122 → 1146) and the seloger key
+  **59 → 2 rows** (`1138 → 1108`, `rent_cc` 1138 → 1108) — the real rise and the real drop, each
+  once. Verified by query after the write.
 - [2026-08-25 15:55] AGREED: `.claude/hooks/tenure-guard.sh` neutralises the literal `text/plain`
   before its patterns run. `plai` is a substring of `text/plain` and `allow` is a substring of
   `Disallow`, so ANY robots.txt test puts an "inclusion keyword" within eighty characters of a

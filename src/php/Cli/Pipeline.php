@@ -80,26 +80,14 @@ final readonly class Pipeline
             return $listing;
         }
 
-        return new RawListing(
-            sourceName: $listing->sourceName,
-            externalId: $listing->externalId,
-            title: $listing->title,
-            description: $listing->description,
-            fields: $listing->fields,
-            url: $listing->url,
-            commune: $listing->commune,
-            postcode: $listing->postcode,
-            rentCc: $listing->rentCc,
-            rentHc: $listing->rentHc,
-            charges: $listing->charges,
-            surfaceM2: $listing->surfaceM2,
-            rooms: $listing->rooms,
-            bedrooms: $listing->bedrooms,
-            floor: $listing->floor,
-            hasElevator: $listing->hasElevator,
-            detailRead: $listing->detailRead,
-            commuteMinutes: $minutes,
-        );
+        // CLONE-WITH, never a field-by-field rebuild. This used to enumerate every constructor
+        // parameter, and the day `observedAt` was added it silently dropped it — on the ONE
+        // machine where commute is enabled, which is production. The phantom-drop fix shipped,
+        // the tests were green (they run commute OFF), and the first live pass fired the same
+        // phantom drop again (2026-08-29 21:20). `RawListing::mergedWith()`'s own comment had
+        // named this exact trap. A clone carries every property, including tomorrow's, and
+        // `PipelineRunTest` now asserts that by reflection.
+        return $listing->withCommute($minutes);
     }
 
     /**

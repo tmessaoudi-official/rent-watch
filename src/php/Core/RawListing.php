@@ -117,6 +117,20 @@ final readonly class RawListing
      * is what the seen-set is keyed on — a detail map that happened to define `ref` could otherwise
      * re-identify a listing mid-pass and re-notify it forever.
      */
+    /**
+     * The same listing with its commute filled in — and EVERYTHING ELSE untouched, by construction.
+     *
+     * Clone-with inside the class (readonly properties may only be re-initialised here), never a
+     * field-by-field rebuild: `Pipeline::enrich()` used to enumerate every constructor parameter,
+     * and the day `observedAt` was added it dropped it silently, on the one machine where commute
+     * is enabled — production. The phantom-drop fix shipped green and the first live pass fired
+     * the same phantom drop again (2026-08-29). `mergedWith()` below had named this exact trap.
+     */
+    public function withCommute(int $minutes): self
+    {
+        return clone($this, ['commuteMinutes' => $minutes]);
+    }
+
     public function mergedWith(self $detail): self
     {
         $str = static fn (string $mine, string $theirs): string => $theirs !== '' ? $theirs : $mine;

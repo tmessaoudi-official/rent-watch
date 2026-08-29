@@ -20,6 +20,7 @@ use Scout\Core\SourceHealth;
 use Scout\Core\SourceProfile;
 use Scout\Core\SourceStatus;
 use Scout\Core\Tenure;
+use Scout\Enrich\CommutePlanner;
 use Scout\Store\Store;
 
 /**
@@ -379,6 +380,64 @@ final class PipelineRunTest extends TestCase
 
         self::assertCount(0, $this->ofKind($channel, NotificationKind::RENT_DROP), '1122 was the rent BEFORE 1146, not after it');
         self::assertSame([1122, 1146], $store->priceHistory($store->dedupKey($newer)), 'changes only: one rise, no oscillation');
+    }
+
+    /**
+     * THE HOP THE FIRST FIX MISSED. Commute enrichment is ON only in production, and `enrich()`
+     * rebuilt the listing field by field — dropping `observedAt`, so the deployed fix fired the
+     * same phantom drop on its first live pass while every test (commute OFF) stayed green. This
+     * replays the loop WITH a planner, on the path production takes.
+     */
+    public function testTheLoopStaysClosedWhenCommuteEnrichmentIsOn(): void
+    {
+        $store = $this->store();
+        $channel = new RecordingChannel();
+        $pipeline = $this->pipeline($store, new Notifier([$channel]), new FixedPlanner(42));
+        $older = $this->dated('bussy', 1122, '2026-08-26T18:31:09Z');
+        $newer = $this->dated('bussy', 1146, '2026-08-27T13:34:25Z');
+
+        $pipeline->runOnce([new FakeSource('bienici', [$older])], '2026-08-26T19:00:00Z');
+        $pipeline->runOnce([new FakeSource('bienici', [$newer, $older])], '2026-08-27T14:00:00Z');
+        $pipeline->runOnce([new FakeSource('bienici', [$newer, $older])], '2026-08-27T14:15:00Z');
+
+        self::assertCount(0, $this->ofKind($channel, NotificationKind::RENT_DROP));
+        self::assertSame([1122, 1146], $store->priceHistory($store->dedupKey($newer)));
+    }
+
+    /**
+     * And the structural guard: enrichment changes `commuteMinutes` and NOTHING else, asserted over
+     * every constructor parameter by reflection — so the next property added to `RawListing`
+     * cannot be dropped on this hop either. Every parameter is given a non-default value first;
+     * a guard that compares defaults to defaults asserts nothing.
+     */
+    public function testEnrichmentPreservesEveryOtherPropertyByReflection(): void
+    {
+        $args = [];
+        foreach ((new \ReflectionClass(RawListing::class))->getConstructor()?->getParameters() ?? [] as $p) {
+            $type = (string) $p->getType();
+            $args[$p->getName()] = match (true) {
+                $p->getName() === 'commuteMinutes' => null,
+                str_contains($type, 'array') => ['k' => 'v-' . $p->getName()],
+                str_contains($type, 'string') => 'v-' . $p->getName(),
+                str_contains($type, 'float') => 7.5,
+                str_contains($type, 'int') => 7,
+                str_contains($type, 'bool') => true,
+                default => self::fail('unhandled constructor parameter type ' . $type . ' for ' . $p->getName()),
+            };
+        }
+        $listing = new RawListing(...$args);
+        $pipeline = $this->pipeline($this->store(), null, new FixedPlanner(42));
+
+        $enriched = (new \ReflectionMethod(Pipeline::class, 'enrich'))->invoke($pipeline, $listing);
+
+        self::assertInstanceOf(RawListing::class, $enriched);
+        self::assertSame(42, $enriched->commuteMinutes);
+        foreach (array_keys($args) as $name) {
+            if ($name === 'commuteMinutes') {
+                continue;
+            }
+            self::assertSame($listing->$name, $enriched->$name, 'enrichment dropped RawListing::$' . $name);
+        }
     }
 
     /** The counterweight: a genuinely NEWER lower rent is still the event this project exists for. */
@@ -1687,17 +1746,29 @@ final class PipelineRunTest extends TestCase
         ));
     }
 
-    private function pipeline(Store $store, ?Notifier $notifier = null): Pipeline
+    private function pipeline(Store $store, ?Notifier $notifier = null, ?CommutePlanner $commute = null): Pipeline
     {
         return new Pipeline(
             $this->criteria(),
             $store,
             $notifier ?? new Notifier([new RecordingChannel()]),
+            commute: $commute,
         );
     }
 }
 
 /** A source the test drives: fixed listings, a fixed failure, or a fixed health verdict. */
+/** A planner that answers the same minutes for every commune — enough to make `enrich()` take its rebuild path. */
+final readonly class FixedPlanner implements CommutePlanner
+{
+    public function __construct(private int $minutes) {}
+
+    public function minutesFrom(?string $commune, ?string $postcode): ?int
+    {
+        return $this->minutes;
+    }
+}
+
 /** A `FakeSource` that also reports feed freshness, so the pipeline's WRITE of it is observable. */
 final readonly class FreshFakeSource implements \Scout\Adapters\FeedFreshness, Source
 {

@@ -3433,6 +3433,13 @@ run_sabotage "the snapshot drops the observation time (a re-judged row would be 
   src/php/Core/ListingSnapshot.php \
   "s%            'observedAt' => \$listing->observedAt,%%"
 
+# THE HOP THE FIRST FIX MISSED: enrichment rebuilt the listing and dropped the observation time, on
+# the one machine where commute is enabled — production. Green tests, phantom drop on the first
+# live pass (2026-08-29 21:20).
+run_sabotage "enrichment drops the observation time again (the production hop of the phantom-drop loop)" \
+  src/php/Core/RawListing.php \
+  "s%return clone(\$this, \['commuteMinutes' => \$minutes\]);%return clone(\$this, ['commuteMinutes' => \$minutes, 'observedAt' => null]);%"
+
 # Lenient parsing moves a mismatched weekday FORWARD, and forward is the wrong direction here: a
 # stale card reading as the newest one is the loop with the arithmetic reversed.
 run_sabotage "sentAt() parses leniently (a mismatched weekday is advanced instead of refused)" \
