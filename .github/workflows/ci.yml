@@ -159,7 +159,7 @@ jobs:
         run: bash tests/test-drift-scan.sh
 
       - name: Config/doc drift scan (fails on P0/P1)
-        run: bash .claude/skills/rw-repair/drift-scan.sh
+        run: bash .claude/skills/scout-repair/drift-scan.sh
 
       - name: Shell script syntax
         run: |

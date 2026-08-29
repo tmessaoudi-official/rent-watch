@@ -34,14 +34,14 @@ namespace Scout\Adapters\Http;
  * Reading one `robots.txt` per host per pass is a hard-rule-5 obligation rather than a speed
  * concern — re-reading it for every page of a four-page walk is load a landlord did not need to
  * serve. So the guarantee is real and is asserted, in
- * {@see \Scout\Tests\Cli\ScoutRobotsTest::testRobotsIsFetchedOncePerHostAndNotOncePerPage}.
+ * {@see \Scout\Tests\Rent\Cli\RentScoutRobotsTest::testRobotsIsFetchedOncePerHostAndNotOncePerPage}.
  *
  * It simply is not implemented *here*. Holding the cache would make this class mutable, and
  * `TenureCorpusTest::testEveryCoreValueObjectIsImmutable()` requires every class under `src/php/` to
  * be readonly unless it implements {@see \Scout\Core\MutableByDesign} — whose bar is
  * explicitly *"its mutation must BE the mechanism, not an optimisation"*. A memoisation table does
  * not clear that bar, and taking the exemption anyway is how such a rule stops meaning anything. So
- * the table lives where it belongs: as a local array in {@see \Scout\Cli\Scout::sources()},
+ * the table lives where it belongs: as a local array in {@see \Scout\Rent\Cli\RentScout::sources()},
  * whose lifetime is exactly one build of the source list.
  *
  * One consequence worth stating plainly: because sources are built once per process and

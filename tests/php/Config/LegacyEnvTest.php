@@ -99,7 +99,7 @@ final class LegacyEnvTest extends TestCase
 
     /**
      * The message names the VARIABLE and never its VALUE. `RENT_WATCH_DB` is a path rather than a
-     * credential, but this message is written to `state/last-refusal.txt` and read back onto the
+     * credential, but this message is written to `state/rent-last-refusal.txt` and read back onto the
      * heartbeat, and a refusal channel that quotes values is how `imap://user:password@host` ends
      * up in a file — which is why `Redact` exists at all.
      */
@@ -171,9 +171,9 @@ final class LegacyEnvTest extends TestCase
     {
         $root = sys_get_temp_dir() . '/scout-legacy-' . bin2hex(random_bytes(6));
         mkdir($root . '/state', 0o777, true);
-        mkdir($root . '/config', 0o777, true);
-        copy(\dirname(__DIR__, 3) . '/config/criteria.json', $root . '/config/criteria.json');
-        copy(\dirname(__DIR__, 3) . '/config/sources.json', $root . '/config/sources.json');
+        mkdir($root . '/config/rent', 0o777, true);
+        copy(\dirname(__DIR__, 3) . '/config/rent/criteria.json', $root . '/config/rent/criteria.json');
+        copy(\dirname(__DIR__, 3) . '/config/rent/sources.json', $root . '/config/rent/sources.json');
 
         putenv('RENT_WATCH_MAX_PASSES=1');
         putenv('RENT_SCOUT_DB=' . $root . '/state/db.sqlite3');
@@ -181,25 +181,25 @@ final class LegacyEnvTest extends TestCase
         try {
             $out = fopen('php://memory', 'r+');
             $err = fopen('php://memory', 'r+');
-            $code = (new \Scout\Cli\Scout($root, $out, $err))->run(['run', '--once']);
+            $code = (new \Scout\Rent\Cli\RentScout($root, $out, $err))->run(['run', '--once']);
 
             self::assertSame(2, $code, 'a legacy env name must stop the run');
             self::assertFileExists(
-                $root . '/state/last-refusal.txt',
+                $root . '/state/rent-last-refusal.txt',
                 'the refusal must survive the process for the next start to report it (Q27)'
             );
             self::assertStringContainsString(
                 'SCOUT_MAX_PASSES',
-                (string) file_get_contents($root . '/state/last-refusal.txt')
+                (string) file_get_contents($root . '/state/rent-last-refusal.txt')
             );
         } finally {
             putenv('RENT_WATCH_MAX_PASSES');
             putenv('RENT_SCOUT_DB');
             unset($_ENV['RENT_WATCH_MAX_PASSES'], $_SERVER['RENT_WATCH_MAX_PASSES']);
-            @unlink($root . '/state/last-refusal.txt');
+            @unlink($root . '/state/rent-last-refusal.txt');
             @unlink($root . '/state/db.sqlite3');
-            @unlink($root . '/config/criteria.json');
-            @unlink($root . '/config/sources.json');
+            @unlink($root . '/config/rent/criteria.json');
+            @unlink($root . '/config/rent/sources.json');
             @rmdir($root . '/state');
             @rmdir($root . '/config');
             @rmdir($root);

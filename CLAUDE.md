@@ -20,25 +20,25 @@ Status: **milestone 1 is functionally complete against a frozen payload.** The p
 layer and the `scout` CLI all exist. What is missing is a NETWORK adapter, and that is blocked on an
 input rather than a decision. As of 2026-08-07 there is a PHP 8.5
 implementation of `models` + `tenure` under `src/php/Core/`, a 130-case language-neutral classifier
-corpus at `tests/fixtures/tenure/corpus.json`, the seen-set / price-history / run-log store under
-`src/php/Store/` with `SourceHealth` + `SourceStatus` in `Core/`, a strict JSON config layer under
+corpus at `tests/fixtures/rent/tenure/corpus.json`, the seen-set / price-history / run-log store under
+`src/php/Rent/Store/` with `SourceHealth` + `SourceStatus` in `Core/`, a strict JSON config layer under
 `src/php/Config/` with both files committed, the `Source` contract plus `Payload` / `ListingMapper` /
 `FixtureSource` under `src/php/Adapters/`, the criteria engine (`CriteriaEngine` + `Verdict`), and a
-PHPUnit suite. `scout run --once` is demonstrable end to end today against a frozen payload.
+PHPUnit suite. `scout --domain=rent run --once` is demonstrable end to end today against a frozen payload.
 
-`scout doctor`, `scout dump`, `scout run --once/--seed`, `scout test-notify`, `scout digest` and
-`scout reclassify` all work end to end today.
+`scout --domain=rent doctor`, `scout --domain=rent dump`, `scout --domain=rent run --once/--seed`, `scout --domain=rent test-notify`, `scout --domain=rent digest` and
+`scout --domain=rent reclassify` all work end to end today.
 
 **Q34 IS CLOSED IN ALL THREE PATHS as of 2026-08-26** — the daily floor was the last one, and it had
 been ruled, configured and unbuilt: `digest_hour` was parsed into `NotifyPolicy`, printed by
 `doctor`, and read by nothing at all. `Core/DigestSchedule` is the policy (pure, clock injected,
-mirroring `Core/Heartbeat`) and `state/digest.txt` on the mounted volume is the marker, written only
+mirroring `Core/Heartbeat`) and `state/rent-digest.txt` on the mounted volume is the marker, written only
 after the channel confirms. Three rules travel with it. **It is SILENT on a day with nothing
 pending, and records no window as served** — the heartbeat already carries daily liveness, so an
 unconditional rollup would be a second scheduled push saying nothing new, and leaving the window
 open is what makes *"an unsent digest is retried"* work. **It runs under `--watch` only**, so a
 cron-driven `--once` deployment has the two event-driven paths and no floor; `doctor` says so.
-And **the drain is SHARED with `scout digest`** (`Cli/DigestBatch` + one collector that never throws
+And **the drain is SHARED with `scout --domain=rent digest`** (`Cli/DigestBatch` + one collector that never throws
 and never prints), because two implementations of §1's only landing zone is how one drifts into
 announcing what the other would withhold.
 
@@ -89,7 +89,7 @@ none). The retraction half landed 2026-08-22 and is the same rule read backwards
 closed one, so issues #1 and #2 stood open for days after the regression they reported was fixed and
 pushed, and an alert nobody retracts becomes furniture. Both halves are pinned by
 `tests/test-ci-workflow.sh` — by step NAME *and* by the API call that does the work, since a name
-alone survives the body being gutted. **`scout run --watch` now runs** (2026-08-19):
+alone survives the body being gutted. **`scout --domain=rent run --watch` now runs** (2026-08-19):
 `Core/Pacer` holds the Q37 cadence (15 min ± 5, 5 s between distinct hosts, 60 s per host, order
 shuffled each pass), `Adapters/PacedSource` is the decorator that applies it — so `Pipeline` never
 learns that time exists and `--once` stays unpaced — and `Cli/WatchLoop` is the loop, which SURVIVES
@@ -97,10 +97,10 @@ a pass that throws (reporting it) and stops on SIGINT/SIGTERM only after the pas
 finishes. `Source::host(): ?string` was added to the contract to make host-level pacing possible;
 `null` means the source issues no outbound web request and is never delayed.
 
-**THE FIRST REAL SOURCE IS LIVE (2026-08-19).** In'li is `enabled: true` in `config/sources.json`
+**THE FIRST REAL SOURCE IS LIVE (2026-08-19).** In'li is `enabled: true` in `config/rent/sources.json`
 with a verified endpoint — `robots.txt` read first (`Disallow: /espace-membre/` only), the search
-page fetched, the payload frozen and scrubbed into `tests/fixtures/inli/search.html`.
-`scout doctor --source=inli` returns **92 annonces, 4 pages, ~12 s, `ok`**. Its search page is
+page fetched, the payload frozen and scrubbed into `tests/fixtures/rent/inli/search.html`.
+`scout --domain=rent doctor --source=inli` returns **92 annonces, 4 pages, ~12 s, `ok`**. Its search page is
 server-rendered, so there is no JSON API to prefer and it uses the new `html` adapter:
 `Adapters/HtmlSource` + `Adapters/Html/Selector`, built on PHP 8.5's own `Dom\HTMLDocument` and
 `querySelectorAll` — **no hand-written selector engine was needed**, which is why this cost ~300
@@ -112,7 +112,7 @@ about itself, because walking until a page comes back empty is a termination rul
 
 **SOURCE #3 IS LIVE, AND IT IS THE FIRST THAT NEEDS A SECOND REQUEST (2026-08-21).** Cityloger —
 `www.cityloger.fr`, the Immobilière 3F group's own lettings platform — is `enabled: true`;
-`scout doctor --source=cityloger` returns **51 annonces, ~16 s, `ok`**, and the ref is stable across
+`scout --domain=rent doctor --source=cityloger` returns **51 annonces, ~16 s, `ok`**, and the ref is stable across
 two runs. Four things about it change how a source is added here:
 
 - **Its search card carries NO tenure at all.** Not a badge, not a code, nothing — asserted by test,
@@ -168,7 +168,7 @@ Cityloger skews to the intermediate and libre stock this project is looking for.
 > `min_rooms: 4` alone; two CDC 5-pièces at 112 and 117 m² rejected by the rent ceiling). The
 > headline number was right and its explanation was invented, which is worse than being wrong twice:
 > a true number attached to a false cause stops anyone looking. **Never generalise one source's
-> measurement to the tree** — `scout run --seed -v --source=<name>` on a throwaway
+> measurement to the tree** — `scout --domain=rent run --seed -v --source=<name>` on a throwaway
 > `RENT_SCOUT_DB` prints every rejection with its reason and costs one poll.
 
 **The notification carries the postcode, the departement, the floor and the lift** (phase 1,
@@ -213,7 +213,7 @@ Three mechanisms replaced the single gate, and each closes a hole the others ope
 failures still THROW (robots refusing the detail path, a card with no `url` — those are states, not
 events, and every hydration would fail for the same reason), while a runtime failure is RECORDED
 with its attempt count and redacted message, counted by `Store::detailFailureCount()`, and reported
-by `scout doctor`. Throwing was right about silence and wrong about blast radius: it voided the
+by `scout --domain=rent doctor`. Throwing was right about silence and wrong about blast radius: it voided the
 entire pass, so one permanently-404ing page meant the source returned nothing, marked nothing seen,
 never notified a new listing again — and reported `SOURCE_BROKEN` on a diagnosis that was untrue.
 Retried past a 6 h backoff, three times, then left alone.
@@ -245,7 +245,7 @@ nothing rather than saying no, which is the safe direction (hard rule 9).
 >   and must not be extended to — it matches the whole trimmed string, so prose returns `null`
 >   (safe), while a substring reader would read *"Aucun ascenseur"* as `true`.
 >
-> Ground truth is `tests/fixtures/inli/descriptions.json` — 20 live captures, each hand-labelled, which
+> Ground truth is `tests/fixtures/rent/inli/descriptions.json` — 20 live captures, each hand-labelled, which
 > **live extraction now matches 20/20**. The bare ordinal (`situé au deuxième`) and the site typo are
 > deliberately NOT parsed: under-extraction is the safe direction.
 
@@ -277,7 +277,7 @@ widening to all eight departements while dropping the surface floor to 50 m² an
 > eight of the old matches quoted 1258–1669 € CC, so the ceiling alone kills every one of them — a
 > first draft of the Q2 entry reasoned exactly that far and wrote *"the live yield is zero"*. The
 > other two changes had opened a pool the old criteria never looked at. **Never predict a yield from
-> the previous filter's matches**; `scout run --once --seed` on a throwaway `RENT_SCOUT_DB` costs
+> the previous filter's matches**; `scout --domain=rent run --once --seed` on a throwaway `RENT_SCOUT_DB` costs
 > one poll. Two live consequences worth knowing: nearly every match is OUTSIDE the ranked communes
 > (91/93/94 — Les Ulis, Aulnay, Pierrefitte, Vitry — with Dourdan and Dammarie-les-Lys scoring
 > highest), because there is nothing under 1200 € CC in the Boucle de Seine; and scores ran
@@ -360,7 +360,7 @@ postcode, so nothing would have looked broken. Ranked communes now feed that voc
 > social half of the missing tier-4 input; it states **no year**, so it is a pointer, not a figure.
 >
 > **A12 Logirep/Polylogis IS SOURCE #4, live since 2026-08-22** — and it was the row ranked WEAKEST.
-> `scout doctor --source=logirep` returns **113 annonces, 428 ms, `ok`**: one request, no pagination,
+> `scout --domain=rent doctor --source=logirep` returns **113 annonces, 428 ms, `ok`**: one request, no pagination,
 > so it is the cheapest source in the tree by a factor of fifty (In'li takes 24 s). One endpoint
 > covers four Polylogis landlords. Four things about it are worth carrying forward:
 >
@@ -414,7 +414,7 @@ postcode, so nothing would have looked broken. Ranked communes now feed that voc
 > the date: a 500 can be transient.
 
 **SOURCE #2 IS LIVE, AND IT IS THE FIRST MIXED-TENURE ONE (2026-08-20).** CDC Habitat is
-`enabled: true`; `scout doctor --source=cdc_habitat` returns **139 annonces, ~21 s**. In'li is pure
+`enabled: true`; `scout --domain=rent doctor --source=cdc_habitat` returns **139 annonces, ~21 s**. In'li is pure
 LLI, so until now *nothing exercised §1 against a real payload* — CDC ships `Logement intermédiaire`
 and `Logement à loyer libre` badges in one result set and social stock in others. Three things about
 it are worth knowing before touching a source again:
@@ -426,7 +426,7 @@ it are worth knowing before touching a source again:
   does not cover `/recherche/…`. That is why pagination here is `page_path` (a PATH segment,
   `/page-2`) and not `page_param`: appending `?page=2` would query a space the site asked robots to
   stay out of. Because the path changes per page, **robots is re-checked for every page**, and CDC's
-  `robots.txt` is frozen at `tests/fixtures/cdc_habitat/robots.txt` and asserted per page by test.
+  `robots.txt` is frozen at `tests/fixtures/rent/cdc_habitat/robots.txt` and asserted per page by test.
 - **The walk now stops at the count the site declares**, rather than probing one page past the end.
   CDC's out-of-range page answers `301`, not empty, and the adapter refuses a non-2xx on purpose —
   a redirect landing back on page one ends a walk exactly like a genuine last page.
@@ -440,7 +440,7 @@ Two smaller things landed with it, both hard rule 9: `Payload::floor()` reads fl
 they are (`RDC` is **0**, not unknown; and the generic number reader would return the ROOM COUNT from
 `3 pièces - 4ème étage - 82m²`), and `Payload::bool()` accepts the amenity noun `ascenseur`, which
 can only ever yield `true` or `null` and so cannot manufacture the explicit `false` the high-floor
-penalty needs. **`tests/fixtures/tenure/corpus.json` now has CAPTURED cases** (130
+penalty needs. **`tests/fixtures/rent/tenure/corpus.json` now has CAPTURED cases** (130
 total, 122 synthetic + 8 captured): two CDC cards — including the `au plus près` one, which is what
 stops that classifier fix from being quietly undone — two Cityloger detail pages, and two Logirep
 captures added 2026-08-22, one an ordinary card that states no tenure at all and one the site's own
@@ -587,11 +587,11 @@ the negation shapes checked first (`non meublé`), which is the lift-negation le
 ### Bien'ici — source #6, and it disagrees with SeLoger on almost every decision (2026-08-25)
 
 Three real alerts landed within ninety minutes of the subscription being created, and the source was
-live the same evening: `scout doctor --source=bienici` returns **13 annonces, `ok`, 731 ms**, and a
+live the same evening: `scout --domain=rent doctor --source=bienici` returns **13 annonces, `ok`, 731 ms**, and a
 seeded pass matches **10 of 13** — the best hit rate in the tree by a wide margin, because the
 portal applies the saved search's own criteria before sending and those criteria mirror
 `criteria.json`. Prove a change offline with
-`MAILBOX_DIR=tests/fixtures/bienici scout doctor --source=bienici`. Four things carry forward:
+`MAILBOX_DIR=tests/fixtures/rent/bienici scout --domain=rent doctor --source=bienici`. Four things carry forward:
 
 - **IT PUBLISHES A REAL LISTING ID, so identity is the LINK.** `/annonce/laforet-immo-facile-
   22588736` survives `stableId()` stripping the query. Content-addressing was invented for SeLoger,
@@ -644,10 +644,10 @@ portal applies the saved search's own criteria before sending and those criteria
 ### leboncoin — source #7, and the first HTML-only alert (2026-08-26)
 
 Its first alert ever fired at 07:33 Paris and the source was live the same morning:
-`scout doctor --source=leboncoin` returns **3 annonces, `ok`, 864 ms**, and a seeded pass matches
+`scout --domain=rent doctor --source=leboncoin` returns **3 annonces, `ok`, 864 ms**, and a seeded pass matches
 **1 of 3** (Combs-la-Ville, 59,9 m², 935 €; the other two rejected at 48 m² and 45 m² against the
 50 m² floor). Prove a change offline with
-`MAILBOX_DIR=tests/fixtures/leboncoin scout doctor --source=leboncoin`.
+`MAILBOX_DIR=tests/fixtures/rent/leboncoin scout --domain=rent doctor --source=leboncoin`.
 
 **IT NEEDED A PARSER CHANGE, not config alone — and the failure it would otherwise have produced is
 this project's defining one.** leboncoin sends **no `text/plain` alternative**, the first portal to
@@ -700,8 +700,8 @@ cost: the rent ceiling is not checkable for this source.**
 
 ### PAP — source #8, and the numeric twin of the title lesson (2026-08-26)
 
-`scout doctor --source=pap` returns **2 annonces, `ok`, 483 ms**. Prove a change offline with
-`MAILBOX_DIR=tests/fixtures/pap scout doctor --source=pap`. It is the first **direct-from-owner**
+`scout --domain=rent doctor --source=pap` returns **2 annonces, `ok`, 483 ms**. Prove a change offline with
+`MAILBOX_DIR=tests/fixtures/rent/pap scout --domain=rent doctor --source=pap`. It is the first **direct-from-owner**
 portal, so its inventory does not overlap the agency portals every other private source draws from,
 and structurally the simplest alert in the tree: a real `text/plain` part, **one listing per
 message** (no `card_separator` at all), and a real ad id — `/annonces/-r458301723` — so identity is
@@ -750,7 +750,7 @@ applies and the figure lands in `rentHc`.
 > read it as 1 €. Both are frozen. Append a third; never renumber.
 ### Transit enrichment — the last empty layer, and the curve that had to be measured (2026-08-26)
 
-`src/php/Enrich/` was the only spec layer with no code at all. It exists because **nothing in the
+`src/php/Rent/Enrich/` was the only spec layer with no code at all. It exists because **nothing in the
 score discriminated**: 83 live matches spread over all eight departements scored 16–48, so
 `high_priority_score: 70` could never fire and the `!!` marker was dead.
 
@@ -781,7 +781,7 @@ one probe of four communes settled it.
 - **A score component, never a disqualifier** — developer ruling, verbatim *"1 hour 15 max ! but keep
   showing even those with more anyway"*, and hard rule 8 independently. Clamped at both ends, so it
   can never go negative and can never act as a back-door rejection.
-- **`commuteMinutes` lives on `RawListing`**, not as a `judge()` argument, because `scout reclassify`
+- **`commuteMinutes` lives on `RawListing`**, not as a `judge()` argument, because `scout --domain=rent reclassify`
   re-judges from the v7 snapshot — a value passed alongside would be absent on every re-judge and a
   stored listing would silently score lower the second time. `floor` and `hasElevator` arrive by the
   same route.
@@ -807,15 +807,15 @@ one probe of four communes settled it.
 > template line — edit the line in place.** `.env.example` now carries that warning where it happens.
 
 **Commute is OFF everywhere except the developer's machine.** The activation is a personal address
-and lives only in the gitignored `config/criteria.local.json`, and the loader's two-sided guard
+and lives only in the gitignored `config/rent/criteria.local.json`, and the loader's two-sided guard
 refuses `weights.commute` without `commute.enabled` — so CI, the fixtures and the sabotage ledger all
-run commute OFF, and the component is exercised by `tests/fixtures/criteria/commute.json`.
+run commute OFF, and the component is exercised by `tests/fixtures/rent/criteria/commute.json`.
 
 
 **`seloger` IS LIVE as of 2026-08-25 — source #5, and the first that is not a landlord.** The IMAP
-credentials arrived, and `scout doctor --source=seloger` against the real mailbox returns **9
+credentials arrived, and `scout --domain=rent doctor --source=seloger` against the real mailbox returns **9
 annonces, `ok`, ~19 s**. Prove a change without touching the network with
-`MAILBOX_DIR=tests/fixtures/seloger scout doctor --source=seloger`; a seeded run over the two
+`MAILBOX_DIR=tests/fixtures/rent/seloger scout --domain=rent doctor --source=seloger`; a seeded run over the two
 fixtures yields one match (Dourdan, 3p, 52,37 m², 915 € CC) and one rejection (Conflans, 44,71 m²
 under the 50 m² floor).
 
@@ -875,7 +875,7 @@ configures no pattern is bit-for-bit unchanged. Three rules travel with it:
 > about dates (`IMAP_SINCE_DAYS`, default 7, a window of 0 clamped to 1); and **`FROM <the source's
 > own sender>` pushed into the query**, so each source gets its own window rather than a slice of
 > one — without it a busy portal starves a quiet one silently, and it worsens with every source
-> added. `scout doctor --source=seloger` → **74 annonces**, from 0.
+> added. `scout --domain=rent doctor --source=seloger` → **74 annonces**, from 0.
 
 > **A rent is a PERIODIC amount, and a wider window is what proved it.** A live `Baisse de prix`
 > card quotes three figures — the reduction `baissé de 100 €`, the new rent `1 100 €/mois`, the old
@@ -894,14 +894,14 @@ configures no pattern is bit-for-bit unchanged. Three rules travel with it:
 > the plausible band, a valid IdF postcode, and a town 250 km away. They are excluded by
 > `params.from`, and would be refused again by the no-information floor. Both layers earn their keep.
 
-**THE CAR DOMAIN EXISTS AS OF 2026-08-29 — `scout --domain=car`, `src/php/Vehicle/`,
+**THE CAR DOMAIN EXISTS AS OF 2026-08-29 — `scout --domain=car`, `src/php/Car/`,
 `config/car/`.** A second domain, not a parameterisation of the rent path: `VehicleListing`,
 `VehicleClassifier` (the §1 vehicle set, non-overridable, NEGATION READ FIRST because every term
 arrives negated in honest copy), `VehicleCriteria` + `VehicleScorer` (one hard ceiling, one
 stated-location filter, everything else a clamped score component), `VehicleStore` (own tables on
 its own file, composing the housing `Store` for runs/health/alerts), two adapters (`VehicleEmailSource`
 with positional card readers; `SitemapVehicleSource`, the detail-hydration pattern applied to a whole
-source), `VehiclePipeline`, `VehicleFormatter`, `Cli/VehicleScout`. The rent path changed in two
+source), `VehiclePipeline`, `VehicleFormatter`, `Car/Cli/CarScout` (was `Cli/VehicleScout`). The rent path changed in two
 places only: the `--domain=car` dispatch line and `Cli/ChannelFactory`, extracted so both CLIs build
 channels from one place. First slice: ParuVendu (email, samples its feed — 3 cards per message) and
 Autohero (sitemap + JSON-LD, seed before watching). Rulings: `docs/plans/scout-rename-and-car-domain.plan.md`;
@@ -914,7 +914,7 @@ Do not start it; `docs/PHORJ-REQUIREMENTS.md` remains the record of what it woul
 **Q27's LIVENESS SIGNAL IS LIVE (2026-08-22), and it was ruled but unbuilt.** `HEARTBEAT_HOURS` (today `RENT_HEARTBEAT_HOURS`) sat
 in `.env.example` read by no code at all: `NotificationKind::HEARTBEAT` existed, but only
 `test-notify` used it, so a watcher that died at 03:00 was indistinguishable from one watching a
-quiet market until somebody thought to look. `scout run --watch` now emits a LOW-priority beat
+quiet market until somebody thought to look. `scout --domain=rent run --watch` now emits a LOW-priority beat
 every `RENT_HEARTBEAT_HOURS` (default 24) — **whether or not anything matched**, which is the
 entire point — carrying passes completed, listings notified and sources OK. **The startup beat is
 `isDue()`-gated, not unconditional** (`Scout::runCommand()`, the startup `isDue()` check — cited by LINE for one round, and the line moved twice; a symbol survives an edit above it): the marker is on the mounted volume, so a
@@ -922,10 +922,10 @@ restart inside the interval sends nothing, and only a cold start — no marker �
 That is the correct behaviour (a redeploy loop must not spam the channel) but it is NOT a
 channel-health check, and reading it as one costs time: a redeploy on 2026-08-23 15:48 left the
 marker at the previous day's 22:15 and that looked like a fault for several minutes. To prove the
-DEPLOYED image can reach the user, run `docker compose run --rm scout test-notify`. `Core/Heartbeat` is the
+DEPLOYED image can reach the user, run `docker compose run --rm rent-scout test-notify`. `Core/Heartbeat` is the
 pure policy (clock injected; a cold start is due, an unreadable marker is due, a marker in the
 FUTURE is due — the bias is always one beat too many, never one suppressed), and the marker lives at
-`state/heartbeat.txt`, on Q8's mounted volume, so it survives the container being replaced. An
+`state/rent-heartbeat.txt`, on Q8's mounted volume, so it survives the container being replaced. An
 unusable `RENT_HEARTBEAT_HOURS` is a **loud refusal at startup**, not a silent fallback: `0` would
 disable the one signal that distinguishes a dead watcher from a quiet market.
 
@@ -950,7 +950,7 @@ make the marker **unwritable** (a directory where the file goes): `beat()` write
 reads `is_file()`, so every check is due — and two beats is then the *correct* result, per the
 documented bias. All three guarantees are in `tests/sabotage-check.sh`.
 
-Q27's other half landed with it: a startup refusal from `run` writes `state/last-refusal.txt`, and
+Q27's other half landed with it: a startup refusal from `run` writes `state/rent-last-refusal.txt`, and
 the next successful start reports it on the beat and clears it. That covers the failure that reaches
 nobody — the process exits before any channel exists, and under Docker its stderr scrolls past in a
 log nobody reads. **`ConfigError` and `SourceError` during `run` are recorded too**, because a
@@ -963,13 +963,13 @@ the disk — a `ConfigError` message quotes the offending VALUE back, which is e
 third-party host (loopback stays allowed — the wire tests need a real socket). Before In'li was
 enabled the offline guarantee held only because every source was disabled; enabling one turned the
 suite into a four-page-per-test crawler of a live landlord's site within a single run.
-`scout doctor|run --source=<name>` (repeatable) limits a run to one source, which is what onboarding
+`scout --domain=rent doctor|run --source=<name>` (repeatable) limits a run to one source, which is what onboarding
 the next source needs and what keeps the CLI tests off the shipped source list.
 
 **`--source=<name>` also FORCE-RUNS a source that is `enabled: false`** (2026-08-22), and only an
 explicit name does — an ordinary pass still skips it, which is asserted separately because deleting
 the enabled check is the over-correction. It is a repair, not a convenience: `/add-source` step 5
-prescribes running `scout doctor` against a new block *before* flipping the flag, and that order was
+prescribes running `scout --domain=rent doctor` against a new block *before* flipping the flag, and that order was
 impossible while a disabled source could not run. `dump` always behaved this way; the verbs now
 agree. Three things travel with it. The run SAYS the source is disabled, because a `--source` left
 behind in a deployment is otherwise indistinguishable from one somebody enabled on purpose. Hard
@@ -987,9 +987,9 @@ any path that loses the seen-set. `ConfigTest::testNoFixtureSourceShipsEnabled` 
 creeping back.
 
 **Two more environment seams, both of them there so a test cannot become a hang or a crawl**
-(2026-08-19). `SCOUT_MAX_PASSES=<n>` bounds `scout run --watch` to n passes; absent — the
+(2026-08-19). `SCOUT_MAX_PASSES=<n>` bounds `scout --domain=rent run --watch` to n passes; absent — the
 normal case — the loop runs until stopped, and when it is set the watcher SAYS so on its banner
-every time. `tests/php/Cli/ScoutTest.php` sets it for every test in the class, because `--watch` is
+every time. `tests/php/Rent/Cli/RentScoutTest.php` sets it for every test in the class, because `--watch` is
 the one verb whose success case never returns: a test that expects the run to be refused and is
 wrong does not fail, it blocks, and it blocks the suite and the sabotage ledger behind it. That was
 observed — disabling the Q36 guard made the ledger sit on its FIRST case for eleven minutes printing
@@ -997,11 +997,11 @@ nothing. `tests/sabotage-check.sh` now also runs each case under `timeout` (`SAB
 default 300 s) and counts a suite that never finished as a loud FAILURE, since a hang is not a
 detection.
 
-**The Q36 flood guard reads the ROWS, not the file** (fixed 2026-08-19). `scout run` refuses to
+**The Q36 flood guard reads the ROWS, not the file** (fixed 2026-08-19). `scout --domain=rent run` refuses to
 notify while `Store::isSeenSetEmpty()` — a missing volume mount produces a valid, empty, migrated
 database indistinguishable from a healthy one, and every historic listing would push at once. The
 guard used to ask whether `Store::open()` had CREATED the file, which any earlier command that
-merely opened the database answered away: `scout doctor` opens it, so typing the first command a new
+merely opened the database answered away: `scout --domain=rent doctor` opens it, so typing the first command a new
 machine invites you to type disarmed the guard for the following run. Q36's other half — a mount
 marker file — is WITHDRAWN rather than unimplemented; `docs/OPEN-QUESTIONS.md` records why it cannot
 fire in either placement.
@@ -1117,7 +1117,7 @@ committed on 2026-08-26**, from two dated official publications, each carried in
 > **`logement social` (PLAI, PLUS) must NEVER be surfaced as a match.**
 
 This is not a config toggle bolted on at the end. It is a first-class domain concept with its own
-module (`src/php/Core/TenureClassifier.php` + `Tenure.php`), its own test suite, and a
+module (`src/php/Rent/Core/TenureClassifier.php` + `Tenure.php`), its own test suite, and a
 **fail-closed default**. It is an
 **eligibility fact**, not a ranking preference: the user is not eligible, so a social-housing false
 positive is not a slightly-wrong result — it is a wasted application and the reason a user stops
@@ -1157,7 +1157,7 @@ in prose drifts, so none is written here.
 
 Questions to the developer use the **`AskUserQuestion` tool**, per the global framework: options with
 the recommended one FIRST (labelled, with its reason) and a visible *"none of these / challenge the
-premise"* escape. Protocol details: `.claude/skills/rw-ask-human/SKILL.md` (renamed from
+premise"* escape. Protocol details: `.claude/skills/scout-ask-human/SKILL.md` (renamed from
 `ask-human` 2026-08-18 — a repo skill may not share a global skill's name).
 
 > The container-era plain-text protocol and the `❓`/`⏹` end-of-reply markers are **RETIRED**
@@ -1219,14 +1219,17 @@ impossible by design rather than by omission (`docs/PHORJ-REQUIREMENTS.md`).
 
 | Layer | Path | Responsibility |
 |---|---|---|
-| Core | `src/php/Core/` · later `src/phorj/core/` | `models`, `tenure` (the classifier), `criteria` (score + hard disqualifiers), `dedup`, `health` (`SourceHealth` + `SourceStatus`), `Redact` (masks secrets in adapter error text) |
-| Store | `src/php/Store/` | SQLite seen-set, price history, run log and the schema-v4 cross-portal `group_key`. **PHP-only** — it touches a database, so phorj will not transpile it. |
+| Entry point | `src/php/Cli/` | `Scout` — the `--domain=<slug>` dispatcher, which NEVER defaults — plus `Domains` (the registry: a new domain is one entry), `WatchLoop`, `ChannelFactory`. `bin/scout --domain=rent …` / `--domain=car …` |
+| Core (generic) | `src/php/Core/` | What no domain owns: `Text`, `Redact` (masks secrets in adapter error text), `Pacer`, `Heartbeat`, `health` (`SourceHealth` + `SourceStatus`), `Offline`, and the Notify channels/transports |
+| Rent domain | `src/php/Rent/{Core,Config,Adapters,Store,Enrich,Notify,Cli}/` · later `src/phorj/core/` | Everything housing-bound: `models`, `tenure` (the classifier), `criteria` (score + hard disqualifiers), `dedup`, the SQLite store, the field maps and source contract, transit enrichment, the rent formatter and `Cli/RentScout` |
+| Car domain | `src/php/Car/` | The vehicle twin — `Vehicle*` listing, classifier, criteria, scorer, store, sources, pipeline, formatter — and `Cli/CarScout` |
+| Store | `src/php/Rent/Store/` | SQLite seen-set, price history, run log and the schema-v4 cross-portal `group_key`. **PHP-only** — it touches a database, so phorj will not transpile it. |
 | Notify | `src/php/Core/Notify/` | One module per channel. Every notification carries `score` + human-readable `reasons[]`. |
-| Adapters | `src/php/Adapters/` | `base` (the `Source` interface), `http_json`, `html`, `email_alert` (IMAP), `browser` (Playwright, opt-in), `sites/` for per-site overrides |
-| Enrich | `src/php/Enrich/` | `transit` (IDFM / PRIM door-to-door commute), `geo` (commune → INSEE code, coords) |
-| Config | `config/` | `criteria.json` (user criteria), `sources.json` (source definitions + field maps) — both committed. **JSON, not YAML** — ruled 2026-08-07 (Q22): no `ext-yaml` here and no way to install one. `_`-prefixed keys are comments; any other unknown key is a validation error. A gitignored `criteria.local.json` overrides field-by-field |
-| Fixtures | `tests/fixtures/<source>/` | Frozen HTML/JSON payloads, and frozen `.eml` alerts for an `email_alert` source. Parser tests run **offline**. No network in CI. |
-| Classifier corpus | `tests/fixtures/tenure/corpus.json` | **Language-neutral.** Read by both implementations — that shared file is what makes the differential test mean anything. |
+| Adapters | `src/php/Adapters/` (generic: `Http/*`, `Mail/*`, `SourceError`, `FeedFreshness`) · `src/php/Rent/Adapters/` (the `Source` interface, `http_json`, `html`, `email_alert` (IMAP), `browser` (Playwright, opt-in), `sites/` for per-site overrides) | Site-specific code lives ONLY here |
+| Enrich | `src/php/Rent/Enrich/` | `transit` (IDFM / PRIM door-to-door commute), `geo` (commune → INSEE code, coords) |
+| Config | `config/<domain>/` — `config/rent/`, `config/car/` | `criteria.json` (user criteria), `sources.json` (source definitions + field maps) — both committed. **JSON, not YAML** — ruled 2026-08-07 (Q22): no `ext-yaml` here and no way to install one. `_`-prefixed keys are comments; any other unknown key is a validation error. A gitignored `criteria.local.json` overrides field-by-field |
+| Fixtures | `tests/fixtures/<domain>/<source>/` | Frozen HTML/JSON payloads, and frozen `.eml` alerts for an `email_alert` source. Parser tests run **offline**. No network in CI. |
+| Classifier corpus | `tests/fixtures/rent/tenure/corpus.json` | **Language-neutral.** Read by both implementations — that shared file is what makes the differential test mean anything. |
 
 PHP is **8.5**, no runtime dependencies, PSR-4 `Scout\` → `src/php/`. The test runner is
 PHPUnit's official PHAR, not a Composer dev dependency — see `README.md` § Getting started for why.
@@ -1321,7 +1324,7 @@ read-only, adversarial reviewer subagents** in `.claude/agents/`. Three lenses, 
 
 Each reviewer **reads the actual diff, code and tests itself** — never certify from the author's
 narrative — and is chartered to REFUTE, not approve. The global `/converge` runs the panel
-mechanically — invoke it with `--auto` (no-interrupts directive) after loading `/rw-lenses`.
+mechanically — invoke it with `--auto` (no-interrupts directive) after loading `/scout-lenses`.
 
 **Tier: MAXIMAL by default** — all three lenses, **two consecutive fully-clean rounds**, any finding
 resets the counter, cap 5 rounds → then ask via `AskUserQuestion` (never silently proceed). Rationale: a
@@ -1437,7 +1440,7 @@ bash tests/test-fetch-phpunit.sh        # proves the runner fetch refuses a bad 
 bash tests/test-ci-workflow.sh          # proves ci.yml still wires every step CLAUDE.md claims,
                                         #   AND that the ledger's baseline gate cannot redden itself
                                         #   (needs tools/phpunit.phar — it executes that gate)
-bash .claude/skills/rw-repair/drift-scan.sh                         # config/doc drift; exit 1 on P0/P1
+bash .claude/skills/scout-repair/drift-scan.sh                         # config/doc drift; exit 1 on P0/P1
 bash tests/test-sabotage-applies.sh     # proves every sabotage EXPRESSION still matches something —
                                         #   an expression that matches nothing reports coverage it
                                         #   does not have, and each is checked ON ITS OWN
@@ -1464,21 +1467,21 @@ seen-set that stops persisting, a price history that stops recording, a run log 
 source as calm. Q37 pacing is the same shape again: a banned IP presents as every source going quiet
 at once, which is exactly what a slow rental market looks like. A green suite proves the code passes
 the tests; only the sabotage run proves the tests would notice if it stopped working. **Run it after
-any change to `src/php/Core/Tenure*`, `Text.php`, the corpus, `src/php/Core/Pacer.php`,
-`src/php/Cli/WatchLoop.php`, `src/php/Adapters/PacedSource.php`, or anything under
-`src/php/Store/`.** It already found three undetected
+any change to `src/php/Rent/Core/Tenure*`, `Text.php`, the corpus, `src/php/Core/Pacer.php`,
+`src/php/Cli/WatchLoop.php`, `src/php/Rent/Adapters/PacedSource.php`, or anything under
+`src/php/Rent/Store/`.** It already found three undetected
 regressions and one piece of dead safety code on the day it was written, and two more holes in the
 store's own suite the day that was added.
 
 <!-- ADAPT: keep in step with bin/scout.
      Target CLI surface, per spec §10:
-       scout doctor              # health-check every source: status, timing, item counts
-       scout dump <source>       # raw payload of the first item — for building field maps
-       scout run --once [-v]     # single pass
-       scout run --watch         # loop with jitter
-       scout test-notify         # verify the notification channel
-       scout replay <fixture>    # re-run parsing against a saved fixture
-     `scout dump` is what makes onboarding a new source take 5 minutes instead of an hour.
+       scout --domain=rent doctor              # health-check every source: status, timing, item counts
+       scout --domain=rent dump <source>       # raw payload of the first item — for building field maps
+       scout --domain=rent run --once [-v]     # single pass
+       scout --domain=rent run --watch         # loop with jitter
+       scout --domain=rent test-notify         # verify the notification channel
+       scout --domain=rent replay <fixture>    # re-run parsing against a saved fixture
+     `scout --domain=rent dump` is what makes onboarding a new source take 5 minutes instead of an hour.
      Build it early — it is milestone 1, not a nice-to-have. -->
 
 ## Testing & verification
@@ -1489,7 +1492,7 @@ Required coverage, per spec §11 — non-negotiable once `src/` exists:
   Offline. No network in CI. A parser test that reaches the network is a monitoring check, not a test.
 - **Classifier tests.** ≥30 hand-labelled listing texts covering pure-LLI In'li, mixed CDC Habitat,
   an explicit PLAI, an explicit PLS, and an ambiguous case. The suite must go red if the classifier
-  regresses. **Done** — `tests/fixtures/tenure/corpus.json`, 130 cases, and the suite asserts all five
+  regresses. **Done** — `tests/fixtures/rent/tenure/corpus.json`, 130 cases, and the suite asserts all five
   shapes are present so "30 easy ones" cannot satisfy it. The corpus is **122 synthetic + 8 CAPTURED**
   (2026-08-20 onward — CDC Habitat cards, Cityloger detail pages, Logirep card + filter facets, and a
   SeLoger alert CTA — the first captured from an EMAIL, and the first whose offending text belongs to
@@ -1500,7 +1503,7 @@ Required coverage, per spec §11 — non-negotiable once `src/` exists:
   renumber.
 - **Sabotage-verification is part of the classifier's test contract**, not an extra. See
   `tests/sabotage-check.sh` and § "Common workflows" above for why a green suite is insufficient here.
-- **The surface matrix is the other half of that contract.** `tests/php/Core/SurfaceMatrixTest.php`
+- **The surface matrix is the other half of that contract.** `tests/php/Rent/Core/SurfaceMatrixTest.php`
   takes the cross product of the classifier's own excluded-or-undetermined vocabulary — read from
   `LABELS`, `AMBIGUOUS_LABELS` and `PROCEDURAL` by reflection — and EVERY surface a listing presents,
   and asserts no cell reaches a notification. It exists because eight review rounds each found a P0
@@ -1537,7 +1540,7 @@ Required coverage, per spec §11 — non-negotiable once `src/` exists:
   **group** (schema v4: the key SURVIVES a survivorship flip, a delisted member keeps it, two groups
   that meet are merged, a listing that clusters alone has NO group, and §1 is judged across the
   WHOLE cluster — an excluded member vetoes it, an undetermined one does not, and the veto is
-  DURABLE: it is read from the persisted group, so it survives both a later `scout reclassify` that
+  DURABLE: it is read from the persisted group, so it survives both a later `scout --domain=rent reclassify` that
   cannot see the evidence which caused it AND a later pass in which the excluded sibling was not
   fetched at all (a failed source, a `--source=<name>` run, a delisting). Stated cost: `group_key`
   is never cleared, so an over-merge rejects both flats permanently; a singleton reports its own
@@ -1557,7 +1560,7 @@ Required coverage, per spec §11 — non-negotiable once `src/` exists:
   the diagnostic). A new store behaviour without a category is a behaviour nobody decided to
   guarantee.
 
-  **`scout doctor` and the run loop MUST pass `$nowIso` to `Store::health()`.** Without it the store
+  **`scout --domain=rent doctor` and the run loop MUST pass `$nowIso` to `Store::health()`.** Without it the store
   has no clock, and ONE verdict becomes underivable: `STALE` never fires at all. That is the clock's
   only job — an earlier version also used it to filter the run log, and that discarded real failures
   whenever the clock itself was the wrong thing. **`doctor` must also print `Store::journalMode()`**: WAL can
@@ -1573,26 +1576,30 @@ state/                      The SQLite seen-set, price history and run log. Giti
 prototype/                  Pre-existing single-file prototype. Reference only; do not extend in place
 docs/OPEN-QUESTIONS.md      All 25 questions, each closed 2026-08-07 with the default applied
 docs/plans/                 <topic>.plan.md, each with its own ## Decisions Log
-config/                     criteria.json + sources.json (committed) — JSON, ruled 2026-08-07 (Q22)
-src/php/Core/               PHP 8.5 pure core — models + tenure classifier + source health
+config/<domain>/            criteria.json + sources.json per domain (committed) — JSON, ruled 2026-08-07 (Q22)
+src/php/Cli/                Scout — the --domain dispatcher (never defaults) — Domains (the registry), WatchLoop, ChannelFactory
+src/php/Core/               the GENERIC core: Text, Redact, Pacer, Heartbeat, source health, the Notify channels
+src/php/Rent/               the rent domain — Core (models, tenure classifier, criteria, dedup), Config, Adapters,
+                            Store, Enrich, Notify (Formatter), Cli/RentScout
+src/php/Car/                the car domain — the Vehicle* classes and Cli/CarScout
 src/php/Core/Pacer.php      the Q37 cadence; clock, sleeper and RNG all injected so it is testable
 src/php/Cli/WatchLoop.php   the `--watch` loop; survives a failing pass, stops after the one in flight
-src/php/Adapters/PacedSource.php   decorator applying Pacer, so Pipeline never learns time exists
-src/php/Store/              SQLite seen-set, price history, run log, cross-portal group (v4)
+src/php/Rent/Adapters/PacedSource.php   decorator applying Pacer, so Pipeline never learns time exists
+src/php/Rent/Store/              SQLite seen-set, price history, run log, cross-portal group (v4)
 src/phorj/                  phorj port of the same pure core                  [waits on phorj]
-tests/php/                  PHPUnit suites
-tests/fixtures/tenure/      corpus.json — the language-neutral classifier corpus
-tests/fixtures/<source>/    Frozen payloads, one dir per source
-tests/fixtures/seloger/     The first REAL portal alerts, scrubbed. Their AWKWARD structure is
+tests/php/                  PHPUnit suites — generic under Core/Adapters/Config/Cli, then Rent/… and Car/…
+tests/fixtures/rent/tenure/      corpus.json — the language-neutral classifier corpus
+tests/fixtures/<domain>/<source>/   Frozen payloads, one dir per source, under the domain that reads them
+tests/fixtures/rent/seloger/     The first REAL portal alerts, scrubbed. Their AWKWARD structure is
                             the point — preamble, `=_?:` boundary, 2047 subject split mid-word.
                             The 003 capture is the TITLE one: four cards, not one of which the
                             old vocabulary pattern could read (`APARTMENT`, `T5`, `T3`)
-tests/fixtures/bienici/     The second portal's alerts. A five-card alert, a one-card alert whose
+tests/fixtures/rent/bienici/     The second portal's alerts. A five-card alert, a one-card alert whose
                             suggestion card makes it two, and a message with NO cards at all
-tests/fixtures/leboncoin/   The third portal's, and the first HTML-ONLY alert: no text/plain
+tests/fixtures/rent/leboncoin/   The third portal's, and the first HTML-ONLY alert: no text/plain
                             part at all, so every URL lives in an href. n=1 — one message, three
                             cards, the first this subscription ever produced
-tests/fixtures/pap/         The fourth portal's, and the first DIRECT-FROM-OWNER one. ONE listing
+tests/fixtures/rent/pap/         The fourth portal's, and the first DIRECT-FROM-OWNER one. ONE listing
                             per message, so no card_separator at all. Both captures quote the
                             alert's own SEARCH CRITERIA above the listing — the 45 m² floor the
                             first-match-wins surface reader returned instead of the flat's 50 —
@@ -1835,7 +1842,7 @@ tests/test-tenure-guard.sh         Sabotage test FOR that hook — must-fire and
 .claude/agents/source-resilience-reviewer.md    resilience + legal posture + secrets lens
 .claude/agents/completeness-reviewer.md         completeness + blast-radius lens
 .claude/skills/                    Repo-native slash skills; `ls` is the authoritative list
-.claude/skills/rw-repair/drift-scan.sh  The mechanical half of /rw-repair — run it in a gate
+.claude/skills/scout-repair/drift-scan.sh  The mechanical half of /scout-repair — run it in a gate
 tests/sabotage-check.sh            Breaks the classifier many ways; the suite must catch every one
 tests/test-fetch-phpunit.sh        Proves the runner fetch refuses a bad signature
 tests/test-drift-scan.sh           Sabotage test FOR that gate — each S8 sub-check must go red
@@ -1871,16 +1878,16 @@ tests/test-ci-workflow.sh          Proves ci.yml still wires every step this fil
 
 The repo carries exactly FOUR skills, all repo-specific by name and content (global-is-reference
 ruling, 2026-08-18 — a repo may not duplicate anything that exists in `~/.claude/`): `/add-source`
-(onboard a landlord or portal, config-only), `/rw-ask-human` (the question protocol with this
-repo's extra rules), `/rw-lenses` (the mandatory review dimensions + sleuth lens K), and
-`/rw-repair` (the drift gate). Every other skill — `/sweep`, `/sleuth`, `/inspect`, `/gaps`,
+(onboard a landlord or portal, config-only), `/scout-ask-human` (the question protocol with this
+repo's extra rules), `/scout-lenses` (the mandatory review dimensions + sleuth lens K), and
+`/scout-repair` (the drift gate). Every other skill — `/sweep`, `/sleuth`, `/inspect`, `/gaps`,
 `/forge`, `/cross-check`, `/converge`, `/pre-commit`, `/aggregate-findings`, `/handoff`,
 `/retrospective`, `/expanding-context` — comes from the developer's global install. **Before
-running ANY of those global review skills here, load `/rw-lenses` first**: it carries the
-rent-watch dimensions, lens K and the repo conventions (reports under `var/claude/`,
+running ANY of those global review skills here, load `/scout-lenses` first**: it carries the
+scout review dimensions, lens K and the repo conventions (reports under `var/claude/`,
 non-blocking closes, project scope only) that the deleted repo-local copies used to enforce.
 
-`/rw-repair` (renamed from the bundle's `/repair` — global-is-reference ruling, 2026-08-18) detects drift between what this config *claims* and what exists. Its mechanical half is
-`bash .claude/skills/rw-repair/drift-scan.sh` — exit 1 on any P0/P1, so it works as a gate. Run it after
+`/scout-repair` (renamed from the bundle's `/repair` — global-is-reference ruling, 2026-08-18) detects drift between what this config *claims* and what exists. Its mechanical half is
+`bash .claude/skills/scout-repair/drift-scan.sh` — exit 1 on any P0/P1, so it works as a gate. Run it after
 adding a skill, agent or hook, and after any port from a sibling repo. It exists because one session
 found five such defects by hand, including a shipped framework that denied having a skill it had.

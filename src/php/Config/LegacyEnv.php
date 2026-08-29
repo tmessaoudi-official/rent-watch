@@ -27,7 +27,7 @@ namespace Scout\Config;
  * something to delete, not something to out-rank.
  *
  * The message names the VARIABLE and never its VALUE: `Scout::run()` calls this INSIDE its own
- * try, so a refusal here goes through `failRun()` and is persisted to `state/last-refusal.txt`,
+ * try, so a refusal here goes through `failRun()` and is persisted to `state/rent-last-refusal.txt`,
  * then read back onto the Q27 heartbeat. A channel that quotes values is how a pasted
  * `imap://user:password@host` reaches a file — see {@see \Scout\Core\Redact}.
  *

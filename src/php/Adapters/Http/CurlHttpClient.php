@@ -97,7 +97,7 @@ final readonly class CurlHttpClient implements HttpClient
         // `SCOUT_OFFLINE=1` turns every outbound request into a loud refusal, and
         // `tests/bootstrap.php` sets it for the whole suite. Spec §11 says parser tests run
         // offline; until 2026-08-19 that held only BY ACCIDENT, because every source in
-        // `config/sources.json` was disabled and the tests that run the real CLI against the real
+        // `config/rent/sources.json` was disabled and the tests that run the real CLI against the real
         // config therefore had nothing to poll. Enabling In'li turned the suite into a four-page
         // crawler of a live landlord's site, once per test, inside a single run.
         //

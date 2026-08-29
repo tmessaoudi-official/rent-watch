@@ -1,4 +1,4 @@
-# rent-watch — the deployment ruled by Q8: Docker on a VPS, `state/` on a mounted volume,
+# scout — the image both domains run from (compose sets the domain in each ENTRYPOINT); the deployment ruled by Q8: Docker on a VPS, `state/` on a mounted volume,
 # `scout run --watch` owning its own schedule rather than cron.
 #
 # GitHub Actions is ruled OUT for running this, explicitly and for a concrete reason: no persistent
@@ -74,7 +74,7 @@ COPY composer.json ./
 # notify) before a single landlord is polled: `scout doctor --source=fixture_demo`, which force-runs
 # a disabled source. Omit the file and that command — the first one README hands a new operator —
 # fails on a box where nothing else is wrong.
-COPY tests/fixtures/fixture_demo/ ./tests/fixtures/fixture_demo/
+COPY tests/fixtures/rent/fixture_demo/ ./tests/fixtures/rent/fixture_demo/
 
 # `state/` is the MOUNTED VOLUME (Q8): the seen-set, the price history, the run log, the Q27
 # heartbeat marker and `last-refusal.txt`. Created here so the image runs even unmounted — but see
@@ -83,7 +83,7 @@ COPY tests/fixtures/fixture_demo/ ./tests/fixtures/fixture_demo/
 RUN mkdir -p /app/state
 
 # Non-root. Nothing here needs privilege, and the one writable path is the volume.
-RUN useradd --system --create-home --uid 10001 rentwatch \
+RUN useradd --system --create-home --uid 10001 scout \
     && chown -R 10001:10001 /app
 # Numeric, not the name: a host that maps the container's filesystem (a bind-mounted `state/`, which
 # is exactly what Q8 prescribes) resolves a numeric id without needing the name to exist there.
@@ -95,4 +95,4 @@ USER 10001:10001
 # implementation.
 
 ENTRYPOINT ["php", "/app/bin/scout"]
-CMD ["run", "--watch"]
+CMD ["help"]

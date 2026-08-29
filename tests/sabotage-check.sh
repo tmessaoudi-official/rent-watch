@@ -60,7 +60,7 @@ run_sabotage() {
   # Checked: an unnoticed copy failure makes the scratch suite fail for the wrong reason, and the
   # detection assertion below cannot tell that apart from a caught sabotage.
   # config/ JOINED THIS LIST on 2026-08-07 and it is not optional. The config layer's tests read
-  # `config/criteria.json` and `config/sources.json` through a repo-root constant, so without it
+  # `config/rent/criteria.json` and `config/rent/sources.json` through a repo-root constant, so without it
   # every one of them ERRORS in the scratch copy — and an errored suite is a red suite, which this
   # harness cannot tell apart from a caught sabotage. Every sabotage would have reported `ok` while
   # proving nothing at all, which is precisely the failure the whole script exists to detect.
@@ -108,7 +108,7 @@ run_sabotage() {
   # rm -rf'd and rebuilt above for every sabotage, so the cache PHPUnit writes under it dies with it.
   # `timeout`, because a sabotage can make the suite BLOCK rather than fail, and a gate that stalls
   # silently is worse than one that reports a failure. Observed on 2026-08-19: disabling the Q36
-  # empty-database guard let `scout run --watch` enter its real fifteen-minute loop inside a test
+  # empty-database guard let `scout --domain=rent run --watch` enter its real fifteen-minute loop inside a test
   # that expected the run to be refused, and this script sat on its FIRST case for eleven minutes
   # printing nothing. The test-side fix is a bounded loop; this is the harness refusing to be held
   # hostage by the next one. The full suite runs in ~25 s, so five minutes is not a tight budget.
@@ -232,42 +232,42 @@ fi
 printf '\n'
 
 run_sabotage "PLS dropped from the excluded set" \
-  src/php/Core/Tenure.php \
+  src/php/Rent/Core/Tenure.php \
   's/^            self::PLS,$//'
 
 run_sabotage "PLAI dropped from the excluded set" \
-  src/php/Core/Tenure.php \
+  src/php/Rent/Core/Tenure.php \
   's/^            self::PLAI,$//'
 
 run_sabotage "conflict rule removed (eligible verdict no longer withholds)" \
-  src/php/Core/TenureClassifier.php \
+  src/php/Rent/Core/TenureClassifier.php \
   's/if ($winner->tenure->isEligible()) {/if (false) {/'
 
 run_sabotage "collocation guard removed (bare 'plus' becomes a social label)" \
-  src/php/Core/TenureClassifier.php \
+  src/php/Rent/Core/TenureClassifier.php \
   's/if (!$inContext) {/if (false) {/'
 
 run_sabotage "comparative suppression removed ('LOGEMENT PLUS GRAND' reads as financing)" \
-  src/php/Core/TenureClassifier.php \
+  src/php/Rent/Core/TenureClassifier.php \
   's|^    private const string COMPARATIVE_TAIL = .*$|    private const string COMPARATIVE_TAIL = "zzzz-no-such-word";|'
 
 # `reasons[]` is the product's only user-facing output (spec §5) and had exactly two assertions on it
 # — non-empty, and no blank entry — so reverting the tier-2 reason to the TABLE LITERAL, which makes a
 # notification quote a phrase the listing does not contain, left the whole suite green.
 run_sabotage "tier-2 reason quotes the table literal instead of the matched text" \
-  src/php/Core/TenureClassifier.php \
+  src/php/Rent/Core/TenureClassifier.php \
   "s|self::oneLine(\$matched)|\$hit['literal']|"
 
 # The doubt FLOOR in a structured tenure field. Round 5 found the prose branch answering silence when
 # no COLLOCATION noun sat beside the acronym — a §1 breach on the strongest rung of the ladder.
 run_sabotage "field prose branch goes silent again (no collocation noun => no signal, no doubt)" \
-  src/php/Core/TenureClassifier.php \
+  src/php/Rent/Core/TenureClassifier.php \
   's/$doubtAt = $this->firstNonComparativeOccurrence($cased, $acronym);/$doubtAt = null;/'
 
 # Addressed to firstNonComparativeOccurrence() alone — `if (!$this->matches` also appears in
 # isCodeList(), and a sabotage that broke both could be "detected" by a fixture for the other one.
 run_sabotage "the comparative escape stops firing (the adverb becomes a doubt)" \
-  src/php/Core/TenureClassifier.php \
+  src/php/Rent/Core/TenureClassifier.php \
   '/private function firstNonComparativeOccurrence/,$ s@if (!$this->matches@if (true || !$this->matches@'
 
 # The title/description boundary. Two independent halves — the fold that preserves the newline, and
@@ -277,20 +277,20 @@ run_sabotage "folding flattens the title/description newline again" \
   's|\[^\\S\\n\]+|\\s+|'
 
 run_sabotage "conventionne adjacency anchor reverts to \$ (which matches before a final newline)" \
-  src/php/Core/TenureClassifier.php \
+  src/php/Rent/Core/TenureClassifier.php \
   's|\*\\z/u|*$/u|'
 
 # ROUND 6: the doubt floor on the PROSE surface, and the four consumers of the boundary rule.
 run_sabotage "prose branch goes silent again (no collocation noun => no signal, no doubt)" \
-  src/php/Core/TenureClassifier.php \
+  src/php/Rent/Core/TenureClassifier.php \
   '/\$hit = \$this->financingAcronymPosition/,$ s|\$doubtAt = \$this->firstNonComparativeOccurrence(\$cased, \$acronym, caseInsensitive: false);|$doubtAt = null;|'
 
 run_sabotage "prose doubt floor goes case-INsensitive (digests the adverb too)" \
-  src/php/Core/TenureClassifier.php \
+  src/php/Rent/Core/TenureClassifier.php \
   's|caseInsensitive: false|caseInsensitive: true|'
 
 run_sabotage "a newline stops ending the financing phrase" \
-  src/php/Core/TenureClassifier.php \
+  src/php/Rent/Core/TenureClassifier.php \
   's@\^\[^\\S\\n\]\*(\\n|\$)@^[^\\S\\n]*($)@'
 
 # The comparative escape exists in TWO methods, and an earlier note here claimed a sabotage was
@@ -300,31 +300,31 @@ run_sabotage "a newline stops ending the financing phrase" \
 # guard on the doubt floor, so reverting it to `\s*` silently reopened the boundary hole with the
 # suite green. One note stretched over two call sites; each now has its own answer.
 run_sabotage "the doubt floor's comparative escape reads across the boundary" \
-  src/php/Core/TenureClassifier.php \
+  src/php/Rent/Core/TenureClassifier.php \
   '/private function firstNonComparativeOccurrence/,$ s@\[^\\S\\n\]\*(?i:@\\s*(?i:@'
 
 run_sabotage "the collocation separator spans the title/description newline" \
-  src/php/Core/TenureClassifier.php \
+  src/php/Rent/Core/TenureClassifier.php \
   "s|(?:\[^\\\\S\\\\n\]\|\[\\\\/\\\\-,:;()\]){1,3}|[\\\\s\\\\/\\\\-,:;()]{1,3}|"
 
 run_sabotage "an eligible label may be assembled across a multi-line FIELD value" \
-  src/php/Core/TenureClassifier.php \
+  src/php/Rent/Core/TenureClassifier.php \
   "s|isset(\$hit\['matched'\])|false|"
 
 run_sabotage "the field NAME stops being read for excluded vocabulary" \
-  src/php/Core/TenureClassifier.php \
+  src/php/Rent/Core/TenureClassifier.php \
   's|$nameSignal = $this->excludedVocabularyIn((string) $name);|$nameSignal = null;|'
 
 run_sabotage "the unrecognised-surface scan sees LABELS only again (PLUS goes blind)" \
-  src/php/Core/TenureClassifier.php \
+  src/php/Rent/Core/TenureClassifier.php \
   's|foreach (array_keys(self::AMBIGUOUS_LABELS) as $acronym) {|foreach ([] as $acronym) {|'
 
 run_sabotage "an unreadable field value is silently dropped instead of digested" \
-  src/php/Core/TenureClassifier.php \
+  src/php/Rent/Core/TenureClassifier.php \
   's|if (!is_scalar($value) \&\& !$value instanceof \\Stringable \&\& $value !== null) {|if (false) {|'
 
 run_sabotage "procedural surfaces are concatenated again (literals assemble across field joins)" \
-  src/php/Core/TenureClassifier.php \
+  src/php/Rent/Core/TenureClassifier.php \
   's|$surfaces\[\] = $folded;|$surfaces[0] .= "\\n" . $folded;|'
 
 run_sabotage "incidental surfaces refuse instead of decoding (one entity kills the listing)" \
@@ -342,50 +342,50 @@ run_sabotage "the tolerant fold substitutes a space instead of decoding (an enti
 # hyphen reads as a separator, so `plai<U+00AD>sir` splits into the word `plai` and invents a match
 # inside *plaisir* — the silent drop Text::hasToken() exists to prevent.
 run_sabotage "the identifier split runs before invisibles are stripped (plaisir becomes plai)" \
-  src/php/Core/TenureClassifier.php \
+  src/php/Rent/Core/TenureClassifier.php \
   's|$cased = Text::foldTolerantPreserveCase((string) $value);|$cased = Text::decodeEntities((string) $value);|'
 
 run_sabotage "the vocabulary filters to isExcluded() again (numero unique goes blind)" \
-  src/php/Core/TenureClassifier.php \
+  src/php/Rent/Core/TenureClassifier.php \
   '/private static function vocabularyKeys/,$ s|if ($tenure->isEligible()) {|if (!$tenure->isExcluded()) {|'
 
 run_sabotage "identifier spellings stop being split (demandeLogementSocial goes blind)" \
-  src/php/Core/TenureClassifier.php \
+  src/php/Rent/Core/TenureClassifier.php \
   "s|foreach (\[\$folded, \$split\] as \$haystack) {|foreach ([\$folded] as \$haystack) {|"
 
 run_sabotage "separator-free key containment removed (numeroUnique goes blind)" \
-  src/php/Core/TenureClassifier.php \
+  src/php/Rent/Core/TenureClassifier.php \
   's|foreach (self::vocabularyKeys() as $normalised => $literal) {|foreach ([] as $normalised => $literal) {|'
 
 run_sabotage "the listing url/commune/postcode/externalId stop being read" \
-  src/php/Core/TenureClassifier.php \
+  src/php/Rent/Core/TenureClassifier.php \
   "s|'postcode' => \$listing->postcode, 'externalId' => \$listing->externalId\] as \$what => \$text) {|'postcode' => null, 'externalId' => null] as \$what => \$text) {|"
 
 run_sabotage "an unreadable surface is read as empty again (breakage becomes absence)" \
-  src/php/Core/TenureClassifier.php \
+  src/php/Rent/Core/TenureClassifier.php \
   's|if ($folded === null) {|if (false) {|'
 run_sabotage "sans negates across the title/description boundary again" \
-  src/php/Core/TenureClassifier.php \
+  src/php/Rent/Core/TenureClassifier.php \
   "s|'/\\\\bsans\[^\\\\S\\\\n\]+\\\\z/u'|'/\\\\bsans\\\\s+\$/u'|"
 
 run_sabotage "procedural tells stop reading structured fields" \
-  src/php/Core/TenureClassifier.php \
+  src/php/Rent/Core/TenureClassifier.php \
   's|foreach ($this->proceduralSurfaces($listing) as $folded) {|foreach ([Text::fold($listing->text())] as $folded) {|'
 
 run_sabotage "an excluded label in an unrecognised field is ignored again" \
-  src/php/Core/TenureClassifier.php \
+  src/php/Rent/Core/TenureClassifier.php \
   's|$unknownFieldDoubt = $this->excludedVocabularyIn($value);|$unknownFieldDoubt = null;|'
 
 run_sabotage "an eligible tell may be assembled across a phrase boundary" \
-  src/php/Core/TenureClassifier.php \
+  src/php/Rent/Core/TenureClassifier.php \
   's|if (\$tenure->isEligible() \&\& str_contains(\$matched, "\\n")) {|if (false) {|'
 
 run_sabotage "an eligible LABEL may be assembled across a phrase boundary" \
-  src/php/Core/TenureClassifier.php \
+  src/php/Rent/Core/TenureClassifier.php \
   "s|\$hit\['tenure'\]->isEligible() && str_contains|false \&\& str_contains|"
 
 run_sabotage "reasons[] stop being collapsed to one line" \
-  src/php/Core/TenureClassifier.php \
+  src/php/Rent/Core/TenureClassifier.php \
   's|return trim((string) preg_replace(./\\s+/u., . ., \$fragment));|return $fragment;|'
 
 # The two folded surfaces must stay byte-aligned: label positions come from fold(), the ambiguous
@@ -400,23 +400,23 @@ run_sabotage "word boundaries dropped (substring match: 'plaine' becomes PLAI)" 
   "s|'/(?<!\[a-z0-9\])' . preg_quote(\$needle, '/') . '(?!\[a-z0-9\])/u'|'/' . preg_quote(\$needle, '/') . '/u'|"
 
 run_sabotage "source default raised above the fail-closed floor" \
-  src/php/Core/TenureClassifier.php \
+  src/php/Rent/Core/TenureClassifier.php \
   's/5 => 50\]/5 => 95]/'
 
 run_sabotage "fail-closed floor lowered" \
-  src/php/Core/TenureClassifier.php \
+  src/php/Rent/Core/TenureClassifier.php \
   's/public const int FLOOR_BP = 60;/public const int FLOOR_BP = 10;/'
 
 run_sabotage "mixedTenure defaults to false (config omission opens the gate)" \
-  src/php/Core/SourceProfile.php \
+  src/php/Rent/Core/SourceProfile.php \
   's/public bool $mixedTenure = true,/public bool $mixedTenure = false,/'
 
 run_sabotage "UNKNOWN routed to the notification channel" \
-  src/php/Core/TenureClassifier.php \
+  src/php/Rent/Core/TenureClassifier.php \
   's/if ($tenure === Tenure::UNKNOWN) {/if (false) {/'
 
 run_sabotage "fail-closed downgrade removed (mixed source keeps an eligible tenure)" \
-  src/php/Core/TenureClassifier.php \
+  src/php/Rent/Core/TenureClassifier.php \
   's/if ($tenure->isEligible()$/if (false \&\& $tenure->isEligible()/'
 
 # The gate's THIRD term, added 2026-08-23 when In'li turned out to publish PLS. Dropping it makes a
@@ -424,7 +424,7 @@ run_sabotage "fail-closed downgrade removed (mixed source keeps an eligible tenu
 # is the disarmed state In'li shipped in, now reachable by deleting four words instead of by
 # believing a source's own description of itself.
 run_sabotage "the fail-closed rule stops requiring the detail page to have been read" \
-  src/php/Core/TenureClassifier.php \
+  src/php/Rent/Core/TenureClassifier.php \
   's/\&\& !$detailRead) {/) {/' \
   's/$source->mixedTenure \&\& !$detailRead ? Outcome::DIGEST/$source->mixedTenure \&\& false ? Outcome::DIGEST/'
 
@@ -432,7 +432,7 @@ run_sabotage "the fail-closed rule stops requiring the detail page to have been 
 # the EXCLUSION rules rather than only the source-default floor, reading a page would turn an
 # explicit PLS into a match — the exact inversion §1 exists to prevent.
 run_sabotage "reading the detail page licenses an excluded listing" \
-  src/php/Core/TenureClassifier.php \
+  src/php/Rent/Core/TenureClassifier.php \
   's/if ($tenure->isExcluded()) {/if ($tenure->isExcluded() \&\& !$detailRead) {/'
 
 # BOTH encoding guards at once, deliberately — and the reason is worth recording.
@@ -454,11 +454,11 @@ run_sabotage "combining marks no longer stripped (NFD text stops matching)" \
   '/p{Mn}/d'
 
 run_sabotage "conventionne exception widened back to any eligible tenure" \
-  src/php/Core/TenureClassifier.php \
+  src/php/Rent/Core/TenureClassifier.php \
   's/if ($other->tenure !== Tenure::LLI) {/if (!$other->tenure->isEligible()) {/'
 
 run_sabotage "ambiguous uppercase acronym guessed instead of digested" \
-  src/php/Core/TenureClassifier.php \
+  src/php/Rent/Core/TenureClassifier.php \
   's/return $ambiguousAt === null ? null : \[$ambiguousAt, false\];/return $ambiguousAt === null ? null : [$ambiguousAt, true];/'
 
 run_sabotage "French inflection dropped (labels matched exactly again)" \
@@ -470,15 +470,15 @@ run_sabotage "the -al\/-aux branch dropped (logements sociaux stops matching)" \
   "s/} elseif (str_ends_with(\$word, 'al')) {/} elseif (false) {/"
 
 run_sabotage "doubts compete positionally again (indecidable marker resolved as a tenure)" \
-  src/php/Core/TenureClassifier.php \
+  src/php/Rent/Core/TenureClassifier.php \
   's/if ($s->tenure === Tenure::UNKNOWN) {/if (false) {/'
 
 run_sabotage "doubts no longer withhold an otherwise-eligible verdict" \
-  src/php/Core/TenureClassifier.php \
+  src/php/Rent/Core/TenureClassifier.php \
   's/if ($objections !== \[\] || $doubts !== \[\]) {/if ($objections !== []) {/'
 
 run_sabotage "prose field values bypass the collocation guard again" \
-  src/php/Core/TenureClassifier.php \
+  src/php/Rent/Core/TenureClassifier.php \
   's/preg_quote($acronym, .\/.)/mb_strtolower(preg_quote($acronym, "\/"))/'
 
 # The adjacency test is the whole exception. Three separate ways to defeat it, because the first two
@@ -487,7 +487,7 @@ run_sabotage "prose field values bypass the collocation guard again" \
 # word. Deleting the whitespace-only test is what makes any LLI anywhere in the text qualify a
 # `conventionné`, which is v1 of this code and the shape that MATCHED a mixed résidence.
 run_sabotage "conventionne exception unbounded again (any LLI anywhere deletes it)" \
-  src/php/Core/TenureClassifier.php \
+  src/php/Rent/Core/TenureClassifier.php \
   's/^\( *\)&& $this->matches(.*substr($folded, $between, $s->position - $between))) {$/\1\&\& true) {/'
 
 # NOTE: there is no "direction-aware" sabotage here. One was written, and it proved the explicit
@@ -497,7 +497,7 @@ run_sabotage "conventionne exception unbounded again (any LLI anywhere deletes i
 # directly by TenureClassifierTest::testConventionneIsOnlyExcusedByALabelThatPrecedesIt().
 
 run_sabotage "conventionne adjacency measures the table literal, not the matched text" \
-  src/php/Core/TenureClassifier.php \
+  src/php/Rent/Core/TenureClassifier.php \
   's/$between = $other->position + $other->length;/$between = $other->position + strlen($other->evidence);/'
 
 run_sabotage "invisible non-Cf characters no longer stripped" \
@@ -505,7 +505,7 @@ run_sabotage "invisible non-Cf characters no longer stripped" \
   "s/self::INVISIBLE/''/"
 
 run_sabotage "numero unique alone becomes a determinate rejection again" \
-  src/php/Core/TenureClassifier.php \
+  src/php/Rent/Core/TenureClassifier.php \
   "s/'numero unique' => Tenure::UNKNOWN,/'numero unique' => Tenure::SOCIAL,/"
 
 # NOT SABOTAGED, and the reason is worth recording rather than quietly omitting.
@@ -516,23 +516,23 @@ run_sabotage "numero unique alone becomes a determinate rejection again" \
 # deleting one of two redundant guards. Listing it as a sabotage would report a hole that is not one.
 
 run_sabotage "tier 5 consulted even when higher tiers fired" \
-  src/php/Core/TenureClassifier.php \
+  src/php/Rent/Core/TenureClassifier.php \
   's/array_filter($signals) === \[\] \&\& $doubts === \[\]/true/'
 
 run_sabotage "SOCIAL stops corroborating the excluded tenures" \
-  src/php/Core/Tenure.php \
+  src/php/Rent/Core/Tenure.php \
   's/return $other->isExcluded();/return false;/'
 
 run_sabotage "tier tie-break ignores position (first table entry wins)" \
-  src/php/Core/TenureClassifier.php \
+  src/php/Rent/Core/TenureClassifier.php \
   's/return $tierSignals\[0\];/return array_values($tierSignals)[count($tierSignals) - 1];/'
 
 run_sabotage "'sans' negation lookbehind removed" \
-  src/php/Core/TenureClassifier.php \
+  src/php/Rent/Core/TenureClassifier.php \
   's/&& $this->isPrecededBySans($folded, $position)/\&\& false/'
 
 run_sabotage "conventionne exception removed entirely (genuine LLI stock digests)" \
-  src/php/Core/TenureClassifier.php \
+  src/php/Rent/Core/TenureClassifier.php \
   's/if ($s->tenure !== Tenure::CONVENTIONNE || $s->evidence !== .conventionne.) {/if (true) {/'
 
 # ── The store ─────────────────────────────────────────────────────────────────────────────────────
@@ -547,71 +547,71 @@ run_sabotage "conventionne exception removed entirely (genuine LLI stock digests
 # actually looking, so "the store suite passes" proves nothing on its own.
 
 run_sabotage "unknown rent reads as a drop to zero (null treated as 0)" \
-  src/php/Store/Store.php \
+  src/php/Rent/Store/Store.php \
   's%($rentCc !== null && $previousRentCc !== null) ? $rentCc - $previousRentCc : null%($rentCc ?? 0) - ($previousRentCc ?? 0)%'
 
 run_sabotage "last known rent erased when a source stops publishing it" \
-  src/php/Store/Store.php \
+  src/php/Rent/Store/Store.php \
   's%COALESCE(:rent, rent_cc)%:rent%'
 
 run_sabotage "price history records unchanged rents (no longer changes-only)" \
-  src/php/Store/Store.php \
+  src/php/Rent/Store/Store.php \
   's%$rentCc !== null && $rentCc !== $chronoBefore%$rentCc !== null%'
 
 run_sabotage "seen-set stops persisting (every run re-notifies everything)" \
-  src/php/Store/Store.php \
+  src/php/Rent/Store/Store.php \
   "s%'sqlite:' . \$path%'sqlite::memory:'%"
 
 run_sabotage "notified flag never read (a digested listing counts as notified)" \
-  src/php/Store/Store.php \
+  src/php/Rent/Store/Store.php \
   "s%\$row !== false && \$row\['notified_at'\] !== null%true%"
 
 run_sabotage "marking an unknown listing notified is a silent no-op" \
-  src/php/Store/Store.php \
+  src/php/Rent/Store/Store.php \
   's%if ($statement->rowCount() === 0) {%if (false) {%'
 
 run_sabotage "dedup key no longer scoped to the source (two feeds collide on id 17)" \
-  src/php/Store/Store.php \
+  src/php/Rent/Store/Store.php \
   "s%return \$source . ':id:' . rawurlencode(\$externalId);%return ':id:' . rawurlencode(\$externalId);%"
 
 run_sabotage "URL normalisation bypassed (a #fragment forks the identity)" \
-  src/php/Store/Store.php \
+  src/php/Rent/Store/Store.php \
   's%if ($parts === false || !isset($parts\[.host.\])) {%if (true) {%'
 
 run_sabotage "URL path folded with the host (two distinct listings over-merge)" \
-  src/php/Store/Store.php \
+  src/php/Rent/Store/Store.php \
   's%return $rebuilt;%return strtolower($rebuilt);%'
 
 run_sabotage "unparseable timestamp silently becomes the epoch" \
-  src/php/Store/Store.php \
+  src/php/Rent/Store/Store.php \
   's@throw new .InvalidArgumentException(sprintf(.horodatage ISO-8601 illisible : %s., $iso));@return 0;@'
 
 run_sabotage "a database from a NEWER schema is operated on anyway" \
-  src/php/Store/Store.php \
+  src/php/Rent/Store/Store.php \
   's%if ($recorded > self::SCHEMA_VERSION) {%if (false) {%'
 
 run_sabotage "a source that never ran is reported healthy" \
-  src/php/Store/Store.php \
+  src/php/Rent/Store/Store.php \
   's%status: SourceStatus::NEVER_RUN,%status: SourceStatus::OK,%'
 
 run_sabotage "a failed last run no longer reports BROKEN" \
-  src/php/Store/Store.php \
+  src/php/Rent/Store/Store.php \
   's%if (!$lastOk) {%if (false) {%'
 
 run_sabotage "a failed run extends the empty streak (failure read as 'nothing found')" \
-  src/php/Store/Store.php \
+  src/php/Rent/Store/Store.php \
   "s%(int) \$run\['ok'\] !== 1 || %%"
 
 run_sabotage "empty-run threshold raised out of reach (a dead source stays OK)" \
-  src/php/Store/Store.php \
+  src/php/Rent/Store/Store.php \
   's%self::EMPTY_RUNS_BEFORE_BROKEN%99%'
 
 run_sabotage "zero-baseline check removed (a genuinely quiet source is cried wolf on)" \
-  src/php/Store/Store.php \
+  src/php/Rent/Store/Store.php \
   's%if ($baseline > 0.0) {%if (true) {%'
 
 run_sabotage "drop-below-mean warning threshold neutralised" \
-  src/php/Store/Store.php \
+  src/php/Rent/Store/Store.php \
   's%$rollingMean \* self::DROP_WARNING_RATIO%0.0%'
 
 # ── The store, round two ──────────────────────────────────────────────────────────────────────────
@@ -623,47 +623,47 @@ run_sabotage "drop-below-mean warning threshold neutralised" \
 # sentence: the tests looked thorough and were not, and only sabotage said so.
 
 run_sabotage "unknown baseline treated as a zero baseline (broken-after-a-gap reads OK)" \
-  src/php/Store/Store.php \
+  src/php/Rent/Store/Store.php \
   's%$baseline = self::lastProductiveCount($runs, $streakStart);%$baseline = 0.0;%'
 
 run_sabotage "trailing Z no longer normalised (parsed in the host timezone)" \
-  src/php/Store/Store.php \
+  src/php/Rent/Store/Store.php \
   's%$normalised = str_ends_with($iso, .Z.) ? substr($iso, 0, -1) . .+00:00. : $iso;%$normalised = $iso;%'
 
 run_sabotage "timestamp round-trip check dropped (2026-02-30 rolls forward to 2 March)" \
-  src/php/Store/Store.php \
+  src/php/Rent/Store/Store.php \
   's%&& $parsed->format($format) === $normalised%%'
 
 run_sabotage "Unicode trim reverts to ASCII trim (an nbsp id collapses the whole run)" \
-  src/php/Store/Store.php \
+  src/php/Rent/Store/Store.php \
   's%trim($value, ".*")%trim($value)%'
 
 run_sabotage "no-information floor removed (id-less, url-less, title-less listings share one key)" \
-  src/php/Store/Store.php \
+  src/php/Rent/Store/Store.php \
   's%if ($url === .. && $title === ..) {%if (false) {%'
 
 run_sabotage "previous rent read by write order, not chronological order" \
-  src/php/Store/Store.php \
+  src/php/Rent/Store/Store.php \
   's%WHERE dedup_key = :key AND at_epoch <= :epoch%WHERE dedup_key = :key%'
 
 run_sabotage "changes-only invariant drops its forward check (duplicate consecutive rents)" \
-  src/php/Store/Store.php \
+  src/php/Rent/Store/Store.php \
   's%&& $rentCc !== $this->rentAfter($key, $epoch)%%'
 
 run_sabotage "a stale sighting overwrites the current state" \
-  src/php/Store/Store.php \
+  src/php/Rent/Store/Store.php \
   's%} elseif (!$isCurrent) {%} elseif (false) {%'
 
 run_sabotage "a partial re-parse erases the stored URL" \
-  src/php/Store/Store.php \
+  src/php/Rent/Store/Store.php \
   's%url          = COALESCE(NULLIF(:url, ....), url),%url          = :url,%'
 
 run_sabotage "a partial re-parse erases the stored title" \
-  src/php/Store/Store.php \
+  src/php/Rent/Store/Store.php \
   's%title        = COALESCE(NULLIF(:title, ....), title),%title        = :title,%'
 
 run_sabotage "price history ordered by insertion id rather than by time" \
-  src/php/Store/Store.php \
+  src/php/Rent/Store/Store.php \
   's%SELECT rent_cc FROM price_history WHERE dedup_key = :key ORDER BY at_epoch ASC, id ASC%SELECT rent_cc FROM price_history WHERE dedup_key = :key ORDER BY id ASC%'
 
 # This slot used to hold a "NOT SABOTAGED" note claiming the run-log ordering was redundant because
@@ -672,19 +672,19 @@ run_sabotage "price history ordered by insertion id rather than by time" \
 # ordering and its opposite are now real, tested guarantees:
 
 run_sabotage "run recency read from the timestamp again (one skewed clock hides every later run)" \
-  src/php/Store/Store.php \
+  src/php/Rent/Store/Store.php \
   's%WHERE source = :source ORDER BY id ASC%WHERE source = :source ORDER BY at_epoch ASC, id ASC%'
 
 run_sabotage "never-productive source hides behind OK again" \
-  src/php/Store/Store.php \
+  src/php/Rent/Store/Store.php \
   's%if (!$everProduced && $successfulRuns >= self::EMPTY_RUNS_BEFORE_BROKEN%if (false%'
 
 run_sabotage "a source failing half its fetches reads as healthy" \
-  src/php/Store/Store.php \
+  src/php/Rent/Store/Store.php \
   's%if ($runsInWindow >= self::MIN_RUNS_FOR_FLAKY%if (false%'
 
 run_sabotage "adapter error text persisted and shown unredacted" \
-  src/php/Store/Store.php \
+  src/php/Rent/Store/Store.php \
   's%Redact::text($error)%$error%'
 
 run_sabotage "only BROKEN alerts (NEVER_RUN and NEVER_PRODUCED go quiet)" \
@@ -711,63 +711,63 @@ run_sabotage "redaction fails OPEN on a PCRE error (raw text returned)" \
 # interrupt, so each of those repairs now has a sabotage of its own.
 
 run_sabotage "schema version stops tracking the schema (an older database opens and then throws)" \
-  src/php/Store/Store.php \
+  src/php/Rent/Store/Store.php \
   's%public const int SCHEMA_VERSION = [0-9]\+;%public const int SCHEMA_VERSION = 1;%'
 
 run_sabotage "the v1 upgrade never runs (seen_epoch column missing forever)" \
-  src/php/Store/Store.php \
+  src/php/Rent/Store/Store.php \
   's%if ($recorded < 2) {%if (false) {%'
 
 run_sabotage "the upgrade forgets to re-stamp the version (every open re-migrates)" \
-  src/php/Store/Store.php \
+  src/php/Rent/Store/Store.php \
   "s%\$stamp->execute(\['value' => (string) self::SCHEMA_VERSION\]);%%"
 
 run_sabotage "seen_epoch backfilled to zero (every stored listing reads as older than anything)" \
-  src/php/Store/Store.php \
+  src/php/Rent/Store/Store.php \
   's%$epoch = self::epoch((string) $row\[.last_seen_at.\]);%$epoch = 0;%'
 
 run_sabotage "baseline falls back to the last SUCCESSFUL run again (one quiet day zeroes it)" \
-  src/php/Store/Store.php \
+  src/php/Rent/Store/Store.php \
   "s%&& (int) \$runs\[\$i\]\['item_count'\] > 0%%"
 
 run_sabotage "the rolling window loses its upper bound (a 2036 run inflates every later mean)" \
-  src/php/Store/Store.php \
+  src/php/Rent/Store/Store.php \
   's%if ($at < $cutoff || $at > $reference) {%if ($at < $cutoff) {%'
 
 run_sabotage "the window scan stops at the first out-of-range row instead of skipping it" \
-  src/php/Store/Store.php \
+  src/php/Rent/Store/Store.php \
   's%                continue;%                break;%'
 
 run_sabotage "a superseded sighting counts as a price drop again" \
-  src/php/Store/Store.php \
+  src/php/Rent/Store/Store.php \
   's%isPriceDrop: $isCurrent && $delta !== null && $delta < 0,%isPriceDrop: $delta !== null \&\& $delta < 0,%'
 
 run_sabotage "the rent comparison reads the changes-only history again (a real drop is swallowed)" \
-  src/php/Store/Store.php \
+  src/php/Rent/Store/Store.php \
   's%$previousRentCc = $isCurrent%$previousRentCc = false%'
 
 run_sabotage "a stale sighting can no longer fill a missing URL" \
-  src/php/Store/Store.php \
+  src/php/Rent/Store/Store.php \
   's%SET url     = COALESCE(NULLIF(url, ....), NULLIF(:url, ....), url),%SET url     = url,%'
 
 run_sabotage "a stale sighting overwrites the URL instead of filling it" \
-  src/php/Store/Store.php \
+  src/php/Rent/Store/Store.php \
   's%SET url     = COALESCE(NULLIF(url, ....), NULLIF(:url, ....), url),%SET url     = :url,%'
 
 run_sabotage "the rollback is unguarded again (disk-full reports 'no active transaction')" \
-  src/php/Store/Store.php \
+  src/php/Rent/Store/Store.php \
   's%} catch (\\Throwable) {%} catch (\\LogicException) {%'
 
 run_sabotage "STALE never fires (a source whose schedule stopped reads OK forever)" \
-  src/php/Store/Store.php \
+  src/php/Rent/Store/Store.php \
   's%if ($silentFor > self::ROLLING_WINDOW_DAYS \* 86400) {%if (false) {%'
 
 run_sabotage "NEVER_PRODUCED loses its time floor (a source is accused 45 minutes after onboarding)" \
-  src/php/Store/Store.php \
+  src/php/Rent/Store/Store.php \
   's%&& $span >= self::MIN_SPAN_FOR_NEVER_PRODUCED%%'
 
 run_sabotage "millisecond timestamps refused again (what every JSON API emits)" \
-  src/php/Store/Store.php \
+  src/php/Rent/Store/Store.php \
   's%str_pad($m\[1\], 6, .0.)%$m[1]%'
 
 run_sabotage "IMAP LOGIN / POP3 PASS credentials pass through unmasked" \
@@ -807,39 +807,39 @@ run_sabotage "ambiguous names accept ':' again ('Erreur auth: <url>' eats the ur
 # repaired concurrently and the round could not be scored. Freeze first.
 
 run_sabotage "the changes-only guard reads the delta baseline again (duplicate rents)" \
-  src/php/Store/Store.php \
+  src/php/Rent/Store/Store.php \
   's%$rentCc !== $chronoBefore%$rentCc !== $previousRentCc%'
 
 run_sabotage "recency ignores the clock (a late-committed run erases BROKEN)" \
-  src/php/Store/Store.php \
+  src/php/Rent/Store/Store.php \
   's%if ($nowIso !== null) {%if (false) {%'
 
 run_sabotage "a future-stamped run is trusted even when a clock is available" \
-  src/php/Store/Store.php \
+  src/php/Rent/Store/Store.php \
   's%$at <= $now%true%'
 
 run_sabotage "an unstamped legacy database is stamped current instead of upgraded" \
-  src/php/Store/Store.php \
+  src/php/Rent/Store/Store.php \
   's%$recorded = 1;%return;%'
 
 run_sabotage "an undateable row brings the whole upgrade down again" \
-  src/php/Store/Store.php \
+  src/php/Rent/Store/Store.php \
   's%} catch (\\InvalidArgumentException) {%} catch (\\RangeException) {%'
 
 run_sabotage "an empty-string URL is written over a known one" \
-  src/php/Store/Store.php \
+  src/php/Rent/Store/Store.php \
   's%url          = COALESCE(NULLIF(:url, ....), url),%url          = COALESCE(:url, url),%'
 
 run_sabotage "WAL is never requested (two processes contend instead of sharing)" \
-  src/php/Store/Store.php \
+  src/php/Rent/Store/Store.php \
   "s%PRAGMA journal_mode = WAL%PRAGMA journal_mode = delete%"
 
 run_sabotage "the busy timeout is dropped (a second writer fails instantly)" \
-  src/php/Store/Store.php \
+  src/php/Rent/Store/Store.php \
   "s%PRAGMA busy_timeout = %PRAGMA cache_size = %"
 
 run_sabotage "fractional seconds narrow again (a Go feed's .1Z is refused)" \
-  src/php/Store/Store.php \
+  src/php/Rent/Store/Store.php \
   's%str_pad($m\[1\], 6, .0.)%$m[1]%'
 
 run_sabotage "secret names stop matching inside an env-var (IMAP_PASSWORD leaks)" \
@@ -878,7 +878,7 @@ run_sabotage "the LOGIN stoplist is bypassed (French prose is eaten)" \
 # and a Redact affix that turned every secret name into a substring match. Each now has a sabotage.
 
 run_sabotage "STALE measured from the last-inserted row instead of the newest credible one" \
-  src/php/Store/Store.php \
+  src/php/Rent/Store/Store.php \
   "s%\$silentFor = \$now - max(\$credible);%\$silentFor = \$now - (int) \$last['at_epoch'];%"
 
 run_sabotage "the secret-name affix matches mid-word again (project vocabulary is eaten)" \
@@ -902,7 +902,7 @@ run_sabotage "the base64 blob pattern eats long camelCase identifiers again" \
   "s%(?=\[A-Za-z0-9+/\]\*\[0-9+/\])%%"
 
 run_sabotage "record() reverts to a deferred transaction (the busy handler is skipped)" \
-  src/php/Store/Store.php \
+  src/php/Rent/Store/Store.php \
   "s%\$this->pdo->exec('BEGIN IMMEDIATE');%\$this->pdo->beginTransaction();%"
 
 # NOT SABOTAGED, and recorded rather than quietly omitted: `upgradeFrom()`'s own `BEGIN IMMEDIATE`.
@@ -913,15 +913,15 @@ run_sabotage "record() reverts to a deferred transaction (the busy handler is sk
 # is bounded: a migration runs once per database, and losing that race fails loudly.
 
 run_sabotage "journalMode() reports what was asked for, not what was given" \
-  src/php/Store/Store.php \
+  src/php/Rent/Store/Store.php \
   "s%\$journalMode = (string) \$mode->fetchColumn();%\$journalMode = 'wal';%"
 
 run_sabotage "the span reverts to last-minus-first (a skewed first run disables the detector)" \
-  src/php/Store/Store.php \
+  src/php/Rent/Store/Store.php \
   "s%\$span = max(\$epochs) - min(\$epochs);%\$span = (int) \$last['at_epoch'] - (int) \$runs[0]['at_epoch'];%"
 
 run_sabotage "fractional seconds are capped at six digits again (Go nanoseconds refused)" \
-  src/php/Store/Store.php \
+  src/php/Rent/Store/Store.php \
   's%(.d+)(?=%(\\d{1,6})(?=%'
 
 # ── The store, round six ──────────────────────────────────────────────────────────────────────────
@@ -947,7 +947,7 @@ run_sabotage "the ntfy topic drops back to the ambiguous list (a JSON body leaks
   "s%^        'topic',\$%%"
 
 run_sabotage "the counting window has no upper edge at all" \
-  src/php/Store/Store.php \
+  src/php/Rent/Store/Store.php \
   's%$edge = $now ?? (int) $runs\[array_key_last($runs)\]\[.at_epoch.\];%$edge = PHP_INT_MAX;%'
 
 # ── The store, round seven ────────────────────────────────────────────────────────────────────────
@@ -1002,15 +1002,15 @@ run_sabotage "the stoplist boundary reverts to \\b (accented entries go dead)" \
   "s%')(?!\[A-Za-z0-9_\]))'%')..b)'%"
 
 run_sabotage "the byte-fallback trim loses \\x85 and \\xAD" \
-  src/php/Store/Store.php \
+  src/php/Rent/Store/Store.php \
   's%.x85.xA0.xAD%\\xA0%'
 
 run_sabotage "the counting window loses its upper edge (a future-stamped row alerts forever)" \
-  src/php/Store/Store.php \
+  src/php/Rent/Store/Store.php \
   's%if ($at < $cutoff || $at > $edge) {%if ($at < $cutoff) {%'
 
 run_sabotage "the counting window ignores the clock (a stale writer hides failures)" \
-  src/php/Store/Store.php \
+  src/php/Rent/Store/Store.php \
   "s%\$edge = \$now ?? (int)%\$edge = (int)%"
 
 # ── The config, adapter and criteria layers, added 2026-08-07 ─────────────────────
@@ -1018,39 +1018,39 @@ run_sabotage "the counting window ignores the clock (a stale writer hides failur
 # wrongly rejected is indistinguishable from a listing that was never published.
 
 run_sabotage "an unknown room count starts disqualifying (the prototype's bug)" \
-  src/php/Core/CriteriaEngine.php \
+  src/php/Rent/Core/CriteriaEngine.php \
   's%\$listing->rooms !== null \&\& \$listing->rooms <%(\$listing->rooms ?? 0) <%'
 
 run_sabotage "an unknown surface starts disqualifying" \
-  src/php/Core/CriteriaEngine.php \
+  src/php/Rent/Core/CriteriaEngine.php \
   's%\$listing->surfaceM2 !== null \&\& \$listing->surfaceM2 <%(\$listing->surfaceM2 ?? 0.0) <%'
 
 run_sabotage "charges comprises stops being derived from HC + charges" \
-  src/php/Core/RawListing.php \
+  src/php/Rent/Core/RawListing.php \
   's%if (\$this->rentHc !== null \&\& \$this->charges !== null) {%if (false) {%'
 
 run_sabotage "the title-only exclusion starts matching the description too" \
-  src/php/Config/Criteria.php \
+  src/php/Rent/Config/Criteria.php \
   's%\$foldedTitle = Text::fold(\$title);%\$foldedTitle = Text::fold(\$title . "\\n" . \$description);%'
 
 run_sabotage "a DIGEST verdict gets promoted into scoring" \
-  src/php/Core/CriteriaEngine.php \
+  src/php/Rent/Core/CriteriaEngine.php \
   's%if (\$classification->outcome === Outcome::DIGEST) {%if (false) {%'
 
 run_sabotage "an excluded tenure stops being rejected by the criteria engine" \
-  src/php/Core/CriteriaEngine.php \
+  src/php/Rent/Core/CriteriaEngine.php \
   's%if (\$classification->outcome === Outcome::REJECT) {%if (false) {%'
 
 run_sabotage "the score stops being clamped (a penalty can drive it negative)" \
-  src/php/Core/CriteriaEngine.php \
+  src/php/Rent/Core/CriteriaEngine.php \
   's%(int) round(max(0, min(\$total, \$earned)) \* 100 / \$total)%(int) round(\$earned * 100 / \$total)%'
 
 run_sabotage "a listing with no location evidence stops being rejected" \
-  src/php/Core/CriteriaEngine.php \
+  src/php/Rent/Core/CriteriaEngine.php \
   's%if (!\$listing->hasLocationEvidence()) {%if (false) {%'
 
 run_sabotage "the high-floor penalty starts firing on an UNMENTIONED lift" \
-  src/php/Core/CriteriaEngine.php \
+  src/php/Rent/Core/CriteriaEngine.php \
   's%\$listing->hasElevator === false \&\& \$listing->floor !== null%\$listing->hasElevator !== true \&\& \$listing->floor !== null%'
 
 run_sabotage "an unknown config key becomes silently ignored" \
@@ -1058,15 +1058,15 @@ run_sabotage "an unknown config key becomes silently ignored" \
   's%if (\$this->remaining === \[\]) {%if (true) {%'
 
 run_sabotage "mixed_tenure stops being required in a source block" \
-  src/php/Config/ConfigLoader.php \
+  src/php/Rent/Config/ConfigLoader.php \
   "s%if (!\\\$r->has('mixed_tenure')) {%if (false) {%"
 
 run_sabotage "an excluded default_tenure becomes acceptable in config" \
-  src/php/Config/ConfigLoader.php \
+  src/php/Rent/Config/ConfigLoader.php \
   's%if (\$defaultTenure->isExcluded()) {%if (false) {%'
 
 run_sabotage "an enabled source may carry an unverified REMPLACER url" \
-  src/php/Config/ConfigLoader.php \
+  src/php/Rent/Config/ConfigLoader.php \
   's%if (str_contains(\$url, self::UNVERIFIED_URL)) {%if (false) {%'
 
 run_sabotage "any underscore-prefixed key becomes a comment again" \
@@ -1074,15 +1074,15 @@ run_sabotage "any underscore-prefixed key becomes a comment again" \
   "s%if (str_starts_with(\\\$name, '_') \&\& array_key_exists(substr(\\\$name, 1), \\\$data)) {%if (str_starts_with(\\\$name, '_')) {%"
 
 run_sabotage "a missing items_path yields an empty list instead of throwing" \
-  src/php/Adapters/FixtureSource.php \
+  src/php/Rent/Adapters/FixtureSource.php \
   's%if (\$items === null) {%if (false) { \$items = [];%'
 
 run_sabotage "an item with no stable id gets skipped instead of failing the run" \
-  src/php/Adapters/ListingMapper.php \
+  src/php/Rent/Adapters/ListingMapper.php \
   "s%if (\\\$ref === null || \\\$ref === '') {%if (false) {%"
 
 run_sabotage "the thousands-separator rule is dropped (1.450 becomes 1)" \
-  src/php/Adapters/Payload.php \
+  src/php/Rent/Adapters/Payload.php \
   's%if (\$trailing === 3) {%if (false) {%'
 
 # Restores the pre-2026-08-19 parser: strip every non-digit, then read what is left as ONE number.
@@ -1097,7 +1097,7 @@ run_sabotage "the thousands-separator rule is dropped (1.450 becomes 1)" \
 # here did exactly that and were caught by the harness's own `cmp -s` no-op guard. Anchor on the
 # plain assignment underneath instead; it says the same thing and cannot rot into a no-op.
 run_sabotage "a unit's own digit fuses into the number again (55,32 m2 -> 55322)" \
-  src/php/Adapters/Payload.php \
+  src/php/Rent/Adapters/Payload.php \
   's%\$raw = \$token\[0\];%\$raw = preg_replace("~[^0-9,.-]~u", "", \$raw) ?? "";%'
 
 # The other half: the token is found, but the LAST one wins instead of the first. Reads as an
@@ -1105,19 +1105,19 @@ run_sabotage "a unit's own digit fuses into the number again (55,32 m2 -> 55322)
 # string (every rent this project has ever parsed) is unaffected, so the change looks harmless in
 # every test that does not deliberately put two quantities in one string.
 run_sabotage "the LAST numeric token wins instead of the first" \
-  src/php/Adapters/Payload.php \
+  src/php/Rent/Adapters/Payload.php \
   's%\$raw = \$token\[0\];%preg_match_all("~-?[0-9][0-9.,]*[0-9]|-?[0-9]~u", \$raw, \$all); \$raw = end(\$all[0]);%'
 
 run_sabotage "an unrecognised boolean spelling becomes false instead of null" \
-  src/php/Adapters/Payload.php \
+  src/php/Rent/Adapters/Payload.php \
   's%default => null,%default => false,%'
 
 run_sabotage "zero and false start counting as absent values" \
-  src/php/Adapters/Payload.php \
+  src/php/Rent/Adapters/Payload.php \
   's%if (\$value === null) {%if (!\$value) {%'
 
 run_sabotage "an accented exclude pattern stops being refused" \
-  src/php/Config/ConfigLoader.php \
+  src/php/Rent/Config/ConfigLoader.php \
   's%x80-%xFE-%'
 
 run_sabotage "SourceError stops masking credentials before they are persisted" \
@@ -1125,7 +1125,7 @@ run_sabotage "SourceError stops masking credentials before they are persisted" \
   's%Redact::text(\$message)%\$message%'
 
 run_sabotage "a fixture path may escape the repo" \
-  src/php/Adapters/FixtureSource.php \
+  src/php/Rent/Adapters/FixtureSource.php \
   "s%if (str_contains(\\\$relative, '..')) {%if (false) {%"
 
 # ── Dedup and the notification layer, added 2026-08-07 ────────────────────────────
@@ -1134,27 +1134,27 @@ run_sabotage "a fixture path may escape the repo" \
 # (hard rule 2), which is what the notify sabotages attack.
 
 run_sabotage "dedup merges on ONE corroborating fact (every T4 in a commune collapses)" \
-  src/php/Core/Dedup.php \
+  src/php/Rent/Core/Dedup.php \
   's%MIN_CORROBORATING_FACTS = 2%MIN_CORROBORATING_FACTS = 1%'
 
 run_sabotage "dedup treats two UNKNOWN communes as the same commune" \
-  src/php/Core/Dedup.php \
+  src/php/Rent/Core/Dedup.php \
   's%if (\$communeA === null || \$communeB === null || \$communeA === .. || \$communeA !== \$communeB) {%if (false) {%'
 
 run_sabotage "dedup stops respecting the track boundary (In'li merges with SeLoger)" \
-  src/php/Core/Dedup.php \
+  src/php/Rent/Core/Dedup.php \
   's%if (\$familyA !== \$familyB) {%if (false) {%'
 
 run_sabotage "dedup ignores a stated rent disagreement" \
-  src/php/Core/Dedup.php \
+  src/php/Rent/Core/Dedup.php \
   's%RENT_TOLERANCE_RATIO = 0.03%RENT_TOLERANCE_RATIO = 9.99%'
 
 run_sabotage "dedup ignores a stated surface disagreement" \
-  src/php/Core/Dedup.php \
+  src/php/Rent/Core/Dedup.php \
   's%SURFACE_TOLERANCE_RATIO = 0.03%SURFACE_TOLERANCE_RATIO = 9.99%'
 
 run_sabotage "dedup starts fuzzy-matching two listings from the SAME source" \
-  src/php/Core/Dedup.php \
+  src/php/Rent/Core/Dedup.php \
   's%if (\$a->sourceName === \$b->sourceName) {%if (false) {%'
 
 run_sabotage "a broken channel stops being reported (a send failure goes silent)" \
@@ -1178,11 +1178,11 @@ run_sabotage "a channel throwing an unexpected error escapes and aborts the run"
   "s%Throwable %DomainException %"
 
 run_sabotage "a rent drop crossing the ceiling loses its new-match announcement" \
-  src/php/Core/Notify/Formatter.php \
+  src/php/Rent/Notify/Formatter.php \
   "s%(\\\$nowQualifies ? 'PASSE SOUS LE PLAFOND' : 'Baisse de loyer')%'Baisse de loyer'%"
 
 run_sabotage "an hors-charges rent is shown as though it were charges comprises" \
-  src/php/Core/Notify/Formatter.php \
+  src/php/Rent/Notify/Formatter.php \
   "s% € HC% € CC%"
 
 run_sabotage "the literal-secret mask is dropped (a self-hosted ntfy topic leaks)" \
@@ -1190,7 +1190,7 @@ run_sabotage "the literal-secret mask is dropped (a self-hosted ntfy topic leaks
   's%\$message = str_replace(\$literal, self::MASK, \$message);%%'
 
 run_sabotage "a known duplicate is silently dropped instead of shown" \
-  src/php/Core/Notify/Formatter.php \
+  src/php/Rent/Notify/Formatter.php \
   "s%if (\\\$duplicates !== \[\]) {%if (false) {%"
 
 # ── The run loop, the CLI and schema v3, added 2026-08-07 ─────────────────────────
@@ -1208,29 +1208,29 @@ run_sabotage "a known duplicate is silently dropped instead of shown" \
 # 2026-08-19 full ledger — which is the harness working, and the reason it is removed rather than left.
 
 run_sabotage "--seed stops marking listings notified (the flood moves one run later)" \
-  src/php/Cli/Pipeline.php \
+  src/php/Rent/Cli/Pipeline.php \
   's%MARKED NOTIFIED WITHOUT SENDING%DISABLED%; s%^                \$this->store->markNotified(\$sighting->dedupKey, \$nowIso, .MATCH.);$%%'
 
 run_sabotage "the digest re-emits everything on every pass (Q34)" \
-  src/php/Cli/Pipeline.php \
+  src/php/Rent/Cli/Pipeline.php \
   's%if (!\$this->store->wasNotified(\$sighting->dedupKey)) {%if (true) {%'
 
 run_sabotage "a match is marked notified even when no channel confirmed" \
-  src/php/Cli/Pipeline.php \
+  src/php/Rent/Cli/Pipeline.php \
   's%if (\$this->notifier->delivered(\$failures)) {%if (true) {%'
 
 # --- schema v8: a promotion must survive the digest that preceded it ------------------------------
 
 run_sabotage "the match gate forgets WHAT the listing was announced as (a promotion is swallowed)" \
-  src/php/Cli/Pipeline.php \
+  src/php/Rent/Cli/Pipeline.php \
   's%wasNotifiedAs(\$sighting->dedupKey, .MATCH.)%wasNotified(\$sighting->dedupKey)%'
 
 run_sabotage "an announcement may be DOWNGRADED (a match reopens for re-announcement)" \
-  src/php/Store/Store.php \
+  src/php/Rent/Store/Store.php \
   's%WHEN notified_at IS NOT NULL AND COALESCE%WHEN 0 = 1 AND COALESCE%'
 
 run_sabotage "a pre-v8 announcement reads as a DOUBT (the historic backlog re-announces as matches)" \
-  src/php/Store/Store.php \
+  src/php/Rent/Store/Store.php \
   "s%\\\$row\\['notified_as'\\] === null ? 'MATCH' :%\\\$row['notified_as'] === null ? 'DIGEST' :%"
 
 # --- §1 across a cross-portal cluster --------------------------------------------------------------
@@ -1240,27 +1240,27 @@ run_sabotage "a pre-v8 announcement reads as a DOUBT (the historic backlog re-an
 # dropping it leaves `groupExcludedTenure()` with nothing to find on the very pass that formed the
 # cluster. Replaced the old in-pass-scan case, which became dead when that scan was removed.
 run_sabotage "the cluster is never recorded as a group (the durable veto has nothing to read)" \
-  src/php/Cli/Pipeline.php \
+  src/php/Rent/Cli/Pipeline.php \
   's%\$this->store->assignGroup(\$memberKeys);%%'
 
 # --- every announcement path is bounded AND says what it left behind ------------------------------
 
 run_sabotage "promotions stop being capped (a resolved backlog empties onto the phone at once)" \
-  src/php/Cli/Scout.php \
+  src/php/Rent/Cli/RentScout.php \
   's%\$promotions = \\array_slice(\$promotions, 0, Store::DIGEST_BATCH);%%'
 
 run_sabotage "a capped pipeline digest stops naming its remainder (the rest is invisible)" \
-  src/php/Cli/Pipeline.php \
+  src/php/Rent/Cli/Pipeline.php \
   's%\$digestOverflow = max%\$digestOverflow = 0; \$dead = max%'
 
 # --- the beat's three contributors, each pinned on its own ----------------------------------------
 
 run_sabotage "a delivered MATCH stops counting as an announcement" \
-  src/php/Cli/Pipeline.php \
+  src/php/Rent/Cli/Pipeline.php \
   's%^                ++\$notified;$%%'
 
 run_sabotage "a delivered digest entry stops counting as an announcement" \
-  src/php/Cli/Pipeline.php \
+  src/php/Rent/Cli/Pipeline.php \
   's%\$notified += \\count(\$batch);%%'
 
 # NOT A CASE: the over-fire direction at the PIPELINE layer. It was written against a caller-side
@@ -1273,35 +1273,35 @@ run_sabotage "a delivered digest entry stops counting as an announcement" \
 # --- Q27: the beat's own figures ------------------------------------------------------------------
 
 run_sabotage "the beat's notified count goes back to a hard-coded 0 (constant at any traffic level)" \
-  src/php/Cli/Scout.php \
+  src/php/Rent/Cli/RentScout.php \
   's%\$this->beat(\$notifier, \$store, \$passes, \$notified, null, \$watched, \$failedPasses);%\$this->beat(\$notifier, \$store, \$passes, 0, null, \$watched, \$failedPasses);%'
 
 run_sabotage "the pass result is discarded again (nothing feeds the beat's count)" \
-  src/php/Cli/Scout.php \
+  src/php/Rent/Cli/RentScout.php \
   's%\$notified += \$pushed ?? 0;%%'
 
 # --- the digest backlog must DRAIN, not harden -----------------------------------------------------
 
 run_sabotage "the digest batch loses its cap (one all-or-nothing send that grows on every failure)" \
-  src/php/Store/Store.php \
+  src/php/Rent/Store/Store.php \
   "s%bindValue(':limit', max(1, \\\$limit)%bindValue(':limit', max(1, 100000)%"
 
 run_sabotage "a capped digest stops naming the remainder (the bin reads as empty)" \
-  src/php/Cli/Scout.php \
+  src/php/Rent/Cli/RentScout.php \
   's%if ($batch->overflow() > 0) {%if (false) {%'
 
 # --- the cluster veto must survive every path -----------------------------------------------------
 
 run_sabotage "reclassify stops consulting the group (it resurrects a listing the cluster vetoed)" \
-  src/php/Cli/Scout.php \
+  src/php/Rent/Cli/RentScout.php \
   's%\$groupVeto = \$store->groupExcludedTenure(\$key);%\$groupVeto = null;%'
 
 run_sabotage "the group veto reads eligible tenures as excluded (every clustered row is skipped)" \
-  src/php/Store/Store.php \
+  src/php/Rent/Store/Store.php \
   's%if (\$tenure !== null && \$tenure->isExcluded()) {%if (\$tenure !== null) {%'
 
 run_sabotage "the pipeline veto reads only THIS pass's harvest (a missing sibling launders the flat)" \
-  src/php/Cli/Pipeline.php \
+  src/php/Rent/Cli/Pipeline.php \
   's%\$this->store->groupExcludedTenure(\$sighting->dedupKey),%null,%'
 
 # NOT A CASE: `confidenceBp` on the durable veto's synthetic Classification. `CriteriaEngine`
@@ -1313,51 +1313,51 @@ run_sabotage "the pipeline veto reads only THIS pass's harvest (a missing siblin
 # --- the beat reports DELIVERIES, and every announcement path is bounded ---------------------------
 
 run_sabotage "the beat counts verdicts again instead of deliveries (steady state reads as busy)" \
-  src/php/Cli/Scout.php \
+  src/php/Rent/Cli/RentScout.php \
   's%\$matchesOut = \$result->notified;%\$matchesOut = \$result->matches;%'
 
 run_sabotage "the pipeline digest loses its cap (the unattended path grows on every failure)" \
-  src/php/Cli/Pipeline.php \
+  src/php/Rent/Cli/Pipeline.php \
   's%\$batch = \\array_slice(\$digestEntries, 0, Store::DIGEST_BATCH);%\$batch = \$digestEntries;%'
 
 run_sabotage "a failed fetch stops being recorded as a failed run" \
-  src/php/Cli/Pipeline.php \
+  src/php/Rent/Cli/Pipeline.php \
   's%\$this->store->recordRun(\$source->name(), 0, false, \$e->getMessage(), \$nowIso, \$durationMs);%%'
 
 run_sabotage "an adapter exception aborts the whole pass instead of one source" \
-  src/php/Cli/Pipeline.php \
+  src/php/Rent/Cli/Pipeline.php \
   's%catch (SourceError %catch (\\UnexpectedValueException %'
 
 run_sabotage "item_count starts counting MATCHES instead of parsed items (Q30)" \
-  src/php/Cli/Pipeline.php \
+  src/php/Rent/Cli/Pipeline.php \
   's%\$this->store->recordRun(\$source->name(), count(\$listings), true%\$this->store->recordRun($source->name(), 0, true%'
 
 run_sabotage "health alerting narrows back to BROKEN alone (Q29)" \
-  src/php/Cli/Pipeline.php \
+  src/php/Rent/Cli/Pipeline.php \
   's%!\$health->status->isAlerting()%\$health->status->value !== "broken"%'
 
 run_sabotage "the alert cooldown is ignored (a broken source pushes every run)" \
-  src/php/Store/Store.php \
+  src/php/Rent/Store/Store.php \
   's%return (\$now - \$last) >= \$cooldownHours \* 3600;%return true;%'
 
 run_sabotage "the cooldown keys on the source alone, so an escalation is swallowed" \
-  src/php/Store/Store.php \
+  src/php/Rent/Store/Store.php \
   "s%WHERE source = :source AND status = :status'%WHERE source = :source'%"
 
 run_sabotage "a source that recovers sends no recovery notice" \
-  src/php/Cli/Pipeline.php \
+  src/php/Rent/Cli/Pipeline.php \
   's%if (\$this->store->clearAlerts(\$source->name())) {%if (false) {%'
 
 run_sabotage "the tenure verdict stops being persisted (Q24)" \
-  src/php/Cli/Pipeline.php \
+  src/php/Rent/Cli/Pipeline.php \
   's%\$this->store->recordVerdict(%$this->store->schemaVersion(); $unused = array(%'
 
 run_sabotage "run duration stops being measured (Q25: doctor's fourth column)" \
-  src/php/Cli/Scout.php \
+  src/php/Rent/Cli/RentScout.php \
   's%\$durationMs = (int) round((hrtime(true) - \$startedAt) / 1_000_000);%$durationMs = null;%'
 
 run_sabotage "doctor stops printing the journal mode (a silent WAL refusal)" \
-  src/php/Cli/Scout.php \
+  src/php/Rent/Cli/RentScout.php \
   "s%. ', journal ' . \\\$store->journalMode() . ')')%. ')')%"
 
 # RETIRED, with the reason recorded rather than the case quietly deleted: "doctor stops passing the
@@ -1368,7 +1368,7 @@ run_sabotage "doctor stops printing the journal mode (a silent WAL refusal)" \
 # covers that directly. Do not re-add this case without first making doctor's output depend on it.
 
 run_sabotage "the scraping opt-in gate is removed (hard rule 4 / Q26)" \
-  src/php/Cli/Scout.php \
+  src/php/Rent/Cli/RentScout.php \
   's%if (\$definition->requiresScrapingOptIn() \&\& !\$this->scrapingAllowed(\$argv)) {%if (false) {%'
 
 run_sabotage "an unknown notification channel name is silently dropped" \
@@ -1376,7 +1376,7 @@ run_sabotage "an unknown notification channel name is silently dropped" \
   's%if (\$channel === null) {%if (false) {%'
 
 run_sabotage "the freshness bonus is given to every listing forever" \
-  src/php/Cli/Pipeline.php \
+  src/php/Rent/Cli/Pipeline.php \
   's%\$this->ageSeconds(\$sighting->dedupKey, \$nowIso)%null%'
 
 # ── The network adapters, added 2026-08-07 ────────────────────────────────────────
@@ -1384,7 +1384,7 @@ run_sabotage "the freshness bonus is given to every listing forever" \
 # the adapter. Every case below breaks a guarantee that is otherwise silent.
 
 run_sabotage "robots.txt stops being consulted before a fetch (hard rule 5)" \
-  src/php/Adapters/HttpJsonSource.php \
+  src/php/Rent/Adapters/HttpJsonSource.php \
   's%if (!\$this->robots->allows(Robots::pathOf(\$url))) {%if (false) {%'
 
 run_sabotage "an unreadable robots.txt starts allowing everything (fails OPEN)" \
@@ -1396,15 +1396,15 @@ run_sabotage "an empty Disallow starts meaning disallow-everything" \
   "s%if (\\\$value !== '') {%if (true) { \\\$value = \\\$value ?: '/';%"
 
 run_sabotage "a non-2xx response becomes an empty result instead of a failure" \
-  src/php/Adapters/HttpJsonSource.php \
+  src/php/Rent/Adapters/HttpJsonSource.php \
   's%if (!\$response->isSuccess()) {%if (false) {%'
 
 run_sabotage "a moved items_path yields an empty list instead of throwing" \
-  src/php/Adapters/HttpJsonSource.php \
+  src/php/Rent/Adapters/HttpJsonSource.php \
   's%if (\$items === null) {%if (false) { $items = [];%'
 
 run_sabotage "the REMPLACER guard is removed from the adapter itself" \
-  src/php/Adapters/HttpJsonSource.php \
+  src/php/Rent/Adapters/HttpJsonSource.php \
   "s%if (str_contains(\\\$url, 'REMPLACER')) {%if (false) {%"
 
 run_sabotage "the honest User-Agent is dropped for a browser disguise (hard rule 5)" \
@@ -1420,7 +1420,7 @@ run_sabotage "a request header is allowed to override the honest User-Agent" \
   "s%if (strtolower(\\\$name) === 'user-agent') {%if (false) {%"
 
 run_sabotage "config regains the power to disguise a source's User-Agent" \
-  src/php/Config/ConfigLoader.php \
+  src/php/Rent/Config/ConfigLoader.php \
   "s%if (strtolower((string) \\\$headerName) === 'user-agent') {%if (false) {%"
 
 run_sabotage "a colon-smuggled header NAME slips past the funnel's token check" \
@@ -1428,7 +1428,7 @@ run_sabotage "a colon-smuggled header NAME slips past the funnel's token check" 
   's%if (preg_match(self::HEADER_NAME_TOKEN, \$name) !== 1) {%if (false) {%'
 
 run_sabotage "a colon-smuggled header NAME slips past config validation" \
-  src/php/Config/ConfigLoader.php \
+  src/php/Rent/Config/ConfigLoader.php \
   's%if (preg_match(self::HEADER_NAME_TOKEN, (string) \$headerName) !== 1) {%if (false) {%'
 
 run_sabotage "a line break in a header VALUE reaches the wire (header injection)" \
@@ -1436,7 +1436,7 @@ run_sabotage "a line break in a header VALUE reaches the wire (header injection)
   's%if (preg_match(.~\[\\r\\n\]~., (string) \$value) === 1) {%if (false) {%'
 
 run_sabotage "a line break in a config header VALUE passes validation" \
-  src/php/Config/ConfigLoader.php \
+  src/php/Rent/Config/ConfigLoader.php \
   's%if (preg_match(.~\[\\r\\n\]~., \$headerValue) === 1) {%if (false) {%'
 
 run_sabotage "the funnel token anchor stops rejecting a trailing newline in a name" \
@@ -1444,7 +1444,7 @@ run_sabotage "the funnel token anchor stops rejecting a trailing newline in a na
   "s%+\$/D';%+\$/';%"
 
 run_sabotage "config's token anchor stops rejecting a trailing newline in a name" \
-  src/php/Config/ConfigLoader.php \
+  src/php/Rent/Config/ConfigLoader.php \
   "s%+\$/D';%+\$/';%"
 
 run_sabotage "the ntfy Click url stops being sanitised (header injection from a listing)" \
@@ -1504,15 +1504,15 @@ run_sabotage "the closing </br> form drops out of the block-tag alternation" \
   's%|br|li%|li%'
 
 run_sabotage "tracking parameters stop being stripped from an alert link id" \
-  src/php/Adapters/EmailAlertSource.php \
+  src/php/Rent/Adapters/EmailAlertSource.php \
   's%return \$scheme . .://. . \$host . \$path;%return $link;%'
 
 run_sabotage "unsubscribe links start becoming listings" \
-  src/php/Adapters/EmailAlertSource.php \
+  src/php/Rent/Adapters/EmailAlertSource.php \
   's%if (stripos(\$link, \$noise) !== false) {%if (false) {%'
 
 run_sabotage "a mailbox from the wrong sender stops being filtered out" \
-  src/php/Adapters/EmailAlertSource.php \
+  src/php/Rent/Adapters/EmailAlertSource.php \
   's%if (!\$this->isFrom(\$message)) {%if (false) {%'
 
 run_sabotage "a mailbox failure becomes an empty list instead of a source failure" \
@@ -1520,15 +1520,15 @@ run_sabotage "a mailbox failure becomes an empty list instead of a source failur
   's%if (!is_dir(\$this->directory)) {%if (false) {%'
 
 run_sabotage "the rent plausibility band is removed (a postcode parses as a rent)" \
-  src/php/Adapters/EmailAlertSource.php \
+  src/php/Rent/Adapters/EmailAlertSource.php \
   's%\$value >= 200 \&\& \$value <= 20000%$value !== null%'
 
 run_sabotage "only the band's 200 FLOOR is removed (an agency fee parses as a rent)" \
-  src/php/Adapters/EmailAlertSource.php \
+  src/php/Rent/Adapters/EmailAlertSource.php \
   's%\$value >= 200 \&\& %%'
 
 run_sabotage "only the band's 20000 CEILING is removed (a sale price parses as a rent)" \
-  src/php/Adapters/EmailAlertSource.php \
+  src/php/Rent/Adapters/EmailAlertSource.php \
   's% \&\& \$value <= 20000%%'
 
 run_sabotage "SMTP permits plaintext credentials to a remote host" \
@@ -1597,7 +1597,7 @@ run_sabotage "the pacer records the time it INTENDED to wait, not the clock" \
   's%\$issuedAt = (\$this->clock)();%\$issuedAt = \$readyAt;%'
 
 run_sabotage "the decorator does not pace at all (every request goes out unthrottled)" \
-  src/php/Adapters/PacedSource.php \
+  src/php/Rent/Adapters/PacedSource.php \
   's%\$this->pacer->beforeFetch(\$this->inner->host());%%'
 
 # A DIFFERENT regression from the one above, and the more plausible of the two: the pacing is all
@@ -1605,19 +1605,19 @@ run_sabotage "the decorator does not pace at all (every request goes out unthrot
 # requests back to back and only then starts behaving, so a short pass is never throttled at all.
 # The `finally` leaves the original `return` below unreachable, which PHP accepts.
 run_sabotage "the decorator waits AFTER the request instead of before it" \
-  src/php/Adapters/PacedSource.php \
+  src/php/Rent/Adapters/PacedSource.php \
   's%\$this->pacer->beforeFetch(\$this->inner->host());%try { return $this->inner->fetch(); } finally { $this->pacer->beforeFetch($this->inner->host()); }%'
 
 run_sabotage "the decorator swallows a source failure into an empty list (rule 3)" \
-  src/php/Adapters/PacedSource.php \
+  src/php/Rent/Adapters/PacedSource.php \
   's%return \$this->inner->fetch();%try { return \$this->inner->fetch(); } catch (\\Throwable) { return []; }%'
 
 run_sabotage "wrapAll stops sharing one pacer (each source gets a private window)" \
-  src/php/Adapters/PacedSource.php \
+  src/php/Rent/Adapters/PacedSource.php \
   's%static fn (Source \$s): Source => new self(\$s, \$pacer),%static fn (Source $s): Source => new self($s, clone $pacer),%'
 
 run_sabotage "PacedSource::health drops the clock, so STALE can never fire" \
-  src/php/Adapters/PacedSource.php \
+  src/php/Rent/Adapters/PacedSource.php \
   's%return \$this->inner->health(\$nowIso);%return \$this->inner->health();%'
 
 # Narrows the caught type instead of rethrowing: `\LogicException` is a real class, so the file still
@@ -1668,42 +1668,42 @@ run_sabotage "the wait is served as one long sleep, ignoring signals for 20 min"
 # The one that matters most. A redesign renaming `featured-item` leaves a 200, valid HTML and zero
 # cards; returning them as an empty list reports calm forever.
 run_sabotage "a selector matching nothing returns an empty list instead of throwing" \
-  src/php/Adapters/HtmlSource.php \
+  src/php/Rent/Adapters/HtmlSource.php \
   's%if (\$items->count() === 0) {%if (false) {%'
 
 # Drops the capture and hands the whole text node to the number parser. `3 pièces · 55.32 m²` then
 # yields the FIRST token for the surface — 3 m² instead of 55.32 — and 3 m² is a number, so nothing
 # downstream can tell it apart from a very small studio.
 run_sabotage "the field map's regex capture is ignored (surface reads the room count)" \
-  src/php/Adapters/Html/Selector.php \
+  src/php/Rent/Adapters/Html/Selector.php \
   's%if ($this->capture === null) {%if (true) {%'
 
 # Walking pages until one comes back empty is a TERMINATION rule, not a correctness proof: a page=N
 # that quietly 404s or redirects to page one ends the walk exactly like a genuine last page. Without
 # the declared-total check, 24 of 92 listings is reported as a complete pass.
 run_sabotage "pagination stops checking the total the page declares" \
-  src/php/Adapters/HtmlSource.php \
+  src/php/Rent/Adapters/HtmlSource.php \
   's%if (\$total !== null \&\& count(\$out) < \$total) {%if (false) {%'
 
 # Unbounded pagination against a site that ignores the page parameter is an infinite request loop
 # on somebody else's server — the one bug in this adapter that could actually get an IP banned,
 # which under hard rule 5 is the thing polite pacing exists to prevent.
 run_sabotage "the pagination page bound stops being enforced" \
-  src/php/Adapters/HtmlSource.php \
+  src/php/Rent/Adapters/HtmlSource.php \
   's%if (\$page >= \$this->definition->maxPages) {%if (false) {%'
 
 # A pattern that does not match yields the UNPARSED text instead of null. Hard rule 9's neighbour:
 # the field is then a string that happens to contain a number somewhere, and the parser will find
 # one — so an unknown becomes a confident wrong value rather than an honest absence.
 run_sabotage "a regex that does not match returns the raw text instead of null" \
-  src/php/Adapters/Html/Selector.php \
+  src/php/Rent/Adapters/Html/Selector.php \
   's%return \$value === .. ? null : \$value;%return $value;%'
 
 # The loader stops refusing an enabled html source with no item_selector, so the refusal moves from
 # load time to fetch time — after a poll has been scheduled and a run logged against a source that
 # was never going to work.
 run_sabotage "an enabled html source may ship with no item_selector" \
-  src/php/Config/ConfigLoader.php \
+  src/php/Rent/Config/ConfigLoader.php \
   "s%if (\\\$type === 'html' \&\& (\\\$itemSelector === null || trim(\\\$itemSelector) === '')) {%if (false) {%"
 
 # ── the Q36 flood guard ───────────────────────────────────────────────────────────────────────
@@ -1718,21 +1718,21 @@ run_sabotage "an enabled html source may ship with no item_selector" \
 
 # The guard is disarmed outright.
 run_sabotage "the empty-database guard stops firing" \
-  src/php/Cli/Scout.php \
+  src/php/Rent/Cli/RentScout.php \
   's%if (\$store->isSeenSetEmpty() \&\& !\$seed) {%if (false) {%'
 
 # It fires, but `--seed` is no longer the way past it, so the ONLY documented route through is shut
 # and the guard becomes a wall: the tool can never make its first real run.
 run_sabotage "--seed no longer gets past the empty-database guard" \
-  src/php/Cli/Scout.php \
+  src/php/Rent/Cli/RentScout.php \
   's%if (\$store->isSeenSetEmpty() \&\& !\$seed) {%if (true) {%'
 
 # The regression this whole change fixes, reintroduced: the store answers "has anything been
 # recorded?" from a flag about THIS process instead of from the rows. Any earlier command that
-# opened the file — `scout doctor` is the first one a new machine invites you to type — then
+# opened the file — `scout --domain=rent doctor` is the first one a new machine invites you to type — then
 # answers it for good.
 run_sabotage "the seen-set emptiness answer comes from the process, not the rows" \
-  src/php/Store/Store.php \
+  src/php/Rent/Store/Store.php \
   's%return (int) \$this->pdo->query(.SELECT EXISTS (SELECT 1 FROM listings).)->fetchColumn() === 0;%return false;%'
 
 # ── schema v4, the cross-portal group ─────────────────────────────────────────────────────────────
@@ -1741,39 +1741,39 @@ run_sabotage "the seen-set emptiness answer comes from the process, not the rows
 # moved. Neither shows up as an error, and both are invisible in a green suite.
 
 run_sabotage "a cluster's members are no longer tied into a group" \
-  src/php/Store/Store.php \
+  src/php/Rent/Store/Store.php \
   's%\$members = array_values(array_unique(\$memberKeys));%$members = [];%'
 
 # The one that survives a shuffle. Minting from whoever survived THIS pass renames the group every
 # time source order changes, and orphans any member that delisted in between.
 run_sabotage "the group key is minted fresh each pass instead of adopted" \
-  src/php/Store/Store.php \
+  src/php/Rent/Store/Store.php \
   's%\$adopted ??= \$members\[0\];%$adopted = $members[0];%'
 
 # NULL never equals NULL in SQL, so taking the group branch for an ungrouped listing reports "no
 # price history" for most of the database, silently.
 run_sabotage "the joined history compares a NULL group against itself" \
-  src/php/Store/Store.php \
+  src/php/Rent/Store/Store.php \
   's%if (\$group === null) {%if (false) {%'
 
 # The §1-adjacent one: a group-scoped notification gate hides a real flat the moment an over-merge
 # happens, and hides it permanently.
 run_sabotage "grouping also marks its members notified" \
-  src/php/Store/Store.php \
+  src/php/Rent/Store/Store.php \
   's%UPDATE listings SET group_key = :group WHERE dedup_key = :key%UPDATE listings SET group_key = :group, notified_at = first_seen_at WHERE dedup_key = :key%'
 
 run_sabotage "an older database is opened without ever adding group_key" \
-  src/php/Store/Store.php \
+  src/php/Rent/Store/Store.php \
   's%if (\$recorded < 4) {%if (false) {%'
 
 # Back to the pre-v4 shape: cluster first, record only survivors. The overlay then ships inert —
 # every group is a group of one and nothing anywhere says so.
 run_sabotage "only the cluster survivor is recorded" \
-  src/php/Cli/Pipeline.php \
+  src/php/Rent/Cli/Pipeline.php \
   "s%foreach (\\\$cluster\\['members'\\] as \\\$member) {%foreach ([\$cluster['listing']] as \$member) {%"
 
 run_sabotage "--seed marks only the survivor, leaving members to be announced later" \
-  src/php/Cli/Pipeline.php \
+  src/php/Rent/Cli/Pipeline.php \
   "s%foreach (\\\$clusterKeys\\[spl_object_id(\\\$listing)\\] as \\\$memberKey) {%foreach ([\$sighting->dedupKey] as \$memberKey) {%"
 
 # ── the second source: CDC Habitat, path pagination, and prose that is not an acronym ─────────────
@@ -1783,35 +1783,35 @@ run_sabotage "--seed marks only the survivor, leaving members to be announced la
 # only covers page one keeps returning 200 while breaking hard rule 5.
 
 run_sabotage "the card's own prose is scanned as an identifier field again (the adverb PLUS returns)" \
-  src/php/Core/TenureClassifier.php \
+  src/php/Rent/Core/TenureClassifier.php \
   "s%if (\\\$name === '_text') {%if (false) {%"
 
 run_sabotage "RawListing::text stops returning the adapter's card-text surface" \
-  src/php/Core/RawListing.php \
+  src/php/Rent/Core/RawListing.php \
   's%\$cardText = \$this->fields\[._text.\] ?? null;%$cardText = null;%'
 
 run_sabotage "the config's own tenure_field stops being read as a financing field" \
-  src/php/Core/TenureClassifier.php \
+  src/php/Rent/Core/TenureClassifier.php \
   "s%'tenurefield',%%"
 
 run_sabotage "RDC stops meaning the ground floor (null is not zero, hard rule 9)" \
-  src/php/Adapters/Payload.php \
+  src/php/Rent/Adapters/Payload.php \
   's%return 0;%return null;%'
 
 run_sabotage "a floor is read with the generic number parser (the room count becomes the floor)" \
-  src/php/Adapters/ListingMapper.php \
+  src/php/Rent/Adapters/ListingMapper.php \
   's%floor: Payload::floor(\$item, \$map->floor),%floor: Payload::int($item, $map->floor),%'
 
 run_sabotage "robots is checked for the index only, never for the pages the walk visits" \
-  src/php/Adapters/HtmlSource.php \
+  src/php/Rent/Adapters/HtmlSource.php \
   's%if (!\$this->robots->allows(Robots::pathOf(\$pageUrl))) {%if (false) {%'
 
 run_sabotage "page_path silently falls back to appending a query parameter" \
-  src/php/Adapters/HtmlSource.php \
+  src/php/Rent/Adapters/HtmlSource.php \
   's%\$pageBody = \$this->get(\$pageUrl, \[\]);%$pageBody = $this->get($url, ["page" => (string) $page]);%'
 
 run_sabotage "a page_path with no {page} placeholder is accepted, so the walk never advances" \
-  src/php/Config/ConfigLoader.php \
+  src/php/Rent/Config/ConfigLoader.php \
   's%if (\$pagePath !== null \&\& !str_contains(\$pagePath, .{page}.)) {%if (false) {%'
 
 
@@ -1828,7 +1828,7 @@ run_sabotage "a page_path with no {page} placeholder is accepted, so the walk ne
 # guarantee while testing nothing at all, which is worse than one that fails. What bounds requests
 # now is the budget, not the ordering, so the sabotage targets the budget.
 run_sabotage "the per-pass detail budget stops bounding (every novel listing costs a request)" \
-  src/php/Adapters/HtmlSource.php \
+  src/php/Rent/Adapters/HtmlSource.php \
   's%if ($spent >= $budget) {%if (false) {%'
 
 # ── Phase 2b: prose readers, and the two facts they manufacture if read carelessly ────────────────
@@ -1839,23 +1839,23 @@ run_sabotage "the per-pass detail budget stops bounding (every novel listing cos
 # being collected the day its map changes, and a correct match demoted to the digest by an adverb.
 
 run_sabotage "Payload::floor reads a plural count, so a building height becomes the tenant's floor" \
-  src/php/Adapters/Payload.php \
+  src/php/Rent/Adapters/Payload.php \
   's%etage[\]b/%etage/%'
 
 run_sabotage "Prose::floor reads a plural count (de 18 etages) as a position" \
-  src/php/Core/Prose.php \
+  src/php/Rent/Core/Prose.php \
   's%etage[\]b/%etage/%'
 
 run_sabotage "Prose::elevator stops reading the negation first (Aucun ascenseur becomes a lift)" \
-  src/php/Core/Prose.php \
+  src/php/Rent/Core/Prose.php \
   's%if ($negation !== null && ($assertion === null || $negation > $assertion)) {%if (false) {%'
 
 run_sabotage "the detail cache stops being keyed on the map, so a widened map serves stale rows" \
-  src/php/Adapters/HtmlSource.php \
+  src/php/Rent/Adapters/HtmlSource.php \
   's%$listing->externalId, $detailMap->fingerprint());%$listing->externalId);%'
 
 run_sabotage "prose fields are scanned as identifiers again, so the adverb plus reads as PLUS" \
-  src/php/Core/TenureClassifier.php \
+  src/php/Rent/Core/TenureClassifier.php \
   "s%(\$name === 'title' || \$name === 'description')%(\$name === 'never-a-real-field')%"
 
 # The successor to "a detail_map with no gate refuses", which retired on 2026-08-23 when novelty
@@ -1863,47 +1863,47 @@ run_sabotage "prose fields are scanned as identifiers again, so the adverb plus 
 # leaves its source resolving UNKNOWN for ever while health stays green. The refusal moved up a
 # layer, to config load, so the sabotage moved with it rather than being deleted.
 run_sabotage "a detail_map with a zero budget is accepted, so it can never run" \
-  src/php/Config/ConfigLoader.php \
+  src/php/Rent/Config/ConfigLoader.php \
   's%if ($detailMap !== null \&\& $detailBudget === 0) {%if (false) {%'
 
 run_sabotage "a failed detail fetch becomes an unhydrated listing (rule 3)" \
-  src/php/Adapters/HtmlSource.php \
+  src/php/Rent/Adapters/HtmlSource.php \
   's%} catch (SourceError $e) {%} catch (SourceError $e) { return $listing;%'
 
 run_sabotage "the detail map gets the card path, so _text becomes the whole PAGE" \
-  src/php/Adapters/HtmlSource.php \
+  src/php/Rent/Adapters/HtmlSource.php \
   's%$this->flatMapped($detailMap, detailMode: true)%$this->flatMapped($detailMap, detailMode: false)%'
 
 run_sabotage "an absent detail value overwrites what the card knew (rule 9)" \
-  src/php/Core/RawListing.php \
+  src/php/Rent/Core/RawListing.php \
   's%static fn (mixed $mine, mixed $theirs): mixed => $theirs ?? $mine%static fn (mixed $mine, mixed $theirs): mixed => $theirs%'
 
 run_sabotage "an empty detail string overwrites the card's own text (rule 9)" \
-  src/php/Core/RawListing.php \
+  src/php/Rent/Core/RawListing.php \
   's%static fn (string $mine, string $theirs): string => $theirs !== .. ? $theirs : $mine%static fn (string $mine, string $theirs): string => $theirs%'
 
 run_sabotage "the detail page re-identifies the listing, so it re-notifies forever" \
-  src/php/Core/RawListing.php \
+  src/php/Rent/Core/RawListing.php \
   's%externalId: $this->externalId,%externalId: $detail->externalId !== '"'"''"'"' ? $detail->externalId : $this->externalId,%'
 
 run_sabotage "robots is checked for the search page only, never for the detail pages" \
-  src/php/Adapters/HtmlSource.php \
+  src/php/Rent/Adapters/HtmlSource.php \
   '/private function withDetail/,$ s%if (!$this->robots->allows(Robots::pathOf($url))) {%if (false) {%'
 
 run_sabotage "detail fetches stop being paced (a per-listing burst, hard rule 5)" \
-  src/php/Adapters/HtmlSource.php \
+  src/php/Rent/Adapters/HtmlSource.php \
   '/private function withDetail/,$ s%usleep($this->definition->rateLimitMs \* 1000);%%'
 
 run_sabotage "a {page} url template is fetched literally, so page one is never real" \
-  src/php/Adapters/HtmlSource.php \
+  src/php/Rent/Adapters/HtmlSource.php \
   's%$firstUrl = $urlTemplate ? str_replace(.{page}., .1., $url) : $url;%$firstUrl = $url;%'
 
 run_sabotage "the walk stops substituting {page}, so every page is page one" \
-  src/php/Adapters/HtmlSource.php \
+  src/php/Rent/Adapters/HtmlSource.php \
   "s%? str_replace('{page}', (string) \$page, \$url)%? \$url%"
 
 run_sabotage "a detail map may redefine ref, so identity comes from the wrong page" \
-  src/php/Config/FieldMap.php \
+  src/php/Rent/Config/FieldMap.php \
   's%if ($map->ref !== \[\]) {%if (false) {%'
 
 
@@ -1917,8 +1917,8 @@ run_sabotage "the cold start stops beating (a watcher that dies in hour one is i
   's%if ($lastSentIso === null || trim($lastSentIso) === %if (false \&\& %'
 
 run_sabotage "the heartbeat marker is never written (so every restart beats)" \
-  src/php/Cli/Scout.php \
-  's%@file_put_contents($this->stateFile(.heartbeat.txt.), $now%@file_put_contents("/dev/null", $now%'
+  src/php/Rent/Cli/RentScout.php \
+  's%@file_put_contents($this->stateFile(.rent-heartbeat.txt.), $now%@file_put_contents("/dev/null", $now%'
 
 run_sabotage "an unreadable heartbeat marker suppresses the beat instead of forcing one" \
   src/php/Core/Heartbeat.php \
@@ -1933,11 +1933,11 @@ run_sabotage "RENT_HEARTBEAT_HOURS=0 silently disables liveness instead of refus
   's%if ($intervalHours < 1) {%if (false) {%'
 
 run_sabotage "the previous startup refusal is never cleared (reported forever)" \
-  src/php/Cli/Scout.php \
+  src/php/Rent/Cli/RentScout.php \
   's%@unlink($path);%%'
 
 run_sabotage "a startup refusal is written to disk unredacted (a credential leak)" \
-  src/php/Cli/Scout.php \
+  src/php/Rent/Cli/RentScout.php \
   's%Redact::text($text)%$text%'
 
 # The beat's health figure counts what the run WATCHES. Reverting it to every enabled source is the
@@ -1945,7 +1945,7 @@ run_sabotage "a startup refusal is written to disk unredacted (a credential leak
 # healthy, and the line simply reports faults that do not exist. Observed on a real container as
 # "1/5 source(s) en bon état" while one source was deliberately scoped and four were never polled.
 run_sabotage "the beat counts CONFIGURED sources again (a scoped watcher invents faults)" \
-  src/php/Cli/Scout.php \
+  src/php/Rent/Cli/RentScout.php \
   "s%count(\$watched) . ' source(s) en bon état';%count(\$this->sourceNames()) . ' source(s) en bon état';%"
 
 # And the other direction, which is why the fix is not just "count fewer". Drop the disclosure and a
@@ -1953,7 +1953,7 @@ run_sabotage "the beat counts CONFIGURED sources again (a scoped watcher invents
 # is not watching go unwatched. The beat is what reaches the phone; the startup banner is a log line
 # read once.
 run_sabotage "the beat stops disclosing that it is scoped (a forgotten --source looks perfect)" \
-  src/php/Cli/Scout.php \
+  src/php/Rent/Cli/RentScout.php \
   's%if ($configured !== \\count($watched)) {%if (false) {%'
 
 # The in-loop beat — the one that fires on day two — lives inside a closure, so an argument that is
@@ -1962,13 +1962,13 @@ run_sabotage "the beat stops disclosing that it is scoped (a forgotten --source 
 # test missed it because the fixed clock makes the in-loop beat unreachable. The case that catches
 # it had to reach that call site deliberately.
 run_sabotage "the in-loop beat loses an argument to the closure boundary (dies on day two)" \
-  src/php/Cli/Scout.php \
+  src/php/Rent/Cli/RentScout.php \
   's%$heartbeat, $digestSchedule, $digestZone, $watched%$digestSchedule, $digestZone, $watched%'
 
 # ── Q34: the daily digest floor ───────────────────────────────────────────────
 # The bin this drains is §1's ONLY landing zone — every listing the classifier could not resolve
 # confidently. Both other emission paths are event-driven (end of a pass that produced new entries,
-# or a human typing `scout digest`), so before the floor existed a backlog that failed to send simply
+# or a human typing `scout --domain=rent digest`), so before the floor existed a backlog that failed to send simply
 # sat there. Every case below is silent in the same way the Q27 ones are: the bin quietly stops
 # draining, and an operator seeing no rollup reads it as "nothing to check" — which is exactly what
 # the ruled empty-day behaviour also looks like.
@@ -1979,49 +1979,49 @@ run_sabotage "the in-loop beat loses an argument to the closure boundary (dies o
 # offset the incoming instant carries rather than the CONFIGURED zone, so the floor's hour drifts
 # with the caller's clock instead of meaning 08:00 where the operator lives.
 run_sabotage "the floor computes its window in the instant's own offset, not the configured zone" \
-  src/php/Core/DigestSchedule.php \
+  src/php/Rent/Core/DigestSchedule.php \
   's%$local = $now->setTimezone($zone);%$local = $now;%'
 
 # And the resolution itself: reverting this makes every deployment run on the default zone whatever
 # `TZ` says, which is silent — a watcher in another zone simply emits at the wrong hour for ever.
 run_sabotage "TZ is ignored entirely and everything runs in the default zone" \
-  src/php/Core/DigestSchedule.php \
+  src/php/Rent/Core/DigestSchedule.php \
   's%if ($raw === null || trim($raw) === %if (true || trim($raw) === %'
 
 # THE MARKER is what makes this a floor rather than a second pipeline. Without its write the bin
 # drains on EVERY pass — once per Q37 cadence, all day.
 run_sabotage "the digest floor never records its window (drains every pass, not daily)" \
-  src/php/Cli/Scout.php \
-  's%@file_put_contents($this->stateFile(.digest.txt.), $now%@file_put_contents("/dev/null", $now%'
+  src/php/Rent/Cli/RentScout.php \
+  's%@file_put_contents($this->stateFile(.rent-digest.txt.), $now%@file_put_contents("/dev/null", $now%'
 
 run_sabotage "a marker in the future suppresses the floor until the clock catches up" \
-  src/php/Core/DigestSchedule.php \
+  src/php/Rent/Core/DigestSchedule.php \
   's%if (self::isAfter($last, $now)) {%if (false) {%'
 
 run_sabotage "an unreadable digest marker suppresses the floor instead of forcing one" \
-  src/php/Core/DigestSchedule.php \
+  src/php/Rent/Core/DigestSchedule.php \
   's%if ($now === null || $last === null) {%if (false) {%'
 
 run_sabotage "the cold start stops draining (a backlog surviving a restart is never rescued)" \
-  src/php/Core/DigestSchedule.php \
+  src/php/Rent/Core/DigestSchedule.php \
   's%if ($lastEmittedIso === null || trim($lastEmittedIso) === %if (false \&\& %'
 
 # THE EMPTY-DAY RULING. Removing the early return makes the floor emit a rollup with nothing in it
 # every day — a second scheduled push saying nothing the heartbeat did not, and the fastest way to
-# train its reader to swipe the channel away. (The expression also bites the `scout digest` copy of
+# train its reader to swipe the channel away. (The expression also bites the `scout --domain=rent digest` copy of
 # the same guard, which is the point of them sharing one collector: neither may drift alone.)
 run_sabotage "an empty digest bin is announced anyway (a daily push with nothing in it)" \
-  src/php/Cli/Scout.php \
+  src/php/Rent/Cli/RentScout.php \
   's%if ($batch->isEmpty()) {%if (false) {%'
 
 # THE FAILED-SEND ASYMMETRY: marking before delivery consumes the day's floor with nothing having
 # reached anyone, and these entries have no other route to the developer.
 run_sabotage "digest entries are marked before the channel confirms (a failed send eats the backlog)" \
-  src/php/Cli/Scout.php \
+  src/php/Rent/Cli/RentScout.php \
   's%if (!$notifier->delivered($failures)) {%if (false) {%'
 
 run_sabotage "the digest floor is never checked at all (the bin only ever drains by hand)" \
-  src/php/Cli/Scout.php \
+  src/php/Rent/Cli/RentScout.php \
   's%$digestSchedule->isDue(%false \&\& $digestSchedule->isDue(%'
 
 # THE IN-LOOP CALL SITE, uniquely — the same trap the beat fell into and for the same reason: under
@@ -2030,7 +2030,7 @@ run_sabotage "the digest floor is never checked at all (the bin only ever drains
 # leaves it null INSIDE the loop while the startup check keeps working, so only a test that forces a
 # second due-check can see it — which is what the unwritable-marker case does.
 run_sabotage "the floor loses its schedule to the closure boundary (dies on the first due day)" \
-  src/php/Cli/Scout.php \
+  src/php/Rent/Cli/RentScout.php \
   's%$heartbeat, $digestSchedule, $digestZone, $watched%$heartbeat, $watched%'
 
 # A snapshot-less row is a LIVE SOURCE FAULT — a listing whose payload could not be JSON-encoded, not
@@ -2038,13 +2038,13 @@ run_sabotage "the floor loses its schedule to the closure boundary (dies on the 
 # never returned at all). Draining it silently loses the one signal that says a source is emitting
 # payloads nothing can encode.
 run_sabotage "the floor drains snapshot-less rows without naming the source fault" \
-  src/php/Cli/Scout.php \
+  src/php/Rent/Cli/RentScout.php \
   's%if ($batch->withoutSnapshot > 0) {%if (false) {%'
 
 # `doctor` promising a daily floor to a cron-driven `--once` deployment is the hard-rule-2 shape that
 # line has already been rewritten twice to stop repeating, one scope narrower.
 run_sabotage "doctor stops saying the floor is --watch only (an --once deployment reads a promise)" \
-  src/php/Cli/Scout.php \
+  src/php/Rent/Cli/RentScout.php \
   's%h en `--watch` (Q34) %h (Q34) %'
 
 # ── region mode (2026-08-22) ─────────────────────────────────────────────────────────────────────
@@ -2055,20 +2055,20 @@ run_sabotage "doctor stops saying the floor is --watch only (an --once deploymen
 # Dead: the filter rejects everything, which is indistinguishable from a quiet rental market — the
 # exact shape hard rule 2 exists for, arriving through config rather than a selector.
 run_sabotage "region mode reverts to matching nothing (reads as a quiet market for ever)" \
-  src/php/Config/Criteria.php \
+  src/php/Rent/Config/Criteria.php \
   's%return $this->postcodeMatchesPrefix($postcode);%return false;%'
 
 # Open, direction one: the prefix check is skipped along with the name check, so `communes: []`
 # quietly becomes "anywhere in France". Over-matching does not look broken — it looks busy. Same
 # line as the case above, mutated the other way, because that one line IS the region-mode decision.
 run_sabotage "region mode stops checking the postcode prefix (anywhere in France matches)" \
-  src/php/Config/Criteria.php \
+  src/php/Rent/Config/Criteria.php \
   's%return $this->postcodeMatchesPrefix($postcode);%return true;%'
 
 # Open, direction two: the loader stops refusing the one combination that has no filter left at all.
 # The refusal is what makes the loosening safe, so it is load-bearing, not defensive decoration.
 run_sabotage "the empty-communes + empty-prefixes refusal is removed (config fails open)" \
-  src/php/Config/ConfigLoader.php \
+  src/php/Rent/Config/ConfigLoader.php \
   's%if ($communes === \[\] && $prefixes === \[\]) {%if (false) {%'
 
 # And the regression region mode actually caused, which no test of region mode itself would find:
@@ -2077,7 +2077,7 @@ run_sabotage "the empty-communes + empty-prefixes refusal is removed (config fai
 # its commune — no S1 score, nothing to name in the notification, a weaker dedup key — while still
 # matching on its postcode, so nothing looks wrong.
 run_sabotage "a ranked commune stops being alert-parser vocabulary (emails lose their commune)" \
-  src/php/Config/ConfigLoader.php \
+  src/php/Rent/Config/ConfigLoader.php \
   's%$communeLabels\[$key\] ??= $label;%%'
 
 # ── `--source=<name>` force-run, and the demo source that must not ship enabled (2026-08-22) ──────
@@ -2091,26 +2091,26 @@ run_sabotage "a ranked commune stops being alert-parser vocabulary (emails lose 
 # source. The failure mode is the one this repo already names — a debugging flag that reports a
 # clean, fast, empty pass — arriving now on the onboarding path `/add-source` step 5 prescribes.
 run_sabotage "--source stops force-running a disabled source (named source runs nothing)" \
-  src/php/Cli/Scout.php \
+  src/php/Rent/Cli/RentScout.php \
   's%if ($only === null) {%if (true) {%'
 
 # Direction two, and the over-correction: the enabled check goes away entirely, so every disabled
 # source runs on every ordinary pass — including the placeholder blocks kept `enabled: false`
 # precisely because nobody has verified their endpoint (hard rule 1).
 run_sabotage "the enabled check is dropped, so every disabled source runs unasked" \
-  src/php/Cli/Scout.php \
+  src/php/Rent/Cli/RentScout.php \
   's%if (!$definition->enabled) {%if (false) {%'
 
 # Hard rule 1 at the funnel. Force-running brought REMPLACER back within reach of a real fetch, so
 # the refusal is what makes force-running safe rather than defensive decoration.
 run_sabotage "a REMPLACER endpoint is polled instead of refused (hard rule 1 at the funnel)" \
-  src/php/Cli/Scout.php \
+  src/php/Rent/Cli/RentScout.php \
   's%if ($definition->url === ConfigLoader::UNVERIFIED_URL) {%if (false) {%'
 
 # And the config itself. This is the state the tree was actually in, so the case is a regression
 # test for a shipped defect rather than a hypothetical: the guard must notice the flag going back.
 run_sabotage "the demo fixture ships enabled again (fake listings in a real deployment)" \
-  config/sources.json \
+  config/rent/sources.json \
   '/"fixture_demo"/,/^    },/ s%"enabled": false%"enabled": true%'
 
 # ── `.env` is parsed, never executed (2026-08-22) ──────────────────────────────────────────────────
@@ -2119,7 +2119,7 @@ run_sabotage "the demo fixture ships enabled again (fake listings in a real depl
 # empty" while the file plainly contained one, because bash had read `KEY=a b c` as a one-command
 # prefix and never exported it -- and had EXECUTED `b c`, printing part of a live credential.
 
-# Precedence. `RENT_SCOUT_DB=/tmp/throwaway bin/scout run` is how a live source is measured without
+# Precedence. `RENT_SCOUT_DB=/tmp/throwaway bin/scout --domain=rent run` is how a live source is measured without
 # touching the real seen-set; a file that could override the environment would silently point that
 # at the real database, and the run would look completely normal.
 run_sabotage "the file overrides the real environment (a throwaway run hits the real store)" \
@@ -2148,19 +2148,19 @@ run_sabotage "wrapping quotes are kept, so every quoted secret is wrong by two c
 # `floor === 0` is RDC and REAL. Read as falsy it vanishes, which is the display twin of rejecting a
 # listing for not stating a floor.
 run_sabotage "the ground floor is treated as no floor at all (RDC vanishes)" \
-  src/php/Core/Notify/Formatter.php \
+  src/php/Rent/Notify/Formatter.php \
   's%if ($listing->floor !== null) {%if (!empty($listing->floor)) {%'
 
 # An UNMENTIONED lift becomes an absent one -- the notification asserting something no source said,
 # about the one feature that makes a 5th-floor flat unlivable for some people.
 run_sabotage "a lift nobody mentioned is reported as absent (a fact the tool invented)" \
-  src/php/Core/Notify/Formatter.php \
+  src/php/Rent/Notify/Formatter.php \
   's%if ($listing->hasElevator !== null) {%if (true) {%'
 
 # The postcode leaves the headline. On In'li -- 54 of 83 matches, and it ships NO title -- the
 # headline is the only text in the notification, so this returns it to a bare commune and a price.
 run_sabotage "the postcode is dropped from the headline (ambiguous commune, no title)" \
-  src/php/Core/Notify/Formatter.php \
+  src/php/Rent/Notify/Formatter.php \
   "s%\$where = \$where === '' ? \$postcode : \$where . ' ' . \$postcode;%%"
 
 # ── Detail hydration, schema v5 (2026-08-23) ─────────────────────────────────────────────────────
@@ -2171,27 +2171,27 @@ run_sabotage "the postcode is dropped from the headline (ambiguous commune, no t
 # 3 names, and it presents as a listing that merely has no title.
 
 run_sabotage "a hydrated page is re-fetched every pass anyway (the crawl)" \
-  src/php/Adapters/HtmlSource.php \
+  src/php/Rent/Adapters/HtmlSource.php \
   "s%if (\$cached !== null \&\& \$cached->fields !== null) {%if (false) {%"
 
 run_sabotage "the per-pass hydration budget stops being enforced" \
-  src/php/Adapters/HtmlSource.php \
+  src/php/Rent/Adapters/HtmlSource.php \
   "s%if (\$spent >= \$budget) {%if (false) {%"
 
 run_sabotage "a failed detail fetch is swallowed and never recorded" \
-  src/php/Adapters/HtmlSource.php \
+  src/php/Rent/Adapters/HtmlSource.php \
   "s%\$this->store->recordDetailFailure(%\$this->nothing(%"
 
 run_sabotage "the detail cache key loses its source, so two landlords share a row" \
-  src/php/Store/Store.php \
+  src/php/Rent/Store/Store.php \
   "s%FROM listing_detail WHERE source = :source AND external_id = :id%FROM listing_detail WHERE external_id = :id OR :source IS NULL%"
 
 run_sabotage "a failed detail page is retried on every pass, for ever" \
-  src/php/Adapters/HtmlSource.php \
+  src/php/Rent/Adapters/HtmlSource.php \
   "s%if (\$cached->attempts >= self::DETAIL_ATTEMPT_CAP) {%if (false) {%"
 
 run_sabotage "hydration priority is inverted, so the worst candidate takes the slot" \
-  src/php/Adapters/HtmlSource.php \
+  src/php/Rent/Adapters/HtmlSource.php \
   's%return $owed;%return array_reverse($owed, true);%'
 
 # ── the letterless fast path, and the one thing that makes it safe ────────────────────────────────
@@ -2203,16 +2203,16 @@ run_sabotage "hydration priority is inverted, so the worst candidate takes the s
 # numeric-entity-encodes its own payload. The two placements are indistinguishable in review.
 
 run_sabotage "the letterless skip reads the RAW value, so an entity-encoded PLAI is never scanned" \
-  src/php/Core/TenureClassifier.php \
+  src/php/Rent/Core/TenureClassifier.php \
   "s|if (!\\\$this->matches('/\\\\p{L}/u', \\\$folded)) {|if (!\\\$this->matches('/\\\\p{L}/u', (string) \\\$value)) {|"
 
 run_sabotage "a letterless literal enters the vocabulary, making the skip unsound" \
-  src/php/Core/TenureClassifier.php \
+  src/php/Rent/Core/TenureClassifier.php \
   "s|    private const array PROCEDURAL = \\[|    private const array PROCEDURAL = ['2026' => Tenure::SOCIAL,|"
 
 # ── Schema v7: the evidence a verdict was formed from, and the outcome it was judged to ──────────
 # Every case here is silent by construction, and they share one shape: the damage is not visible
-# when it is done, only when `scout reclassify` runs months later on evidence that quietly shrank.
+# when it is done, only when `scout --domain=rent reclassify` runs months later on evidence that quietly shrank.
 #
 # The invariant under all of them is `reclassify runs on evidence ⊇ original, never ⊂`. A card whose
 # field says PLS while its title says `logement intermédiaire` classifies UNKNOWN today BY CONFLICT;
@@ -2223,21 +2223,21 @@ run_sabotage "a letterless literal enters the vocabulary, making the skip unsoun
 # The three falsy-but-real values of hard rule 9, one case each. All three decode to something a
 # careless reader calls "empty", and all three mean something specific.
 run_sabotage "a rez-de-chaussee floor decodes as an unknown floor" \
-  src/php/Core/ListingSnapshot.php \
+  src/php/Rent/Core/ListingSnapshot.php \
   "s%floor: self::nullableInt(\$data\['floor'\] ?? null),%floor: self::nullableInt(\$data['floor'] ?? null) ?: null,%"
 
 # `false` is "there is no lift" and only the explicit false may drive the high-floor penalty.
 # Decoded as null it becomes "the listing did not mention one", and the penalty silently stops
 # firing — a scoring change nobody ordered, visible only as listings ranking slightly too high.
 run_sabotage "an explicit 'no lift' decodes as never mentioned" \
-  src/php/Core/ListingSnapshot.php \
+  src/php/Rent/Core/ListingSnapshot.php \
   's%return is_bool($value) ? $value : null;%return is_bool($value) \&\& $value ? $value : null;%'
 
 # `detailRead` is what the fail-closed rule reads to decide whether weak evidence on a mixed source
 # digests or matches. Lost, every hydrated listing re-judges as unread — which is the SAFE
 # direction, and still wrong: it silently re-digests listings whose pages were read and found clean.
 run_sabotage "a hydrated listing is snapshotted as though its page was never read" \
-  src/php/Core/ListingSnapshot.php \
+  src/php/Rent/Core/ListingSnapshot.php \
   "s%'detailRead' => \$listing->detailRead,%'detailRead' => false,%"
 
 # THE GUARD ON THE GUARD. A field added to RawListing and forgotten in the encoder is dropped from
@@ -2245,46 +2245,46 @@ run_sabotage "a hydrated listing is snapshotted as though its page was never rea
 # "the source did not say". The reflection test is the only thing standing between that and a
 # reclassify running on less than the original — this proves it actually fires.
 run_sabotage "a field silently leaves the snapshot (the reflection guard must catch it)" \
-  src/php/Core/ListingSnapshot.php \
+  src/php/Rent/Core/ListingSnapshot.php \
   "s%'commune' => \$listing->commune,%%"
 
 # The verdict and its evidence are written in ONE statement precisely so they cannot diverge.
 # Storing the verdict alone leaves every row unreclassifiable, and nothing says so until months
 # later when reclassify skips the lot.
 run_sabotage "a verdict is stored with no evidence beside it" \
-  src/php/Store/Store.php \
+  src/php/Rent/Store/Store.php \
   "s%'evidence' => \$snapshot,%'evidence' => null,%"
 
 # Hard rule 3, in the place it costs most. A corrupt snapshot degraded to `null` is indistinguishable
 # from a pre-v7 row that never had one — so reclassify would skip it as "never captured" instead of
 # reporting a database that is losing data.
 run_sabotage "a corrupt snapshot degrades to nothing instead of being refused" \
-  src/php/Store/Store.php \
+  src/php/Rent/Store/Store.php \
   's%return ListingSnapshot::decode($json);%try { return ListingSnapshot::decode($json); } catch (\\Throwable) { return null; }%'
 
 # `pendingDigest()` becoming "everything not yet notified" would surface listings the criteria
 # REJECTED — into the one channel §1 uses as its landing zone, which is the worst possible place for
 # a rejected listing to reappear looking merely doubtful.
 run_sabotage "the pending digest stops filtering on the outcome" \
-  src/php/Store/Store.php \
+  src/php/Rent/Store/Store.php \
   "s%WHERE outcome = 'DIGEST' AND notified_at IS NULL%WHERE notified_at IS NULL%"
 
-# And its mirror: forgetting delivery makes `scout digest` repeat its whole contents every time,
+# And its mirror: forgetting delivery makes `scout --domain=rent digest` repeat its whole contents every time,
 # which is the alert fatigue Q34 exists to prevent. A digest the developer has learned to skip costs
 # the fail-closed rule its only landing zone just as surely as never sending one.
 run_sabotage "the pending digest forgets an entry was already delivered" \
-  src/php/Store/Store.php \
+  src/php/Rent/Store/Store.php \
   "s%WHERE outcome = 'DIGEST' AND notified_at IS NULL%WHERE outcome = 'DIGEST'%"
 
 # THE PLACEMENT, not the call. `recordOutcome()` runs before the REJECT and DIGEST branches, both of
 # which `continue` — moved inside the digest branch it would still look right in review, and a
-# listing promoted DIGEST -> MATCH would keep its stale DIGEST for ever while `scout digest` went on
+# listing promoted DIGEST -> MATCH would keep its stale DIGEST for ever while `scout --domain=rent digest` went on
 # announcing as doubtful something already notified as a match.
 run_sabotage "the judged outcome is never recorded" \
-  src/php/Cli/Pipeline.php \
+  src/php/Rent/Cli/Pipeline.php \
   's%$this->store->recordOutcome($sighting->dedupKey, $verdict->outcome->value);%%'
 
-# ── `scout digest` on demand, Q34's other half (2026-08-23) ───────────────────────────────────────
+# ── `scout --domain=rent digest` on demand, Q34's other half (2026-08-23) ───────────────────────────────────────
 # This command's whole reason to exist is a listing the pipeline's retry cannot reach: an entry
 # judged doubtful, undelivered, and then delisted, so no later pass ever re-offers it. Every failure
 # below leaves that listing exactly where it was — unannounced, with nothing anywhere saying so.
@@ -2303,35 +2303,35 @@ run_sabotage "the judged outcome is never recorded" \
 # widening `pendingDigest()` to reach pre-v7 rows — a §1 risk that was explicitly refused, since
 # nothing stored distinguishes a pre-v7 digest from a pre-v7 rejection.
 run_sabotage "the on-demand digest skips the very rows it exists to rescue" \
-  src/php/Cli/Scout.php \
+  src/php/Rent/Cli/RentScout.php \
   's%\$listing ??= new RawListing(%if (\$listing === null) { continue; }\n            \$listing ??= new RawListing(%'
 
 # Marking before the channel confirms consumes the batch permanently on a failed send. A digest
 # entry, unlike a match, has no second chance from anywhere: nothing else will ever surface it.
 run_sabotage "the on-demand digest marks its entries before the channel confirms" \
-  src/php/Cli/Scout.php \
+  src/php/Rent/Cli/RentScout.php \
   's%if (!\$notifier->delivered(\$failures)) {%if (false) {%'
 
 # The count is what tells the reader a backlog was announced WITHOUT its full detail. Removed, a set
 # of degraded entries is indistinguishable from a set of sources that publish nothing but titles.
 run_sabotage "the degraded-row count stops being reported" \
-  src/php/Cli/Scout.php \
+  src/php/Rent/Cli/RentScout.php \
   's%if (\$withoutSnapshot > 0) {%if (false) {%'
 
 # Hard rule 3, in this command's own shape. A corrupt snapshot swallowed silently means a database
 # losing data reads as a quiet one — and the entry would still be announced, so nothing looks wrong.
 run_sabotage "an unreadable snapshot is swallowed instead of counted" \
-  src/php/Cli/Scout.php \
+  src/php/Rent/Cli/RentScout.php \
   's%++\$unreadable;%%'
 
 # A placeholder outranking a stated fact. `commune inconnue` is a label for the ABSENCE of
 # information; printed while a real title sits unused it turns every rescued row into an entry
 # nobody can identify — the display twin of the miss the command was built to fix.
 run_sabotage "an unlocated listing loses its title to the placeholder" \
-  src/php/Core/Notify/Formatter.php \
+  src/php/Rent/Notify/Formatter.php \
   "s%\$where = \$where === '' ? trim(\$listing->title) : \$where;%%"
 
-# ── `scout reclassify`, Q35 — the §1 surface of the two (2026-08-23) ──────────────────────────────
+# ── `scout --domain=rent reclassify`, Q35 — the §1 surface of the two (2026-08-23) ──────────────────────────────
 # Every case here ends in a social listing being announced as a match, which is the one outcome this
 # project exists to prevent. None of them is visible at the moment of damage: the command reports a
 # promotion, the promotion looks like the recovered miss Q35 promised, and only an application to a
@@ -2343,7 +2343,7 @@ run_sabotage "an unlocated listing loses its title to the placeholder" \
 # gone, the title is not — so degrading instead of skipping manufactures the breach, preferentially
 # on the listings most likely to be social, because those are the ones whose evidence conflicts.
 run_sabotage "an evidence-less row is judged on its title instead of being skipped" \
-  src/php/Cli/Scout.php \
+  src/php/Rent/Cli/RentScout.php \
   's%if (\$evidence === null) {%if (false) {%'
 
 # The same hole reached from the other side: the skip stops being reported. The rows are still not
@@ -2351,14 +2351,14 @@ run_sabotage "an evidence-less row is judged on its title instead of being skipp
 # and `reclassify` reporting "0 promotions" over a thousand skipped rows reads as a classifier with
 # nothing left to find.
 run_sabotage "the evidence-less skip count stops being reported" \
-  src/php/Cli/Scout.php \
+  src/php/Rent/Cli/RentScout.php \
   's%if (\$skipped > 0) {%if (false) {%'
 
 # Notifying on any transition, not just DIGEST -> MATCH. Under §1 the interesting direction is the
 # one that ANNOUNCES: a row demoted to REJECT pushed as a match is a rejected listing arriving in the
 # match channel wearing a match's formatting.
 run_sabotage "reclassify announces transitions that are not promotions" \
-  src/php/Cli/Scout.php \
+  src/php/Rent/Cli/RentScout.php \
   "s%if (\$after === 'MATCH' \&\& \$before !== 'MATCH') {%if (\$after !== \$before) {%"
 
 # Marking before the channel confirms. A promotion is the ONE announcement this listing will ever
@@ -2370,21 +2370,21 @@ run_sabotage "reclassify announces transitions that are not promotions" \
 # `pendingDigest()` at once, leaving a MATCH nobody was told about that no command could reach.
 # Short-circuiting the failure branch makes every promotion write regardless of the channel.
 run_sabotage "a promotion is written to the store before the channel confirms" \
-  src/php/Cli/Scout.php \
+  src/php/Rent/Cli/RentScout.php \
   's%^            if (!\$notifier->delivered(\$failures)) {$%            if (false) {%'
 
 # And the ordering that makes the refusal cheap. Building the notifier AFTER the loop means a deploy
 # whose RENT_NTFY_TOPIC is not yet set re-judges everything, then refuses — consuming the whole promotable
 # backlog in one run while printing a message about an environment variable.
 run_sabotage "the notifier is not checked until after every row has been re-judged" \
-  src/php/Cli/Scout.php \
+  src/php/Rent/Cli/RentScout.php \
   's%^            \$fatal = \$notifier->fatalProblem();$%            \$fatal = null;%'
 
 # A row the criteria engine never judged is a dedup MEMBER, and `NULL` outcome is what distinguishes
 # "never judged" from "judged and rejected". Manufacturing an outcome for it destroys that
 # distinction permanently, and the next reclassify then treats a member as a survivor.
 run_sabotage "an unjudged dedup member is given a manufactured outcome" \
-  src/php/Cli/Scout.php \
+  src/php/Rent/Cli/RentScout.php \
   's%if (\$before === null) {%if (false) {%'
 
 # The fail-closed profile for a source that has since been removed from sources.json — the
@@ -2405,14 +2405,14 @@ run_sabotage "an unjudged dedup member is given a manufactured outcome" \
 # defence in depth working, and it is exactly why the pair has to be sabotaged together — a careless
 # "simplify the fallback" edit rewrites the whole constructor call, not one argument of it.
 run_sabotage "a vanished source's listings inherit an eligible tenure from nothing" \
-  src/php/Cli/Scout.php \
-  's%^                null,$%                \\Scout\\Core\\Tenure::LLI,%; s%^                true,$%                false,%'
+  src/php/Rent/Cli/RentScout.php \
+  's%^                null,$%                \\Scout\\Rent\\Core\\Tenure::LLI,%; s%^                true,$%                false,%'
 
 # One damaged row voiding the whole run. Loud is right; global is not — this is the blast-radius
 # mistake detail hydration already made once, where a single unreadable page stopped every other
 # listing being processed.
 run_sabotage "one unreadable snapshot voids the entire reclassify run" \
-  src/php/Cli/Scout.php \
+  src/php/Rent/Cli/RentScout.php \
   's%^            } catch (.*InvalidArgumentException \$e) {$%            } catch (\\RuntimeException \$e) {%'
 
 # ── The snapshot's own losslessness, found by a review panel 2026-08-24 ───────────────────────────
@@ -2425,26 +2425,26 @@ run_sabotage "one unreadable snapshot voids the entire reclassify run" \
 # CONSTRUCTOR PARAMETER is encoded, and `fields` was — it was the VALUE TYPE inside that nothing
 # exercised.
 run_sabotage "a non-scalar field value is dropped on the way out of the snapshot" \
-  src/php/Core/ListingSnapshot.php \
+  src/php/Rent/Core/ListingSnapshot.php \
   's%\$fields\[(string) \$key\] = is_scalar(\$item) ? (string) \$item : \$item;%if (is_scalar($item)) { $fields[(string) $key] = (string) $item; }%'
 
 # The key alone is evidence: `numeroUnique` and `demandeLogementSocial` are literal PROCEDURAL
 # entries, so dropping a key because its VALUE is empty throws away the strongest social
 # discriminator the domain offers while looking like tidying.
 run_sabotage "a field whose value is null loses its key, and the key was the signal" \
-  src/php/Core/ListingSnapshot.php \
+  src/php/Rent/Core/ListingSnapshot.php \
   's%\$fields\[(string) \$key\] = is_scalar(\$item) ? (string) \$item : \$item;%if ($item !== null) { $fields[(string) $key] = is_scalar($item) ? (string) $item : $item; }%'
 
 # The counterweight to both: a decoder that stopped normalising scalars would satisfy the two cases
 # above while changing what every real adapter's listing looks like to the classifier.
 run_sabotage "an ordinary scalar field stops being normalised to a string" \
-  src/php/Core/ListingSnapshot.php \
+  src/php/Rent/Core/ListingSnapshot.php \
   's%\$fields\[(string) \$key\] = is_scalar(\$item) ? (string) \$item : \$item;%$fields[(string) $key] = $item;%'
 
 # Corruption degraded to sparseness. A `fields` that is not a map at all, silently emptied, hands the
 # classifier a listing with no structured evidence and no way to tell that from one that had none.
 run_sabotage "a non-object fields map is emptied instead of refused" \
-  src/php/Core/ListingSnapshot.php \
+  src/php/Rent/Core/ListingSnapshot.php \
   "s%throw new \\\\InvalidArgumentException('listing snapshot has a non-object \`fields\`');%return [];%"
 
 # ── One unreadable listing must not take the pass with it (2026-08-24) ────────────────────────────
@@ -2455,7 +2455,7 @@ run_sabotage "a non-object fields map is emptied instead of refused" \
 # `ok = 1`, and the offending row was left with `tenure = NULL`, whose documented meaning is
 # "stored before schema v3".
 run_sabotage "an unencodable listing throws instead of being stored without a snapshot" \
-  src/php/Store/Store.php \
+  src/php/Rent/Store/Store.php \
   's%} catch (.*JsonException) {%} catch (\\RuntimeException) {%'
 
 # And the same failure in the criteria engine, which is reached one loop later. `Text::fold()`
@@ -2468,13 +2468,13 @@ run_sabotage "an unencodable listing throws instead of being stored without a sn
 # and the suite stayed green — which the ledger reported as `undetected` when nothing was undetected
 # at all. A mutation has to actually mutate the behaviour, or its verdict is about the mutation.
 run_sabotage "an unfoldable title aborts the judging loop instead of being inconclusive" \
-  src/php/Config/Criteria.php \
+  src/php/Rent/Config/Criteria.php \
   's%} catch (MalformedText) {%} catch (MalformedText $e) { throw $e;%'
 
 # The count is what makes the state visible on the pass that causes it. Without it, a row that can
 # never be re-judged is discovered months later from a skip counter, if at all.
 run_sabotage "a verdict stored without its snapshot is not reported by the pass" \
-  src/php/Cli/Pipeline.php \
+  src/php/Rent/Cli/Pipeline.php \
   's%++\$unencodable;%%'
 
 # ── the offline tripwire covers EVERY outbound path, not just the funnel (2026-08-24) ─────────────
@@ -2508,7 +2508,7 @@ run_sabotage "the offline tripwire starts refusing loopback too" \
 # that on 2026-08-24, in the same round it caught the two tests for this guard passing input they
 # never supplied. Both lines of defence were vacuous for the same guarantee, in different ways.
 run_sabotage "an unfoldable commune aborts the pass from rankOf and from Dedup" \
-  src/php/Config/Criteria.php \
+  src/php/Rent/Config/Criteria.php \
   '/\$folded = Text::fold(\$raw);/,+1 s%catch (MalformedText)%catch (\\LogicException)%'
 
 # The two-surface split in `excludedBy()`. Folding both in ONE try silently disabled
@@ -2517,7 +2517,7 @@ run_sabotage "an unfoldable commune aborts the pass from rankOf and from Dedup" 
 # title `Parking en sous-sol`, description `Belle vue,&nbsp;calme.` stopped being rejected and landed
 # in the *à vérifier* channel, which is §1's landing zone.
 run_sabotage "a readable title stops being checked when the description will not fold" \
-  src/php/Config/Criteria.php \
+  src/php/Rent/Config/Criteria.php \
   's%        if (\$foldedTitle !== null) {%        if (false) {%'
 
 # ── the other two egress points (round 2, 2026-08-24) ─────────────────────────────────────────────
@@ -2544,7 +2544,7 @@ run_sabotage "the ntfy refusal puts the topic back in the message" \
 # `WatchLoop` wraps in its own try, so any throw skipped the one signal that says the watcher is
 # alive — while a comment two lines up claimed it was "outside its try/catch by construction".
 run_sabotage "the heartbeat stops being emitted from a finally" \
-  src/php/Cli/Scout.php \
+  src/php/Rent/Cli/RentScout.php \
   's%                } finally {%                } catch (\\Throwable) {%'
 
 # ── round 3: the beat must not lie, and the config must not widen (2026-08-24) ────────────────────
@@ -2555,12 +2555,12 @@ run_sabotage "the heartbeat stops being emitted from a finally" \
 # Silence was the DESIGNED alarm here — Q27's banner says so — and round 2 replaced it with an
 # affirmative false-healthy on the one channel the repo says can be believed.
 run_sabotage "the beat stops naming a failed pass, so it reads as healthy" \
-  src/php/Cli/Scout.php \
+  src/php/Rent/Cli/RentScout.php \
   's%\$reasons\[\] = \$failedPasses . . passe(s) EN ÉCHEC.*;%%'
 
 # And the counter behind it. Never incremented, the beat has nothing to name.
 run_sabotage "a failing pass is not counted, so the beat cannot know" \
-  src/php/Cli/Scout.php \
+  src/php/Rent/Cli/RentScout.php \
   's%                        ++\$failedPasses;%%'
 
 # The loader asymmetry a listing-side fix opened. `communeKey()` returning `''` instead of throwing
@@ -2569,14 +2569,14 @@ run_sabotage "a failing pass is not counted, so the beat cannot know" \
 # commune was awarded that rank. Measured at rank 1: "commune de premier choix", with the raw bytes
 # in `reasons[]`. Config is the input that must fail loudly.
 run_sabotage "an unnormalisable commune_rank label is accepted, ranking every unreadable commune" \
-  src/php/Config/ConfigLoader.php \
+  src/php/Rent/Config/ConfigLoader.php \
   's%^                if (\$key === .\{2\}) {$%                if (false) {%'
 
 # The audit trail. A row that classified LLI and failed to encode is not SKIPPED by reclassify — it
 # is invisible to it, because `staleVerdicts()` selects undetermined verdicts only. `doctor` is the
 # one place it can be seen, and schema v7 exists so a verdict can be re-examined at all.
 run_sabotage "verdicts with no evidence stop being countable" \
-  src/php/Store/Store.php \
+  src/php/Rent/Store/Store.php \
   "s%WHERE tenure IS NOT NULL AND evidence_json IS NULL%WHERE 0%"
 
 # ── console is not a delivery (round 7 P0) ────────────────────────────────────────────────────
@@ -2604,7 +2604,7 @@ run_sabotage "delivered() goes back to counting channels instead of naming them"
 # this warning is the only thing between a misconfigured deployment and a watcher that announces to
 # a log for ever while marking nothing notified.
 run_sabotage "a run with no remote channel stops saying so" \
-  src/php/Cli/Scout.php \
+  src/php/Rent/Cli/RentScout.php \
   's%        if (\$notifier->hasRemoteChannel()) {%        if (true) {%'
 
 # ── group-scoped suppression is forbidden, on BOTH delivery paths ─────────────────────────────
@@ -2615,12 +2615,12 @@ run_sabotage "a run with no remote channel stops saying so" \
 # suite stayed green both times. It is also the likeliest change a future session makes: `--seed`
 # twelve lines above marks every member and IS pinned, so the asymmetry reads as an oversight.
 run_sabotage "a delivered match marks the whole cluster, silencing an over-merged flat for ever" \
-  src/php/Cli/Pipeline.php \
+  src/php/Rent/Cli/Pipeline.php \
   "s%\\\$this->store->markNotified(\\\$sighting->dedupKey, \\\$nowIso, 'MATCH');%foreach (\\\$clusterKeys[spl_object_id(\\\$listing)] as \\\$mk) { \\\$this->store->markNotified(\\\$mk, \\\$nowIso, 'MATCH'); }%"
 
 # The digest entry carries `keys` as well as `key`, so the forbidden loop is easier to write here.
 run_sabotage "a delivered digest marks every clustered member instead of the entry key" \
-  src/php/Cli/Pipeline.php \
+  src/php/Rent/Cli/Pipeline.php \
   "s%\\\$this->store->markNotified(\\\$entry\\['key'\\], \\\$nowIso, 'DIGEST');%foreach (\\\$entry['keys'] as \\\$mk) { \\\$this->store->markNotified(\\\$mk, \\\$nowIso, 'DIGEST'); }%"
 
 # ── round 7 P1s: guarantees that were real and pinned by nothing ──────────────────────────────
@@ -2638,21 +2638,21 @@ run_sabotage "the offline tripwire searches the url instead of parsing its host"
 # case collapses all four clauses at once, so its detection comes from the `null` half and this one
 # could rot alone — the compound-rot failure test-sabotage-applies.sh was rewritten to prevent.
 run_sabotage "two unfoldable communes are treated as the same commune" \
-  src/php/Core/Dedup.php \
+  src/php/Rent/Core/Dedup.php \
   "s%|| \$communeA === '' %%"
 
 # "A liveness signal that can replace the diagnosis is worse than one that is late." The beat runs
 # in the pass's finally, so a throwing beat propagates INSTEAD of the pass's own exception and
 # WatchLoop::onError reports the wrong cause on the one channel this repo says can be believed.
 run_sabotage "the beat's own failure masks the pass's diagnosis" \
-  src/php/Cli/Scout.php \
+  src/php/Rent/Cli/RentScout.php \
   's%\$this->warn(.battement de cœur non émis.*$%throw \$beatFailure;%'
 
 # The highest-traffic of the three caps — it runs unattended every fifteen minutes — and the only
 # one whose remainder could be deleted with the whole suite green. Both siblings assert their line
 # by string; this one asserted only the RunResult field.
 run_sabotage "the pipeline stops naming the digest remainder to the operator" \
-  src/php/Cli/Scout.php \
+  src/php/Rent/Cli/RentScout.php \
   's%if (\$result->digestOverflow > 0) {%if (false) {%'
 
 # ── round 7 P2s ───────────────────────────────────────────────────────────────────────────────
@@ -2661,21 +2661,21 @@ run_sabotage "the pipeline stops naming the digest remainder to the operator" \
 # suppresses rather than re-announces — the quiet direction, in the one place §1 wants it. The
 # sibling rule (a pre-v8 NULL reading as MATCH) was pinned; this arm was not.
 run_sabotage "an unrecognised announcement kind re-announces instead of staying quiet" \
-  src/php/Store/Store.php \
+  src/php/Rent/Store/Store.php \
   "s%            default => 2,%            default => 0,%"
 
 # A denial that FOLLOWS the noun. `Ascenseur : non` is an ordinary French spec-block row and read
 # as `true` — a bonus awarded for a lift that does not exist, the direction Prose's own docblock
 # forbids. The backward-only window structurally could not see it.
 run_sabotage "a lift denial that follows the noun is read as a lift" \
-  src/php/Core/Prose.php \
+  src/php/Rent/Core/Prose.php \
   's%self::LIFT_TRAILING_WINDOW);%0);%'
 
 # The `au|en` anchor is what keeps a bare COUNT out of the floor even when the noun is singular.
 # The ledger pinned only the `\b` on `etage`; made optional, a building's height becomes the
 # tenant's floor — the exact defect this reader was written to fix.
 run_sabotage "the floor anchor goes optional, so a building height answers for the flat" \
-  src/php/Core/Prose.php \
+  src/php/Rent/Core/Prose.php \
   's%(?:au|en)\\s+(?:le%(?:au|en)?\\s+(?:le%'
 
 # ── round 8: a delivery is a CAPABILITY, not a name ───────────────────────────────────────────
@@ -2699,7 +2699,7 @@ run_sabotage "the console channel starts counting as a delivered notification" \
 # `title` — so `$missing` could never be non-empty and a new unread property passed unnoticed.
 # This is the src-side mutation the guard exists to catch; it must go red.
 run_sabotage "a new listing field reaches no matrix surface and nothing says so" \
-  src/php/Core/RawListing.php \
+  src/php/Rent/Core/RawListing.php \
   "s%        public string \$description = '',%        public string \$description = '', public ?string \$agencyBlurb = null,%"
 
 
@@ -2738,18 +2738,18 @@ run_sabotage "html entities reach the classifier undecoded" \
 # A rent assembled across a line break reads whatever sat above it. `ref 850` over `1 450 EUR` gives
 # 850: inside the plausibility band, six hundred euros low, clearing a ceiling the real rent does not.
 run_sabotage "the rent separator admits newlines again" \
-  src/php/Adapters/EmailAlertSource.php \
+  src/php/Rent/Adapters/EmailAlertSource.php \
   "s%(\\\\d\[\\\\d\\\\h.,\]{2,})%(\\\\d[\\\\d\\\\s.,]{2,})%g"
 
 # THE NO-INFORMATION FLOOR. Without it every card whose extraction failed hashes to the same key --
 # the store's "nothing collapses onto a shared key" guarantee violated where the store cannot see it.
 run_sabotage "the content identity is minted with no locating evidence" \
-  src/php/Adapters/EmailAlertSource.php \
+  src/php/Rent/Adapters/EmailAlertSource.php \
   's%        if ($locating === null || $locating === ..) {%        if (false) {%'
 
 # Rent back in the identity, which turns every price drop into a brand-new listing with no history.
 run_sabotage "the rent joins the content identity, so a price cut mints a new flat" \
-  src/php/Adapters/EmailAlertSource.php \
+  src/php/Rent/Adapters/EmailAlertSource.php \
   "s%identityFor(\\\$commune, \\\$postcode, \\\$rooms, \\\$surface, \\\$residence)%identityFor(\\\$commune, \\\$postcode, \\\$rooms, \\\$surface, \\\$residence . '|' . \\\$rent)%"
 
 # Two cards in one message sharing an identity: one is kept, the rest dropped, and the drop is
@@ -2757,26 +2757,26 @@ run_sabotage "the rent joins the content identity, so a price cut mints a new fl
 # over three indistinguishable coliving rooms). Not detecting the collision at all re-emits the
 # duplicate under an identity another card already owns.
 run_sabotage "duplicate identities within one message stop being noticed" \
-  src/php/Adapters/EmailAlertSource.php \
+  src/php/Rent/Adapters/EmailAlertSource.php \
   's%            if (isset($seenIds\[$listing->externalId\])) {%            if (false) {%'
 
 # The half the ruling did NOT relax. Dropping a card without a word is exactly the silence the old
 # throw existed to prevent, and it is the shape that would make the change a regression rather than
 # a fix — a source quietly under-reporting, which is indistinguishable from a quiet market.
 run_sabotage "a dropped duplicate card is dropped in silence" \
-  src/php/Adapters/EmailAlertSource.php \
+  src/php/Rent/Adapters/EmailAlertSource.php \
   's%                if ($this->warn !== null) {%                if (false) {%'
 
 # Hard rule 2. A message that plainly carries cards and yields none is a changed template, and it is
 # indistinguishable from a quiet market unless it is loud.
 run_sabotage "a message full of cards that yields none returns quietly" \
-  src/php/Adapters/EmailAlertSource.php \
+  src/php/Rent/Adapters/EmailAlertSource.php \
   's%        if ($out === \[\] && count($segments) > 1) {%        if (false) {%'
 
 # §1 AT LOAD. Segmenting removes a batch-level regime mention from every card; on a mixed-tenure
 # source that is a decision nobody has made against a real payload.
 run_sabotage "a segmented mixed-tenure source is allowed to load" \
-  src/php/Config/ConfigLoader.php \
+  src/php/Rent/Config/ConfigLoader.php \
   "s%if (isset(\\\$params\['card_separator'\]) && \\\$params\['card_separator'\] !== '' && \\\$mixedTenure) {%if (false) {%"
 
 # RETIRED 2026-08-25, and retired rather than repaired because the GUARANTEE changed.
@@ -2798,7 +2798,7 @@ run_sabotage "a segmented mixed-tenure source is allowed to load" \
 # never throws -- it returns false and the field is null for ever. On residence_pattern that
 # silently narrows the identity floor, since the residence is one of the three facts it accepts.
 run_sabotage "an uncompilable email pattern is accepted and never matches anything" \
-  src/php/Config/ConfigLoader.php \
+  src/php/Rent/Config/ConfigLoader.php \
   "s%, '') === false) {%, '') === false \&\& false) {%"
 
 # THE NOTIFICATION LINKED TO THE SAVED SEARCH, NOT THE FLAT. Taking the FIRST qualifying link in a
@@ -2806,7 +2806,7 @@ run_sabotage "an uncompilable email pattern is accepted and never matches anythi
 # is alert management on card one, a third-party advert on card two and the photo on card three. The
 # link is the one thing a push exists to deliver, and a wrong one is not visibly wrong.
 run_sabotage "the card links to the portal's furniture instead of the flat" \
-  src/php/Adapters/EmailAlertSource.php \
+  src/php/Rent/Adapters/EmailAlertSource.php \
   's%foreach (array_reverse(self::linksIn($segment)) as $candidate) {%foreach (self::linksIn($segment) as $candidate) {%'
 
 # "RECENT" READ AS THE TAIL OF THE FOLDER. Measured 2026-08-25 on a 1436-message Gmail label:
@@ -2834,13 +2834,13 @@ run_sabotage "a non-positive IMAP window is obeyed rather than clamped" \
 # below the plausibility floor so the card was merely dropped, but a 300 EUR reduction would have
 # been returned as a rent that clears a ceiling the flat comes nowhere near.
 run_sabotage "a periodic rent no longer outranks a bare figure (the discount wins)" \
-  src/php/Adapters/EmailAlertSource.php \
+  src/php/Rent/Adapters/EmailAlertSource.php \
   "s%'~(\\\\d\[\\\\d\\\\h.,\]{2,})\\\\h\*(?:€|EUR|euros?)\\\\h\*(?:/\\\\h\*mois|par mois|mensuel)~iu',%%"
 
 # And the other half: preg_match stops at the first hit, so one implausible figure hid a perfectly
 # readable rent three lines below it.
 run_sabotage "only the first rent-shaped figure in a card is considered" \
-  src/php/Adapters/EmailAlertSource.php \
+  src/php/Rent/Adapters/EmailAlertSource.php \
   's%foreach ($matches\[1\] ?? \[\] as $candidate) {%foreach (array_slice($matches[1] ?? [], 0, 1) as $candidate) {%'
 
 # THE COMMUNE READ FROM THE PORTAL'S LAYOUT. Dropping this branch falls back to the ranked-vocabulary
@@ -2848,7 +2848,7 @@ run_sabotage "only the first rent-shaped figure in a card is considered" \
 # its town while its postcode still parses, and the notification cannot say where the flat is. It is
 # the shape of failure that has an alibi: `null` reads as "an unranked town", not as "broken".
 run_sabotage "the laid-out commune is ignored in favour of the vocabulary scan" \
-  src/php/Adapters/EmailAlertSource.php \
+  src/php/Rent/Adapters/EmailAlertSource.php \
   "s%            return \$this->matchParam('commune_pattern', \$body);%            return null;%"
 
 # The reverse cut, and the one that has an alibi (2026-08-29): a configured pattern that MISSES
@@ -2856,13 +2856,13 @@ run_sabotage "the laid-out commune is ignored in favour of the vocabulary scan" 
 # extraction — and restores the prototype's "proche Dourdan" over-match on the way. Every other
 # positional reader already yields null on a miss; this one was the last to fall back.
 run_sabotage "a configured commune_pattern that misses falls back to the vocabulary scan again" \
-  src/php/Adapters/EmailAlertSource.php \
+  src/php/Rent/Adapters/EmailAlertSource.php \
   "s%            return \$this->matchParam('commune_pattern', \$body);%            if ((\$c = \$this->matchParam('commune_pattern', \$body)) !== null) { return \$c; }%"
 
 # The other direction: the vocabulary fallback deleted. A source with no commune_pattern -- every
 # email source that existed before this one -- silently stops naming any commune at all.
 run_sabotage "the vocabulary fallback is dropped, so an unconfigured source names no commune" \
-  src/php/Adapters/EmailAlertSource.php \
+  src/php/Rent/Adapters/EmailAlertSource.php \
   "s%            if (\$key !== '' \&\& str_contains(\$folded, \$key)) {%            if (false) {%"
 
 # THE FAIL-CLOSED POSTURE DEFEATED BY A 200. An SPA catch-all answers /robots.txt with its app
@@ -2883,7 +2883,7 @@ run_sabotage "a robots body starting with a markup character is trusted" \
 # live pass were these, and all four matched. The existing colocation patterns cannot fire:
 # neither `coloc` nor `colocation` appears anywhere in them [measured 2026-08-25].
 run_sabotage "the coliving-room title pattern is dropped from the criteria" \
-  config/criteria.json \
+  config/rent/criteria.json \
   's%^    "(?<!\[0-9\])(?<!\[0-9\].*chambres?.*$%%'
 
 # ── Bien'ici: the second email portal, and the first keyed on a real listing id ──────────────────
@@ -2894,14 +2894,14 @@ run_sabotage "the coliving-room title pattern is dropped from the criteria" \
 # Measured over four live messages: 3 of 13 surfaces and 1 of 13 room counts wrong, every one of
 # them under-reported, which is the direction nothing ever notices.
 run_sabotage "the Bien'ici card separator becomes the call to action" \
-  config/sources.json \
+  config/rent/sources.json \
   's%"card_separator": "\\nPhoto\\n"%"card_separator": "Voir l\xe2\x80\x99annonce"%'
 
 # The identity falls back to the card's own link ONLY on the segmented path. Remove the fallback and
 # every Bien'ici card is refused an identity, the zero-cards guard fires, and the source reports a
 # template change that has not happened.
 run_sabotage "a segmented card can no longer be identified by its own link" \
-  src/php/Adapters/EmailAlertSource.php \
+  src/php/Rent/Adapters/EmailAlertSource.php \
   's%?? (\$link === null ? null : self::stableId(\$link))%?? null%'
 
 # The no-information floor moved OUT of identityFor so it guards the card rather than the content
@@ -2909,21 +2909,21 @@ run_sabotage "a segmented card can no longer be identified by its own link" \
 # applying the moment a portal published a real id -- and a segment yielding a rent and nothing else
 # is an extraction failure, whatever key it would have got.
 run_sabotage "the no-information floor stops guarding the card" \
-  src/php/Adapters/EmailAlertSource.php \
+  src/php/Rent/Adapters/EmailAlertSource.php \
   's%if (!self::locatable(\$commune, \$postcode, \$rooms, \$surface, \$residence)) {%if (false) {%'
 
 # THE HEADER MUST NOT BECOME A LISTING. It carries a rent, a room count and a surface belonging to
 # no flat; what it lacks is a listing link. Widen link_host to the bare domain and `/mon-alerte/`
 # qualifies again -- which is also how the notification went back to opening the saved search.
 run_sabotage "Bien'ici's link host widens from the listing path to the domain" \
-  config/sources.json \
+  config/rent/sources.json \
   's%"link_host": "bienici.com/annonce/"%"link_host": "bienici.com"%'
 
 # One mailbox serves every portal, so `from` is the source's scope and not a nicety. Without the
 # refusal an enabled email source reads every message in the label within the window and ingests
 # other portals' alerts as its own, reporting a plausible count throughout.
 run_sabotage "an enabled email source may ship without naming its sender" \
-  src/php/Config/ConfigLoader.php \
+  src/php/Rent/Config/ConfigLoader.php \
   's%\$from = \$params\[.from.\] ?? null;%\$from = \$params["from"] ?? "sabotage";%'
 
 # A segmented source keyed on its links must say WHICH links are listings. Two cards ending on the
@@ -2931,7 +2931,7 @@ run_sabotage "an enabled email source may ship without naming its sender" \
 # caught by nothing -- plausible unique ids that change with the next campaign, so the whole source
 # renotifies for ever and reads as a busy market.
 run_sabotage "a segmented link-keyed source may ship without a link host" \
-  src/php/Config/ConfigLoader.php \
+  src/php/Rent/Config/ConfigLoader.php \
   's%&& (!\\is_string(\$linkHost) || trim(\$linkHost) === ..)) {%\&\& false) {%'
 
 # THE SAME RULE ON THE FORCE-RUN PATH. The loader refuses a `from`-less email_alert only when it is
@@ -2939,13 +2939,13 @@ run_sabotage "a segmented link-keyed source may ship without a link host" \
 # rule 1's REMPLACER refusal into buildSource(). A drafted block force-run without a sender reads
 # EVERY message in the shared label and ingests other portals' alerts as its own.
 run_sabotage "a force-run email source may skip naming its sender" \
-  src/php/Cli/Scout.php \
+  src/php/Rent/Cli/RentScout.php \
   's%\$from = \$definition->params\[.from.\] ?? null;%\$from = \$definition->params["from"] ?? "sabotage";%'
 
 # An empty link_host satisfies an isset() check and then makes EVERY link qualify -- stringParam()
 # treats '' as unset. The silent shape the refusal describes, reached by a different mistake.
 run_sabotage "an empty link host passes for a named one" \
-  src/php/Config/ConfigLoader.php \
+  src/php/Rent/Config/ConfigLoader.php \
   's%(!\\is_string(\$linkHost) || trim(\$linkHost) === ..)%(!isset(\$params["link_host"]))%'
 
 # ── tier 4: the income-ceiling band (2026-08-26) ──────────────────────────────
@@ -2957,19 +2957,19 @@ run_sabotage "an empty link host passes for a named one" \
 # B1's one-person figure, so `<=` socialises a genuine LLI listing quoting its own ceiling. The
 # scaffolding shipped with `<=`.
 run_sabotage "the ceiling boundary goes back to inclusive (an LLI ad quoting its own ceiling rejects)" \
-  src/php/Core/PlafondBands.php \
+  src/php/Rent/Core/PlafondBands.php \
   's%return $ceilingEur < $band\[.max.\]%return $ceilingEur <= $band["max"]%'
 
 # THE THRESHOLD IS DERIVED from the committed table. A literal drifts from the figures beside it at
 # the next January revaluation, and the tier keeps applying last year's boundary.
 run_sabotage "the unknown-zone threshold is written rather than derived from the table" \
-  src/php/Core/PlafondBands.php \
+  src/php/Rent/Core/PlafondBands.php \
   's%min(array_map(min(...), self::LLI_2026))%40000%'
 
 # §1: tier 4 may never assert eligibility from a number. The overlap means such a reading would be
 # wrong across a 73 451 EUR range, and it is the direction that puts a social listing in a push.
 run_sabotage "a band may assert an intermediate tenure again (eligibility manufactured from a number)" \
-  src/php/Core/PlafondBands.php \
+  src/php/Rent/Core/PlafondBands.php \
   's%if ($band\[.tenure.\] !== Tenure::SOCIAL) {%if (false) {%'
 
 # THE ANCHOR must keep `de ressources`. An intermediate ad quoting its own RENT ceiling as an annual
@@ -2978,27 +2978,27 @@ run_sabotage "a band may assert an intermediate tenure again (eligibility manufa
 # a rent ceiling being read as an income ceiling -- and it lands below the threshold, so the tier
 # would contradict the listing's own intermediate label and digest a real match.
 run_sabotage "the ceiling reader drops the de-ressources half (a RENT ceiling reads as an income one)" \
-  src/php/Core/TenureClassifier.php \
+  src/php/Rent/Core/TenureClassifier.php \
   's%\$anchor = .*;%\$anchor = "plafon[a-z]*";%'
 
 # THE NEGATION, read first -- `sans plafond de ressources` is ordinary private-market copy.
 run_sabotage "the ceiling reader ignores its own negation (a signal made from its absence)" \
-  src/php/Core/TenureClassifier.php \
+  src/php/Rent/Core/TenureClassifier.php \
   "s%if ((\\\$match\['neg'\]\[0\] ?? '') !== '') {%if (false) {%"
 
 # THE PLAUSIBILITY FLOOR, twin of the rent band: a rent or charge near the anchor is below every
 # threshold, so without it the tier answers SOCIAL to noise.
 run_sabotage "the ceiling reader drops its plausibility floor (a rent becomes an income ceiling)" \
-  src/php/Core/TenureClassifier.php \
+  src/php/Rent/Core/TenureClassifier.php \
   's%if ($amount < self::PLAFOND_PLAUSIBLE_MIN_EUR) {%if (false) {%'
 
 # THE TIER ITSELF.
 run_sabotage "tier 4 stops reading the listing (the rung goes inert again)" \
-  src/php/Core/TenureClassifier.php \
+  src/php/Rent/Core/TenureClassifier.php \
   's%4 => $this->plafondSignals($listing),%4 => [],%'
 
 run_sabotage "the classifier ships with tier 4 disarmed again" \
-  src/php/Core/TenureClassifier.php \
+  src/php/Rent/Core/TenureClassifier.php \
   's%$bands ?? PlafondBands::ileDeFrance2026()%$bands ?? new PlafondBands()%'
 
 # ── leboncoin: HTML-only alert mail (2026-08-26) ──────────────────────────────
@@ -3025,13 +3025,13 @@ run_sabotage "an HTML-only alert loses its links again (a source that reports a 
 # tenure scan. A campaign string carrying `lli` and `plai` conflicts a correct verdict into the
 # digest -- the CDC-tooltip class on a surface no listing copy controls.
 run_sabotage "URL tracking parameters are classified as prose again (a campaign string vetoes a flat)" \
-  src/php/Core/RawListing.php \
+  src/php/Rent/Core/RawListing.php \
   's%\[?#\]\[^%[?#]ZZZ[^%'
 
 # And the §1 half of that rule: the PATH is kept on purpose, because `/logement-social/` is real
 # evidence and losing a social signal is the dangerous direction.
 run_sabotage "the whole URL is blanked, not just its parameters (a social path signal is lost)" \
-  src/php/Core/RawListing.php \
+  src/php/Rent/Core/RawListing.php \
   's%, .\$1., \$text)%, "", $text)%'
 
 # A CONFIGURED `title_pattern` THAT MISSES MUST NOT WEAR THE SUBJECT LINE AS AN ALIBI.
@@ -3046,14 +3046,14 @@ run_sabotage "the whole URL is blanked, not just its parameters (a social path s
 # place every frozen card extracts, so the fallback branch is never entered and all six fixture
 # suites stay green while the safety is deleted. `EmailAlertSegmentationTest` enters it on purpose.
 run_sabotage "an unread title falls back to the message subject again (a title-only exclusion goes unreachable)" \
-  src/php/Adapters/EmailAlertSource.php \
+  src/php/Rent/Adapters/EmailAlertSource.php \
   "s%?? ''%?? \$message->subject()%"
 
 # And the half that keeps the asymmetry honest: a source configuring NO pattern must still take the
 # subject, because there it is the documented answer rather than a substitute for one. Blanking both
 # would silently strip the title from every single-flat alert.
 run_sabotage "a source with no title_pattern loses its subject title" \
-  src/php/Adapters/EmailAlertSource.php \
+  src/php/Rent/Adapters/EmailAlertSource.php \
   's%return \$message->subject();%return "";%'
 
 # A TITLE IS A POSITION, NEVER A VOCABULARY. The replacement anchors on the layout SeLoger emits --
@@ -3064,13 +3064,13 @@ run_sabotage "a source with no title_pattern loses its subject title" \
 # `<n> pièces . <s> m²`. Break the anchor and nothing matches, so every card falls back — which is
 # the state the source shipped in for a month.
 run_sabotage "the seloger title loses its positional anchor (every card falls back again)" \
-  config/sources.json \
+  config/rent/sources.json \
   's%pi\[eè\]ces?\\\\b~mu%piZZZces?\\\\b~mu%'
 
 # And the capture floor is 2 characters, not 3, because `T5` and `T3` are real SeLoger titles. A
 # floor of 3 looks harmless and silently drops exactly the shortest titles the portal emits.
 run_sabotage "the seloger title capture floor rises to 3 (T5 and T3 stop being titles)" \
-  config/sources.json \
+  config/rent/sources.json \
   's%{2,80}%{3,80}%'
 
 # --- PAP: the search criteria quoted above the listing (2026-08-26) --------------------------
@@ -3088,11 +3088,11 @@ run_sabotage "the seloger title capture floor rises to 3 (T5 and T3 stop being t
 # pinned by EmailAlertSegmentationTest, which enters it on purpose. Same dead-safety-code trap the
 # seloger title walked into on 2026-08-26.
 run_sabotage "a missed surface_pattern falls back to the first m² in the body again" \
-  src/php/Adapters/EmailAlertSource.php \
+  src/php/Rent/Adapters/EmailAlertSource.php \
   's%\$owned = \$this->stringParam(.surface_pattern.) !== null;%\$owned = \$this->matchParam("surface_pattern", \$body) !== null;%'
 
 run_sabotage "a missed rooms_pattern falls back to the first digit in the body again" \
-  src/php/Adapters/EmailAlertSource.php \
+  src/php/Rent/Adapters/EmailAlertSource.php \
   's%\$owned = \$this->stringParam(.rooms_pattern.) !== null;%\$owned = \$this->matchParam("rooms_pattern", \$body) !== null;%'
 
 # link_host CARRIES THE PATH here. PAP's message has two links, both on www.pap.fr: the annonce and
@@ -3101,14 +3101,14 @@ run_sabotage "a missed rooms_pattern falls back to the first digit in the body a
 # second listing carrying the real flat's rent, commune and surface under its own identity —
 # notified as a separate flat, and never delisted because an unsubscribe page never goes away.
 run_sabotage "the pap link filter loses its path (the unsubscribe page becomes a listing)" \
-  config/sources.json \
+  config/rent/sources.json \
   's%"link_host": "www.pap.fr/annonces/"%"link_host": "www.pap.fr"%'
 
 # title_pattern was INERT on every non-segmented source: listingsIn() hardcoded the subject and only
 # the segmented path consulted cardTitle(). A configured pattern doing nothing, which on this source
 # makes exclude_title_patterns unreachable — the In'li and SeLoger lesson a third time.
 run_sabotage "a non-segmented source takes the message subject as its title again" \
-  src/php/Adapters/EmailAlertSource.php \
+  src/php/Rent/Adapters/EmailAlertSource.php \
   's%title: \$this->cardTitle(\$message, \$body),%title: \$message->subject(),%'
 
 # --- Commute enrichment (2026-08-26) ---------------------------------------------------------
@@ -3122,43 +3122,43 @@ run_sabotage "a non-segmented source takes the message subject as its title agai
 # a score's clothes: the developer's ruling forbids it in as many words ("keep showing even those
 # with more anyway"), and hard rule 8 keeps the two mechanisms apart.
 run_sabotage "a commute past the ceiling is punished rather than merely unrewarded" \
-  src/php/Core/CriteriaEngine.php \
+  src/php/Rent/Core/CriteriaEngine.php \
   's%: max(0.0, min(1.0, (2 \* \$ceiling - \$minutes) / \$ceiling));%: (\$minutes > \$ceiling ? -1.0 : 1.0);%'
 
 # UNKNOWN IS NOT NEAR. Scoring an absent commute as if it were zero minutes hands every listing the
 # full 30 points on the strength of an API that did not answer -- and it looks like a healthy score.
 run_sabotage "an unknown commute scores as if the flat were on the doorstep" \
-  src/php/Core/CriteriaEngine.php \
+  src/php/Rent/Core/CriteriaEngine.php \
   's%\$reasons\[\] = .trajet inconnu — hors score.;%\$earned += \$w->commute; \$reasons[] = "trajet inconnu";%'
 
 # THE CACHE IS READ. A commune resolves once and then costs no request ever again -- without that
 # the tree spends two requests per listing per pass against a 20 000/day quota, and the same commune
 # spelled two ways spends them twice over.
 run_sabotage "the commute cache is never read (every pass re-requests every commune)" \
-  src/php/Enrich/NavitiaCommute.php \
+  src/php/Rent/Enrich/NavitiaCommute.php \
   's%if (\$cached !== null) {%if (false) {%'
 
 # LONGITUDE FIRST. Reversed, the request still succeeds and returns a plausible journey between two
 # entirely different places -- there is no error to notice, only wrong minutes.
 run_sabotage "the journey coordinates are swapped to latitude first" \
-  src/php/Enrich/NavitiaCommute.php \
+  src/php/Rent/Enrich/NavitiaCommute.php \
   "s%'from' => \\\$from\[0\] . ';' . \\\$from\[1\],%'from' => \\\$from[1] . ';' . \\\$from[0],%"
 
 # SECONDS, not minutes. Verified against the live API: 2148 for a 35-minute trip.
 run_sabotage "the journey duration is read as minutes rather than seconds" \
-  src/php/Enrich/NavitiaCommute.php \
+  src/php/Rent/Enrich/NavitiaCommute.php \
   's%return \$best === null ? null : (int) round(\$best / 60);%return \$best;%'
 
 # A geocode is checked against the postcode it was asked for. Commune names repeat across
 # departements, and a wrong coordinate is cached for ever and mis-scores a whole town in silence.
 run_sabotage "a geocoded place is accepted without checking its postcode" \
-  src/php/Enrich/NavitiaCommute.php \
+  src/php/Rent/Enrich/NavitiaCommute.php \
   's%if (\$postcode !== null \&\& !\$this->matchesPostcode(\$candidate, \$postcode)) {%if (false) {%'
 
 # Enrichment must never void a pass that has already fetched real listings -- the blast-radius
 # mistake detail hydration made once already.
 run_sabotage "an unreachable commute API takes the whole pass down with it" \
-  src/php/Enrich/NavitiaCommute.php \
+  src/php/Rent/Enrich/NavitiaCommute.php \
   's%} catch (\\Throwable) {%} catch (\\JsonException) {%'
 
 # A COMMUTE IS MINUTES BETWEEN TWO PLACES. Drop the destination from the cache lookup and every
@@ -3169,7 +3169,7 @@ run_sabotage "an unreachable commute API takes the whole pass down with it" \
 # bound and unused, so the suite would go red on a PDO error rather than on the guarantee, which
 # proves nothing. A constant key is the same defect with no crash to hide behind.
 run_sabotage "the commute cache forgets which destination its minutes are to" \
-  src/php/Enrich/NavitiaCommute.php \
+  src/php/Rent/Enrich/NavitiaCommute.php \
   's%\$destinationKey = sha1(\$destination);%\$destinationKey = "any-destination";%'
 
 # ── The IMAP window cap ─────────────────────────────────────────────────────────────────────────
@@ -3208,7 +3208,7 @@ run_sabotage "the window is measured after the cap instead of before it" \
 # appearing on listings whose regime was the source default -- exactly the private-portal cards that
 # score highest, and exactly the ones §1's residual lives in.
 run_sabotage "a guessed tenure is allowed to carry the high-priority marker" \
-  src/php/Core/CriteriaEngine.php \
+  src/php/Rent/Core/CriteriaEngine.php \
   's%&& \$classification->confidenceBp >= self::HIGH_PRIORITY_MIN_CONFIDENCE_BP;%;%'
 
 # And the withheld marker must SAY it was withheld. A demotion in silence is indistinguishable from
@@ -3218,7 +3218,7 @@ run_sabotage "a guessed tenure is allowed to carry the high-priority marker" \
 # draft spliced a quote in and produced a PARSE ERROR, which the ledger reported as proving nothing
 # either way — correctly. A mutation that does not compile tests nothing.
 run_sabotage "a marker withheld for low confidence is withheld in silence" \
-  src/php/Core/CriteriaEngine.php \
+  src/php/Rent/Core/CriteriaEngine.php \
   's%\$reasons\[\] = \(.priorité normale malgré\)%\$_unused = \1%'
 
 # THE `!!` GLYPH ITSELF. Every other link in that chain had a test — the engine producing
@@ -3253,21 +3253,21 @@ run_sabotage "the ntfy wire hardcodes a level instead of sending the notificatio
 # said healthy. These five cases pin the parts of the fix whose failure is, as usual here, silent.
 
 run_sabotage "a silent feed stops being reported at all (the leboncoin case returns)" \
-  src/php/Store/Store.php \
+  src/php/Rent/Store/Store.php \
   's%if ($silentFor >= $feedSilentDays \* 86400) {%if (false) {%'
 
 # UNKNOWN MUST NOT BECOME OLD. Reading a null feed date as ancient turns the entire pre-v11 run log,
 # every html/json source and the documented MAILBOX_DIR fixture workflow into a permanent alert --
 # hard rule 9 at the health layer, and the noisy direction, which is how an alert becomes furniture.
 run_sabotage "an unknown feed date is read as an ancient one" \
-  src/php/Store/Store.php \
+  src/php/Rent/Store/Store.php \
   's%\$feedDates\[\] = \$reported;%\$feedDates[] = \$reported ?? "1970-01-01T00:00:00Z";%; s%if (\$reported !== null \&\& \$reported !== ..) {%if (true) {%'
 
 # A FUTURE DATE MUST NOT MASK AN AGEING FEED. The verdict reduces reported dates to their maximum,
 # so one portal with a fast clock wins that maximum and reports the feed fresh for ever. Removing the
 # credibility filter is the mutation; the suite must notice.
 run_sabotage "a future-dated message is trusted, masking a silent feed for ever" \
-  src/php/Store/Store.php \
+  src/php/Rent/Store/Store.php \
   's%static fn (string \$at): bool => self::epoch(\$at) <= \$cutoff,%static fn (string $at): bool => true,%'
 
 # THE THRESHOLD/WINDOW RELATION MUST STILL BE REPORTED. This was a hard refusal until 2026-08-29,
@@ -3276,7 +3276,7 @@ run_sabotage "a future-dated message is trusted, masking a silent feed for ever"
 # now -- but a diagnostic nobody prints is the dead config the refusal was trying to prevent, one
 # layer over. Silencing it must go red.
 run_sabotage "doctor stops warning that the threshold is at or above the IMAP window" \
-  src/php/Cli/Scout.php \
+  src/php/Rent/Cli/RentScout.php \
   's%if (\$days === null || \$days < \$window) {%if (true) {%'
 
 # THE DECORATOR MUST FORWARD IT. `wrapAll()` wraps every source under --watch, which is the ONLY
@@ -3288,11 +3288,11 @@ run_sabotage "doctor stops warning that the threshold is at or above the IMAP wi
 # passes the threshold EXPLICITLY -- so dropping the merge left feed_silent unreachable in
 # production under default config while the whole suite stayed green.
 run_sabotage "the configured threshold never reaches health() (feed_silent dead by default)" \
-  src/php/Store/Store.php \
+  src/php/Rent/Store/Store.php \
   's%\$feedSilentDays ??= \$this->feedSilentDays;%%'
 
 run_sabotage "PacedSource stops forwarding feed freshness (dead under --watch, green in tests)" \
-  src/php/Adapters/PacedSource.php \
+  src/php/Rent/Adapters/PacedSource.php \
   's%return $this->inner instanceof FeedFreshness ? $this->inner->newestFeedItemAt() : null;%return null;%'
 
 # ── round 9b: the links three reviewers each cut with the suite green (2026-08-29) ────────────
@@ -3304,7 +3304,7 @@ run_sabotage "PacedSource stops forwarding feed freshness (dead under --watch, g
 # THE MASTER SWITCH. One line, and FEED_SILENT dies for seloger, bienici, leboncoin and pap at once,
 # in production only. The store tests all pass the date by hand, so none of them noticed.
 run_sabotage "EmailAlertSource stops delegating freshness to its mailbox (all email sources)" \
-  src/php/Adapters/EmailAlertSource.php \
+  src/php/Rent/Adapters/EmailAlertSource.php \
   's%return \$this->mailbox->newestMessageAt();%return null;%'
 
 # THE PARSER ITSELF, which no test had ever executed. `new \DateTimeImmutable` is a RELATIVE
@@ -3328,7 +3328,7 @@ run_sabotage "FileMailbox starts reporting fixture dates as feed freshness" \
 
 # THE PIPELINE and THE DOCTOR are the two writers. Either one silently stops populating the column.
 run_sabotage "the pipeline stops recording the feed date it just read" \
-  src/php/Cli/Pipeline.php \
+  src/php/Rent/Cli/Pipeline.php \
   's%\$feedNewestAt = FeedDate::of(\$source);%$feedNewestAt = null;%'
 
 # BOTH WRITERS, in one place. `Pipeline` and `doctor` each had their own copy of this expression and
@@ -3338,25 +3338,25 @@ run_sabotage "the pipeline stops recording the feed date it just read" \
 # cannot exist is not a reason to leave code untested -- it is a reason not to duplicate it, so the
 # two sites were collapsed onto FeedDate::of() and the pipeline's coverage now covers both.
 run_sabotage "the shared feed-date reader stops asking the source (both writers at once)" \
-  src/php/Adapters/FeedDate.php \
+  src/php/Rent/Adapters/FeedDate.php \
   's%return \$source instanceof FeedFreshness ? \$source->newestFeedItemAt() : null;%return null;%'
 
 # THE ZERO-COUNT GATE. Widening it lets FEED_SILENT preempt the empty-streak BROKEN verdict that
 # owns the zero case.
 run_sabotage "the zero-count gate is widened, letting a silent feed preempt broken" \
-  src/php/Store/Store.php \
+  src/php/Rent/Store/Store.php \
   's%\&\& \$feedSilentDays !== null \&\& \$lastCount > 0)%\&\& $feedSilentDays !== null \&\& $lastCount >= 0)%'
 
 # WRITE-TIME VALIDATION. Deferring it turns an unreadable date into a permanent ABSENCE of verdict:
 # the source looks watched and is unwatched.
 run_sabotage "recordRun drops write-time validation of the feed date" \
-  src/php/Store/Store.php \
+  src/php/Rent/Store/Store.php \
   's%            self::epoch(\$feedNewestAt);%            ;%'
 
 # INSTANTS, NOT STRINGS. The store accepts any RFC 3339 offset, so a lexical max picks the wrong
 # element across mixed offsets and over-states silence.
 run_sabotage "the newest feed date is chosen lexically instead of by instant" \
-  src/php/Store/Store.php \
+  src/php/Rent/Store/Store.php \
   's%if (\$best === null || self::epoch(\$date) > self::epoch(\$best)) {%if ($best === null || $date > $best) {%'
 
 # THE PER-FETCH RESET. Without it a pass that fetched NOTHING reports the previous pass's date as
@@ -3371,36 +3371,36 @@ run_sabotage "ImapMailbox keeps a stale feed date across a fetch that returned n
 # 375. A tally that excludes the newest cases is worse than no tally — those are exactly the ones
 # nobody has confidence in yet, and CLAUDE.md and the plan files quote this number as authoritative.
 # `tests/test-ci-workflow.sh` pins the position, so appending below it is now a red build.
-# ── per-source feed_silent_days and `scout replay --file` (2026-08-29) ──────────────────────────
+# ── per-source feed_silent_days and `scout --domain=rent replay --file` (2026-08-29) ──────────────────────────
 #
 # THE PER-SOURCE THRESHOLD RIDES THROUGH ONE FUNNEL. `EmailAlertSource::health()` is the only place
 # a source's own `feed_silent_days` reaches the store, and doctor, the pipeline and the heartbeat
 # all read health through the source. Dropping the argument there re-installs the global threshold
 # for every caller at once, and the suite must say so.
 run_sabotage "a per-source feed_silent_days is ignored by the source's own health()" \
-  src/php/Adapters/EmailAlertSource.php \
+  src/php/Rent/Adapters/EmailAlertSource.php \
   's%return $this->store->health($this->name(), $nowIso, $this->definition->feedSilentDays);%return $this->store->health($this->name(), $nowIso);%'
 
 # Both load-time refusals share one guard: a threshold on a source that cannot act on it (html/json
 # report no feed date), and a threshold of 0, which disables the verdict. Disabling the guard accepts
 # both — a configured feature that never runs, and a switched-off one that looks configured.
 run_sabotage "feed_silent_days is accepted on a source that can never act on it, and at 0" \
-  src/php/Config/ConfigLoader.php \
+  src/php/Rent/Config/ConfigLoader.php \
   's%        if ($feedSilentDays !== null) {%        if (false) {%'
 
-# `scout replay --file` — three guarantees, each a silent failure without its case.
+# `scout --domain=rent replay --file` — three guarantees, each a silent failure without its case.
 #
 # The replay's store is a THROWAWAY. `dump` hydrates through the detail cache, so against the real
 # database a replay records one fetch-failure row per listing, for pages nobody fetched, in the
 # store it was diagnosing.
 run_sabotage "scout replay --file writes its simulated detail failures into the real store" \
-  src/php/Cli/Scout.php \
+  src/php/Rent/Cli/RentScout.php \
   "s%            Store::open(':memory:'),%            \$this->store(),%"
 
 # The replay client, not the real one. The suite runs SCOUT_OFFLINE=1, so this one is caught by the
 # offline tripwire — but only because a test runs replay against a real source block at all.
 run_sabotage "scout replay --file polls the real host instead of the frozen file" \
-  src/php/Cli/Scout.php \
+  src/php/Rent/Cli/RentScout.php \
   's%new self($this->rootDir, $this->out, $this->err, $this->nowIso, $client, $this->notifier)%new self($this->rootDir, $this->out, $this->err, $this->nowIso, $this->http, $this->notifier)%'
 
 # `/robots.txt` must be ABSENT (404 = allow), never the payload: HTML handed to the robots parser
@@ -3422,22 +3422,22 @@ run_sabotage "the replay client answers a detail-page URL with the search payloa
 # history rows, 128 emails. The observation time travels adapter → listing → snapshot → pipeline →
 # store, and each hop is a place it can be quietly dropped.
 run_sabotage "an email listing is observed at the pass time again (the adapter drops the message date)" \
-  src/php/Adapters/EmailAlertSource.php \
+  src/php/Rent/Adapters/EmailAlertSource.php \
   's%            observedAt: $message->sentAt(),%            observedAt: null,%'
 
 run_sabotage "the pipeline records every sighting at the pass time (the observation time is ignored)" \
-  src/php/Cli/Pipeline.php \
+  src/php/Rent/Cli/Pipeline.php \
   's%$member->observedAt ?? $nowIso%$nowIso%'
 
 run_sabotage "the snapshot drops the observation time (a re-judged row would be re-dated to now)" \
-  src/php/Core/ListingSnapshot.php \
+  src/php/Rent/Core/ListingSnapshot.php \
   "s%            'observedAt' => \$listing->observedAt,%%"
 
 # THE HOP THE FIRST FIX MISSED: enrichment rebuilt the listing and dropped the observation time, on
 # the one machine where commute is enabled — production. Green tests, phantom drop on the first
 # live pass (2026-08-29 21:20).
 run_sabotage "enrichment drops the observation time again (the production hop of the phantom-drop loop)" \
-  src/php/Core/RawListing.php \
+  src/php/Rent/Core/RawListing.php \
   "s%return clone(\$this, \['commuteMinutes' => \$minutes\]);%return clone(\$this, ['commuteMinutes' => \$minutes, 'observedAt' => null]);%"
 
 # Lenient parsing moves a mismatched weekday FORWARD, and forward is the wrong direction here: a
@@ -3448,33 +3448,33 @@ run_sabotage "sentAt() parses leniently (a mismatched weekday is advanced instea
 
 # TWO TRACKS, ONE PUSH. Identities stay per track (the 2026-08-06 ruling); only the push is shared.
 run_sabotage "cross-track copies are MERGED into one identity (the two-tracks ruling reversed)" \
-  src/php/Core/Dedup.php \
+  src/php/Rent/Core/Dedup.php \
   's%        if ($familyA !== $familyB) {%        if (false) {%'
 
 run_sabotage "a same-track pair is reported as a twin (a duplicate wearing the twin label)" \
-  src/php/Core/Dedup.php \
+  src/php/Rent/Core/Dedup.php \
   's%        if ($a->sourceName === $b->sourceName || $familyA === $familyB) {%        if ($a->sourceName === $b->sourceName) {%'
 
 run_sabotage "the agency copy is pushed as well as the direct route (43 flats pushed twice again)" \
-  src/php/Cli/Pipeline.php \
+  src/php/Rent/Cli/Pipeline.php \
   's%            if ($announcedByTwin \&\& !$isDirect) {%            if (false) {%'
 
 run_sabotage "the direct route is no longer judged first, so source order decides which copy is pushed" \
-  src/php/Cli/Pipeline.php \
+  src/php/Rent/Cli/Pipeline.php \
   "s%usort(\$clustered, static fn (array \$a, array \$b): int => (\$a\['family'\] === 'institutional' ? 0 : 1) <=> (\$b\['family'\] === 'institutional' ? 0 : 1));%usort(\$clustered, static fn (array \$a, array \$b): int => 0);%"
 
 # A ROOM IS A NOUN, NOT A POSITION. The anchored form let three live titles through in a week.
 run_sabotage "the room pattern is anchored at the start of the title again (an emoji defeats it)" \
-  config/criteria.json \
+  config/rent/criteria.json \
   's%\\\\bchambres?\\\\b"%^\\\\s*chambre\\\\b"%'
 
 # THE SOURCE LEADS THE TITLE — the developer's own ordering signal.
 run_sabotage "the source no longer leads a match title" \
-  src/php/Core/Notify/Formatter.php \
+  src/php/Rent/Notify/Formatter.php \
   "s%\$listing->sourceName . ' · ' . (\$score === null%'' . (\$score === null%"
 
 run_sabotage "the source no longer leads a rent-drop title" \
-  src/php/Core/Notify/Formatter.php \
+  src/php/Rent/Notify/Formatter.php \
   "s%title: \$listing->sourceName . ' · ' . (\$nowQualifies%title: '' . (\$nowQualifies%"
 
 # ── THE CAR DOMAIN (2026-08-29) ────────────────────────────────────────────────────────────────
@@ -3482,70 +3482,96 @@ run_sabotage "the source no longer leads a rent-drop title" \
 # The vehicle §1 set arrives NEGATED in honest copy. Cutting the negation window rejects every good
 # ad that says "jamais accidenté" — over-rejection, invisible by definition.
 run_sabotage "the vehicle classifier stops reading negations (every honest ad rejects itself)" \
-  src/php/Vehicle/VehicleClassifier.php \
+  src/php/Car/VehicleClassifier.php \
   "s%private const string NEGATION_BEFORE = '~(?:\\\\b(?:jamais|non|pas|aucun|aucune|sans|ni|zero|0)\\\\b)%private const string NEGATION_BEFORE = '~(?:\\\\bzzznever\\\\b)%"
 
 run_sabotage "accidenté leaves the vehicle exclusion set (decision 9 undone without a commit saying so)" \
-  src/php/Vehicle/VehicleClassifier.php \
+  src/php/Car/VehicleClassifier.php \
   "s%        'accidenté' => '~\\\\baccident(?:e|ee|es|ees|s)?\\\\b~u',%        'accidenté' => '~\\\\bzzznever\\\\b~u',%"
 
 run_sabotage "the price ceiling stops being a hard line (a 30 001 € car is pushed)" \
-  src/php/Vehicle/VehicleScorer.php \
+  src/php/Car/VehicleScorer.php \
   's%if ($car->priceEur !== null \&\& $car->priceEur > $criteria->maxPriceEur) {%if (false) {%'
 
 run_sabotage "an unknown location rejects a car (hard rule 9 inverted on the car side)" \
-  src/php/Vehicle/VehicleCriteria.php \
+  src/php/Car/VehicleCriteria.php \
   "s%        if (\$this->postcodePrefixes === \[\] || \$postcode === null || trim(\$postcode) === '') {%        if (\$this->postcodePrefixes === []) {%"
 
 # The phantom-drop loop, rebuilt on the car side: every hop of the observation time.
 run_sabotage "the car pipeline records every sighting at the pass time (a re-read older card is a drop again)" \
-  src/php/Vehicle/VehiclePipeline.php \
+  src/php/Car/VehiclePipeline.php \
   's%$this->store->record($car, $car->observedAt ?? $nowIso);%$this->store->record($car, $nowIso);%'
 
 run_sabotage "the car store treats an older sighting as current" \
-  src/php/Vehicle/VehicleStore.php \
+  src/php/Car/VehicleStore.php \
   "s%            \$isCurrent = \$isNew || \$epoch >= (int) \$row\['seen_epoch'\];%            \$isCurrent = true;%"
 
 run_sabotage "the car snapshot drops the observation time" \
-  src/php/Vehicle/VehicleSnapshot.php \
+  src/php/Car/VehicleSnapshot.php \
   "s%            'observedAt' => \$listing->observedAt,%%"
 
 run_sabotage "the car email adapter stamps cards at the pass time (the message date is dropped)" \
-  src/php/Vehicle/VehicleEmailSource.php \
+  src/php/Car/VehicleEmailSource.php \
   's%            observedAt: $message->sentAt(),%            observedAt: null,%'
 
 # Q36, the car analog, and the seed that makes it safe.
 run_sabotage "the car seed no longer marks the market as notified (the next pass pushes it all)" \
-  src/php/Vehicle/VehiclePipeline.php \
+  src/php/Car/VehiclePipeline.php \
   's%                    $this->store->markNotified($sighting->dedupKey, $nowIso);%                    /* seed marks nothing */%'
 
 run_sabotage "the car CLI runs on an empty seen-set (the whole Autohero catalogue would push at once)" \
-  src/php/Cli/VehicleScout.php \
+  src/php/Car/Cli/CarScout.php \
   's%        if (!$seed \&\& $store->isSeenSetEmpty()) {%        if (false) {%'
 
 # The sitemap source's whole economics: fetch only what the seen-set does not know.
 run_sabotage "the sitemap source ignores the seen-set (every pass re-fetches the whole catalogue)" \
-  src/php/Vehicle/SitemapVehicleSource.php \
+  src/php/Car/SitemapVehicleSource.php \
   's%            if (isset($known\[$id\])) {%            if (false) {%'
 
 # Health baselines on the FEED. Recording the novel slice made the first live pass a false warn_drop.
 run_sabotage "the car pipeline baselines a sitemap source's health on its novel lots, not its index" \
-  src/php/Vehicle/VehiclePipeline.php \
+  src/php/Car/VehiclePipeline.php \
   's%$itemCount = $source instanceof SitemapVehicleSource ? ($source->lastIndexSize() ?? count($listings)) : count($listings);%$itemCount = count($listings);%'
 
 run_sabotage "a furniture segment with no price and no facts is read as a card again" \
-  src/php/Vehicle/VehicleEmailSource.php \
+  src/php/Car/VehicleEmailSource.php \
   's%        if ($pricePattern !== null \&\& $factsPattern !== null \&\& $price === null \&\& $body === null \&\& $year === null) {%        if (false) {%'
 
 run_sabotage "the sitemap source stops checking robots.txt for lot pages" \
-  src/php/Vehicle/SitemapVehicleSource.php \
+  src/php/Car/SitemapVehicleSource.php \
   's%            $this->refuseUnlessAllowed($url);%            /* unchecked */%'
 
 # The replay runs the source UNTHROTTLED. With the throttle kept, In'li's 2 s × 20 simulated detail
 # fetches is 40+ s of sleeping to answer a file (43 s measured) — a repair tool nobody reaches for.
 run_sabotage "scout replay --file keeps the adapter's rate limit and sleeps through simulated fetches" \
-  src/php/Cli/Scout.php \
+  src/php/Rent/Cli/RentScout.php \
   's%            $definition->unthrottled(),%            $definition,%'
+
+# ── The generic entry point (2026-08-29) ─────────────────────────────────────────────────────────
+# `bin/scout` dispatches on `--domain=` and NEVER defaults. The shape it replaced had rent implicit
+# and `--domain=car` special-cased inside the rent CLI, so a deployment that forgot the flag watched
+# the wrong domain against the wrong database with a green heartbeat. Both fall-throughs below run
+# a real `doctor` — which is why ScoutDispatchTest dispatches into an EMPTY temporary root: there the
+# fall-through surfaces as a config refusal carrying the wrong message, and the assertion on the
+# message is what distinguishes "refused because no domain" from "ran the rent doctor and refused".
+run_sabotage "a missing --domain quietly falls through to the first registered domain" \
+  src/php/Cli/Scout.php \
+  's%if (\$slugs === \[\]) {%if ($slugs === [] \&\& $rest === []) {%; s%Domains::get(\$slugs\[0\])%Domains::get($slugs[0] ?? Domains::slugs()[0])%'
+
+run_sabotage "an unknown --domain falls through to the first registered one instead of being named" \
+  src/php/Cli/Domains.php \
+  's%return self::all()\[\$slug\] ?? null;%return self::all()[$slug] ?? array_values(self::all())[0];%'
+
+# The state markers became per-domain in the same change (`rent-heartbeat.txt`). A deployment that
+# still carries `heartbeat.txt` is renamed ONCE before anything reads it; without that the first
+# start after the redeploy beats immediately and re-serves a digest window it already served.
+run_sabotage "the pre-split state markers are never migrated (so the first start after redeploy beats)" \
+  src/php/Rent/Cli/RentScout.php \
+  's%^        \$this->migrateLegacyMarkers();$%        // migrateLegacyMarkers() disabled%'
+
+run_sabotage "a legacy marker overwrites a newer one already under the per-domain name" \
+  src/php/Rent/Cli/RentScout.php \
+  's%if (is_file(\$from) \&\& !is_file(\$to)) {%if (is_file($from)) {%'
 
 printf '\n  %d sabotage(s) detected, %d undetected\n' "$pass" "$fail"
 

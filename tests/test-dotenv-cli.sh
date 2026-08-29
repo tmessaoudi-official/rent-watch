@@ -41,11 +41,11 @@ fi
 # location, so the symlink points back at the real src/, which is what we want to exercise. (That
 # same property is a trap in tests/sabotage-check.sh, where the real src/ is precisely what must NOT
 # be used; there it is copied.)
-mkdir -p "$work/bin" "$work/config"
+mkdir -p "$work/bin" "$work/config/rent"
 cp "$repo/bin/scout" "$work/bin/scout"
 ln -s "$repo/vendor" "$work/vendor"
 
-cat > "$work/config/criteria.json" <<'JSON'
+cat > "$work/config/rent/criteria.json" <<'JSON'
 {
   "communes": ["Sartrouville"],
   "postcode_prefixes": ["78"],
@@ -54,7 +54,7 @@ cat > "$work/config/criteria.json" <<'JSON'
 }
 JSON
 
-cat > "$work/config/sources.json" <<'JSON'
+cat > "$work/config/rent/sources.json" <<'JSON'
 {
   "sources": {
     "demo": {
@@ -74,7 +74,7 @@ printf '\n  .env loading, through the real executable\n\n'
 #
 # Without this, a test asserting "the path from .env appears" could be satisfied by a default that
 # happens to match, and the whole file would prove nothing.
-control="$(cd "$work" && php bin/scout doctor --source=demo 2>&1 || true)"
+control="$(cd "$work" && php bin/scout --domain=rent doctor --source=demo 2>&1 || true)"
 check "with no .env the CLI still starts (a fresh clone has none)" \
   grep -q 'scout doctor' <<<"$control"
 check "…and uses the built-in default database path" \
@@ -88,7 +88,7 @@ cat > "$work/.env" <<'ENV'
 RENT_SCOUT_DB=a dir with spaces/rw.sqlite3
 ENV
 
-loaded="$(cd "$work" && php bin/scout doctor --source=demo 2>&1 || true)"
+loaded="$(cd "$work" && php bin/scout --domain=rent doctor --source=demo 2>&1 || true)"
 check "a .env value CONTAINING SPACES reaches the CLI intact" \
   grep -q 'a dir with spaces/rw.sqlite3' <<<"$loaded"
 check "…and the shell never ran any of it (no 'command not found')" \
@@ -96,9 +96,9 @@ check "…and the shell never ran any of it (no 'command not found')" \
 
 # ── precedence: the real environment outranks the file ────────────────────────────────────────────
 #
-# `RENT_SCOUT_DB=/tmp/throwaway bin/scout run` is how a live source is measured without touching the
+# `RENT_SCOUT_DB=/tmp/throwaway bin/scout --domain=rent run` is how a live source is measured without touching the
 # real seen-set. A file that could override it would silently redirect that at the real database.
-override="$(cd "$work" && RENT_SCOUT_DB='env-wins.sqlite3' php bin/scout doctor --source=demo 2>&1 || true)"
+override="$(cd "$work" && RENT_SCOUT_DB='env-wins.sqlite3' php bin/scout --domain=rent doctor --source=demo 2>&1 || true)"
 check "an environment variable outranks the same key in .env" \
   grep -q 'env-wins.sqlite3' <<<"$override"
 
@@ -109,7 +109,7 @@ this line is not an assignment hunter2
 ENV
 
 set +e
-malformed="$(cd "$work" && php bin/scout doctor --source=demo 2>&1)"
+malformed="$(cd "$work" && php bin/scout --domain=rent doctor --source=demo 2>&1)"
 malformed_code=$?
 set -e
 

@@ -17,8 +17,8 @@ namespace Scout\Core;
  * test that waited 24 of them would never be written. The `?string $lastSentIso` it judges is read
  * from a file rather than the store — deliberately, and for a reason worth stating: a lost marker
  * costs exactly one extra low-priority heartbeat, which is the benign direction, while touching
- * `src/php/Store/**` would put this change on `tests/sabotage-check.sh`'s mandatory trigger list and
- * owe a multi-hour ledger for a liveness marker. `state/last-refusal.txt` is already ruled as a file
+ * `src/php/Rent/Store/**` would put this change on `tests/sabotage-check.sh`'s mandatory trigger list and
+ * owe a multi-hour ledger for a liveness marker. `state/rent-last-refusal.txt` is already ruled as a file
  * in `state/` by Q27 itself, so a sibling marker matches the ruling's own pattern.
  */
 final readonly class Heartbeat

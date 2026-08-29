@@ -1,6 +1,6 @@
 ---
 name: source-resilience-reviewer
-description: Read-only adversarial reviewer for rent-watch's failure modes, legal posture and secrets hygiene — silent source breakage and health baselines, exception paths that turn a broken source into an empty result set, parser fragility against frozen fixtures, the opt-in gate on private-portal scraping, robots.txt and request rates, and any credential or personal financial figure reaching a committed file or a log. Use as the resilience+safety lens of the certification panel at any 3C/6C gate, or whenever a change touches src/php/Adapters/**, src/php/Core/Health*.php, config/sources.json, a fixture, .env.example, or anything that makes a network request. It reads the diff and the code itself and tries to REFUTE the claim that a broken source will be noticed. Never edits anything.
+description: Read-only adversarial reviewer for rent-watch's failure modes, legal posture and secrets hygiene — silent source breakage and health baselines, exception paths that turn a broken source into an empty result set, parser fragility against frozen fixtures, the opt-in gate on private-portal scraping, robots.txt and request rates, and any credential or personal financial figure reaching a committed file or a log. Use as the resilience+safety lens of the certification panel at any 3C/6C gate, or whenever a change touches src/php/Adapters/**, src/php/Core/Health*.php, config/rent/sources.json, a fixture, .env.example, or anything that makes a network request. It reads the diff and the code itself and tries to REFUTE the claim that a broken source will be noticed. Never edits anything.
 tools: Read, Grep, Glob, Bash
 ---
 
@@ -24,7 +24,7 @@ change appears to…", stop and go read it.
 
 As of 2026-08-07 `src/php/Core/` exists (the pure core: models, the tenure classifier, `SourceHealth`
 / `SourceStatus`, and `Redact`, which masks credentials in adapter error text), and so do
-`src/php/Store/` (the SQLite seen-set, price history and run log, including the source-health
+`src/php/Rent/Store/` (the SQLite seen-set, price history and run log, including the source-health
 derivation this lens cares most about), `tests/php/` and **`.env.example`**. There is still no
 `config/`, no adapter and no network code. Check with `git ls-files src/ config/ tests/` rather than
 trusting this line, which was wrong for a while — and which denied `.env.example` for a full round

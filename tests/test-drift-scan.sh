@@ -25,7 +25,7 @@
 set -uo pipefail
 
 repo="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-scan="$repo/.claude/skills/rw-repair/drift-scan.sh"
+scan="$repo/.claude/skills/scout-repair/drift-scan.sh"
 
 work="$(mktemp -d)"
 [[ -n "$work" && -d "$work" ]] || { printf 'mktemp -d failed; refusing to continue\n' >&2; exit 1; }
@@ -63,8 +63,8 @@ scratch_project() {
   # the `.claude/settings.json` omission described just below, and as the sabotage ledger's own
   # missing `.env.example`: a scratch tree that is not what it is judging.
   # `tools` ONLY, and NEVER `tests`. Linking `tests` made a later case's
-  # `mkdir -p "$dir/tests/fixtures/tenure"` + `cp` resolve THROUGH the link into the real
-  # `tests/fixtures/tenure/corpus.json` — the classifier's ground truth, which CLAUDE.md lists among
+  # `mkdir -p "$dir/tests/fixtures/rent/tenure"` + `cp` resolve THROUGH the link into the real
+  # `tests/fixtures/rent/tenure/corpus.json` — the classifier's ground truth, which CLAUDE.md lists among
   # the files that must not be casually written. `cp` refused it as "the same file" and no damage
   # was done, but a case that WROTE rather than copied would have rewritten the corpus from a test
   # run. The scratch tree exists so the repo is never mutated; a symlink out of it defeats that
@@ -136,8 +136,8 @@ check "a setting read by getenv() and missing from the template is reported" \
 # Its own direction because a compose substitution has NO getenv() to find it by: Compose resolves
 # it before the container exists. This is the half that hid RW_UID/RW_GID.
 check "a compose substitution missing from the template is reported" \
-  fires_with compose 'compose.yaml substitutes \$\{RW_UID\}' \
-  bash -c 'sed -i "/^RW_UID=/d" "$1/.env.example"' _
+  fires_with compose 'compose.yaml substitutes \$\{SCOUT_UID\}' \
+  bash -c 'sed -i "/^SCOUT_UID=/d" "$1/.env.example"' _
 
 # ── (d) a template key nothing reads ─────────────────────────────────────────────────────────────
 check "a template key no code reads is reported" \
@@ -206,8 +206,8 @@ check "S8 announces itself in a non-quiet run (so a silent removal is visible)" 
 scratch_corpus() {
   local dir="$1"
   scratch_project "$dir"
-  mkdir -p "$dir/tests/fixtures/tenure"
-  cp "$repo/tests/fixtures/tenure/corpus.json" "$dir/tests/fixtures/tenure/corpus.json"
+  mkdir -p "$dir/tests/fixtures/rent/tenure"
+  cp "$repo/tests/fixtures/rent/tenure/corpus.json" "$dir/tests/fixtures/rent/tenure/corpus.json"
 }
 
 # The claim under test is written into a doc the scan discovers by rglob. `CLAUDE.md` is the file
@@ -223,9 +223,9 @@ s7_says() {
 }
 
 # Real numbers, so a fixture that drifts from the corpus fails as loudly as the prose would.
-s7_cases=$(python3 -c "import json;d=json.load(open('$repo/tests/fixtures/tenure/corpus.json'));print(len(d['cases']))")
-s7_synth=$(python3 -c "import json;d=json.load(open('$repo/tests/fixtures/tenure/corpus.json'));print(sum(1 for c in d['cases'] if c.get('provenance')=='synthetic'))")
-s7_capt=$(python3 -c "import json;d=json.load(open('$repo/tests/fixtures/tenure/corpus.json'));print(sum(1 for c in d['cases'] if c.get('provenance')=='captured'))")
+s7_cases=$(python3 -c "import json;d=json.load(open('$repo/tests/fixtures/rent/tenure/corpus.json'));print(len(d['cases']))")
+s7_synth=$(python3 -c "import json;d=json.load(open('$repo/tests/fixtures/rent/tenure/corpus.json'));print(sum(1 for c in d['cases'] if c.get('provenance')=='synthetic'))")
+s7_capt=$(python3 -c "import json;d=json.load(open('$repo/tests/fixtures/rent/tenure/corpus.json'));print(sum(1 for c in d['cases'] if c.get('provenance')=='captured'))")
 
 s7ok="$work/case-s7-clean"
 scratch_corpus "$s7ok"

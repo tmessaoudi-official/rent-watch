@@ -117,7 +117,7 @@ This is the actionable half when the developer runs this exercise on the sibling
    repos share this hook: opening a sibling installs its copy over yours, so on the next session the
    target differs from your source again and a naive snapshot would overwrite the original.
 
-9. **`/repair` + `.claude/skills/rw-repair/drift-scan.sh`.** Every earlier port rejected `/repair` as
+9. **`/repair` + `.claude/skills/scout-repair/drift-scan.sh`.** Every earlier port rejected `/repair` as
    "operates on a persistent `~/.claude/`". That was inherited, not checked: its five drift categories
    are about the project's own docs versus the project's own filesystem. It is ported here **on
    evidence** — one session found five drift defects by hand that the scan catches mechanically, the

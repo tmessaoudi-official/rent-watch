@@ -6,13 +6,13 @@
 !.env.example
 *.pem
 *.key
-# Local criteria overrides. `config/criteria.json` is committed and deliberately carries only
+# Local criteria overrides. `config/rent/criteria.json` is committed and deliberately carries only
 # values that were already public; `criteria.local.json` is where real budget, ranked communes and
 # any private tuning go, and it overrides the committed file field by field (Q11). Four documents
 # claimed this file was gitignored while nothing ignored it — a `git add .` after tuning would have
 # committed the developer's real criteria to a public repo. Verify with:
-#   git check-ignore -v config/criteria.local.json
-/config/*.local.json
+#   git check-ignore -v config/rent/criteria.local.json
+/config/*/*.local.json
 
 # ── Runtime state ───────────────────────────────────────────────────────────────
 # The seen-set and the listings DB. Deleting these makes the next run RE-NOTIFY
@@ -96,5 +96,4 @@ Thumbs.db
 *.rej
 *.log
 
-# the car domain's personal overrides, like config/criteria.local.json
-config/car/criteria.local.json
+# the car domain's personal overrides, like config/rent/criteria.local.json

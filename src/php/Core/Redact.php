@@ -197,7 +197,7 @@ final readonly class Redact
             //     their own lines, where no verb precedes them. Three narrowings, each earned:
             //     a MULTIPLE OF FOUR (base64 always is), and BOTH cases present (encoded random
             //     bytes are mixed-case; French words and SCREAMING_CONSTANTS are not). Without them
-            //     this ate `AUTHENTICATIONFAILED`, `tests/fixtures/tenure`, a bare SHA-256 line and
+            //     this ate `AUTHENTICATIONFAILED`, `tests/fixtures/rent/tenure`, a bare SHA-256 line and
             //     — worst — `conventionnement`, which is §1 classifier vocabulary. A `[:>] ` prefix
             //     is allowed because a debug trace writes `CLIENT -> SERVER: <blob>`.
             '~(^|[:>][ \t])((?=[A-Za-z0-9+/]*[a-z])(?=[A-Za-z0-9+/]*[A-Z])(?:[A-Za-z0-9+/]{4}){4,}={0,2})[ \t]*\r?$~m'

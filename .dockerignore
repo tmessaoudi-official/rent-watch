@@ -8,7 +8,7 @@
 .env
 .env.*
 !.env.example
-config/criteria.local.json
+config/*/criteria.local.json
 
 # `state/` is the mounted volume, and a development seen-set is a record of flats a real person
 # looked at. Baking it into a layer both ships that and masks a forgotten volume mount, since the
@@ -45,4 +45,4 @@ compose.yaml
 tests/*
 !tests/fixtures
 tests/fixtures/*
-!tests/fixtures/fixture_demo
+!tests/fixtures/rent/fixture_demo

@@ -29,7 +29,7 @@ final readonly class SmtpTransport implements MailTransport
         private int $port = 587,
         private string $user = '',
         private string $password = '',
-        private string $from = 'rent-watch@localhost',
+        private string $from = 'scout@localhost',
         /** `tls` = implicit TLS (port 465), `starttls` = upgrade after EHLO (587), `none` = refused unless local. */
         private string $security = 'starttls',
         private int $timeoutSeconds = 20,
@@ -122,7 +122,7 @@ final readonly class SmtpTransport implements MailTransport
 
         try {
             $this->expect($socket, 220);
-            $this->say($socket, 'EHLO rent-watch');
+            $this->say($socket, 'EHLO scout');
             $capabilities = $this->expect($socket, 250);
 
             if ($this->security === 'starttls') {
@@ -142,7 +142,7 @@ final readonly class SmtpTransport implements MailTransport
 
                 // Re-issued after the upgrade, per RFC 3207: capabilities before and after TLS may
                 // differ, and AUTH is commonly advertised only afterwards.
-                $this->say($socket, 'EHLO rent-watch');
+                $this->say($socket, 'EHLO scout');
                 $this->expect($socket, 250);
             }
 

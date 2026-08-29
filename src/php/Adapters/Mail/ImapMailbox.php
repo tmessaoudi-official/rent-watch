@@ -162,7 +162,7 @@ final class ImapMailbox implements Mailbox, MutableByDesign
      * Strict by round-trip: parse, re-format with the same mask, and require the result to equal
      * the input. That is what rejects `Fri, 09 Aug 2026` (a Sunday), which every non-round-tripping
      * route in PHP accepts and silently advances by five days. Same technique as
-     * {@see \Scout\Store\Store::epoch()}, which carries its own scar for the same class of bug.
+     * {@see \Scout\Rent\Store\Store::epoch()}, which carries its own scar for the same class of bug.
      *
      * Both masks are tried because RFC 2822 makes the day-of-week optional and real mailers emit
      * both shapes; the numeric-offset and named-zone variants likewise. Nothing here falls back to
@@ -267,7 +267,7 @@ final class ImapMailbox implements Mailbox, MutableByDesign
      * portals' alerts plus the watcher's own notification emails, which land in the same inbox. So
      * a busy portal starves a quiet one, silently, and it gets worse with every source added. Push
      * the source's own `params.from` into the QUERY and each source gets its own window instead of a
-     * slice of one. The post-fetch `from` check in {@see \Scout\Adapters\EmailAlertSource} stays
+     * slice of one. The post-fetch `from` check in {@see \Scout\Rent\Adapters\EmailAlertSource} stays
      * as it was: this makes the fetch cheap and correct, it is not the security boundary.
      *
      * The date is formatted with `date()`'s English month abbreviations, which RFC 3501 requires

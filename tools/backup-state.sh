@@ -32,7 +32,8 @@ if [[ $# -eq 0 ]]; then
   [[ "$_car" = /* ]] || _car="$_root/$_car"
   if [[ -f "$_car" ]]; then "$0" "$_car"; fi
 fi
-_base="$(basename "$_db" .sqlite3)"
+_base="${_db##*/}"
+_base="${_base%.sqlite3}"
 _dest="${2:-$_root/state/backups}"
 
 die() {

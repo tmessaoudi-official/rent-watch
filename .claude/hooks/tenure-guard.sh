@@ -78,7 +78,7 @@ case "$file_path" in
   # phpunit.xml lives at the repo ROOT and matched none of the above, so the guard exited before any
   # pattern ran — and ONE `<exclude>` line there drops the §1 corpus from the suite. A review
   # measured it: 193 tests became 90, and drift-scan still reported P0=0 P1=0 P2=0. Only
-  # sabotage-check.sh noticed, and CLAUDE.md scopes that to changes under src/php/Core/Tenure*,
+  # sabotage-check.sh noticed, and CLAUDE.md scopes that to changes under src/php/Rent/Core/Tenure*,
   # which a runner-config edit is not.
   */phpunit.xml|phpunit.xml|*/phpunit.xml.dist|phpunit.xml.dist) ;;
   *) exit 0 ;;
@@ -141,7 +141,7 @@ fi
 #
 # The alternation also covers the empty/null idioms of the languages this repo ACTUALLY uses. It
 # carried `= *none` — a Python idiom, and the only Python here is the superseded prototype — while
-# missing the YAML and JSON nulls that `config/criteria.json` and `config/sources.json` will be
+# missing the YAML and JSON nulls that `config/rent/criteria.json` and `config/rent/sources.json` will be
 # written in, and PHP's `array()`. That inversion was a standing gap, not a regression from the
 # narrowing: the pre-narrowing pattern missed them too.
 #
@@ -153,7 +153,7 @@ fi
 # test ran over the whole write, so ONE occurrence of `source` anywhere disarmed the pattern for the
 # entire file. The counter-example the round-5 commit itself led with,
 # `public static function excluded(): array { return []; }`, went silent by adding one word of
-# docblock above it, and `config/sources.json` was permanently exempt because its own content
+# docblock above it, and `config/rent/sources.json` was permanently exempt because its own content
 # guarantees the token.
 #
 # Narrowing it to the matched span does not rescue it either: `communes:` sits just before the match
@@ -176,7 +176,7 @@ fi
 # "confidence < 0.6" in CLAUDE.md, so the first pattern looked for `0.[0-5]` — but the classifier
 # stores confidence in INTEGER BASIS POINTS (`FLOOR_BP = 60`) precisely so that PHP and phorj cannot
 # disagree on a float, and a run of `0.6` appears nowhere in src/. A 2026-08-06 review set the floor
-# to 0 and watched the tripwire stay silent. The float form is kept because config/criteria.json and
+# to 0 and watched the tripwire stay silent. The float form is kept because config/rent/criteria.json and
 # the notification payload will both express confidence as a fraction; the integer form is what the
 # code actually uses. Both must be covered, and tests/test-tenure-guard.sh has a case for each.
 #
@@ -265,7 +265,7 @@ fi
 
 # 6. Making the hard exclusions configurable.
 # A leading `#` or `//` means the line is a COMMENT describing the source, not a key enabling it:
-# `# config: CDC Habitat publishes PLUS and PLAI alongside LLI` is exactly the note config/sources.json
+# `# config: CDC Habitat publishes PLUS and PLAI alongside LLI` is exactly the note config/rent/sources.json
 # will carry about a mixed-tenure landlord, and firing on it teaches the reader to ignore the guard.
 # PER LINE, and the previous form was broken in BOTH directions by the flattening: `^ *(#|//|\*)`
 # could only ever anchor at the start of the whole write, so a leading comment line hid every toggle
@@ -292,7 +292,7 @@ fi
 # 7. Weakening classifier tests.
 #
 # MATCHED CASE-INSENSITIVELY, because bash `case` globs are not. The repo's classifier tests are
-# `tests/php/Core/TenureCorpusTest.php` and `TenureClassifierTest.php` — CamelCase — so
+# `tests/php/Rent/Core/TenureCorpusTest.php` and `TenureClassifierTest.php` — CamelCase — so
 # `*tests*tenure*` and `*tenure*test*` matched NEITHER, and this pattern had never once executed
 # against the only two files where a skipped classifier test can happen. CLAUDE.md §1 rates that P0.
 lc_path="$(printf '%s' "$file_path" | tr '[:upper:]' '[:lower:]')"

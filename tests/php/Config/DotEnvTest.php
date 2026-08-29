@@ -126,7 +126,7 @@ final class DotEnvTest extends TestCase
 
     public function testAMalformedLineIsRefusedAndTheREFUSALDoesNotQuoteIt(): void
     {
-        // The refusal reaches a terminal and, for `run`, `state/last-refusal.txt`. This file holds
+        // The refusal reaches a terminal and, for `run`, `state/rent-last-refusal.txt`. This file holds
         // the IMAP password, the SMTP password and the ntfy topic, so a parser that echoes what it
         // could not parse leaks a credential the day someone fat-fingers one.
         $path = $this->write("RW_T_OK=1\nthis is not an assignment sekret-value\n");

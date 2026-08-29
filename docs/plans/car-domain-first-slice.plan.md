@@ -161,6 +161,30 @@
     the certification, and both watchers are redeployed after. Historical plan text keeps its
     old spellings and paths.
 
+- [2026-08-30 00:40] AGREED (executed, with the deltas that execution forced): the restructuring
+  above landed as ONE scripted move (`var/claude/restructure-generic-scout.php`, gitignored,
+  refuses to run twice) plus a second boundary-corrected pass — the first pass's lookbehinds
+  rejected a preceding `\` and `/`, so every `\Scout\…::class` and every `tests/fixtures/…` path
+  survived it; 2 296 tests green after, the apply-sweep clean at 566 expressions. Deltas:
+  `Scout\Store` moved under `Scout\Rent\Store` after all — `VehicleStore` COMPOSES it for the run
+  log/health/alerts, so the car domain depends on the rent store's generic half (**owed**: extract
+  that half into a generic store; recorded, not done). The dispatcher is `Scout\Cli\Scout` +
+  `Scout\Cli\Domains`, and it NEVER defaults: a missing or unknown `--domain=` exits 2 listing the
+  registry, `help` alone is usage. Compose services are `rent-scout` / `car-scout` with the flag in
+  each ENTRYPOINT (`docker compose up -d --remove-orphans` on redeploy, or the old `scout`
+  container keeps running beside the new one). `RW_UID`/`RW_GID` → `SCOUT_UID`/`SCOUT_GID`
+  (compose, `.env`, template, README); Dockerfile user `scout`, `CMD ["help"]`. Repo skills
+  `rw-*` → `scout-*` (next session to appear). Shared transports default to `scout@localhost` /
+  `[scout]` / `EHLO scout`, each domain passes its own label — which exposed that the SMTP envelope
+  sender follows the transport, not the header, masked while both defaults coincided. State markers
+  are `state/rent-{heartbeat,digest,last-refusal}.txt`, renamed ONCE from the unprefixed files at
+  the rent CLI's first start (only when the new name is absent), pinned by two tests and two ledger
+  cases; two more ledger cases pin the non-defaulting dispatcher. The ntfy topics follow one
+  scheme, `<initial>w-<32 hex>` (developer ruling, verbatim: *"keep the same format… unify
+  everything"*): the car topic was regenerated as `cw-…` and the test push on it delivered.
+  Historical plan text keeps its old spellings, except three citations of a path meant to be
+  EXECUTED (`drift-scan.sh`), which the drift gate rightly refused.
+
 ## Formal Plan
 
 1. `Vehicle/VehicleListing` + `VehicleSnapshot` (reflection-covered encoder), TDD.

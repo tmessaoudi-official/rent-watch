@@ -139,7 +139,7 @@ final class SmtpTransportWireTest extends TestCase
             '221 bye',
         ]);
 
-        $transport = new SmtpTransport('127.0.0.1', $port, security: 'none', timeoutSeconds: 5);
+        $transport = new SmtpTransport('127.0.0.1', $port, security: 'none', timeoutSeconds: 5, from: 'rent-watch@localhost');
         $transport->send(
             'moi@example.test',
             'Sujet',

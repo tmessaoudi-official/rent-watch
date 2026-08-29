@@ -9,7 +9,7 @@ namespace Scout\Core;
  *
  * WHY THIS IS HAND-ROLLED RATHER THAN `Normalizer::normalize()` OR `iconv`:
  * this repo ships the same core twice — once in PHP, once in phorj — and the two are compared
- * fixture-by-fixture against `tests/fixtures/tenure/corpus.json`. That comparison only means
+ * fixture-by-fixture against `tests/fixtures/rent/tenure/corpus.json`. That comparison only means
  * something if both implementations fold text identically. ICU's normalisation tables are a
  * dependency phorj has not been confirmed to have, and `iconv//TRANSLIT` output varies with the
  * host locale. An explicit table is portable, has no locale, and never changes under us.

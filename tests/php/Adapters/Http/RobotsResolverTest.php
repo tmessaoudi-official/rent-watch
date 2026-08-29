@@ -20,7 +20,7 @@ use Scout\Adapters\Http\RobotsResolver;
  * It lives here rather than in the CLI suite for a reason worth stating: every row is a POSTURE
  * decision — what a missing, forbidden or broken `robots.txt` licenses — and a posture that can only
  * be exercised through a full CLI round trip is a posture nobody will add a case to. The CLI suite
- * ({@see \Scout\Tests\Cli\ScoutRobotsTest}) proves the wiring exists; this one proves the wiring
+ * ({@see \Scout\Tests\Rent\Cli\RentScoutRobotsTest}) proves the wiring exists; this one proves the wiring
  * carries the right verdict.
  *
  * The two rows that must never be collapsed into each other are `404` and `5xx`. They are both

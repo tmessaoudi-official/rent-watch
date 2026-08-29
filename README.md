@@ -18,7 +18,7 @@ Single language, single user, single machine. CLI plus push notifications — **
 
 > **Corrected 2026-08-29.** This section said *six* sources and *schema v8* from 2026-08-25, and
 > listed the transit layer and classifier tier 4 as "genuinely absent" — all four claims had been
-> false since 2026-08-26, when leboncoin and PAP went live (sources #7 and #8), `src/php/Enrich/`
+> false since 2026-08-26, when leboncoin and PAP went live (sources #7 and #8), `src/php/Rent/Enrich/`
 > landed with the IDFM/PRIM commute component, and the `plafonds` figures were fetched and armed.
 > The store is at **schema v11** (v9 commute cache, v10 destination fingerprint, v11 feed
 > freshness). The per-source detail lives in `CLAUDE.md`; this page is the summary and it drifted.
@@ -28,7 +28,7 @@ Single language, single user, single machine. CLI plus push notifications — **
 > `.env.example`'s own header carries the ruling: a stale *"this is only a sketch"* notice on a live
 > thing is worse than no notice at all.
 
-`scout run --watch` polls **In'li, CDC Habitat, Cityloger, Logirep, SeLoger, Bien'ici, leboncoin
+`scout --domain=rent run --watch` polls **In'li, CDC Habitat, Cityloger, Logirep, SeLoger, Bien'ici, leboncoin
 and PAP** on the Q37 cadence, hydrates detail pages behind a novelty gate, classifies every listing
 by tenure, enriches it with a door-to-door commute, scores it, and pushes what matches. `doctor`,
 `dump`, `run --once/--seed/--watch`, `test-notify`, `digest` and `reclassify` all work end to end.
@@ -38,8 +38,8 @@ steady count (`FEED_SILENT`, 2026-08-28).
 **SeLoger went live on 2026-08-25** — the first Tier B portal and the first source that is not a
 landlord. It ingests alert emails over IMAP rather than scraping, which is hard rule 4's primary
 path and not a workaround: SeLoger answers **403 with a DataDome challenge on every route**, the
-bare homepage included. `scout doctor --source=seloger` returns 9 annonces against the live mailbox;
-`MAILBOX_DIR=tests/fixtures/seloger scout doctor --source=seloger` runs the same path against two
+bare homepage included. `scout --domain=rent doctor --source=seloger` returns 9 annonces against the live mailbox;
+`MAILBOX_DIR=tests/fixtures/rent/seloger scout --domain=rent doctor --source=seloger` runs the same path against two
 real frozen alerts with no credentials at all.
 
 > Pointing it at a real mailbox found two defects that 1 900 green tests had not. Four of the first
@@ -51,7 +51,7 @@ real frozen alerts with no credentials at all.
 
 **Bien'ici followed hours later**, and it is much the easier of the two: it publishes a real listing
 id in the URL path, so identity is the link and none of SeLoger's content-addressing is needed.
-`scout doctor --source=bienici` returns **13 annonces in 731 ms**, and a seeded pass matches **10 of
+`scout --domain=rent doctor --source=bienici` returns **13 annonces in 731 ms**, and a seeded pass matches **10 of
 13** — by far the best hit rate in the tree, because the portal applies the saved search's criteria
 before sending and those criteria mirror `criteria.json`.
 
@@ -73,12 +73,41 @@ were absent when this paragraph was first written and are not any more.
 | [`spec/PROJECT_BRIEF.md`](spec/PROJECT_BRIEF.md) | The full specification — the source of truth |
 | [`docs/OPEN-QUESTIONS.md`](docs/OPEN-QUESTIONS.md) | **Start here.** Every filter enumerated, and the decisions still owed |
 | `src/php/Core/` | The tenure classifier, the models it works on, and the source-health verdict |
-| `src/php/Store/` | The SQLite seen-set, price history and run log. Deleting the database re-notifies the entire market on the next run, and the price history cannot be reconstructed — a listing only ever shows its *current* rent |
-| `tests/fixtures/tenure/corpus.json` | 130 hand-labelled listing texts — the classifier's ground truth, and language-neutral so the phorj port reads the same file. **122 synthetic + 8 captured**: `spec/PROJECT_BRIEF.md` §4 asks for *real* texts, and they arrived from 2026-08-20 with the live sources (CDC Habitat card text, Cityloger detail prose — including the corpus's first captured SOCIAL case — and Logirep, whose second capture is the site's own FILTER FACET STRIP, containing `PLAI` inside `Plain-pied`, `LLI` inside `Ce·lli·er` and `PLUS` inside `plusieurs`). Every case declares its `provenance` and a test asserts the counts, so the remaining gap is data rather than a promise |
+| `src/php/Rent/Store/` | The SQLite seen-set, price history and run log. Deleting the database re-notifies the entire market on the next run, and the price history cannot be reconstructed — a listing only ever shows its *current* rent |
+| `tests/fixtures/rent/tenure/corpus.json` | 130 hand-labelled listing texts — the classifier's ground truth, and language-neutral so the phorj port reads the same file. **122 synthetic + 8 captured**: `spec/PROJECT_BRIEF.md` §4 asks for *real* texts, and they arrived from 2026-08-20 with the live sources (CDC Habitat card text, Cityloger detail prose — including the corpus's first captured SOCIAL case — and Logirep, whose second capture is the site's own FILTER FACET STRIP, containing `PLAI` inside `Plain-pied`, `LLI` inside `Ce·lli·er` and `PLUS` inside `plusieurs`). Every case declares its `provenance` and a test asserts the counts, so the remaining gap is data rather than a promise |
 | `prototype/` | A pre-existing single-file prototype, kept as reference. **Not** the shipping implementation — it has no tenure classifier at all |
 | [`CLAUDE.md`](CLAUDE.md) | How code gets delivered here: rules, gates, the eligibility boundary |
 | `.claude/` | Claude Code configuration ([details](CLAUDE.md#claude-config-in-this-repo)) |
 
+## One program, several domains
+
+`scout` is one watcher with a domain switch. Every verb takes `--domain=<slug>` — there is NO
+implicit domain, on purpose: the shape this replaced had rent implicit and `--domain=car` as a
+special case, so a deployment that forgot the flag watched the wrong domain against the wrong
+database with a green heartbeat. `bin/scout help` lists the registry; `bin/scout --domain=rent help`
+lists that domain's verbs.
+
+Everything a domain owns follows ONE scheme, so the next domain is one registry entry
+(`src/php/Cli/Domains.php`) plus its own tree:
+
+| What | rent | car | the rule |
+|---|---|---|---|
+| namespace | `Scout\Rent\…` | `Scout\Car\…` | `Scout\<Slug>\…` over a generic `Scout\Core` / `Scout\Adapters` / `Scout\Cli` |
+| CLI | `Scout\Rent\Cli\RentScout` | `Scout\Car\Cli\CarScout` | `--domain=<slug>` dispatches to it |
+| config | `config/rent/` | `config/car/` | `criteria.json` + `sources.json` (+ gitignored `criteria.local.json`) |
+| fixtures | `tests/fixtures/rent/<source>/` | `tests/fixtures/car/<source>/` | under the domain that reads them |
+| env keys | `RENT_SCOUT_DB`, `RENT_IMAP_MAILBOX`, `RENT_NTFY_TOPIC`, `RENT_HEARTBEAT_HOURS`, `RENT_FEED_SILENT_DAYS` | `CAR_*` | `<SLUG>_*`; the IMAP/SMTP account, `NTFY_SERVER`, `IMAP_SINCE_DAYS`, `IMAP_MAX_MESSAGES`, `TZ` are shared |
+| database | `state/rent-watch.sqlite3` | `state/car-watch.sqlite3` | `state/<slug>-watch.sqlite3` |
+| markers | `state/rent-heartbeat.txt`, `rent-digest.txt`, `rent-last-refusal.txt` | `state/car-heartbeat.txt` | `state/<slug>-*.txt` |
+| mailbox label | `rent-watch/portails` | `car-watch/portails` | `<slug>-watch/portails` |
+| push label | `rent-watch` | `car-watch` | `<slug>-watch` leads every subject and title |
+| ntfy topic | `rw-<32 hex>` | `cw-<32 hex>` | `<initial>w-<32 hex>`, `openssl rand -hex 16` — the topic IS the secret |
+| compose service | `rent-scout` | `car-scout` | the flag sits in the service's ENTRYPOINT, so `docker compose run --rm car-scout doctor` is a car verb |
+
+The generic layer is what no domain owns: `Text`, `Redact`, `Pacer`, `Heartbeat`, source health,
+the notification channels and transports, the HTTP and IMAP clients, `WatchLoop`, `ChannelFactory`.
+It names no domain anywhere, and `ScoutDispatchTest` pins that the usage text is generated from the
+registry rather than typed beside it.
 ## Getting started
 
 ```bash
@@ -121,22 +150,22 @@ against them.
 
 ## Deploying it
 
-Ruled by Q8: **Docker on a VPS, `state/` on a mounted volume, `scout run --watch` owning its own
+Ruled by Q8: **Docker on a VPS, `state/` on a mounted volume, `scout --domain=rent run --watch` owning its own
 schedule.** Not cron — the process keeps its jitter and a continuous run log. Not GitHub Actions,
 explicitly: no persistent disk means no seen-set, which means re-notifying the entire market on
 every run.
 
 ```bash
 cp .env.example .env && $EDITOR .env      # a push channel — or nothing ever reaches you
-docker compose run --rm scout doctor      # sources reachable? journal WAL? channels usable?
-docker compose run --rm scout run --once --seed
+docker compose run --rm rent-scout doctor      # sources reachable? journal WAL? channels usable?
+docker compose run --rm rent-scout run --once --seed
 docker compose up -d
 ```
 
 **The seed step is not optional.** An empty seen-set makes `run` refuse (Q36), because an empty
 seen-set is exactly what a forgotten volume mount looks like and the alternative is notifying the
 entire back catalogue at once. With `restart: unless-stopped` that refusal becomes a restart loop —
-visible, since Q27 records it to `state/last-refusal.txt` and reports it on the next successful
+visible, since Q27 records it to `state/rent-last-refusal.txt` and reports it on the next successful
 start, but still a loop. Seed first and it starts clean.
 
 **File ownership is the one thing that bites on a first deploy.** `state/` is bind-mounted from the
@@ -144,7 +173,7 @@ host, so it belongs to whoever created it, while the container runs as its own u
 to `1000:1000` — the ordinary first user on a Debian/Ubuntu VPS. If yours differs:
 
 ```bash
-RW_UID=$(id -u) RW_GID=$(id -g) docker compose up -d
+SCOUT_UID=$(id -u) SCOUT_GID=$(id -g) docker compose up -d
 ```
 
 Get it wrong and the refusal now says so by name (`base de données inutilisable (…) : le volume
@@ -160,15 +189,17 @@ committed and pushed, and the tree was clean and green throughout. Green, pushed
 three different things.
 
 ```bash
-docker tag scout:local rent-watch:pre-<what-you-are-leaving>   # rollback, one retag away
+docker tag scout:local scout:pre-<what-you-are-leaving>   # rollback, one retag away
 docker compose build                                                # BEFORE stopping: a failed
                                                                     #   build must not leave you down
 sqlite3 state/rent-watch.sqlite3 ".backup /tmp/mig-rehearse.sqlite3"
-php -r 'require "vendor/autoload.php"; $s=Scout\Store\Store::open("/tmp/mig-rehearse.sqlite3");
+php -r 'require "vendor/autoload.php"; $s=Scout\Rent\Store\Store::open("/tmp/mig-rehearse.sqlite3");
         echo $s->schemaVersion()," ",$s->journalMode(),PHP_EOL;'    # rehearse the migration
 docker compose stop                                                 # graceful; finishes the pass
 sqlite3 state/rent-watch.sqlite3 ".backup state/rent-watch.sqlite3.pre-<v>.$(date +%s).bak"
-docker compose up -d
+docker compose up -d --remove-orphans   # --remove-orphans matters ONCE after 2026-08-30: the rent service was
+                                        # renamed scout → rent-scout, and compose leaves the old container RUNNING
+                                        # beside the new one otherwise — two rent watchers, every push twice
 ```
 
 The rehearsal step is there because the seen-set is the one file this project documents as
@@ -189,7 +220,7 @@ already notified is re-notified — that is the seen-set's job and it survives t
 image layer is a distributable artifact and a baked-in credential survives any later layer that
 deletes it. The demo fixture *is* shipped, and it lets a fresh VPS prove the whole
 pipeline before a single landlord is polled — but it is `enabled: false` as of 2026-08-22, so it
-takes an explicit `scout doctor --source=fixture_demo` to run. It shipped ENABLED for two weeks,
+takes an explicit `scout --domain=rent doctor --source=fixture_demo` to run. It shipped ENABLED for two weeks,
 from before any real endpoint existed, and a real pass therefore counted ten flats that do not
 exist in its totals, its `doctor` table and its heartbeat.
 
@@ -202,7 +233,7 @@ cannot be reconstructed — a listing only ever shows its *current* rent.
 
 ```bash
 tools/backup-state.sh                       # → state/backups/rent-watch.<stamp>.sqlite3
-0 4 * * *  cd /srv/rent-watch && tools/backup-state.sh   # a daily crontab line
+0 4 * * *  cd /srv/scout && tools/backup-state.sh   # a daily crontab line
 ```
 
 **Do not use `cp`, and the reason is silent.** The watcher holds the database open in WAL mode, so a
@@ -223,18 +254,18 @@ Three files carry the deployment, and only one of them is in git.
 |---|---|
 | `state/rent-watch.sqlite3` | The seen-set. **Without it the new host re-notifies the entire market on its first pass** — hundreds of pushes for flats you have already read and dismissed. |
 | `.env` | Credentials: IMAP, the push channel, the IDFM key. Gitignored, so a `git clone` does not bring it. |
-| `config/criteria.local.json` | Gitignored too, and it is what turns commute scoring on — a clone without it silently scores every listing without the heaviest component in the tree. |
+| `config/rent/criteria.local.json` | Gitignored too, and it is what turns commute scoring on — a clone without it silently scores every listing without the heaviest component in the tree. |
 
 ```bash
 tools/backup-state.sh                                     # take a verified copy FIRST
 rsync -av state/backups/rent-watch.<stamp>.sqlite3 \
-          .env config/criteria.local.json  <host>:/srv/rent-watch/…
-ssh <host> 'cd /srv/rent-watch && docker compose build && docker compose run --rm scout doctor'
+          .env config/rent/criteria.local.json  <host>:/srv/scout/…
+ssh <host> 'cd /srv/scout && docker compose build && docker compose run --rm rent-scout doctor'
 ```
 
 **`doctor` before `up -d`, always.** It is the one command that proves the new host can reach the
 sources *and* the notification channel before anything is scheduled — and `docker compose run --rm
-scout test-notify` proves the channel specifically, which `doctor` alone does not.
+scout --domain=rent test-notify` proves the channel specifically, which `doctor` alone does not.
 
 **Do NOT re-run `--seed` on the new host if you carried the seen-set.** Seeding marks everything
 currently published as already seen, so a genuine new listing that appeared during the move would be
@@ -260,19 +291,19 @@ sent as worse than no alert at all.
 > are those announces every match to the terminal and marks NOTHING notified, which means it
 > re-announces the same listings on every pass and never writes the heartbeat marker. It is not
 > refused — `run --once` at a terminal is exactly that shape — but it warns at startup, `doctor`
-> says `AUCUN canal n'atteint de destinataire`, and **`scout test-notify` exits 1**.
+> says `AUCUN canal n'atteint de destinataire`, and **`scout --domain=rent test-notify` exits 1**.
 >
-> This matters because the SHIPPED `config/criteria.json` is `channels: ["console"]`. A deployment
+> This matters because the SHIPPED `config/rent/criteria.json` is `channels: ["console"]`. A deployment
 > that never adds a real channel in `criteria.local.json` looks healthy and delivers nothing. Run
-> `scout doctor` after any deploy: it now lists every channel, what it is, and whether it counts.
+> `scout --domain=rent doctor` after any deploy: it now lists every channel, what it is, and whether it counts.
 >
 > Two review rounds were spent on this. Round 7 found `console` satisfying every "did it reach the
 > user" gate; the fix filtered it out **by name**, and round 8 found `email` over a file transport
 > walking through the same hole. It is a capability now — `Channel::reachesRecipient()` — asked
 > once, on the interface.
 
-Put the channel list in **`config/criteria.local.json`**, which is gitignored, rather than in the
-committed `config/criteria.json`. Compose mounts `./config` into the container, so it reaches the
+Put the channel list in **`config/rent/criteria.local.json`**, which is gitignored, rather than in the
+committed `config/rent/criteria.json`. Compose mounts `./config` into the container, so it reaches the
 deployment; and the committed file stays free of anything that would make a fresh clone, a CI job or
 the test suite try to push somewhere real.
 
@@ -305,7 +336,7 @@ notification, so generate it rather than choosing it, and keep it out of anythin
 | `smtp` | speak SMTP directly, with the credentials below |
 | `file` | write real `.eml` files to `MAIL_OUTBOX` and send NOTHING |
 
-`file` is not a stub. The messages are complete and readable, which is how `scout test-notify`
+`file` is not a stub. The messages are complete and readable, which is how `scout --domain=rent test-notify`
 proves the whole email path offline with no server and no credential — and it is the right setting
 to leave configured while you have not got round to the rest.
 
@@ -314,7 +345,7 @@ account password over SMTP, so it needs an *app password*, and an app password n
 verification switched on first:
 
 1. **myaccount.google.com** → **Sécurité** → turn on **Validation en deux étapes**.
-2. Same page, or `myaccount.google.com/apppasswords` → create one, name it `rent-watch`.
+2. Same page, or `myaccount.google.com/apppasswords` → create one, name it `scout`.
 3. Google shows a **16-character password once**. Copy it before closing the box — it is not
    retrievable afterwards, only replaceable.
 
@@ -342,8 +373,8 @@ satisfied `test-notify`, so the exit code meant nothing. It means something now:
 channel that can actually reach you accepted the message.
 
 ```bash
-scout test-notify              # 0 = a real channel accepted it. 1 = nothing that counts did.
-scout doctor                   # lists every channel, what it is, and whether it counts
+scout --domain=rent test-notify              # 0 = a real channel accepted it. 1 = nothing that counts did.
+scout --domain=rent doctor                   # lists every channel, what it is, and whether it counts
 ls -t var/outbox | head -1     # `file` transport: the message that was written and NOT sent
 ```
 
@@ -357,7 +388,7 @@ ls -t var/outbox | head -1     # `file` transport: the message that was written 
 > `command not found`. A value containing backticks would have been executed.
 >
 > The parser takes values literally — no expansion, no substitution — and **the real environment
-> still wins**, so `RENT_SCOUT_DB=/tmp/throwaway bin/scout run` works as before. A line that is not
+> still wins**, so `RENT_SCOUT_DB=/tmp/throwaway bin/scout --domain=rent run` works as before. A line that is not
 > `KEY=VALUE` is a startup refusal naming the line NUMBER and never the line, because this file
 > holds credentials.
 
@@ -386,7 +417,7 @@ is blocked on a mailbox, an endpoint capture or a phorj module that does not exi
    Tier 4 (`plafonds` bands) armed 2026-08-26. The phorj port waits on `Core.Imap`, an HTML parser
    and `sleep` (see `docs/PHORJ-REQUIREMENTS.md`). Before any real source; everything depends on it.
 3. **In'li adapter** ✅ live 2026-08-19 — and hydrating its detail pages proved it is NOT pure LLI.
-4. **Health monitoring + `scout doctor`.** ✅ — `SourceHealth`, the Q27 heartbeat (2026-08-22) and
+4. **Health monitoring + `scout --domain=rent doctor`.** ✅ — `SourceHealth`, the Q27 heartbeat (2026-08-22) and
    `FEED_SILENT` (2026-08-28), which is the one verdict the original design could not express.
 5. **CDC Habitat** ✅ live 2026-08-20 — the first mixed-tenure source.
 6. **Email-alert adapter + one private portal.** ✅ SeLoger 2026-08-25, then Bien'ici, leboncoin
@@ -401,20 +432,20 @@ is blocked on a mailbox, an endpoint capture or a phorj module that does not exi
 ## Planned CLI
 
 ```
-scout doctor                  # health-check every source: status, timing, item counts
-scout dump <source>           # raw payload of the first item — for building field maps
-scout run --once [-v]         # single pass
-scout run --watch [-v]        # loop: every 15 min ± 5 of jitter, paced per host (Q37)
-scout test-notify             # verify the notification channel
-scout digest [--dry-run]      # emit the pending "à vérifier" rollup, on demand
-scout reclassify [--dry-run]  # re-judge stored UNKNOWN verdicts against today's classifier
-scout replay <source>         # alias of `dump` — takes a SOURCE NAME
-scout replay <source> --file=<payload>   # a frozen page through that source's own field map, offline
+scout --domain=rent doctor                  # health-check every source: status, timing, item counts
+scout --domain=rent dump <source>           # raw payload of the first item — for building field maps
+scout --domain=rent run --once [-v]         # single pass
+scout --domain=rent run --watch [-v]        # loop: every 15 min ± 5 of jitter, paced per host (Q37)
+scout --domain=rent test-notify             # verify the notification channel
+scout --domain=rent digest [--dry-run]      # emit the pending "à vérifier" rollup, on demand
+scout --domain=rent reclassify [--dry-run]  # re-judge stored UNKNOWN verdicts against today's classifier
+scout --domain=rent replay <source>         # alias of `dump` — takes a SOURCE NAME
+scout --domain=rent replay <source> --file=<payload>   # a frozen page through that source's own field map, offline
 ```
 
-`scout replay <source>` bare is an ALIAS OF `dump`, and takes a SOURCE NAME — not a fixture path.
-This line said `<fixture>` for as long as the verb existed, and `scout replay
-tests/fixtures/inli/search.html` answers *"source inconnue"* and exits 2. A three-way disagreement,
+`scout --domain=rent replay <source>` bare is an ALIAS OF `dump`, and takes a SOURCE NAME — not a fixture path.
+This line said `<fixture>` for as long as the verb existed, and `scout --domain=rent replay
+tests/fixtures/rent/inli/search.html` answers *"source inconnue"* and exits 2. A three-way disagreement,
 since the verb was also absent from `scout help` entirely: the spec asked for one thing, the code
 did another, and the tool's own help denied the verb existed.
 
@@ -427,15 +458,15 @@ a `detail_map` is never handed the search page as a listing's detail page. It ru
 would record one fetch-failure row per listing for pages nobody fetched — and **unthrottled**, since
 there is no host to protect (with `rate_limit_ms` kept, In'li's replay spent 43 s asleep). An
 `email_alert` source is refused with the seam that already exists for it: `MAILBOX_DIR=<dir of .eml>
-scout dump <source>`.
+scout --domain=rent dump <source>`.
 
-`scout digest` reads the STORE, not the last pass, and that is the difference that makes it worth
+`scout --domain=rent digest` reads the STORE, not the last pass, and that is the difference that makes it worth
 having: the pipeline already re-offers an undelivered digest entry next run, but only while the ad
 is still published, so an entry whose listing is delisted in between is lost with nothing saying so.
 
 There are **three** emission paths for that rollup, and the third landed 2026-08-26. The pipeline
-emits at the end of any pass that produced NEW entries; `scout digest` emits on demand; and
-`scout run --watch` carries a **daily floor** at `digest_hour` local, which drains whatever is still
+emits at the end of any pass that produced NEW entries; `scout --domain=rent digest` emits on demand; and
+`scout --domain=rent run --watch` carries a **daily floor** at `digest_hour` local, which drains whatever is still
 pending. The floor is what reaches a backlog that failed to send, or one the batch cap left behind,
 on a day that produced nothing new — before it existed, such a backlog sat in the bin until somebody
 thought to look, and that bin is where every listing the classifier could not resolve lands.
@@ -445,9 +476,9 @@ The heartbeat already proves the watcher is alive every 24 h, so a daily "rien �
 would carry no new information and would train you to swipe the channel away; and leaving the window
 open means a send that failed at 08:05 is retried on the next pass rather than tomorrow. It runs
 under `--watch` only — a cron-driven `--once` deployment gets the two event-driven paths and no
-floor — and `scout doctor` prints the hour, the resolved local zone and that scope.
+floor — and `scout --domain=rent doctor` prints the hour, the resolved local zone and that scope.
 
-`scout reclassify` re-runs the classifier AND the criteria engine over stored `UNKNOWN` verdicts,
+`scout --domain=rent reclassify` re-runs the classifier AND the criteria engine over stored `UNKNOWN` verdicts,
 using the schema-v7 snapshot of the listing the verdict was formed from. A row stored before v7 has
 no snapshot and is **skipped, not judged on whatever text remains** — re-judging on less evidence
 than the original saw is how a social listing becomes a match. `--since` is deliberately refused;
@@ -458,7 +489,7 @@ out loud. The pipeline judges a cluster on its most restrictive member but store
 tenure and own snapshot, so a vetoed survivor looks merely undetermined — and re-judging it on its
 own snapshot alone is exactly the `⊂` this command forbids.
 
-`scout dump` is what makes onboarding a new source take five minutes instead of an hour, so it lands in
+`scout --domain=rent dump` is what makes onboarding a new source take five minutes instead of an hour, so it lands in
 milestone 1.
 
 Two obligations on `doctor`, both of which are silent when forgotten: it must pass the current time
@@ -468,9 +499,9 @@ mode makes two processes contend instead of share.
 
 ## Adding a source
 
-Adding a source is **config-only** in the common case — a block in `config/sources.json`, no code. The
+Adding a source is **config-only** in the common case — a block in `config/rent/sources.json`, no code. The
 [`/add-source`](.claude/skills/add-source/SKILL.md) skill walks the whole workflow: live-endpoint
-discovery, field-map building with `scout dump`, fixture capture, tenure labelling, and the health
+discovery, field-map building with `scout --domain=rent dump`, fixture capture, tenure labelling, and the health
 baseline.
 
 Two rules that matter more than the mechanics:
@@ -488,7 +519,7 @@ message, and capture it:
 
 ```bash
 php tools/scrub-eml.php captured.eml tests/fixtures/<portal>/alert.eml you@example.com
-MAILBOX_DIR=tests/fixtures/<portal> php bin/scout doctor --source=<portal>   # force-runs a disabled source
+MAILBOX_DIR=tests/fixtures/<portal> php bin/scout --domain=rent doctor --source=<portal>   # force-runs a disabled source
 ```
 
 `tools/scrub-eml.php` removes the subscriber's identity — the address, the bounce and reply tokens,
@@ -546,7 +577,7 @@ measurement.
 docker compose run --rm car-scout doctor                  # sources, seen-set, channels
 docker compose run --rm car-scout run --once --seed       # mandatory before --watch
 docker compose up -d car-scout
-MAILBOX_DIR=tests/fixtures/paruvendu CAR_SCOUT_DB=:memory: php bin/scout --domain=car dump paruvendu   # offline
+MAILBOX_DIR=tests/fixtures/car/paruvendu CAR_SCOUT_DB=:memory: php bin/scout --domain=car dump paruvendu   # offline
 ```
 
 ## Legal posture
@@ -569,11 +600,11 @@ IMAP credentials, the notification token, the IDFM/PRIM API key and the RFR inco
 `.env`, which is gitignored. `.env.example` is the committed template. Never commit personal financial
 data; never log credentials; scrub any fixture captured from a live payload before committing it.
 
-⚠️ **This repo is currently public**, and `config/criteria.json` is now committed. Making the repo
+⚠️ **This repo is currently public**, and `config/rent/criteria.json` is now committed. Making the repo
 private is still recommended and is the developer's action; the mitigation that makes it survivable
 either way ships regardless (Q11, ruled 2026-08-07):
 
-- The committed `config/criteria.json` carries the eight Île-de-France prefixes (75, 77, 78, 91, 92,
+- The committed `config/rent/criteria.json` carries the eight Île-de-France prefixes (75, 77, 78, 91, 92,
   93, 94, 95), `min_rooms: 3`, `min_surface_m2: 50`, `max_rent_cc: 1200`, and an EMPTY `communes`
   list — region mode, ruled 2026-08-22, where the prefixes are the whole location filter. Those
   numbers moved twice on that day; if this list and the file ever disagree, the file is right and
@@ -588,7 +619,7 @@ either way ships regardless (Q11, ruled 2026-08-07):
   and is no longer accurate, and a privacy claim that quietly drifts is worse than a narrower one
   stated plainly. The ten communes are also no longer a filter — they survive as `commune_rank`
   (which orders results) and as a note in the file recording what to restore.
-- **`config/criteria.local.json` is gitignored** and overrides the committed file field by field, so
+- **`config/rent/criteria.local.json` is gitignored** and overrides the committed file field by field, so
   real budget and real preferences never have to enter git. That claim was written in four documents
   before anything enforced it; `/config/*.local.json` is now in `.gitignore`, and
-  `git check-ignore -v config/criteria.local.json` is how to confirm it rather than believe it.
+  `git check-ignore -v config/rent/criteria.local.json` is how to confirm it rather than believe it.

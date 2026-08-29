@@ -4,7 +4,7 @@
 > possible filters we can use"*.
 >
 > **SETTLED 2026-08-07.** Rows F1–F9 and S1–S8 are now RULINGS — see `docs/OPEN-QUESTIONS.md`
-> Part 1, and `config/criteria.json`, which is their implementation and the authority on any
+> Part 1, and `config/rent/criteria.json`, which is their implementation and the authority on any
 > disagreement. This file stays the *menu* of what could be filtered, and the rows below that are
 > not in `criteria.json` are candidates rather than behaviour.
 >
@@ -18,7 +18,7 @@
 > nothing arrives. That failure is invisible by construction. When in doubt, make it a score.
 
 **Availability legend** — my estimate of how often a field is usable, to be replaced with measured
-numbers once `scout dump` has run against real payloads. `[Unverified]` throughout: these are
+numbers once `scout --domain=rent dump` has run against real payloads. `[Unverified]` throughout: these are
 expectations from how listing sites are structured, not counts.
 
 - **A** — nearly always present, structured

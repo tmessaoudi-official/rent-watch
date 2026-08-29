@@ -46,7 +46,7 @@ namespace Scout\Config;
  * A malformed line is refused, and the refusal names the **line number and nothing else**. It must
  * never quote the line: this file is where the IMAP password, the SMTP password and the ntfy topic
  * live, and `ConfigError` messages are printed to the terminal and — for `run` — recorded via
- * {@see \Scout\Core\Redact} into `state/last-refusal.txt`. A parser that echoes what it could
+ * {@see \Scout\Core\Redact} into `state/rent-last-refusal.txt`. A parser that echoes what it could
  * not parse is a parser that leaks a credential on the day someone fat-fingers one.
  */
 final class DotEnv

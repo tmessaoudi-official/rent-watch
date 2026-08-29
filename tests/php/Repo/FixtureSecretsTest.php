@@ -12,7 +12,7 @@ use PHPUnit\Framework\TestCase;
  *
  * Hard rule 7 says to "scrub any fixture captured from a live payload before committing it", and
  * for three sources that was done by hand. Doing it by hand is why it silently stopped happening:
- * `tests/fixtures/inli/search.html` was scrubbed to `AIzaSyREDACTED-FIXTURE-PLACEHOLDER`, and the
+ * `tests/fixtures/rent/inli/search.html` was scrubbed to `AIzaSyREDACTED-FIXTURE-PLACEHOLDER`, and the
  * two Cityloger detail pages captured a day later shipped Cityloger's live Google Maps API key
  * instead — committed and pushed, because no mechanism ever looked. A rule enforced only by whoever
  * remembers it is a rule that holds until the first busy afternoon.
@@ -95,7 +95,7 @@ final class FixtureSecretsTest extends TestCase
                     $hit,
                     $label . ' carries what looks like a live ' . $kind . '. Scrub it: replace the '
                         . 'value with a visibly fake placeholder of the same shape (see '
-                        . 'tests/fixtures/inli/search.html), so the parser still sees the structure '
+                        . 'tests/fixtures/rent/inli/search.html), so the parser still sees the structure '
                         . 'it would see live. Do not narrow the pattern and do not add an exception.',
                 );
             }

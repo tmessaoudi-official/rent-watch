@@ -10,7 +10,7 @@ use Scout\Core\Pacer;
 /**
  * `scout run --watch`: run a pass, wait out the Q37 cadence, run another, until told to stop.
  *
- * A SEPARATE CLASS SO IT CAN BE TESTED. Inline in `Scout::runCommand()` the same code would need
+ * A SEPARATE CLASS SO IT CAN BE TESTED. Inline in `RentScout::runCommand()` the same code would need
  * config files, a store on disk, a notifier and a database before it could be exercised at all —
  * which for a fifteen-minute cadence means it would be "tested" by watching it run, i.e. never.
  * Everything here is injected: the pass is a closure, the clock and the sleeper live in {@see Pacer},

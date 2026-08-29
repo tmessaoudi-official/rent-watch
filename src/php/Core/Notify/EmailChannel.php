@@ -22,8 +22,8 @@ final readonly class EmailChannel implements Channel
 {
     public function __construct(
         private string $to,
-        private string $from = 'rent-watch@localhost',
-        private string $subjectPrefix = '[rent-watch]',
+        private string $from = 'scout@localhost',
+        private string $subjectPrefix = '[scout]',
         private MailTransport $transport = new SendmailTransport(),
     ) {}
 

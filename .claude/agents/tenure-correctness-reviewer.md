@@ -1,6 +1,6 @@
 ---
 name: tenure-correctness-reviewer
-description: Read-only adversarial reviewer for rent-watch's tenure classification and matching correctness — the French housing tenure classifier, the fail-closed UNKNOWN contract, the excluded-tenure set, the split between hard disqualifiers and score components, and within-source / cross-portal deduplication. Use as the correctness+regression lens of the certification panel at any 3C/6C gate, or whenever a change touches src/php/Core/Tenure*.php, src/php/Core/Text.php, src/php/Core/Criteria*.php, src/php/Core/Dedup*.php, tests/fixtures/tenure/corpus.json, or a source's default_tenure / mixed_tenure flag. It reads the diff and the code itself and tries to REFUTE the claim that no social-housing listing can reach a notification. Never edits anything.
+description: Read-only adversarial reviewer for rent-watch's tenure classification and matching correctness — the French housing tenure classifier, the fail-closed UNKNOWN contract, the excluded-tenure set, the split between hard disqualifiers and score components, and within-source / cross-portal deduplication. Use as the correctness+regression lens of the certification panel at any 3C/6C gate, or whenever a change touches src/php/Rent/Core/Tenure*.php, src/php/Core/Text.php, src/php/Core/Criteria*.php, src/php/Rent/Core/Dedup*.php, tests/fixtures/rent/tenure/corpus.json, or a source's default_tenure / mixed_tenure flag. It reads the diff and the code itself and tries to REFUTE the claim that no social-housing listing can reach a notification. Never edits anything.
 tools: Read, Grep, Glob, Bash
 ---
 
@@ -23,9 +23,9 @@ to…", stop and go read it.
 ## Rule zero-point-five — do not invent a subject
 
 **The tenure path EXISTS as of 2026-08-06 and it is PHP, not Python.** It is
-`src/php/Core/TenureClassifier.php`, `Tenure.php`, `Text.php`, `Outcome.php` and the corpus at
-`tests/fixtures/tenure/corpus.json`; the suite is `tests/php/Core/` run with `php tools/phpunit.phar`.
-`src/php/Store/` also exists as of 2026-08-07 and carries the within-source dedup key, so findings
+`src/php/Rent/Core/TenureClassifier.php`, `Tenure.php`, `Text.php`, `Outcome.php` and the corpus at
+`tests/fixtures/rent/tenure/corpus.json`; the suite is `tests/php/Rent/Core/ (+ the generic tests/php/Core/)` run with `php tools/phpunit.phar`.
+`src/php/Rent/Store/` also exists as of 2026-08-07 and carries the within-source dedup key, so findings
 about `dedupKey()` over-merging or under-merging have a real subject. There is still no `config/`,
 no adapter, and no CROSS-PORTAL dedup — that half is still a target.
 

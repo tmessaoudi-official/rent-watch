@@ -126,21 +126,21 @@ expect_fire "an excluded tenure declared non-excluded in a table" \
 # only two files where a skipped classifier test is possible — which CLAUDE.md §1 rates P0.
 expect_fire "a skipped test in the CamelCase corpus suite" \
   'public function testCorpusCaseClassifiesAsLabelled(): void { $this->markTestSkipped("todo"); }' \
-  "$repo/tests/php/Core/TenureCorpusTest.php"
+  "$repo/tests/php/Rent/Core/TenureCorpusTest.php"
 expect_fire "a skipped test in the CamelCase classifier suite" \
   '$this->markTestSkipped("todo: revisit PLS handling");' \
-  "$repo/tests/php/Core/TenureClassifierTest.php"
+  "$repo/tests/php/Rent/Core/TenureClassifierTest.php"
 # PHPUnit's attribute family skips a test with the runner exiting 0 — the construct list stopped at
 # markTestSkipped and missed it entirely.
 expect_fire "a PHPUnit attribute skip on a corpus test" \
   "#[RequiresPhpExtension('rentwatch_corpus')]
 public function testCorpusCaseClassifiesAsLabelled(): void {}" \
-  "$repo/tests/php/Core/TenureCorpusTest.php"
+  "$repo/tests/php/Rent/Core/TenureCorpusTest.php"
 # The runner CONFIG route: one line here drops the whole §1 corpus and every other automated
 # control in the repo still reports green. phpunit.xml sits at the repo root and was outside the
 # guard's path filter entirely.
 expect_fire "the corpus suite excluded in phpunit.xml" \
-  '<testsuite name="core"><exclude>tests/php/Core/TenureCorpusTest.php</exclude></testsuite>' \
+  '<testsuite name="core"><exclude>tests/php/Rent/Core/TenureCorpusTest.php</exclude></testsuite>' \
   "$repo/phpunit.xml"
 
 # ROUND 7. Each of these was silent, and each is a real spelling.
@@ -157,14 +157,14 @@ expect_fire "the corpus suite retargeted via <file> rather than <exclude>" \
 # narrowing. Recorded so a future reader knows the gap was measured, not missed.
 expect_fire "the classifier disabled by the inverse spelling" \
   'tenure_check: false' \
-  "$repo/config/criteria.json"
+  "$repo/config/rent/criteria.json"
 expect_fire "the classifier disabled by an enable flag" \
   'enable_tenure: false' \
-  "$repo/config/criteria.json"
+  "$repo/config/rent/criteria.json"
 # A PHP docblock is a comment too — the byte-identical YAML spelling was already exempt.
 expect_silence "a source declaring itself pure with mixed_tenure: false" \
   '"cdc_habitat": { "mixed_tenure": false }' \
-  "$repo/config/sources.json"
+  "$repo/config/rent/sources.json"
 expect_silence "a PHP constructor call passing mixedTenure: false" \
   'new SourceProfile(name: "inli", defaultTenure: Tenure::LLI, mixedTenure: false);'
 expect_silence "a PHP docblock describing a mixed-tenure landlord" \
@@ -176,23 +176,23 @@ expect_fire "a breach on line 1 followed by 80 KB of exempt lines" \
   "$(printf 'config toggle for plus: true
 '; for i in $(seq 1 2000); do printf '# config toggle plus note %d
 ' "$i"; done)" \
-  "$repo/config/sources.json"
+  "$repo/config/rent/sources.json"
 
 # ROUND 8. Pattern 5's narrowing (to silence `mixed_tenure: false`) put `_` in the left boundary,
 # which blocked a match starting at `classifier` — and the suffix group had no `classifier` either,
 # so nothing could match at `tenure`. `tenure_classifier: false` is the natural YAML spelling.
 expect_fire "the compound kill switch in JSON" \
   '"tenure_classifier": false' \
-  "$repo/config/sources.json"
+  "$repo/config/rent/sources.json"
 expect_fire "the compound kill switch as an env var" \
   'TENURE_CLASSIFIER_ENABLED=0' \
-  "$repo/config/sources.json"
+  "$repo/config/rent/sources.json"
 expect_fire "the classifier disabled in JSON" \
   '"tenure": false' \
-  "$repo/config/criteria.json"
+  "$repo/config/rent/criteria.json"
 expect_fire "the classifier disabled by a classification flag" \
   'tenure_classification: false' \
-  "$repo/config/criteria.json"
+  "$repo/config/rent/criteria.json"
 # A `<directory>` ATTRIBUTE narrows the suite to nothing while the runner still prints a green OK and
 # exits 0: `suffix="ClassifierTest.php"` drops the 108-case §1 corpus AND the surface matrix, and
 # drift-scan stays clean. No new element is needed, so the element-name list could not see it.
@@ -266,10 +266,10 @@ expect_silence "routing UNKNOWN to the digest, which is the rule" \
 # undocumented, so that a future session narrowing pattern 2 sees the cost was chosen.
 expect_fire "a communes block in criteria.json (accepted noise, see pattern 2)" \
   '"communes": { "included": ["Cergy", "Nanterre"], "excluded": [] }' \
-  "$repo/config/criteria.json"
+  "$repo/config/rent/criteria.json"
 expect_fire "a non-tenure denylist in criteria.json (accepted noise, see pattern 2)" \
   '"blocked_landlords": null' \
-  "$repo/config/criteria.json"
+  "$repo/config/rent/criteria.json"
 # …and the detection that suppression was costing, which is why it went.
 expect_fire "an emptied excluded-set accessor whose docblock mentions a source" \
   '/** Hard disqualifiers applied to every listing from every source. */
@@ -277,10 +277,10 @@ public static function excluded(): array { return []; }' \
   "$repo/src/php/Core/Criteria.php"
 expect_fire "an emptied per-source excluded list in sources.json" \
   '"sources": { "cdc_habitat": { "excluded": [] } }' \
-  "$repo/config/sources.json"
+  "$repo/config/rent/sources.json"
 expect_silence "a notify module restating the routing rule" \
   '/** UNKNOWN never reaches the notify channel — it goes to the digest instead. */' \
-  "$repo/src/php/Core/Notify/Formatter.php"
+  "$repo/src/php/Rent/Notify/Formatter.php"
 expect_silence "a health module drop threshold in basis points" \
   'private const int DROP_THRESHOLD_BP = 30;' \
   "$repo/src/php/Core/Health.php"
@@ -296,19 +296,19 @@ expect_silence "a sources.yaml comment describing a mixed-tenure landlord" \
 # mixed-tenure source is now told to carry. Pattern 6's comment alternation learned the shape.
 expect_silence "a sources.json _comment describing a mixed-tenure landlord" \
   '  "_comment": "config: CDC Habitat publishes PLUS and PLAI alongside LLI"' \
-  "$repo/config/sources.json"
+  "$repo/config/rent/sources.json"
 expect_silence "a criteria.json _why key describing the excluded set" \
   '  "_why": "config note: PLAI and PLUS are excluded by the classifier, not by this file"' \
-  "$repo/config/criteria.json"
+  "$repo/config/rent/criteria.json"
 
 # Pattern 7 must not fire on PROSE ABOUT skipping — both of these are real lines from the two
 # classifier test files, and the second is that file's own docblock quoting CLAUDE.md's rule.
 expect_silence "a docblock describing a deleted skip branch" \
   'position > $s->position -> skip, and sabotage-verification proved that clause unreachable' \
-  "$repo/tests/php/Core/TenureClassifierTest.php"
+  "$repo/tests/php/Rent/Core/TenureClassifierTest.php"
 expect_silence "a docblock quoting CLAUDE.md's own rule about skipped fixtures" \
   'A skipped, xfailed, deleted or relabelled fixture is a P0 finding unless the old label was wrong.' \
-  "$repo/tests/php/Core/TenureCorpusTest.php"
+  "$repo/tests/php/Rent/Core/TenureCorpusTest.php"
 
 expect_silence "a file outside src/, config/ and tests/" \
   'excluded_tenures = []' \

@@ -19,7 +19,7 @@ namespace Scout\Core\Notify;
  */
 interface Channel
 {
-    /** Name as it appears in `config/criteria.json` under `notify.channels`. */
+    /** Name as it appears in `config/rent/criteria.json` under `notify.channels`. */
     public function name(): string;
 
     /**

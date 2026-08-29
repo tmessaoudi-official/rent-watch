@@ -1,7 +1,7 @@
 ---
 name: add-source
 description: >
-  Use when onboarding a new landlord or portal into config/sources.json. Walks live-endpoint
+  Use when onboarding a new landlord or portal into config/rent/sources.json. Walks live-endpoint
   discovery, field-map building, fixture capture, tenure labelling and the health baseline so that
   adding a source stays config-only.
 user-invocable: true
@@ -13,7 +13,7 @@ user-invocable: true
   requirement, and §14 makes "verify every endpoint live" a hard rule. Both are easy to
   violate one convenient shortcut at a time, so the workflow is written down.
 
-  Questions here follow `.claude/skills/rw-ask-human/SKILL.md`: `AskUserQuestion`, options with
+  Questions here follow `.claude/skills/scout-ask-human/SKILL.md`: `AskUserQuestion`, options with
   the recommended one first and a visible challenge escape (re-inverted 2026-08-18).
 ═══════════════════════════════════════════════════════════════════════════════════ -->
 
@@ -22,7 +22,7 @@ user-invocable: true
 > If ARGUMENTS contains `--help`: output the text below verbatim, then STOP.
 >
 > ```
-> /add-source <name> — Onboard a new listing source into config/sources.json, config-only.
+> /add-source <name> — Onboard a new listing source into config/rent/sources.json, config-only.
 >
 > Flags:
 >   --url <url>     Search page URL to start discovery from
@@ -137,7 +137,7 @@ refuses outright.
 If it really is an XHR app whose API host is crawlable, ask the developer for the DevTools capture —
 they have a browser, you do not:
 
-> Open the site's search page, set the filters you actually want (Île-de-France, T3+, ≥ 50 m², ≤ 1200 € CC — check `config/criteria.json`, these moved twice on 2026-08-22), then
+> Open the site's search page, set the filters you actually want (Île-de-France, T3+, ≥ 50 m², ≤ 1200 € CC — check `config/rent/criteria.json`, these moved twice on 2026-08-22), then
 > DevTools → Network → Fetch/XHR → re-run the search. Copy the request as cURL and paste it here.
 
 From the cURL, extract: method, URL, query params or JSON body, and the **minimum** headers that make it
@@ -148,10 +148,10 @@ browser UA, that source is telling you it blocks plain clients: use the email-al
 disguise. If the endpoint needs an authenticated session (AL'in typically does), say so explicitly
 rather than half-building it.
 
-## Step 2 — Write a minimal block, then iterate with `scout dump`
+## Step 2 — Write a minimal block, then iterate with `scout --domain=rent dump`
 
-Start with `enabled: false`, an `items_path`, and no `map:`. Run `scout dump <name>` to print one raw
-item, then fill `map:` from the real payload shape. `scout dump` is what makes this take five minutes
+Start with `enabled: false`, an `items_path`, and no `map:`. Run `scout --domain=rent dump <name>` to print one raw
+item, then fill `map:` from the real payload shape. `scout --domain=rent dump` is what makes this take five minutes
 instead of an hour — if it does not exist yet, building it comes first.
 
 Config is **JSON**, not YAML — ruled 2026-08-07 (Q22). The rationale of the day was that the cloud
@@ -256,7 +256,7 @@ under §1, and useless. Three rules, none of them stylistic:
   its old reason — it is the only filter whose inputs the CARD carries in full, so ordering on it
   cannot act on a field the detail page would have filled (hard rule 8).
 - **A detail page that will not load does NOT fail the pass.** It is recorded with its attempt
-  count, retried past a 6 h backoff up to three times, then left alone — and `scout doctor` reports
+  count, retried past a 6 h backoff up to three times, then left alone — and `scout --domain=rent doctor` reports
   how many pages a source has given up on. Do not "fix" this by throwing: a throw voids the whole
   pass, so one dead page stops the source notifying anything at all. A robots refusal or a card with
   no `url` DOES throw, because those are states rather than events.
@@ -282,7 +282,7 @@ A path may be a list — the first non-empty one wins.
 ## Step 3 — Capture a fixture. No network in CI.
 
 ```bash
-scout dump <name> --raw > tests/fixtures/<name>/search.json
+scout --domain=rent dump <name> --raw > tests/fixtures/<name>/search.json
 ```
 
 **Scrub anything personal from the payload before committing it** — agent names, phone numbers, internal
@@ -311,14 +311,14 @@ source's own field.
 
 ## Step 5 — Stability and health baseline
 
-- **Check the `ref` is stable.** Re-run `scout dump <name>` twice and compare the `ref` of the same
+- **Check the `ref` is stable.** Re-run `scout --domain=rent dump <name>` twice and compare the `ref` of the same
   listing. A ref that changes between runs re-notifies forever; so does a fallback hash over a title
   the site A/B-tests.
 - A new source starts with **no baseline**, so breakage detection is blind for its first runs — say so
   rather than implying it is covered. Run it a few times, confirm the item count is stable, then:
 
 ```bash
-scout doctor --source=<name>    # status, timing, item count — for THIS block only
+scout --domain=rent doctor --source=<name>    # status, timing, item count — for THIS block only
 ```
 
 **`--source=<name>` force-runs a source that is still `enabled: false`**, which is what makes the

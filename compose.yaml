@@ -3,9 +3,9 @@
 # FIRST RUN ON A FRESH HOST — seed before you start the watcher:
 #
 #     cp .env.example .env && $EDITOR .env      # a push channel, or nothing reaches you
-#     docker compose run --rm scout doctor      # sources reachable? journal WAL? channels usable?
-#     docker compose run --rm scout run --once --seed
-#     docker compose up -d
+#     docker compose run --rm rent-scout doctor      # sources reachable? journal WAL? channels usable?
+#     docker compose run --rm rent-scout run --once --seed
+#     docker compose up -d                      # both watchers
 #
 # The seed step is not optional and skipping it is not silent-but-fine. Q36 makes `run` REFUSE on an
 # empty seen-set, because an empty seen-set is what a forgotten volume mount looks like and the
@@ -14,10 +14,15 @@
 # first and it starts clean.
 
 services:
-  scout:
+  rent-scout:
     build:
       context: .
     image: scout:local
+    # The domain flag is in the ENTRYPOINT for the same reason as the car service below: a verb typed
+    # after the service name must be a rent verb, and the image itself names no domain (its CMD is
+    # `help`, which lists them).
+    entrypoint: ["php", "/app/bin/scout", "--domain=rent"]
+    command: ["run", "--watch"]
     # `no-new-privileges` because nothing here ever needs to escalate, and the image already runs as
     # a non-root user. Cheap, and it closes a class of surprise from a future base-image change.
     security_opt:
@@ -28,9 +33,9 @@ services:
     # The image runs as uid 10001, and a bind-mounted host directory belongs to whoever created it.
     # Measured, running the real container against a host `state/`: PDO could not create the database
     # and the process died. So the uid is configurable and defaults to the operator's — set
-    # `RW_UID`/`RW_GID` in `.env`, or run `RW_UID=$(id -u) RW_GID=$(id -g) docker compose up -d`.
+    # `SCOUT_UID`/`SCOUT_GID` in `.env`, or run `SCOUT_UID=$(id -u) SCOUT_GID=$(id -g) docker compose up -d`.
     # 1000:1000 is the ordinary first-user id on a Debian/Ubuntu VPS, which is what Q8 prescribes.
-    user: "${RW_UID:-1000}:${RW_GID:-1000}"
+    user: "${SCOUT_UID:-1000}:${SCOUT_GID:-1000}"
     volumes:
       # THE mounted volume of Q8. Everything that must outlive the container lives here: the
       # seen-set, the price history, the run log, the Q27 heartbeat marker and `last-refusal.txt`.
@@ -91,7 +96,7 @@ services:
     read_only: true
     tmpfs:
       - /tmp
-    user: "${RW_UID:-1000}:${RW_GID:-1000}"
+    user: "${SCOUT_UID:-1000}:${SCOUT_GID:-1000}"
     volumes:
       - ./state:/app/state
       - ./config:/app/config:ro

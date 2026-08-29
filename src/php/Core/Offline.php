@@ -9,7 +9,7 @@ namespace Scout\Core;
  *
  * `SCOUT_OFFLINE=1` turns every outbound request into a loud refusal, and
  * `tests/bootstrap.php` sets it for the whole suite. Spec §11 says parser tests run offline; before
- * 2026-08-19 that held only BY ACCIDENT, because every source in `config/sources.json` was disabled
+ * 2026-08-19 that held only BY ACCIDENT, because every source in `config/rent/sources.json` was disabled
  * and so there was nothing to poll. Enabling In'li turned the suite into a four-page crawler of a
  * live landlord's site, once per test.
  *

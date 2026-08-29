@@ -346,8 +346,8 @@ final class RedactTest extends TestCase
             ['conventionnement'],
         ];
         yield 'a path alone on a line' => [
-            "fixture introuvable:\ntests/fixtures/tenure\nabandon",
-            ['tests/fixtures/tenure'],
+            "fixture introuvable:\ntests/fixtures/rent/tenure\nabandon",
+            ['tests/fixtures/rent/tenure'],
         ];
         yield 'a bare SHA-256 alone on a line' => [
             "checksum mismatch\n9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08\nexpected",

@@ -1,0 +1,94 @@
+{
+  "_comment": "rent-watch criteria. JSON, not YAML — ruled 2026-08-07 (docs/OPEN-QUESTIONS.md Q22). JSON has no comments, so any key beginning with an underscore is ignored by the loader; EVERY other unrecognised key is a hard error, which is what stops this convention from swallowing a typo. CORRECTED 2026-08-22: this used to say the values here were 'already public in prototype/sources.yaml'. That stopped being true when min_rooms, min_surface_m2 and max_rent_cc became measured decisions rather than inherited defaults. What still holds, and is the part that matters, is that the file carries NO name, employer, income figure or address — only preferences about flat size, price and area. For private tuning, copy this to config/rent/criteria.local.json (gitignored); it overrides field by field.",
+  "_communes": "EMPTY = REGION MODE, ruled 2026-08-22: the name is not checked and `postcode_prefixes` below is the whole location filter, i.e. anywhere in Île-de-France as of 2026-08-22, when the region was widened from 78/95 to all eight departements on the developer's ruling. It replaces the ten-commune Boucle de Seine list (Q1, 2026-08-07), which was measured on live payloads that day and yielded ZERO matches across all four sources while 60 listings sat in those two departements. To go back to a named list, put the communes here — the ten were: Sartrouville, Houilles, Maisons-Laffitte, Bezons, Cormeilles-en-Parisis, Argenteuil, Le Vésinet, Chatou, Carrières-sur-Seine, Montesson. With a list, matching is on the listing's COMMUNE FIELD only, never as a substring of the description — the prototype searched the description too, so a Paris listing saying 'proche Chatou' passed. `commune_rank` below still orders the results either way, so region mode does NOT lose the preference for the Boucle de Seine; it only stops it being a hard reject.",
+  "communes": [],
+  "_postcode_prefixes": "In REGION MODE (empty `communes`) these are the ONLY location filter, and the loader refuses both being empty — that combination is the one shape of this config that fails open, and over-matching is invisible because it looks like a busy market. With a commune list they are an AND, not an OR: their job is then to reject a same-named commune elsewhere in France. WIDENED 2026-08-22 to all eight Île-de-France departements (75, 77, 78, 91, 92, 93, 94, 95) on the developer's ruling; it was 78/95. 92 has been here twice: removed on 2026-08-07 because with a commune list it could not match anything and so read as intent it did not have, and back now because in region mode a prefix IS the intent. `commune_rank` keeps the Boucle de Seine ordered first, so widening the region did not flatten the preference — a Seine-Saint-Denis flat matches and scores below a Sartrouville one. To narrow again, cut this list; nothing else has to change. One difference between the modes, and it is deliberate: with a list, a listing with NO postcode is not disqualified (unknown is not wrong, hard rule 9) because the name already matched; in region mode the postcode is the only evidence there is, so an unknown one is refused.",
+  "postcode_prefixes": [
+    "75",
+    "77",
+    "78",
+    "91",
+    "92",
+    "93",
+    "94",
+    "95"
+  ],
+  "_min_rooms": "Pièces, not chambres. T3, ruled 2026-08-22 — REVERSES the T4 of Q3 (2026-08-07). Measured that day on live payloads: of the 13 listings that got past the location filter, 10 were rejected here alone, and all 10 were under the rent ceiling (9 In'li LLI at 1017–1353 € CC, one CDC 82 m² at 1669 €). T4-or-larger at ≤1800 € CC did not exist across the four live sources. `min_surface_m2` below still rejects a genuinely small T3, so this stayed a real filter rather than becoming a firehose — at 50 m² since 2026-08-22, which is a floor a real T3 clears and a converted studio does not. An UNKNOWN room count does not disqualify — that is the prototype's `(l.rooms or 0) < min_rooms` bug, which rejects every listing that did not state a room count.",
+  "min_rooms": 3,
+  "_min_surface_m2": "50 m² since 2026-08-22 (was 75). In region mode this and `min_rooms` are the only shape filters left, so it is what stops a T3 of 45 m² being offered as a family flat — the surface floor does the work the commune list used to do incidentally. An UNKNOWN surface is NOT a disqualification (hard rule 9): it loses the surface score component instead. Widening the region and lowering this together is deliberate — more places, smaller floor, tighter rent.",
+  "min_surface_m2": 50,
+  "_max_rent_cc": "CHARGES COMPRISES, hard cutoff, ruled 2026-08-07 (Q2). Every source is normalised to CC before comparison; a source that reports hors charges must declare `charges_included: false` in sources.json so the charges can be added. 1200 € since 2026-08-22, down from 1800 on the developer's ruling. All eight listings that matched under the old ceiling quoted 1258–1669 € CC, so none of them survives this — and the yield still went UP, to 83 matches out of 478, because the region and the surface floor moved in the same change and opened a pool the old criteria never looked at. Do not read the first fact as implying the second: a yield predicted from the previous filter's matches is a guess, and one poll on a throwaway SCOUT_DB measures it. A listing whose CC rent cannot be determined is not disqualified — it loses the rent-headroom score component instead, and says so in its reasons.",
+  "max_rent_cc": 1200,
+  "_exclude_patterns": "Property KIND and letting KIND, never tenure. Tenure exclusion lives in Tenure::isExcluded() and is deliberately absent from config: a user-editable regex duplicating CLAUDE.md §1 would be a second, weaker copy of the one guarantee that must not be config-overridable. Patterns are PCRE fragments matched case-insensitively against ACCENT-FOLDED text, so write `meuble`, not `meublé` — the loader refuses an accented pattern rather than letting it silently never match. Matched against title AND description.",
+  "exclude_patterns": [
+    "\\bcolocation\\b",
+    "\\bcoloc\\b",
+    "\\bcoliving\\b",
+    "\\b(?:location|louer|loue|appartement|logement|studio|bien|t[1-9])\\s+meuble",
+    "\\bmeuble\\s+de\\s+tourisme\\b",
+    "\\bbail\\s+mobilite\\b",
+    "\\bresidence\\s+(?:etudiante|etudiant|senior|seniors|services|service|autonomie|intergenerationnelle|geree)\\b",
+    "\\bviager\\b",
+    "\\blmnp\\b",
+    "\\bsaisonnier\\b",
+    "\\bsaisonniere\\b",
+    "\\bsous[-\\s]location\\b",
+    "\\bfoyer\\s+(?:de\\s+)?(?:jeunes|travailleurs)\\b",
+    "\\bresidence\\s+foyer\\b",
+    "\\behpad\\b",
+    "\\blocal\\s+commercial\\b",
+    "\\blocal\\s+professionnel\\b",
+    "\\bfonds\\s+de\\s+commerce\\b",
+    "\\bmurs\\s+commerciaux\\b"
+  ],
+  "_exclude_title_patterns": "Matched against the TITLE ONLY, and that is the point. THE ROOM PATTERN IS A NOUN, NOT A POSITION (2026-08-29): `^\\s*chambre\\b` read the room as the first word and three live titles defeated it in a week — a leading emoji (`✅ Chambre 10 min RER B`, pushed as a match), an adjective (`Confortable chambre individuelle`), a plural mid-title (`Belles chambres dans appartement lumineux`). The replacement matches `chambre(s)` anywhere UNLESS a count precedes it (a digit, or un/deux/trois/quatre/cinq/six), because a flat COUNTS its bedrooms and a room rental NAMES one. Measured over all 1 593 stored titles: 48 room rentals caught (the anchored form: 36), zero flats. `parking`, `box`, `garage`, `cave` and `bureau` are property types in a title and ordinary amenities in a description — 'T4 avec parking' is wanted, 'Parking en sous-sol' is not. Matching these against the description would drop every flat that has a parking space; not matching them at all would let a parking ad through, because a parking ad states no rooms and no surface and an unknown measurement is never a disqualification. Most are anchored at the start of the title, which is where a property type sits — but not all, and that is deliberate. While EVERY pattern was anchored, the title-only scope protected nothing a sabotage could disprove: a `^` with no `m` flag cannot match inside an appended description either way, so widening the scope was a semantic no-op and the guarantee was untestable. The unanchored entries are phrases unambiguous wherever they sit in a title (`loue parking`, `emplacement de stationnement`) and ordinary in a description ('emplacement de stationnement inclus'), which gives the scope something real to protect.",
+  "exclude_title_patterns": [
+    "^\\s*(?:location\\s+)?(?:de\\s+)?(?:parking|box|garage|cave|cellier|local|bureau|bureaux|entrepot|terrain|hangar|emplacement)\\b",
+    "(?<![0-9])(?<![0-9]\\s)(?<!une\\s)(?<!deux\\s)(?<!trois\\s)(?<!quatre\\s)(?<!cinq\\s)(?<!six\\s)\\bchambres?\\b",
+    "\\b(?:loue|a\\s+louer|location)\\s+(?:de\\s+)?(?:parking|box|garage|emplacement)\\b",
+    "\\bemplacement\\s+de\\s+stationnement\\b",
+    "^(?!.*\\b(?:non|pas|sans)\\b[^\\n]{0,15}meuble).*\\bmeuble"
+  ],
+  "_commune_rank": "1 = most wanted. Drives score component S1 only; it never filters. In REGION MODE (empty `communes`) this is the only place the Boucle de Seine preference survives, which is why the loader stops requiring a rank to appear in `communes` when that list is empty — applied there, the check would reject every rank and force anyone widening to a departement to delete their ordering. With a NAMED commune list the check is back on: a rank for a commune that is filtered out is dead config.",
+  "commune_rank": {
+    "Sartrouville": 1,
+    "Houilles": 1,
+    "Maisons-Laffitte": 1,
+    "Le Vésinet": 2,
+    "Chatou": 2,
+    "Carrières-sur-Seine": 2,
+    "Montesson": 2,
+    "Bezons": 3,
+    "Cormeilles-en-Parisis": 3,
+    "Argenteuil": 3
+  },
+  "_weights": "spec/PROJECT_BRIEF.md §5, weights ruled 2026-08-07. Normalised, so a disabled component does not silently depress every score by its share. `high_floor_no_lift` is the one weight that must be negative, and it is excluded from the normalising total: a penalty is subtracted from what a listing earned, not part of what it could earn.",
+  "weights": {
+    "commune": 25,
+    "commute": 0,
+    "rent_headroom": 15,
+    "surface": 10,
+    "lift": 15,
+    "high_floor_no_lift": -20,
+    "freshness": 10
+  },
+  "_commute": "Off until an IDFM/PRIM key exists (Q1). The loader refuses `enabled: true` with a commute weight of 0, and refuses a non-zero weight while disabled — either way the score would misreport. Turning it on means: set enabled, name the station, set max_minutes, and give weights.commute a value.",
+  "commute": {
+    "enabled": false,
+    "station": null,
+    "max_minutes": null
+  },
+  "_freshness_minutes": "A listing first seen within this window earns the full freshness bonus (S7). The brief notes good LLI units go within hours.",
+  "freshness_minutes": 60,
+  "_notify": "Routing, ruled 2026-08-07. Nothing is batched: the premise of the whole tool is that good stock goes within hours. `channels` ships as console only, because a channel needing a credential cannot be the default in a repo whose .env is not filled in — enabling ntfy or email without its credential is a startup refusal, never a silent no-op.",
+  "notify": {
+    "channels": [
+      "console"
+    ],
+    "high_priority_score": 50,
+    "rent_drop_min_eur": 20,
+    "rent_drop_min_pct": 2.0,
+    "source_broken_cooldown_hours": 24,
+    "digest_hour": 8
+  }
+}

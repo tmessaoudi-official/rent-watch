@@ -245,14 +245,14 @@ Requirements:
 - If a source returns 0 items on N consecutive runs (default 3) when its baseline is
   non-zero → emit a **`SOURCE_BROKEN` alert** through the normal notification channel.
 - If item count drops >70% below its rolling mean → warn.
-- `scout doctor` command: run every source once, report status, timing, and item counts.
+- `scout --domain=rent doctor` command: run every source once, report status, timing, and item counts.
 
 ---
 
 ## 9. Configuration & secrets
 
-- `config/criteria.json` — user criteria, committed.
-- `config/sources.json` — source definitions and field mappings, committed.
+- `config/rent/criteria.json` — user criteria, committed.
+- `config/rent/sources.json` — source definitions and field mappings, committed.
 
   **Amended 2026-08-07 (Q22).** These two were specified as `.yaml`. This container has no `ext-yaml`
   and cannot install a parser (the egress policy 403s Composer's dist source), so a `.yaml` config
@@ -261,7 +261,7 @@ Requirements:
   with `_` are ignored — `_comment` by convention, since JSON has none — and every other unrecognised
   key is a hard validation error.
 
-  A gitignored `config/criteria.local.json`, when present, overrides `criteria.json` field by field.
+  A gitignored `config/rent/criteria.local.json`, when present, overrides `criteria.json` field by field.
   That is how personal tuning stays out of git while the committed file stays a working default.
 - `.env` — **gitignored**. Holds: IMAP credentials, Telegram token, IDFM API key, RFR for
   eligibility checks, any site credentials. Ship a `.env.example`.
@@ -274,20 +274,20 @@ Requirements:
 Required CLI:
 
 ```
-scout doctor                  # health-check every source; prints status, timing, item counts,
+scout --domain=rent doctor                  # health-check every source; prints status, timing, item counts,
                               #   the store's journal mode and the resolved digest schedule
-scout dump <source>           # raw payload of first item — for building field maps
-scout run --once [-v]         # single pass
-scout run --watch             # loop with jitter (15 min ± 5, paced per host — Q37)
-scout run --seed              # populate the seen-set without notifying (empty seen-set — Q36)
-scout digest [--dry-run]      # emit the "à vérifier" digest on demand — added 2026-08-07 (1c)
-scout reclassify [--dry-run]  # re-judge stored undetermined verdicts — added 2026-08-07 (Q35)
-scout test-notify             # verify the notification channel
-scout replay <source>         # alias of `dump` — see the amendment below
+scout --domain=rent dump <source>           # raw payload of first item — for building field maps
+scout --domain=rent run --once [-v]         # single pass
+scout --domain=rent run --watch             # loop with jitter (15 min ± 5, paced per host — Q37)
+scout --domain=rent run --seed              # populate the seen-set without notifying (empty seen-set — Q36)
+scout --domain=rent digest [--dry-run]      # emit the "à vérifier" digest on demand — added 2026-08-07 (1c)
+scout --domain=rent reclassify [--dry-run]  # re-judge stored undetermined verdicts — added 2026-08-07 (Q35)
+scout --domain=rent test-notify             # verify the notification channel
+scout --domain=rent replay <source>         # alias of `dump` — see the amendment below
 ```
 
 **Amended 2026-08-24 on `replay`, which is an ALIAS rather than the verb specified.** This line
-read `scout replay <fixture>`; the implementation is `'replay' => $this->dump($flags)`, which takes
+read `scout --domain=rent replay <fixture>`; the implementation is `'replay' => $this->dump($flags)`, which takes
 a SOURCE NAME, and the verb was missing from `scout help` altogether — so the spec, the code and the
 tool's own help each said something different, and a fixture path exits 2 with *"source inconnue"*.
 Now listed in `help` and documented as an alias. For a `type: fixture` source, `dump` already IS a
@@ -295,7 +295,7 @@ replay against a saved payload; what is NOT built is replaying an arbitrary fixt
 network source's field map, which is the useful half for developing a map offline. Outstanding, not
 withdrawn — unlike `--since`, nothing about it is unsound.
 
-**Amended 2026-08-29: that half is BUILT — `scout replay <source> --file=<payload>`.** A frozen page
+**Amended 2026-08-29: that half is BUILT — `scout --domain=rent replay <source> --file=<payload>`.** A frozen page
 through a network source's own adapter and field map, offline by construction (`/robots.txt` → 404 =
 allow, the search URL and its pages → the file, everything else → 404), against a throwaway store,
 unthrottled. `README.md` § Planned CLI carries the rules and why each one exists.
@@ -315,7 +315,7 @@ created by a missing volume mount re-notifies the entire market at once.
 `--i-accept-legal-risk` is a global flag, never persisted in config, and is required before any
 source carrying `legal_risk: true` will run (Q26, `CLAUDE.md` hard rule 4).
 
-`scout dump` is what makes onboarding a new source take five minutes instead of an hour.
+`scout --domain=rent dump` is what makes onboarding a new source take five minutes instead of an hour.
 Build it early.
 
 ---

@@ -39,7 +39,7 @@ bundle integration raised on its own.
 
 ## Part 1 — The filters, enumerated
 
-> **SETTLED 2026-08-07 — every row below is now a ruling, and `config/criteria.json` is its
+> **SETTLED 2026-08-07 — every row below is now a ruling, and `config/rent/criteria.json` is its
 > implementation.** The tables are kept as written because they record what was reconsidered and why.
 > Where a row asked a question, the answer is in the *Resolution* column added below each table. The
 > committed config is the authority from here on; if the two ever disagree, the config is right and this
@@ -47,7 +47,7 @@ bundle integration raised on its own.
 
 ### Resolution of 1a — hard disqualifiers as shipped
 
-| # | Shipped in `config/criteria.json` | Resolution |
+| # | Shipped in `config/rent/criteria.json` | Resolution |
 |---|---|---|
 | F1 | (not a config key) | `Tenure::isExcluded()` is hard-coded. §1 is not user-overridable, so it is deliberately absent from config. |
 | F2 | `communes` — **now empty: REGION MODE** | **REVERSED 2026-08-22** (see Q1). The ten named communes yielded **zero matches** across all four live sources when measured that day, while 60 listings sat in 78/95; the list is now empty and the prefixes are the whole location filter. Ranking still prefers the Boucle de Seine. Originally **kept as a hard filter** (Q1). The named neighbours are **not** added: adding a commune is a one-line config edit the day it is wanted, and adding ten unrequested ones widens the search on my judgement rather than the developer's. Matching is on **normalised commune + postcode only**, never a substring search over the description — the prototype's *"proche Chatou"* over-match is fixed by construction. |
@@ -85,7 +85,7 @@ Weights are normalised, so the enabled set summing to 75 rather than 100 does no
 |---|---|
 | High priority | **score ≥ 70** → immediate push at high priority. Below that, immediate at normal priority. Nothing is batched: the brief's whole premise is that good LLI stock goes within hours, so a batching delay would defeat the tool. |
 | Normal | every `MATCH` below 70. |
-| *"à vérifier"* digest | **on demand via `scout digest`**, plus an automatic daily emission at the first run after 08:00 local. Not per-listing — that is what makes it a digest rather than a second notification stream. |
+| *"à vérifier"* digest | **on demand via `scout --domain=rent digest`**, plus an automatic daily emission at the first run after 08:00 local. Not per-listing — that is what makes it a digest rather than a second notification stream. |
 | `SOURCE_BROKEN` | **same channel, low priority, and de-duplicated**: at most one alert per source per 24 h, so a source broken for a week does not send seven identical pushes and train the developer to ignore them. |
 | Rent drop | **any drop of ≥ 20 € or ≥ 2%**, whichever is smaller in absolute terms. A 5 € correction is noise; 20 €/month is 240 €/year and worth a glance. |
 
@@ -154,7 +154,7 @@ These are from the brief §5; **none has a weight yet**, and the weights are a d
 > the case where *"≤ N minutes door-to-door"* would beat a geographic one.
 >
 > **Reverses with one line, at either level:** cut `postcode_prefixes` back to `["78", "95"]` for
-> the departements, or put the ten communes back in `config/criteria.json` for the named list —
+> the departements, or put the ten communes back in `config/rent/criteria.json` for the named list —
 > they are listed verbatim in that file's own `_communes` note. The loader refuses `communes` and
 > `postcode_prefixes` both being empty, so neither form can degrade into no filter at all.
 >
@@ -163,14 +163,14 @@ These are from the brief §5; **none has a weight yet**, and the weights are a d
 > scores 25 points lower. The preference survived the widening; it did not become uniform.
 
 **ANSWERED 2026-08-07 — the default applies.** F2 remains a hard filter; S2 (commute) ships with
-weight 0 and is inert until an IDFM key exists. `src/php/Enrich/Transit.php` is therefore NOT
-milestone-1 infrastructure. `config/criteria.json` carries `commute.enabled: false` so turning it on
+weight 0 and is inert until an IDFM key exists. `src/php/Rent/Enrich/Transit.php` is therefore NOT
+milestone-1 infrastructure. `config/rent/criteria.json` carries `commute.enabled: false` so turning it on
 is one visible edit, not a code change.
 
 `spec/PROJECT_BRIEF.md` §0.1. F2 is a flat commune set. The alternative is *"≤ N minutes door-to-door
 to a named station"* via the IDFM/PRIM API, with commune as a score weight instead of a filter.
 **Default if unanswered:** keep F2 as the hard filter, ship S2 disabled, revisit after milestone 8.
-Changes: whether `src/php/Enrich/Transit.php` is milestone-1 infrastructure or a later add-on.
+Changes: whether `src/php/Rent/Enrich/Transit.php` is milestone-1 infrastructure or a later add-on.
 
 ### Ⓐ Q2 — ANSWERED 2026-08-07: hard cutoff, charges comprises — **CEILING LOWERED 2026-08-22**
 
@@ -178,7 +178,7 @@ Changes: whether `src/php/Enrich/Transit.php` is milestone-1 infrastructure or a
 > what this question was about — still a hard cutoff, still charges comprises, still `null`-safe.
 > Only the number moved. **Measured after the change rather than inferred from before it: the live
 > yield is 83 matches out of 478 listings** across the four institutional sources.
-> **Reverses with one line:** `max_rent_cc` in `config/criteria.json`.
+> **Reverses with one line:** `max_rent_cc` in `config/rent/criteria.json`.
 >
 > That number is worth dwelling on, because the obvious prediction was ZERO — all eight listings
 > that matched under the old 1800 ceiling quoted 1258–1669 € CC, so every one of them dies at 1200,
@@ -221,7 +221,7 @@ Changes: the criteria engine's return type (boolean vs. graded).
 > rewritten because the reasoning it records is still why `min_rooms` is 3, and the floor beneath it
 > is now lower rather than absent. What still holds: an unknown surface does not disqualify, and 50
 > m² is a floor a real T3 clears and a converted studio does not. **Reverses with one line each:**
-> `min_rooms` back to `4`, `min_surface_m2` back to `75`, in `config/criteria.json`.
+> `min_rooms` back to `4`, `min_surface_m2` back to `75`, in `config/rent/criteria.json`.
 
 **ANSWERED 2026-08-07 — the default applies.** `min_rooms: 4`, `min_surface_m2: 75`, both hard
 disqualifiers. A large T3 is not in scope. An **unknown** room count or surface does not disqualify —
@@ -251,7 +251,7 @@ Default had been PLS → digest, LIBRE → out. **Both overridden by the answer 
 
 **ANSWERED 2026-08-07 — the default applies.** The brief wins over the prototype. Floor and elevator
 are score components only (S5 +15 / S6 −20). `max_floor` and `require_elevator` do NOT exist in
-`config/criteria.json`, so the prototype's silent drop cannot be reintroduced by a config edit.
+`config/rent/criteria.json`, so the prototype's silent drop cannot be reintroduced by a config edit.
 
 §0.5. The prototype hard-rejects (F7); the brief wants a penalty (S5/S6).
 **Default if unanswered:** follow the brief — scoring penalty, no hard reject. The prototype's
@@ -281,7 +281,7 @@ the container. Treating this as **Python** unless told otherwise. Confirm the to
 ### Ⓐ Q8 — ANSWERED 2026-08-07: Docker on a VPS, mounted volume
 
 **ANSWERED 2026-08-07 — the default applies.** Docker on a VPS with `state/` on a mounted volume;
-`scout run --watch` with jitter rather than cron, so the process owns its own schedule and the run log
+`scout --domain=rent run --watch` with jitter rather than cron, so the process owns its own schedule and the run log
 is continuous. **GitHub Actions is ruled out explicitly**: no persistent disk means no seen-set, which
 means re-notifying everything on every run.
 
@@ -293,7 +293,7 @@ the criteria.
 ### Ⓐ Q9 — ANSWERED 2026-08-07: email **and** ntfy, both optional, console always
 
 **ANSWERED 2026-08-07.** The open half — email only, or a push channel alongside — resolves to
-**both, and neither is required to run.** `config/criteria.json` carries a `notify.channels` list; the
+**both, and neither is required to run.** `config/rent/criteria.json` carries a `notify.channels` list; the
 shipped default enables `console` only, because a channel that needs a credential cannot be the
 default in a repo whose `.env` is not filled in. Enabling `ntfy` or `email` without its credential is a
 **startup refusal**, not a silent no-op — an unsent notification is the failure this project cannot
@@ -325,7 +325,7 @@ notifications).
 
 ### Ⓐ Q15 — ANSWERED 2026-08-07: CDC Habitat stays disabled
 
-**ANSWERED 2026-08-07 — the default applies.** `cdc_habitat` ships in `config/sources.json` with
+**ANSWERED 2026-08-07 — the default applies.** `cdc_habitat` ships in `config/rent/sources.json` with
 `enabled: false` and a `_comment` naming the `robots.txt` `Disallow`. It is not enabled until the real
 endpoint path is known to sit outside it; if it does not, CDC Habitat moves to the email-alert route.
 
@@ -463,7 +463,7 @@ container.
 ### Ⓐ Q11 — ANSWERED 2026-08-07: criteria stay non-personal in git
 
 **ANSWERED 2026-08-07.** Making the repo private is the developer's action and cannot be done from
-here. What IS done from here is the mitigation that makes it survivable either way: `config/criteria.json`
+here. What IS done from here is the mitigation that makes it survivable either way: `config/rent/criteria.json`
 is committed with the **prototype's already-public values** (they have been in `prototype/sources.yaml`
 in this public repo since before this session) and nothing personal is added to it — no name, no
 employer, no income figure, no exact address, no household detail beyond the room count that F4 already
@@ -529,7 +529,7 @@ that `plus de 3 chambres` does not digest half the market (`trap-010` pins that)
 ### Ⓐ Q22 — ANSWERED 2026-08-07: JSON. Milestone 1 is unblocked.
 
 **ANSWERED 2026-08-07 — the default applies (option 1).** The two config files are
-`config/criteria.json` and `config/sources.json`, parsed by `ext-json`. `spec/PROJECT_BRIEF.md` §9 and
+`config/rent/criteria.json` and `config/rent/sources.json`, parsed by `ext-json`. `spec/PROJECT_BRIEF.md` §9 and
 `CLAUDE.md`'s architecture table are amended to say `.json` in the same change.
 
 Three consequences worth writing down, because each one is a thing a later session would otherwise
@@ -568,7 +568,7 @@ inli:
 
 **Options:**
 
-1. **JSON — `config/criteria.json` + `config/sources.json`** *(recommended)*. `ext-json` is already a
+1. **JSON — `config/rent/criteria.json` + `config/rent/sources.json`** *(recommended)*. `ext-json` is already a
    hard requirement in `composer.json` and is always present. The parser is the language's, so there
    is no bespoke code between your file and `mixed_tenure`. The cost is real and worth stating: JSON
    has no comments, and the source definitions are exactly the kind of file that wants a comment
@@ -595,7 +595,7 @@ table are amended to say `.json`.
 
 **ANSWERED 2026-08-07 — the default applies (option 1).** All five constants stay at their current
 values. They can only be tuned against run history that does not exist yet, and all five alert in the
-safe direction. Re-open when `scout doctor` has a month of real runs behind it.
+safe direction. Re-open when `scout --domain=rent doctor` has a month of real runs behind it.
 
 
 **Not blocking** — all five have working defaults and all five alert in the safe direction. Raised so they
@@ -628,7 +628,7 @@ days, so the honest floor could be a week rather than a day.
 **Options:** 1. leave them as they are *(recommended — they can only be tuned against run history
 that does not exist yet)*; 2. raise `MIN_SPAN_FOR_NEVER_PRODUCED` to a week, which trades a slower
 bad-field-map alert for no false accusation of a genuinely quiet source; 3. raise the flaky ratio if
-`scout doctor` turns out noisy on a flaky host; 4. none of these / challenge the premise.
+`scout --domain=rent doctor` turns out noisy on a flaky host; 4. none of these / challenge the premise.
 
 **Default if unanswered:** option 1.
 
@@ -660,11 +660,11 @@ that verdicts are not auditable and drop the reviewer-agent clause; 4. none of t
 ### Ⓐ Q25 — ANSWERED 2026-08-07: schema v3, same migration as Q24
 
 **ANSWERED 2026-08-07 — the default applies (option 1).** `source_runs.duration_ms` lands in the same
-schema v3 as Q24, and `scout doctor` prints it. `SourceHealth` gains a `lastDurationMs` field so the
+schema v3 as Q24, and `scout --domain=rent doctor` prints it. `SourceHealth` gains a `lastDurationMs` field so the
 spec's fourth `doctor` column stops being aspirational.
 
 
-Spec §8: *"`scout doctor` command: run every source once, report status, **timing**, and item
+Spec §8: *"`scout --domain=rent doctor` command: run every source once, report status, **timing**, and item
 counts."* Status and item counts are implemented; `source_runs` has no duration column and
 `SourceHealth` has no timing field, so three of the four are done and the fourth is not.
 
@@ -761,7 +761,7 @@ this is a genuine enhancement rather than a gap.
 
 ### Ⓐ Q20 — ANSWERED 2026-08-07: ICF stays `mixed_tenure: true` · SUBJECT RETIRED 2026-08-23
 
-> **The source this question is about no longer exists in `config/sources.json`** (retired
+> **The source this question is about no longer exists in `config/rent/sources.json`** (retired
 > 2026-08-23, with `seqens`). Nothing below is withdrawn — the ruling was right and the drift guard
 > it demanded is still live — but the block it applied to is gone, so there is no `mixed_tenure`
 > flag left to flip.
@@ -775,7 +775,7 @@ this is a genuine enhancement rather than a gap.
 > Reaching the same disposition from a guess and from a measurement are not the same outcome, and a
 > file that records only the disposition cannot tell them apart.
 >
-> `tests/fixtures/tenure/corpus.json` keeps its own `icf_novedis` and `seqens` entries — corpus
+> `tests/fixtures/rent/tenure/corpus.json` keeps its own `icf_novedis` and `seqens` entries — corpus
 > labels are corpus-local — so `ConfigTest::testEveryCorpusSourceAgreesWithConfig()` simply has two
 > fewer sources to compare, and `testTheMeasuredDeadEndsAreNotShippedAsPlaceholders()` now stops
 > either name reappearing as a `REMPLACER` placeholder.
@@ -783,8 +783,8 @@ this is a genuine enhancement rather than a gap.
 **ANSWERED 2026-08-07 — the default applies (option 1).** `icf_novedis` keeps `mixed_tenure: true`
 until a real Novedis payload can be inspected. The binding check this section asked for is now
 implemented: `ConfigTest::testEveryCorpusSourceAgreesWithConfig()` fails if a `mixed_tenure`,
-`family` or `default_tenure` in `config/sources.json` disagrees with the same source in
-`tests/fixtures/tenure/corpus.json`, so the two cannot drift apart silently. It also asserts that at
+`family` or `default_tenure` in `config/rent/sources.json` disagrees with the same source in
+`tests/fixtures/rent/tenure/corpus.json`, so the two cannot drift apart silently. It also asserts that at
 least five sources appear in both files, because a rename on either side would otherwise make the
 comparison vacuous rather than red.
 
@@ -917,10 +917,10 @@ comma in `criteria.json` or a leftover `type: browser` **stops the whole process
 channel that could report it is the one that refused. Zero notifications is also the normal output on
 a quiet evening, so a dead watcher and a quiet market emit byte-identical output.
 
-**RULED:** `scout run --watch` emits a **heartbeat** at low priority every `HEARTBEAT_HOURS` (default
+**RULED:** `scout --domain=rent run --watch` emits a **heartbeat** at low priority every `HEARTBEAT_HOURS` (default
 24) stating runs completed, sources OK and matches sent — **whether or not anything matched**. Silence
 from rent-watch for longer than that is then itself a signal. A startup refusal exits non-zero *and*
-writes its reason to `state/last-refusal.txt` on the mounted volume, so the next successful start can
+writes its reason to `state/rent-last-refusal.txt` on the mounted volume, so the next successful start can
 report what happened while it was down.
 
 ### Ⓐ Q28 — refusals are scoped, not global
@@ -952,7 +952,7 @@ to `OK` sends one recovery notice and clears the key. The daily digest additiona
 summary of every source not currently `OK`, so a suppressed alert is still visible without a push.
 
 The cooldown is **persisted**, in a `source_alerts` table added by schema v3 — in process memory a
-crash-looping container re-alerts on every restart and a manual `scout doctor` shares no state with
+crash-looping container re-alerts on every restart and a manual `scout --domain=rent doctor` shares no state with
 the running `--watch`.
 
 ### Ⓐ Q30 — `item_count` is what the ADAPTER PARSED, before any filtering
@@ -1021,24 +1021,24 @@ knowingly put an ordinary shouted title for a good flat in it. A once-a-day emis
 glance"* into *"gone"* — and Q21's cost argument was made before the cadence was chosen, then never
 revisited.
 
-**RULED:** emitted on demand via `scout digest`, **and at the end of any run that produced new digest
+**RULED:** emitted on demand via `scout --domain=rent digest`, **and at the end of any run that produced new digest
 entries**, as one low-priority rollup naming only what is new since the last successful emission.
 Entries are marked emitted **only after the channel confirms delivery**; an unsent digest is retried
 next run. The daily emission stays as a floor for days with nothing new, at the timezone named in
 `TZ` — which defaults to `Europe/Paris` in `.env.example`, because a Docker container without it runs
-UTC and *"08:00 local"* silently becomes 10:00 Paris in summer. `scout doctor` prints the resolved
+UTC and *"08:00 local"* silently becomes 10:00 Paris in summer. `scout --domain=rent doctor` prints the resolved
 local time next to the digest schedule.
 
 **PARTIALLY BUILT, and the unbuilt half is named here rather than left to be discovered
 [2026-08-24].** Both emission paths exist and are tested: the automatic one at the end of any pass
-producing new entries, and `scout digest [--dry-run]` on demand, reading the STORE rather than the
+producing new entries, and `scout --domain=rent digest [--dry-run]` on demand, reading the STORE rather than the
 pass — which is the difference that matters, since the pipeline re-offers an undelivered entry only
 while the ad is still published. Entries are marked only after the channel confirms, and an unsent
 digest is retried.
 
 **THE DAILY FLOOR IS BUILT [2026-08-26, `8c24cb2`], and Q34 is now closed in all three paths.**
 `Core/DigestSchedule` is the policy — pure, clock injected, mirroring `Core/Heartbeat` — and
-`state/digest.txt` on Q8's mounted volume is the marker, written ONLY after the channel confirms.
+`state/rent-digest.txt` on Q8's mounted volume is the marker, written ONLY after the channel confirms.
 The window is the most recent local `digest_hour` at or before now, so a container down at 08:00 and
 back at 11:00 emits LATE rather than skipping the day. Marker absent, unreadable, or dated in the
 future are all due: the inherited bias is one emission too many, never one suppressed.
@@ -1052,7 +1052,7 @@ what makes this ruling's own *"an unsent digest is retried"* work — a send tha
 retried on the next pass rather than tomorrow. **To reverse:** emit unconditionally instead of
 returning early on an empty bin.
 
-**SCOPE: the floor runs under `scout run --watch` only.** It lives in the watch loop, beside the
+**SCOPE: the floor runs under `scout --domain=rent run --watch` only.** It lives in the watch loop, beside the
 heartbeat, so a cron-driven `--once` deployment gets the two event-driven paths and no floor.
 `doctor` says `en --watch` for that reason. **To widen:** a due-check in the `--once` path too.
 
@@ -1067,7 +1067,7 @@ returns `false`, emits a Notice and leaves UTC standing — a compose typo movin
 all summer with only a log line to show for it; and the schedule stops depending on process-wide
 mutable state.
 
-The drain itself is SHARED with `scout digest` (`Cli/DigestBatch` plus one collector), because two
+The drain itself is SHARED with `scout --domain=rent digest` (`Cli/DigestBatch` plus one collector), because two
 implementations of §1's only landing zone is how one drifts into announcing what the other would
 withhold. The collector never throws and never prints: the floor runs inside the loop's `finally`,
 where a throw would be counted as a failed pass and one damaged row would report every source
@@ -1080,7 +1080,7 @@ answered only the storage half. Combined with the seen-set's *"new exactly once"
 listing digested as `UNKNOWN` under a classifier that is later improved is a **permanent silent
 miss**. Q18 (PLI) and Q21 (shouted `PLUS`) both deliberately route there, so the bin will not be small.
 
-**RULED:** `scout reclassify [--since]` re-runs the classifier over stored listings using the
+**RULED:** `scout --domain=rent reclassify [--since]` re-runs the classifier over stored listings using the
 persisted raw fields; any row whose `Outcome` improves from `DIGEST` to `MATCH` is notified as a new
 match. The classifier version is stored with the verdict so the command can select only stale rows.
 
@@ -1114,7 +1114,7 @@ deployment with the identical failure mode and no guard: `Store::open()` creates
 in `-v` produces a valid, empty, migrated database indistinguishable from a healthy one — and with
 nothing batched, every historic listing pushes at once.
 
-**RULED:** `Store::open()` reports whether it **created** the database. On a fresh one `scout run`
+**RULED:** `Store::open()` reports whether it **created** the database. On a fresh one `scout --domain=rent run`
 refuses to notify and exits saying so, offering `--seed` to populate the seen-set without notifying.
 The mount is additionally asserted by a marker file written in `SCOUT_DB`'s directory at first
 successful start.
@@ -1122,8 +1122,8 @@ successful start.
 **AMENDED [2026-08-19], on both halves — the ruling's INTENT stands, its two mechanisms did not.**
 
 *The fact the guard reads.* "Did `open()` **create** the file?" is destroyed by any earlier command
-that merely opens the database, and `scout doctor` — the first command a new machine invites you to
-type — opens it. Typing `doctor` once therefore let the following `scout run --once` push the whole
+that merely opens the database, and `scout --domain=rent doctor` — the first command a new machine invites you to
+type — opens it. Typing `doctor` once therefore let the following `scout --domain=rent run --once` push the whole
 back catalogue, which on In'li is 92 listings at once. The guard now reads whether anything has ever
 been **recorded** (`Store::isSeenSetEmpty()`): a fact that lives in the rows, so no other command can
 answer it away. `--seed` is unchanged as the route through.
@@ -1174,7 +1174,7 @@ What shipped, in three parts, each with its own test:
 - the decision is DURABLE, read from the persisted group via `Store::groupExcludedTenure()` rather
   than recomputed per pass. Two later fixes forced that: a pass in which the excluded sibling was
   not fetched (a failed source, a `--source=<name>` run, a delisting) laundered the flat back into a
-  match, and `scout reclassify` — which re-judges from each member's OWN v7 snapshot — undid it
+  match, and `scout --domain=rent reclassify` — which re-judges from each member's OWN v7 snapshot — undid it
   wholesale.
 
 One line reverses it: make `Pipeline::clusterClassification()` return the survivor's own classification.
@@ -1225,7 +1225,7 @@ over-rejection cost VISIBLE rather than merely documented.
 - [2026-08-06] AGREED: work on `master` only; no `claude/*` branch (developer instruction).
 - [2026-08-06] AGREED: `AskUserQuestion` is forbidden; questions are plain text per
   `.claude/skills/ask-human/SKILL.md` — SUPERSEDED by the 2026-08-18 re-inversion below (the
-  timeout died with the cloud container), and the skill was renamed `rw-ask-human`.
+  timeout died with the cloud container), and the skill was renamed `scout-ask-human`.
 - [2026-08-06] ASSUMED: stack is **Python** (Q7), from `prototype/scout.py` and available `ruff`.
 - [2026-08-06] ASSUMED: AGPL headers **stripped**, not propagated (Q12) — flagged for ruling.
 - [2026-08-06] AGREED (Q4): **PLS is EXCLUDED** — it is social housing, and the ruling is no social
@@ -1302,8 +1302,8 @@ over-rejection cost VISIBLE rather than merely documented.
   default** — *"let's answer all the questions then continue non stop till you finish everything"*.
   21 questions resolved in one pass. The per-question entries above each say what was applied and
   what one line reverses it.
-- [2026-08-07] AGREED (Q22, was BLOCKING): **config is JSON** — `config/criteria.json` +
-  `config/sources.json`, parsed by `ext-json`. `spec/PROJECT_BRIEF.md` §9 and `CLAUDE.md`'s
+- [2026-08-07] AGREED (Q22, was BLOCKING): **config is JSON** — `config/rent/criteria.json` +
+  `config/rent/sources.json`, parsed by `ext-json`. `spec/PROJECT_BRIEF.md` §9 and `CLAUDE.md`'s
   architecture table amended to `.json` in the same change. Keys beginning `_` are ignored
   (`_comment` by convention); every other unknown key is a **hard validation error**, so the
   comment convention cannot double as a typo swallower. Milestone 1 unblocked.
@@ -1329,9 +1329,9 @@ over-rejection cost VISIBLE rather than merely documented.
   `upgradeFrom()` already supports.
 - [2026-08-07] AGREED (Q11): repo visibility is the developer's action, but the mitigation ships
   regardless — committed criteria carry only values already public in `prototype/sources.yaml`, and a
-  gitignored `config/criteria.local.json` overrides field-by-field so private tuning never enters git.
+  gitignored `config/rent/criteria.local.json` overrides field-by-field so private tuning never enters git.
 - [2026-08-07] AGREED (Q20): the `mixed_tenure` drift check this file asked for is **implemented** —
-  a test binds every source's flag in `config/sources.json` to the same source in the classifier
+  a test binds every source's flag in `config/rent/sources.json` to the same source in the classifier
   corpus, so the two cannot diverge silently.
 - [2026-08-07 18:30] AGREED (review round): the developer asked for every applied default to be
   reviewed for flaws. Three adversarial reviewers returned **56 findings**. Twelve changed a ruling
@@ -1350,7 +1350,7 @@ over-rejection cost VISIBLE rather than merely documented.
   reason so it cannot be re-added against a green suite. `plafond de ressources` was rejected up
   front for the same reason. What survives is `loyer maitrise` and `loyer abordable` — conventionné
   vocabulary that LLI ads do not use — and both withhold rather than reject.
-- [2026-08-07 18:30] AGREED (Q11 mitigation had no teeth): `config/criteria.local.json` was
+- [2026-08-07 18:30] AGREED (Q11 mitigation had no teeth): `config/rent/criteria.local.json` was
   documented as gitignored in **four** places and was not ignored by anything. `git check-ignore`
   confirmed it. `/config/*.local.json` added — the whole privacy argument for accepting a public repo
   rested on a rule nobody had written.
@@ -1363,7 +1363,7 @@ over-rejection cost VISIBLE rather than merely documented.
   against `geo.api.gouv.fr`. Nine matched the claim; the tenth exposed that the prototype's bare
   `cormeilles` names **no commune in 78 or 95** — it is Cormeilles-en-Parisis (95240), and bare
   `cormeilles` would either match nothing under exact comparison or also match
-  Montigny-lès-Cormeilles under substring. `config/criteria.json` ships the full name, and matching
+  Montigny-lès-Cormeilles under substring. `config/rent/criteria.json` ships the full name, and matching
   is exact on the folded commune field.
 - [2026-08-07 18:30] AGREED (the tripwire had two JSON-shaped blind spots, both created by Q22):
   pattern 6 fired on the `"_comment"` note every mixed-tenure source is now required to carry — the
@@ -1387,14 +1387,14 @@ over-rejection cost VISIBLE rather than merely documented.
   the tool works (`askUserQuestionTimeout: "never"` globally, answered calls verified 2026-08-18)
   and the global Stop hook mechanically requires it. The `❓`/`⏹` end-of-reply markers retire with
   the plain-text protocol. Question QUALITY rules (five parts, recommendation first, after-states,
-  visible escape) are unchanged — see `.claude/skills/rw-ask-human/SKILL.md`.
+  visible escape) are unchanged — see `.claude/skills/scout-ask-human/SKILL.md`.
 
 - [2026-08-24] AGREED (Q38): **an EXCLUDED cluster member decides the whole cluster; an UNDETERMINED
   one does not.** Not deliberated on its merits — forced by a P0 the round-4 panel found, in which
   §1 was judged on the survivor alone and so returned MATCH or REJECT according to the order `Pacer`
   shuffled the sources into that pass. Made DURABLE (read from the persisted group) by two follow-up
-  fixes: a pass that did not fetch the excluded sibling laundered the flat, and `scout reclassify`
+  fixes: a pass that did not fetch the excluded sibling laundered the flat, and `scout --domain=rent reclassify`
   undid the decision wholesale. Accepted cost, stated rather than discovered: an over-merge now
   rejects both flats and `group_key` is never cleared, so that rejection is permanent. Recorded here
   on 2026-08-26 — the entry had said UNANSWERED for two days after the code answered it, which is
-  the drift `/rw-repair` exists to catch.
+  the drift `/scout-repair` exists to catch.

@@ -14,7 +14,7 @@ namespace Scout\Adapters\Http;
  *
  * This is also what separates the two things `CLAUDE.md` hard rule 1 governs. The rule forbids
  * writing an ENDPOINT from memory — it says nothing about the transport. So the adapter is buildable
- * today; only the URL in `config/sources.json` waits on a real capture.
+ * today; only the URL in `config/rent/sources.json` waits on a real capture.
  */
 interface HttpClient
 {

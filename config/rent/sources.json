@@ -1,0 +1,297 @@
+{
+  "_comment": "Source definitions. JSON, not YAML — ruled 2026-08-07 (Q22). Keyed by source name, so a duplicate name is unwritable rather than merely discouraged. Underscore-prefixed keys are comments; every other unknown key is a hard validation error. Use the /add-source skill to onboard a new one.\n\nHARD RULE 1 — an endpoint is never written from memory. FIVE sources are `enabled: true`: four landlords polled over the web (inli, cdc_habitat, cityloger, logirep), each fetched live with `robots.txt` read FIRST and its payload frozen under tests/fixtures/<name>/; and seloger, which is an `email_alert` and so makes no web request at all — its evidence is two real alerts frozen at tests/fixtures/rent/seloger/ rather than a URL. Every block carries the `_verified_at` date that proves it. Every OTHER block is `enabled: false`, carrying the `REMPLACER` placeholder wherever an endpoint or a field map was never captured — today that is `map.ref` on leboncoin alone, and no `url` key at all on any of the disabled blocks. TWO refusals stop this file being half-enabled, and they are in different places on purpose: the LOADER refuses `enabled: true` next to a REMPLACER url (SourceDefinition rule 3), and `Scout::buildSource()` refuses it AGAIN at build time — which is the one that still holds when `--source=<name>` force-runs a block that is disabled, a path the loader's enabled-check cannot see. Unblocking one needs a DevTools cURL capture from the developer; docs/SOURCES.md records which sites answer a plain client, which 403 it, and which were measured to publish nothing at all.\n\nA REMPLACER block means NOBODY HAS LOOKED YET. It does not mean `measured and dead` — those are retired from this file outright rather than left looking like pending work (icf_novedis/A2 and seqens/A5, removed 2026-08-23; their measurements stay in docs/SOURCES.md and the absence is asserted by ConfigTest).",
+  "_why": "The single flag that disarms the fail-closed rule of CLAUDE.md §1. It is REQUIRED on every block — the loader refuses a source that omits it, and SourceProfile independently defaults it to true. `false` is a claim that this landlord publishes NO social stock whatsoever, and it is only defensible for In'li (Action Logement's intermediate arm) and the private-market portals. Every value here is bound to tests/fixtures/rent/tenure/corpus.json by ConfigTest, so the two cannot drift apart silently.",
+  "sources": {
+    "inli": {
+      "_comment": "A1, docs/SOURCES.md. The flagship: ~60 000 LLI units across IDF, covers both 78 and 95, rents 20-30% below market. Pure LLI, which is why mixed_tenure is false here and almost nowhere else. THE FIRST VERIFIED SOURCE IN THIS FILE (2026-08-19).\n\nMIXED_TENURE IS TRUE AS OF 2026-08-23, AND IT USED TO BE FALSE ON THE CLAIM THAT THIS SOURCE IS PURE LLI. Hydration disproved that: two live listings state `Le logement est soumis au plafond de ressources PLS`, declared NOWHERE but the detail page. Tenure is a property of the LISTING, never of the source -- the glossary always said so and this block contradicted it.\n\nArming the flag alone would have digested the source out of existence: 166 of its 168 listings sit at LLI 50bp, below the 0.60 floor, so every one of them -- about two thirds of the tree's entire yield -- would go to `à vérifier` for ever. That is not §1 satisfied, it is the tool switched off. So the fail-closed rule gained a third term: weak label + mixed source + detail page NOT YET READ digests, and a page that has been read and says nothing excluding lets the source default stand. An explicit exclusion is still caught at 90bp by the label rules, which never consulted this flag.",
+      "_verified_at": "2026-08-19",
+      "_source": "Fetched from the live site, robots.txt read FIRST: `User-agent: *` / `Disallow: /espace-membre/` only, so /locations/ is allowed and this poll is within hard rule 5. The search page is SERVER-RENDERED — there is no JSON API behind it (the route map at /locations/js/routes and the app bundle expose only member-area endpoints), which is why type is `html` and not `json`. Frozen payload: tests/fixtures/rent/inli/search.html, scrubbed of the page's embedded third-party Google API key.",
+      "_why": "WHY THE FILTERS ARE LOOSER THAN criteria.json (ruled 2026-08-19): In'li applies price_max/area_min/room_min server-side, so anything it rejects never reaches CriteriaEngine — no score, no log, no `à vérifier` entry. That is the silent over-rejection hard rule 8 warns about, and it is invisible precisely because nothing arrives. So the URL casts a WIDE net and criteria.json does the real filtering, where every rejection is scored and logged; tightening your criteria later then needs no re-capture. WHY PAGINATION: measured, not assumed — these filters returned `92 logements` across 4 pages of 24 [2026-08-19]. A page-one-only read would have dropped 68 listings on every pass and reported a healthy run. total_selector is what makes the walk checkable: collecting fewer than the page declares is a hard failure, because a page=N that quietly 404s ends the walk exactly like a real last page.",
+      "enabled": true,
+      "family": "institutional",
+      "type": "html",
+      "default_tenure": "LLI",
+      "mixed_tenure": true,
+      "url": "https://www.inli.fr/locations/offres/ile-de-france-region_r:11",
+      "base_url": "https://www.inli.fr",
+      "method": "GET",
+      "params": {
+        "price_max": "1600",
+        "area_min": "35",
+        "room_min": "2"
+      },
+      "item_selector": ".featured-items > .featured-item",
+      "page_param": "page",
+      "total_selector": ".sf-results-head h5",
+      "map": {
+        "_comment": "Selectors, not dotted paths — see src/php/Rent/Adapters/Html/Selector.php. `=>` introduces a capture, because the card packs rooms and surface into ONE text node (`3 pièces · 55.32 m²`) and a general number parser would return whichever comes first.",
+        "ref": "a@href => /([^/]+)$",
+        "url": "a@href",
+        "commune": "img@alt",
+        "cp": "a@href => -(\\d{5})/",
+        "rent": ".featured-price .demi-condensed",
+        "surface": ".featured-details span => ([\\d.,]+)\\s*m²",
+        "rooms": ".featured-details span => (\\d+)\\s*pièce",
+        "_charges_included": "The card prints `cc` in a sibling span beside the figure — charges comprises, confirmed on all 19 cards of the frozen capture.",
+        "charges_included": true
+      },
+      "detail_map": {
+        "_comment": "Captured 2026-08-23 from /location-appartement-les-ulis-91940/PRV-054595 (HTTP 200; robots.txt re-read first, still `Disallow: /espace-membre/` only). Frozen at tests/fixtures/rent/inli/detail.html, scrubbed of In'li's Google Maps key and a third-party widget key.\n\nWHY THIS SOURCE NEEDS ONE AT ALL: an In'li card's ENTIRE text is `1 005 € cc 3 pièces · 55.32 m² Longjumeau`. Four facts and no title -- so `exclude_title_patterns` is structurally dead on the source producing two thirds of the matches, and nothing has slipped through it only because In'li lists flats. That is luck, not a filter.\n\nTHE LIFT AND THE FLOOR ARE HERE, AND AN EARLIER VERSION OF THIS COMMENT SAID THEY COULD NOT BE. It read `ascenseur appears nowhere on the page` -- true of the ONE frozen capture and false of the source. Live acceptance on 2026-08-23 hydrated 20 real pages: 18 mention `ascenseur`, 19 state a floor. Generalising from n=1.\n\nBoth are PROSE, so both use `prose:` readers rather than `Payload`'s field readers, and that is not a style choice. A floor is a POSITION (`au 3e étage`) and a building height is a COUNT (`de 18 étages`); reading the second as the first reported a 3rd-floor flat as being on the 4th, on this very source, because In'li's own copy carries the typo `au 3? étage`. And 5 of the 18 lift mentions are NEGATIONS (`sans`, `Aucun`, `Pas d'`, `ne dispose pas d'`), which a substring reader would report as a lift that does not exist. Both are hard rule 9 inverted -- a fact manufactured from its own negation. `Core\\Prose` reads negation first and position only; see tests/fixtures/rent/inli/descriptions.json, the 20 hand-labelled captures.\n\nSELECTORS ADDRESS THE LISTING, NEVER THE PAGE. `.advert-body-description p` is the listing's own prose; `.advert-body-description` itself would drag in the `À propos de ce bien` heading, and the whole page would drag in furniture that conflicts a correct verdict into UNKNOWN -- the CDC `au plus près` failure class, which this source is not exempt from.\n\nAND HYDRATING THIS SOURCE IS WHAT PROVED IT IS NOT PURE LLI: two live listings state `Le logement est soumis au plafond de ressources PLS`, which their cards never said. Under §1 that is a reject, and only the detail page carries it.",
+        "title": "h1",
+        "description": ".advert-body-description p",
+        "floor": ".advert-body-description p => prose:floor",
+        "elevator": ".advert-body-description p => prose:elevator"
+      }
+    },
+    "cdc_habitat": {
+      "_comment": "A3, docs/SOURCES.md. THE SECOND VERIFIED SOURCE, and the FIRST MIXED-TENURE one (2026-08-20) -- CDC Habitat publishes social and intermediate and free-market stock in one result set, which is what mixed_tenure and the whole classifier exist for. In'li was pure LLI, so until now nothing exercised the fail-closed path against a real payload.",
+      "_verified_at": "2026-08-20",
+      "_source": "robots.txt read FIRST, and it is the reason this block looks the way it does. CDC disallows /Recherche/show/, /Recherche/search AND seven search QUERY PARAMETERS by name (?cdTypeBien, ?nbSurfaceMin, ?nbSurfaceMax, ?cdCategorieLogement, ?nbPiece, ?nbLoyerMin, ?nbLoyerMax). So the parameterised search is off limits entirely. What IS advertised -- by the site's own sitemap.xml, linked from that same robots.txt -- is the lowercase, query-free /recherche/location/<region> tree, and robots path matching is case-sensitive, so /Recherche/... does not cover it. Frozen payload: tests/fixtures/rent/cdc_habitat/search.html, checked for secrets before committing (no keys, no tokens, no session ids; the only email is the string `adresse@mail.com` in an accessibility hint and the `page_chapter2` codes are the landlord's own analytics chapters, not phone numbers).",
+      "_why": "WHY THE REGION URL AND NOT 78+95: same ruling as In'li -- server-side filtering silently over-rejects, because anything the site drops never reaches CriteriaEngine and so is never scored, never logged and never lands in the `a verifier` digest (hard rule 8). The region page declares `134 logements disponibles` at 16 per page [measured 2026-08-20]; criteria.json does the real filtering, where every rejection is visible. WHY page_path AND NOT page_param: pagination here is a PATH segment (/page-2/), and appending ?page=2 instead would put a query string on a URL whose query space robots disallows. WHY total_selector: the walk must be checkable -- the page states its own count, and collecting fewer than it declares is a hard failure rather than a thin market.",
+      "enabled": true,
+      "family": "institutional",
+      "type": "html",
+      "default_tenure": null,
+      "mixed_tenure": true,
+      "url": "https://www.cdc-habitat.fr/recherche/location/ile-de-france",
+      "base_url": "https://www.cdc-habitat.fr",
+      "method": "GET",
+      "item_selector": "#listeResultats article.residenceCard",
+      "_page_path": "NO TRAILING SLASH, and that is measured. The site's OWN pagination links are written `/page-2/` and the site 301s them to `/page-2` [2026-08-20]. The adapter refuses a non-2xx rather than following it, deliberately: a redirect that lands back on page one terminates a walk exactly like a real last page. So the canonical form is requested directly and no redirect is involved.",
+      "page_path": "/page-{page}",
+      "total_selector": ".headerResults p",
+      "map": {
+        "_comment": "CSS selectors with an optional @attr and an optional `=> regex` capture -- see src/php/Rent/Adapters/Html/Selector.php. The card packs rooms, floor and surface into ONE heading (`3 pieces - 4eme etage - 82m2`), so each needs its own capture: a general number read would return the room count for all three.",
+        "ref": ".addToFavourites@data-idlot",
+        "url": ".description a@href",
+        "title": ".description h3",
+        "commune": ".location => ^\\s*(.+?)\\s*\\(",
+        "cp": ".location => \\((\\d{5})\\)",
+        "rent": ".price",
+        "surface": ".description h3 => ([\\d.,]+)\\s*m²",
+        "rooms": ".description h3 => (\\d+)\\s*pièce",
+        "_floor": "Captured as PROSE, not as a number, and read by Payload::floor(): `RDC` is the ground floor and the ground floor is 0, not unknown (hard rule 9). Five of the thirteen distinct floor strings on the Yvelines page are RDC.",
+        "floor": ".description h3 => -\\s*([^-]+?)\\s*-\\s*[\\d.,]+\\s*m²",
+        "description": ".notes",
+        "_elevator": "Captured from the amenity list as the NOUN, which is how the card asserts it. Absence of the word is NOT a denial: the capture simply fails and the field stays null, so this can never manufacture the explicit false the high-floor penalty needs (hard rule 9).",
+        "elevator": ".notes => (?i)(ascenseur)",
+        "_tenure_field": "The card's own tenure badge: `Logement a loyer libre`, `Logement intermediaire`, and -- on other departments -- the social variants. This is signal priority 2 (an explicit label), the highest this source offers on a search card. A badge the classifier does not recognise lowers confidence rather than defaulting, and with mixed_tenure true that routes to `a verifier` instead of a match.",
+        "tenure_field": ".label.tooltiped",
+        "_charges_included": "VERIFIED, not assumed: the detail page for the card printing `1 668,67 EUR` states `Loyer charges comprises | 1 668,67 EUR / mois`, and itemises what the charges cover [measured 2026-08-20].",
+        "charges_included": true
+      }
+    },
+    "cityloger": {
+      "_comment": "A6b, docs/SOURCES.md. Cityloger IS the Immobiliere 3F group's lettings platform, and it is how 3F stock is reachable at all: groupe3f.fr publishes no vacancies (its own 'je cherche un logement' route links out to al-in.fr), and this site is where the group actually lists. Low volume, high precision: 51 rentals nationally on 2026-08-20, of which 3 in IDF -- because the SOCIAL stock is allocated through AL'in and the SNE, so what surfaces here skews to the intermediate and libre stock this project is looking for. mixed_tenure is true regardless: the national feed does carry social listings (an Occitanie one is frozen as a fixture).",
+      "_verified_at": "2026-08-20",
+      "_source": "robots.txt read FIRST and frozen at tests/fixtures/rent/cityloger/robots.txt: it disallows only /composants/ /classes/ /include/ /dpe/ /newdpe/, nothing near the search. Results are server-rendered by an infinite-scroll partial (jquery.jscroll) that answers a plain GET with no cookie and no token -- pages 2 and 3 return disjoint sets, and page 7 of a 51-listing feed returns 29 bytes and zero cards, so the walk terminates on its own. Frozen payloads: results.html (page 1 as served), detail-intermediate.html (Antony, Financement LI15P) and detail-social.html (Occitanie, Financement PEXNC), all scrubbed of contact addresses.",
+      "_why": "URL TEMPLATE: the page number sits MID-PATH, so page_path cannot express it -- page_path appends. The rejected alternative was url = the site root, letting page 1 be the homepage widget, whose ten cards are identical to page 1's today [verified 2026-08-20]; that equality is not a guarantee, and if the widget ever becomes 'featured' rather than ranks 1-10, page one is never fetched and nothing says so.\nDETAIL MAP: the search card carries NO tenure -- not a badge, not a code, nothing -- so on a mixed source every listing would resolve UNKNOWN and land in the a-verifier digest forever, which is correct under CLAUDE.md section 1 and useless. The tenure lives on the detail page, so gated listings get a second request; the gate is the run's own commune filter, supplied by the CLI, so 51 national listings cost at most 3 detail fetches rather than 51. SELECTORS MUST ADDRESS THE LISTING'S OWN CONTENT: measured 2026-08-20, the scoped .description classifies the Antony flat LLI at 0.90 while the SAME listing fed its whole detail page classifies UNKNOWN at 0.00 -- the page's furniture ('Commission d'attribution', 'demande de logement social') sits on social and intermediate pages alike and conflicts the verdict away.\nTENURE FIELD REGEX: the financement value sits in the third of three <table class=\"table\"> with nothing to tell them apart, and the first span.label.label-success happens to be it on both frozen pages -- by POSITION, so a new label above it would silently feed a DATE into the tenure field. Anchoring on the word Financement cannot return a date.\nFLOOR: two entries, first non-null wins. Cards say `3e etg`, which Payload::floor's own `etage` pattern does not match, so the capture hands it a bare number instead; the `rdc` fallback is the ground floor, which is 0 and not unknown (hard rule 9), and Payload::floor already reads that word.",
+      "enabled": true,
+      "family": "institutional",
+      "type": "html",
+      "mixed_tenure": true,
+      "default_tenure": null,
+      "url": "https://www.cityloger.fr/resultats-location-{page}-defaut-",
+      "base_url": "https://www.cityloger.fr",
+      "item_selector": "a.card",
+      "max_pages": 20,
+      "rate_limit_ms": 2000,
+      "map": {
+        "ref": "@href => -(\\d+)$",
+        "url": "@href",
+        "title": "h2",
+        "commune": ".cp-perso => ^\\s*\\d{5}\\s+(.+?)\\s*$",
+        "cp": ".cp-perso => (\\d{5})",
+        "rent": ".custom-figPrice",
+        "charges_included": true,
+        "rooms": "h2 => (\\d+)\\s*pi[eè]ce",
+        "floor": [
+          ".cardFeat => (\\d+)e\\s*etg",
+          ".cardFeat => (?i)\\b(rdc)\\b"
+        ]
+      },
+      "detail_map": {
+        "description": ".description",
+        "tenure_field": "div.tab-content => Financement\\s*([A-Z0-9]{3,10})",
+        "surface": "div.tab-content => ([\\d.,]+)\\s*m2",
+        "elevator": "div.tab-content => Ascenseurs\\s*(Oui|Non)"
+      }
+    },
+    "seloger": {
+      "_comment": "B1. Largest IDF inventory. Private market, so LIBRE — in scope since the Q4 answer. type is email_alert because direct scraping of a private portal is opt-in, disabled by default and refuses to run without an explicit flag (hard rule 4); the email-alert route is within ToS, defeats anti-bot because there is no bot, and fires on publication rather than on a poll.",
+      "_verified_at": "2026-08-25",
+      "_source": "Two real alerts captured from a live subscription and frozen at tests/fixtures/rent/seloger/: an alert carrying an offre alternative badged `Surface différente` (campaign SLG-…-ALI-RELAXED) and an agency exclusivity routed through SeLoger (SLG-…-ALI-EXCLUSIVE). They are ONE format, not two — same card, same selectors. Scrubbed by tools/scrub-eml.php, which refuses to write if the address, the ESP list ids or any original qs= token survives; the awkward MIME boundary, the 8bit transfer encoding, the folded headers and the RFC 2047 subject split mid-word are KEPT deliberately, because each is a parser defect this project has already had and the structure is the ground truth.",
+      "_why": "NO LISTING URL AND NO LISTING ID. Every link is click.by.seloger.com/?qs=<opaque per-recipient token>; there is no SeLoger listing id in the HTML, no data-* attribute, nothing — the only per-listing stable string is a photo GUID, and that lives in the HTML part the parser does not prefer. Strip the query, as link-identity does, and all sixteen links in one message collapse to a single id. Hence id_from: content, keyed on the dwelling's structural facts, and the rent is deliberately NOT one of them: a reduction in price must stay a price event rather than mint a second listing. The redirect is NEVER followed at ingest: one third-party request per listing, on a token tied to the subscriber, manufacturing an engagement signal from a click nobody made — hard rule 5 one step out. The unresolved link goes in the notification, where a human clicks it. ENABLED: false — the adapter and the fixtures are proven, what is missing is IMAP credentials (Bucket B1). Prove a change with `scout doctor --source=seloger` and MAILBOX_DIR=tests/fixtures/rent/seloger, which force-runs it.",
+      "enabled": true,
+      "family": "private",
+      "type": "email_alert",
+      "default_tenure": "LIBRE",
+      "mixed_tenure": false,
+      "params": {
+        "from": "alertes.seloger.com",
+        "link_host": "click.by.seloger.com",
+        "card_separator": "Voir l'annonce",
+        "id_from": "content",
+        "title_pattern": "~^\\h*(?!https?://)([^\\n€]{2,80}?)\\h*\\n(?:\\h*\\n|\\h*https?://[^\\n]*\\n)+\\h*\\d+\\h*pi[eè]ces?\\b~mu",
+        "residence_pattern": "~^\\h*([^\\n,]{2,60}),\\h*$~m",
+        "commune_pattern": "~^\\h*([^\\W\\d_][^\\n(]{1,59}?)\\h*\\n\\h*\\(\\d{5}\\)~mu"
+      },
+      "map": {
+        "ref": "url",
+        "charges_included": true
+      }
+    },
+    "bienici": {
+      "_comment": "B1b. The second portal on the email-alert route, and much the easier of the two. Private market, so LIBRE — in scope since the Q4 answer. type is email_alert for the same reason as seloger: direct scraping of a private portal is opt-in, disabled by default and refuses to run without an explicit flag (hard rule 4), while the alert route is within ToS, defeats anti-bot because there is no bot, and fires on publication.",
+      "_verified_at": "2026-08-25",
+      "_source": "Three real messages captured from a live subscription within ninety minutes of creating the alert and frozen at tests/fixtures/rent/bienici/: a five-listing alert, a one-listing alert that also carries a `Cette annonce peut également vous intéresser` suggestion card, and the subscription confirmation, which carries no cards at all and must not throw. Scrubbed by tools/scrub-eml.php — 72 signed tokens replaced across the three, which is the point: EVERY link carries `signedRecipient=<JWT>` whose payload base64url-decodes to the subscriber's address, so the scrubber's old literal-address check passed while the address was one `base64 -d` away. The quoted-printable folding is KEPT, because it is what defeated the first fix.",
+      "_why": "IT PUBLISHES A REAL LISTING ID, which is what SeLoger does not. `/annonce/laforet-immo-facile-22588736` survives `stableId()` stripping the query, so identity is the LINK and none of the content-addressing machinery is needed — nor wanted: a real id has neither of the content key's stated costs (two identical units in one residence sharing an identity; a card that gains a surface changing identity and notifying twice). Chosen BEFORE the first enabled pass, deliberately: nothing migrates a stored row from one key scheme to another, so a source that changes identity re-notifies its whole backlog. THE SEPARATOR IS THE LINE EACH CARD STARTS WITH, not its call to action, and that was measured rather than reasoned: splitting on the CTA puts the alert's own criteria line (`1 200 € max - 3 pièces min - 45 m² min`) inside segment 0 and the PRECEDING card's `RÉFÉRENCE : Cocon_Loc_T4` at the head of every later one, which cost 3 of 13 surfaces and 1 of 13 room counts, all under-reported, all rejected silently by min_surface_m2. commune_pattern anchors on the postcode BEFORE the name (`94600 Choisy-le-Roi`) — the inverse of SeLoger's, whose postcode sits parenthesised on the line below; the anchor is the portal's template, which is why this is per-source config. title_pattern anchors on the STRUCTURE (`<type> N pièces M m²`) rather than on a list of dwelling types, so a `Chambre` can match it and exclude_title_patterns can fire on coliving. mixed_tenure false carries the same §1 residual as seloger: an explicit PLS/PLUS/PLAI label anywhere in a card is still caught at 0.90 by the tier-2 label rules, which never consult the flag, but a card stating no tenure takes the LIBRE default. Reversed by one line.",
+      "enabled": true,
+      "family": "private",
+      "type": "email_alert",
+      "default_tenure": "LIBRE",
+      "mixed_tenure": false,
+      "params": {
+        "from": "no_reply@bienici.com",
+        "link_host": "bienici.com/annonce/",
+        "card_separator": "\nPhoto\n",
+        "title_pattern": "~^\\h*([^\\n\\d]{3,40}\\d+\\h*pi[eè]ces?[^\\n]{0,40})\\h*$~mu",
+        "commune_pattern": "~^\\h*\\d{5}\\h+([^\\n]{2,60}?)\\h*$~mu"
+      },
+      "map": {
+        "ref": "url",
+        "charges_included": true
+      }
+    },
+    "leboncoin": {
+      "_comment": "B2. Where non-agency private landlords actually post. 403s a plain client, so the email alert is the only route regardless of preference. Private market, so LIBRE — in scope since the Q4 answer.",
+      "_verified_at": "2026-08-26",
+      "_source": "ONE real message, frozen at tests/fixtures/rent/leboncoin/alert-3-listings.eml — the first alert this subscription has EVER produced, 26 Aug 07:33 Paris. n=1, and that is stated rather than hidden: the separator and commune_pattern below are measured on a single three-card message, and this repo has twice paid for generalising from one capture. The second alert to arrive is the first regression test. Scrubbed by tools/scrub-eml.php with the USERNAME named as an extra identifier — the tool reported `0 tokens replaced` and wrote `Bonjour tmessaoudi` straight through until that argument existed, because a username is not an address and is not derivable from one.",
+      "_why": "THE FIRST HTML-ONLY PORTAL, and it needed a parser change rather than config alone: leboncoin sends no text/plain alternative, so every URL lived in an href that strip_tags() removed, and the parser produced a perfect 15 975-character body with ZERO links — a source that would have reported a quiet market for ever. EmailMessage::harvestHrefs() now moves each anchor's URL into the body text, AFTER its own anchor text, because cardListing() associates a link with a card by scanning that SEGMENT's text and a message-level array could never do it. IDENTITY IS THE LINK: /vi/3256902167.htm carries a real ad id and stableId() drops both the query and the #fragment the tracking parameters live in, so none of SeLoger's content-addressing is needed — chosen BEFORE the first enabled pass, because nothing migrates a stored row between key schemes. THE SEPARATOR IS THE CTA HERE, which is the opposite of Bien'ici, and it is measured: each card is `<url> <rent> <type · rooms · surface> <features> <quartier> <Commune CP>` then `Voir l'annonce` then the same url again, so splitting on the CTA gives every segment exactly one card's data and its own trailing link; array_reverse takes that last link, and the header and footer segments carry no rent and drop. commune_pattern anchors on the commune BEFORE the postcode on one line (`Combs-la-Ville 77380`) — the inverse of Bien'ici's and different again from SeLoger's parenthesised form. charges_included FALSE because the alert states a bare figure and mentions charges NOWHERE (measured: zero occurrences of `charges`, `CC` or `HC` in the whole message); the Logirep precedent applies, so the value lands in rentHc, max_rent_cc never fires on it, and the score line says the ceiling is unverifiable. STATED COST: the rent ceiling is not checkable for this source. mixed_tenure false carries the same §1 residual as seloger and bienici — an explicit PLS/PLUS/PLAI label anywhere in a card is still caught at 0.90 by the tier-2 label rules, which never consult the flag, but a card stating no tenure takes the LIBRE default. Reversed by one line. title_pattern anchors on the portal's own type line (`Appartement · 3 pièces · 48 m²`) rather than on a list of dwelling types, so a `Chambre · 1 pièce · 12 m²` matches it too and exclude_title_patterns can fire on coliving. WITHOUT IT every listing's title was the EMAIL SUBJECT -- `3 nouveaux biens à louer à Ile-de-France` for all three cards -- which makes exclude_title_patterns structurally dead, the In'li lesson verbatim, on the portal with the largest coliving market in France. SeLoger's anchored `^\\\\s*chambre\\\\b` exclusion exists because four of its first nine matches were coliving ROOMS advertised with the whole flat's room count and surface, passing every numeric filter.",
+      "enabled": true,
+      "family": "private",
+      "type": "email_alert",
+      "default_tenure": "LIBRE",
+      "mixed_tenure": false,
+      "params": {
+        "from": "no.reply@leboncoin.fr",
+        "link_host": "leboncoin.fr/vi/",
+        "card_separator": "Voir l'annonce",
+        "title_pattern": "~^\\h*([^\\n\\d]{3,40}\\d+\\h*pi[eè]ces?[^\\n]{0,40})\\h*$~mu",
+        "commune_pattern": "~^\\h*([^\\n\\d]{2,60}?)\\h+\\d{5}\\h*$~mu"
+      },
+      "map": {
+        "ref": "url",
+        "charges_included": false
+      }
+    },
+    "pap": {
+      "_comment": "B?. De Particulier a Particulier — direct-from-owner stock, so its inventory does not overlap the agency portals. email_alert for the usual reason (hard rule 4). ONE listing per message, which makes it the simplest shape in the tree: no card_separator at all.",
+      "_verified_at": "2026-08-26",
+      "_source": "TWO real alerts, scrubbed to tests/fixtures/rent/pap/. The anchors were measured on the first and the n=1 risk was stated; the second arrived three hours later the same day and confirms every one of them on a different commune, adding the case the first lacked — a rent written 1.150 EUR, where the dot is a thousands separator and \"the rightmost separator is the decimal point\" would read it as 1 EUR.",
+      "enabled": true,
+      "family": "private",
+      "type": "email_alert",
+      "default_tenure": "LIBRE",
+      "mixed_tenure": false,
+      "_why": "TWO defects a naive config walks straight into, both measured on the real capture. (1) link_host CARRIES THE PATH, as at leboncoin: the message has two links and both are on www.pap.fr — the annonce, and the unsubscribe page at /utilisateur/alertes, whose wording matches none of the noise words looksLikeAListing() rejects. A non-segmented source builds one listing PER ACCEPTED LINK, so a host-only value made every alert yield a phantom second listing carrying the real flat's rent, commune and surface under its own identity: notified as a separate flat, and never delisted because an unsubscribe page never goes away. (2) All four patterns are POSITIONAL, anchored on the (NNNNN) postcode line — the one structural landmark the template guarantees — and NOT on vocabulary, because an owner writes the title and 'a title is a position, never a vocabulary' is a lesson already paid for on SeLoger. The alert quotes the subscriber's OWN search criteria above the listing ('jusqu'a 1.200 EUR a partir de 45 m2') and every generic reader is first-match-wins, so without these the surface reads 45 — the search FLOOR — instead of the flat's 50, and min_surface_m2 rejects it as too small with nothing anywhere reading as a fault.",
+      "params": {
+        "from": "users-alertes@pap.fr",
+        "link_host": "www.pap.fr/annonces/",
+        "title_pattern": "~^\\h*([^\\n]{2,80}?)\\h*\\n[^\\n]*\\(\\d{5}\\)\\h*$~mu",
+        "commune_pattern": "~^\\h*([^\\n\\d(]{2,60}?)\\h*\\(\\d{5}\\)\\h*$~mu",
+        "surface_pattern": "~\\(\\d{5}\\)\\h*\\n\\h*([\\d.,]+)\\h*m²~u",
+        "rooms_pattern": "~^[^\\n]*?(\\d+)\\h*pi[eè]ces?[^\\n]*\\n[^\\n]*\\(\\d{5}\\)~mu"
+      },
+      "map": {
+        "ref": "url",
+        "charges_included": false
+      }
+    },
+    "fixture_demo": {
+      "_comment": "NOT a real landlord. A frozen-payload source that exercises the whole pipeline end to end offline — config load, fetch, field map, classify, criteria, dedup, store, notify — with no network and no credentials. DISABLED 2026-08-22, having shipped enabled since before any real endpoint existed: back then it was the only way `scout run --once` could be demonstrated at all, and the reason it was safe (it reads a committed file, not the internet) was never the reason it belonged in a deployment. With four real sources live it stopped being a demo and became ten fabricated listings inside the operator's own store — counted in every pass total, every `doctor` table and every heartbeat source count, and a notification for a flat that does not exist on any path where the seen-set is lost or the seed step skipped. Still fully reachable, because `--source=<name>` force-runs a disabled source: `scout doctor --source=fixture_demo`, or `scout run --once --seed --source=fixture_demo` against a throwaway SCOUT_DB. mixed_tenure is true so the fixture exercises the fail-closed path, which is the half that matters.",
+      "enabled": false,
+      "family": "institutional",
+      "type": "fixture",
+      "default_tenure": null,
+      "mixed_tenure": true,
+      "fixture": "tests/fixtures/rent/fixture_demo/search.json",
+      "items_path": "results.items",
+      "map": {
+        "ref": "id",
+        "title": "title",
+        "url": "url",
+        "commune": [
+          "city",
+          "address.city"
+        ],
+        "cp": [
+          "zipCode",
+          "address.postalCode"
+        ],
+        "rent": [
+          "rent.total",
+          "price"
+        ],
+        "charges_included": true,
+        "rent_hc": "rentHc",
+        "charges": "rent.charges",
+        "surface": "surface",
+        "rooms": [
+          "rooms",
+          "nbRooms"
+        ],
+        "floor": "floor",
+        "elevator": "hasElevator",
+        "description": "description",
+        "tenure_field": "financement"
+      }
+    },
+    "email_demo": {
+      "_comment": "NOT a real portal. A frozen ALERT-EMAIL source, the mailbox twin of fixture_demo: it exercises the whole email-alert path — IMAP-shaped mailbox, MIME parse, charset conversion, link extraction, classify, criteria, notify — with no credentials and no network. Enabled because it reads committed .eml files. Point MAILBOX_DIR at tests/fixtures/rent/mailbox to run it; set IMAP_HOST instead and the same source reads a real mailbox with no other change.",
+      "enabled": false,
+      "family": "private",
+      "type": "email_alert",
+      "default_tenure": "LIBRE",
+      "mixed_tenure": true,
+      "params": {
+        "from": "example-portal.test",
+        "link_host": "example-portal.test"
+      },
+      "map": {
+        "ref": "url",
+        "charges_included": true
+      }
+    },
+    "logirep": {
+      "_comment": "A12, docs/SOURCES.md. Logirep is one of four landlords under the Polylogis group, and this ONE endpoint covers all four -- 113 leasing ads nationally on 2026-08-22, 19 of them Ile-de-France. It was ranked WEAKEST of the some-markers group and that ranking was wrong: its homepage carries exactly two euro signs and two m2 and no lettings link, and those four markers ARE a lettings search form with ss_trnsctntp=leasing checked by default. mixed_tenure is true because neither the card nor the detail page states tenure at all, so every listing resolves UNKNOWN and goes to the a-verifier digest -- correct under CLAUDE.md section 1, and deliberate (ruled 2026-08-22).",
+      "_verified_at": "2026-08-22",
+      "_source": "www.logirep.fr 301s to logirep.polylogis.immo (single hop, measured without -L). robots.txt read FIRST and frozen at tests/fixtures/rent/logirep/robots.txt: standard Drupal, and it disallows /search/ -- robots matching is LITERAL, so it does not reach /recherche; one path over and the answer would have been no. The results route exists only as a 303 Location from the form POST. Frozen payload: search.html, the page as served, scrubbed (scanned for emails, French phone numbers and SIRETs -- the only pattern hits were gallery filenames and screenshot timestamps).",
+      "_why": "EMBEDDED JSON: the page serves its 113 records as JSON inside a script tag and its visible markup carries two euro signs -- the form. So neither adapter fitted: html maps selectors over repeated card elements and there is only ONE script tag, and json parses the response body, which is HTML. embedded_json_selector is the one step in the middle; everything after it is the ordinary JSON path, so items_path, the field map and ListingMapper keep exactly one implementation. NO PAGINATION: the whole result set is in that one payload. RENT IS HORS CHARGES -- charges_included is false, and that is the ruling of 2026-08-22: the card quotes h.c., the detail page states charges only as free prose that is present on some listings and absent on others, and CriteriaEngine is already built for this ('charges comprises, and never on an HC-only figure') -- it files the value in rentHc, never compares it to max_rent_cc, and says the ceiling is unverifiable. The gap is ~30 percent, so filing it as CC would understate every rent against the cap. LIST-VALUED FIELDS: Drupal/Solr boxes every text field as a one-element list, which Payload::scalarOf now unwraps -- before that, commune read as null for all 113 rows and matchesCommune() would have refused every one while health stayed green.",
+      "enabled": true,
+      "family": "institutional",
+      "type": "json",
+      "default_tenure": null,
+      "mixed_tenure": true,
+      "url": "https://logirep.polylogis.immo/recherche",
+      "method": "GET",
+      "params": {
+        "ss_trnsctntp": "leasing"
+      },
+      "embedded_json_selector": "script[data-drupal-selector=\"drupal-settings-json\"]",
+      "items_path": "searchResults.results",
+      "base_url": "https://logirep.polylogis.immo",
+      "map": {
+        "ref": "zs_field_ad_id",
+        "title": "zs_field_short_title",
+        "url": "zs_url",
+        "commune": "tcngramm_X3b_fr_address_locality",
+        "cp": "tcngramm_X3b_fr_address_postalcode",
+        "rent": "zs_field_public_price",
+        "charges_included": false,
+        "surface": "fts_field_living_space",
+        "rooms": "its_field_typology"
+      }
+    }
+  }
+}

@@ -19,7 +19,7 @@
 |---|---|---|---|
 | **1** | **`Core.Imap`** — read-only client + **file-backed test transport** | **all of Track 2** (private portals) | Large |
 | **2** | **HTML parser + CSS selectors** | `type: html` adapters in Track 1 **and** Track 2's email parsing | Medium |
-| **3** | **`sleep` / duration pause** | **`scout run --watch` — the core feature** | **Tiny** ⭐ |
+| **3** | **`sleep` / duration pause** | **`scout --domain=rent run --watch` — the core feature** | **Tiny** ⭐ |
 | Q1 | Can `HttpClient` **set request headers**? | possibly **all of Track 1** | — |
 | Q2 | Is the HTTP **timeout** configurable? | source-health correctness | — |
 | Q3 | **Cookies / session** support? | AL'in only | — |
@@ -150,7 +150,7 @@ sidestep that reasoning.**
 **read** it, in two places:
 
 - **`type: html` source adapters.** Not every landlord exposes JSON; the fallback is CSS selectors over
-  server-rendered HTML. `config/sources.json` is designed around
+  server-rendered HTML. `config/rent/sources.json` is designed around
   `item_selector: "article.annonce-card"` + `select: {title: "h3.card-title", url: "a.card-link@href"}`.
 - **Portal alert emails.** Even with item ①, each alert body **is** an HTML document that must be parsed
   into listings. So this blocks Track 2 too — item ① delivers the emails and this reads them.
@@ -168,7 +168,7 @@ for (Node card in cards) {
 1. **Lenient parsing.** Real listing pages and marketing emails are full of unclosed tags. A strict XML
    parser is unusable. (phorj's tree already references a planned **W4-10 HTML5 parser** — that is this.)
 2. **Selectors: tag, `.class`, `#id`, descendant, attribute presence.** Covers every shape
-   `config/sources.json` needs. Full CSS4 not required.
+   `config/rent/sources.json` needs. Full CSS4 not required.
 3. **Scoped queries** — select within a `Node`, not only from the document root.
 4. **`string?` for a missing attribute**, never `""`. rent-watch's hard rule 9: absent ≠ empty, and an
    empty string that should have been `null` becomes a silent wrong filter decision.
@@ -180,13 +180,13 @@ CSS cascade.
 
 ---
 
-### ③ `sleep` / duration pause. **Blocks `scout run --watch`** ⭐ smallest item, largest ratio
+### ③ `sleep` / duration pause. **Blocks `scout --domain=rent run --watch`** ⭐ smallest item, largest ratio
 
 I searched the interpreter, the VM, `Core.Time`, `Core.Process`, `Core.Runtime` and the conformance
 corpus: **there is no way for a phorj program to pause.** `Core.Time` has `Instant.now`, `Duration.*`, and
 `Time.freeze` — but nothing that yields.
 
-`scout run --watch` is the product's headline mode: poll every N minutes with jitter, forever. Without a
+`scout --domain=rent run --watch` is the product's headline mode: poll every N minutes with jitter, forever. Without a
 pause primitive it cannot be written — a busy-loop would burn a core continuously, and shelling out to
 `sleep` per iteration abandons the single-binary story for the most common operation.
 
@@ -221,7 +221,7 @@ fixed-and-wrong timeout makes a `--watch` loop unreliable.
 **AL'in** only (A4), which likely needs an authenticated session. Not a blocker — AL'in can be last.
 
 **Q4 — Config format. ANSWERED 2026-08-07 on our side — nothing is asked of you.** rent-watch's
-config is `config/criteria.json` + `config/sources.json`, plain JSON. `Core.Json` is already a
+config is `config/rent/criteria.json` + `config/rent/sources.json`, plain JSON. `Core.Json` is already a
 default feature, so the phorj port reads the same files the PHP one does with no new module, and the
 shared-file property that makes the two implementations comparable is preserved.
 
@@ -355,6 +355,6 @@ surfaces cannot be assembled into one literal. And an ELIGIBLE literal may not b
 phrase boundary at all, at any of the three `matchLabels()` call sites; an EXCLUDED one may, because
 failing to match it is the §1 fail-open.
 
-`tests/fixtures/tenure/corpus.json` is the shared oracle, and
-`tests/php/Core/SurfaceMatrixTest.php` is the enumeration: the cross product of this vocabulary and
+`tests/fixtures/rent/tenure/corpus.json` is the shared oracle, and
+`tests/php/Rent/Core/SurfaceMatrixTest.php` is the enumeration: the cross product of this vocabulary and
 every surface, asserted to reach no notification. A port should reproduce both.

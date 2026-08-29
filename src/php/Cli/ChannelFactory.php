@@ -32,8 +32,8 @@ final class ChannelFactory
         string $name,
         mixed $out,
         string $rootDir,
-        string $subjectPrefix = '[rent-watch]',
-        string $fromDefault = 'rent-watch@localhost',
+        string $subjectPrefix,
+        string $fromDefault,
         string $ntfyTopic = '',
     ): Channel {
         // The topic arrives as a VALUE, read by the caller from its own domain's key
@@ -69,7 +69,7 @@ final class ChannelFactory
      * `smtp` speaks the protocol with `.env` credentials, `sendmail` hands off to a host MTA. The
      * default is `smtp` WHEN `SMTP_HOST` is set and `sendmail` otherwise.
      */
-    public static function mailTransport(string $rootDir, string $fromDefault = 'rent-watch@localhost'): MailTransport
+    public static function mailTransport(string $rootDir, string $fromDefault): MailTransport
     {
         $kind = strtolower((string) (getenv('SMTP_TRANSPORT') ?: ''));
         $host = (string) (getenv('SMTP_HOST') ?: '');
