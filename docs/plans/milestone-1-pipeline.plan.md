@@ -1960,6 +1960,11 @@ the machine for its duration**; the cost of forgetting that is the whole ~5 h, n
   case is detected on re-run: **17 / 17**. A guarantee whose branch no test reaches is dead safety
   code until something reaches it — the SeLoger title lesson, a third time. The full 547-case
   ledger is the nightly's, now that its budget fits it.
+- [2026-08-29 22:05] MEASURED at the 6C gate, before it could surprise anyone: the one residual
+  of the two-tracks fix on the EXISTING store is a direct route never pushed whose agency copy
+  already was — such a pair would push once tonight as *voie directe*. Counted: **2 candidates,
+  both In'li rows with `outcome = REJECT`**, which never reach the match path. So the fix changes
+  nothing for the 43 pairs already announced on both sides, and no burst follows the deploy.
 - [2026-08-25 15:55] AGREED: `.claude/hooks/tenure-guard.sh` neutralises the literal `text/plain`
   before its patterns run. `plai` is a substring of `text/plain` and `allow` is a substring of
   `Disallow`, so ANY robots.txt test puts an "inclusion keyword" within eighty characters of a

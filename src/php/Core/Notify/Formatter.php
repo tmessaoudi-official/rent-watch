@@ -40,6 +40,11 @@ final readonly class Formatter
         foreach ($twins as $twin) {
             $route = $twin['direct'] ? 'voie directe, candidature au bailleur' : 'agence / portail';
             $link = $twin['url'] === null ? '' : ' : ' . $twin['url'];
+            // `$listingIsDirect` is load-bearing only by documentation: a NON-direct listing whose
+            // twin was already pushed never reaches this method (the pipeline marks it and moves
+            // on), so the `pushed && !direct` cell is unreachable today. Kept explicit rather than
+            // folded into `$twin['pushed']`, so that if a caller ever pushes an agency copy of an
+            // announced flat, the line it prints does not claim to be the direct route.
             if ($twin['pushed'] && $listingIsDirect) {
                 array_unshift($reasons, '⚑ voie directe — ce bien a déjà été notifié via ' . $twin['source'] . $link);
             } else {

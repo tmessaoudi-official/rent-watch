@@ -380,6 +380,8 @@ final class PipelineRunTest extends TestCase
 
         self::assertCount(0, $this->ofKind($channel, NotificationKind::RENT_DROP), '1122 was the rent BEFORE 1146, not after it');
         self::assertSame([1122, 1146], $store->priceHistory($store->dedupKey($newer)), 'changes only: one rise, no oscillation');
+        // And the row is dated by the NEWER MESSAGE, not by any of the five passes that read it.
+        self::assertSame('2026-08-27T13:34:25Z', $store->snapshot($store->dedupKey($newer))?->lastSeenAt);
     }
 
     /**
@@ -461,8 +463,12 @@ final class PipelineRunTest extends TestCase
 
         $pipeline->runOnce([new FakeSource('fake', [$this->listing()])], '2026-08-07T12:00:00+02:00');
 
-        $stored = $store->priceHistory($store->dedupKey($this->listing()));
-        self::assertSame([1450], $stored);
+        $row = $store->snapshot($store->dedupKey($this->listing()));
+        self::assertNotNull($row);
+        // The name promises "the pass time", so the pass time is what is read back — not merely
+        // that a rent was recorded, which a listing dated to 1970 would also satisfy.
+        self::assertSame('2026-08-07T12:00:00+02:00', $row->lastSeenAt);
+        self::assertSame([1450], $store->priceHistory($row->dedupKey));
     }
 
     // ---------------------------------------------------------------- two tracks, ONE push (2026-08-29)
