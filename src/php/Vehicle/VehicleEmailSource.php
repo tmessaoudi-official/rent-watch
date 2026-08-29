@@ -168,6 +168,15 @@ final readonly class VehicleEmailSource implements VehicleSource, FeedFreshness
             $km = isset($facts['km']) ? self::int($facts['km']) : null;
         }
 
+        // FURNITURE, not a card. The CTA link that ends a card sits on the line AFTER the separator,
+        // so the segment following the last card is the footer carrying that card's link and
+        // nothing else — it re-yielded the last card on every message ("en double dans un même
+        // courrier", six times per doctor run on 2026-08-29). When the portal lays out a price line
+        // and a facts line and a segment has neither, it is not a card.
+        if ($pricePattern !== null && $factsPattern !== null && $price === null && $body === null && $year === null) {
+            return null;
+        }
+
         // MAKE / MODEL — off the ad path, when the portal lays them out there.
         $make = $model = null;
         $mm = $this->definition->param('make_model_pattern');

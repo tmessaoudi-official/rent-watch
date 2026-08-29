@@ -34,6 +34,7 @@ final readonly class SitemapVehicleSource implements VehicleSource
         private readonly Robots $robots,
         private readonly ?\Closure $warn = null,
         private readonly ?\Closure $sleeper = null,
+        private readonly IndexSize $lastIndexSize = new IndexSize(),
     ) {}
 
     public function name(): string
@@ -84,6 +85,7 @@ final readonly class SitemapVehicleSource implements VehicleSource
         if ($index === []) {
             throw new SourceError($this->name(), 'aucune URL du sitemap ne correspond à item_url_pattern — motif obsolète, refusé');
         }
+        $this->lastIndexSize->value = count($index);
 
         return $index;
     }
@@ -102,6 +104,17 @@ final readonly class SitemapVehicleSource implements VehicleSource
         }
 
         return $out;
+    }
+
+    /**
+     * How many lots the sitemap listed on the last `fetch()`/`index()` — the FEED's size, which is
+     * what health must baseline on. `fetch()` returns only NOVEL lots, and after the seed a pass
+     * with zero novel lots is the normal steady state, not a drop: baselining on it fired a false
+     * `warn_drop` on the first live pass (2026-08-29 22:37, "0 annonces contre une moyenne de 1718").
+     */
+    public function lastIndexSize(): ?int
+    {
+        return $this->lastIndexSize->value;
     }
 
     public function fetch(): array

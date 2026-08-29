@@ -70,6 +70,19 @@ final class ParuVenduFixtureTest extends TestCase
         }
     }
 
+    /**
+     * The segment AFTER the last "Voir l'annonce" carries that card's CTA link and nothing else —
+     * footer, not a card. It used to re-yield the last card and warn "en double" on every message.
+     */
+    public function testTheFooterSegmentIsNotACardAndRaisesNoWarning(): void
+    {
+        $warnings = [];
+        $listings = $this->source(static function (string $w) use (&$warnings): void { $warnings[] = $w; })->fetch();
+
+        self::assertCount(3, $listings);
+        self::assertSame([], $warnings, 'a furniture segment is silently not a card');
+    }
+
     public function testTheSameSendersRentAlertYieldsNothing(): void
     {
         $ids = array_map(static fn ($c): string => $c->externalId, $this->source()->fetch());
@@ -80,7 +93,7 @@ final class ParuVenduFixtureTest extends TestCase
         self::assertNull($this->source()->newestFeedItemAt());
     }
 
-    private function source(): VehicleEmailSource
+    private function source(?\Closure $warn = null): VehicleEmailSource
     {
         $definitions = VehicleSourceLoader::load(self::ROOT . '/config/car/sources.json');
 
@@ -88,6 +101,7 @@ final class ParuVenduFixtureTest extends TestCase
             $definitions['paruvendu'],
             VehicleStore::open(':memory:'),
             new FileMailbox(self::ROOT . '/tests/fixtures/paruvendu'),
+            $warn,
         );
     }
 }

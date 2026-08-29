@@ -58,7 +58,11 @@ final readonly class VehiclePipeline
                 continue;
             }
             $feedNewestAt = $source instanceof FeedFreshness ? $source->newestFeedItemAt() : null;
-            $this->store->runs()->recordRun($source->name(), count($listings), true, null, $nowIso, (int) ((microtime(true) - $started) * 1000), $feedNewestAt);
+            // THE FEED'S SIZE, not the novel slice of it: a sitemap source returns only the lots the
+            // seen-set does not know, and after the seed that is 0 on a normal pass — baselining on
+            // it fired a false warn_drop on the first live pass (22:37, "0 contre une moyenne de 1718").
+            $itemCount = $source instanceof SitemapVehicleSource ? ($source->lastIndexSize() ?? count($listings)) : count($listings);
+            $this->store->runs()->recordRun($source->name(), $itemCount, true, null, $nowIso, (int) ((microtime(true) - $started) * 1000), $feedNewestAt);
             $itemsParsed += count($listings);
 
             foreach ($listings as $car) {

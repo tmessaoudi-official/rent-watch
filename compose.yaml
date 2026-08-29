@@ -80,7 +80,12 @@ services:
   #     docker compose up -d car-scout
   car-scout:
     image: scout:local
-    command: ["--domain=car", "run", "--watch"]
+    # The domain flag is in the ENTRYPOINT, not the command: `docker compose run --rm car-scout
+    # doctor` REPLACES the command, and with the flag there the first deploy ran the RENT doctor and
+    # the rent seed instead (2026-08-29 22:2x — measured, and repaired). With it here, every verb
+    # typed after the service name is a car verb.
+    entrypoint: ["php", "/app/bin/scout", "--domain=car"]
+    command: ["run", "--watch"]
     security_opt:
       - no-new-privileges:true
     read_only: true

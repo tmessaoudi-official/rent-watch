@@ -70,6 +70,7 @@ final class AutoheroFixtureTest extends TestCase
         $first = $source->fetch();
         self::assertCount(2, $first, 'budget 2 of 5 novel lots');
         self::assertCount(3, $client->urls, 'the sitemap plus two lot pages — never the whole catalogue');
+        self::assertSame(5, $source->lastIndexSize(), 'health baselines on the FEED (the index), never on the novel slice');
 
         foreach ($first as $lot) {
             $store->record($lot, '2026-08-29T10:00:00Z');

@@ -122,6 +122,9 @@ final readonly class VehicleScout
             $started = microtime(true);
             try {
                 $items = count($source->fetch());
+                if ($source instanceof SitemapVehicleSource) {
+                    $items = $source->lastIndexSize() ?? $items; // the feed's size, as the pipeline records it
+                }
                 $ms = (int) ((microtime(true) - $started) * 1000);
                 $store->runs()->recordRun($source->name(), $items, true, null, $now, $ms, $source instanceof \Scout\Adapters\FeedFreshness ? $source->newestFeedItemAt() : null);
             } catch (\Throwable $e) {

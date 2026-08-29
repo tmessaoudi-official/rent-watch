@@ -3528,6 +3528,15 @@ run_sabotage "the sitemap source ignores the seen-set (every pass re-fetches the
   src/php/Vehicle/SitemapVehicleSource.php \
   's%            if (isset($known\[$id\])) {%            if (false) {%'
 
+# Health baselines on the FEED. Recording the novel slice made the first live pass a false warn_drop.
+run_sabotage "the car pipeline baselines a sitemap source's health on its novel lots, not its index" \
+  src/php/Vehicle/VehiclePipeline.php \
+  's%$itemCount = $source instanceof SitemapVehicleSource ? ($source->lastIndexSize() ?? count($listings)) : count($listings);%$itemCount = count($listings);%'
+
+run_sabotage "a furniture segment with no price and no facts is read as a card again" \
+  src/php/Vehicle/VehicleEmailSource.php \
+  's%        if ($pricePattern !== null \&\& $factsPattern !== null \&\& $price === null \&\& $body === null \&\& $year === null) {%        if (false) {%'
+
 run_sabotage "the sitemap source stops checking robots.txt for lot pages" \
   src/php/Vehicle/SitemapVehicleSource.php \
   's%            $this->refuseUnlessAllowed($url);%            /* unchecked */%'

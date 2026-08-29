@@ -103,6 +103,15 @@
   housing set only); cross-portal twins across car sources (one source per route today); the
   `Voir tous les résultats` route that would lift ParuVendu's 3-card sampling.
 
+- [2026-08-29 22:35] REFUTED ON THE FIRST DEPLOY, and repaired: `docker compose run --rm car-scout
+  doctor` REPLACES the service's `command`, so the `--domain=car` flag I had put there was dropped
+  and the RENT doctor, then the RENT `--seed`, ran instead — 404 rent rows that had never been
+  notified (rejects and the 11 *à vérifier* entries) were stamped as notified at 22:32:01, which
+  would have hidden the digest backlog for good. Measured first (0 MATCH rows carried the stamp),
+  backed up, then reset exactly those rows to un-notified. `car-scout` meanwhile restart-looped on
+  the Q36 refusal — the guard working, loudly, on an unseeded car store. The flag now lives in the
+  service's `entrypoint`, so every verb after the service name is a car verb.
+
 ## Formal Plan
 
 1. `Vehicle/VehicleListing` + `VehicleSnapshot` (reflection-covered encoder), TDD.
