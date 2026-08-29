@@ -253,8 +253,9 @@ final class NotifyTest extends TestCase
 
     public function testEveryAlertingSourceStatusCanBeFormatted(): void
     {
-        // Q29: the 1c table routed SOURCE_BROKEN alone, while six statuses alert. NEVER_PRODUCED was
-        // added precisely because it hid behind OK; deriving it and never sending it wastes it.
+        // Q29: the 1c table routed SOURCE_BROKEN alone, while SEVEN statuses now alert. NEVER_PRODUCED
+        // was added precisely because it hid behind OK; deriving it and never sending it wastes it.
+        // FEED_SILENT joined them 2026-08-29 — a source that keeps reporting while its feed stopped.
         $formatted = 0;
 
         foreach (SourceStatus::cases() as $status) {
@@ -273,7 +274,10 @@ final class NotifyTest extends TestCase
             ++$formatted;
         }
 
-        self::assertGreaterThanOrEqual(5, $formatted, 'the alerting set shrank — check SourceStatus::isAlerting()');
+        // The floor tracks the real count. Left at 5 while seven statuses alerted, TWO members could
+        // have been deleted with this guard still green — a floor that lags is a floor that stops
+        // guarding, which is what it was found doing.
+        self::assertGreaterThanOrEqual(7, $formatted, 'the alerting set shrank — check SourceStatus::isAlerting()');
     }
 
     public function testTheHeartbeatIsSentEvenWhenNothingMatched(): void

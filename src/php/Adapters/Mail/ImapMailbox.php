@@ -115,10 +115,27 @@ final class ImapMailbox implements Mailbox, MutableByDesign
     /**
      * Record a message's `Date`, keeping the newest.
      *
-     * **An UNPARSEABLE date is skipped, never treated as now.** A portal that emits a malformed
-     * header would otherwise refresh the feed's apparent age on every pass and permanently suppress
-     * {@see SourceStatus::FEED_SILENT} — the suppressed direction, which `Core/Heartbeat` rules
-     * against. Skipping degrades to `null`, which yields no verdict rather than a false one.
+     * **An UNPARSEABLE date is skipped, never treated as now**, and — the part that cost a review
+     * round — *unparseable* has to be decided by a STRICT parser. `new \DateTimeImmutable($header)`
+     * is a relative-expression parser, not a date parser: it misparses far more often than it
+     * throws, and every misparse moves the instant FORWARD. Measured on the real private method:
+     * a `Date:` header whose weekday does not match its date — `Fri, 09 Aug 2026 08:00:00 +0200`,
+     * where 9 August 2026 is a Sunday — has `Fri` applied as a RELATIVE MODIFIER and advances to
+     * the next Friday, recording **+5 days**. `now`, `tomorrow` and `+2 days` are all accepted as
+     * literal dates too.
+     *
+     * That is not a cosmetic error, it closes the verdict: the observable band is
+     * `IMAP_SINCE_DAYS − FEED_SILENT_DAYS`, four days on the defaults, so a +5-day shift ages the
+     * message out of the search window — collapsing the count, which the verdict gates on — before
+     * the shifted date can ever reach the threshold. One bad header suppresses `FEED_SILENT` on
+     * that source for ever, which is the failure this whole feature exists to remove.
+     *
+     * {@see parseRfc2822()} is therefore strict by ROUND-TRIP, the same technique `Store::epoch()`
+     * uses and for the same reason. `createFromFormat(RFC2822)` alone is NOT sufficient — it also
+     * yields 14 August for the header above and `getLastErrors()` reports nothing; only re-formatting
+     * the result and comparing it to the input catches it.
+     *
+     * Skipping degrades to `null`, which yields no verdict rather than a false one.
      *
      * Normalised to UTC on the way in so the comparison in `Store::health()` is between instants
      * rather than between strings: portals stamp their own offsets, and `+0200` sorts before `Z`
@@ -132,9 +149,9 @@ final class ImapMailbox implements Mailbox, MutableByDesign
             return;
         }
 
-        try {
-            $at = new \DateTimeImmutable($header);
-        } catch (\Exception) {
+        $at = self::parseRfc2822($header);
+
+        if ($at === null) {
             return;
         }
 
@@ -143,6 +160,37 @@ final class ImapMailbox implements Mailbox, MutableByDesign
         if ($this->newestMessageAt === null || $iso > $this->newestMessageAt) {
             $this->newestMessageAt = $iso;
         }
+    }
+
+    /**
+     * RFC 2822 `Date:`, parsed STRICTLY — or `null`.
+     *
+     * Strict by round-trip: parse, re-format with the same mask, and require the result to equal
+     * the input. That is what rejects `Fri, 09 Aug 2026` (a Sunday), which every non-round-tripping
+     * route in PHP accepts and silently advances by five days. Same technique as
+     * {@see \Scout\Store\Store::epoch()}, which carries its own scar for the same class of bug.
+     *
+     * Both masks are tried because RFC 2822 makes the day-of-week optional and real mailers emit
+     * both shapes; the numeric-offset and named-zone variants likewise. Nothing here falls back to
+     * a permissive parse — the whole point is that an unrecognised shape is UNKNOWN, and unknown
+     * yields no verdict (hard rule 9).
+     */
+    private static function parseRfc2822(string $header): ?\DateTimeImmutable
+    {
+        // Folded headers arrive unfolded by `EmailMessage`, but a trailing comment such as
+        // `+0200 (CEST)` is common and is not part of any mask. Stripped before matching rather
+        // than accepted by a looser mask, so what is compared is still the whole string.
+        $value = trim(preg_replace('~\s*\([^()]*\)\s*$~', '', trim($header)) ?? trim($header));
+
+        foreach (['D, d M Y H:i:s O', 'd M Y H:i:s O', 'D, d M Y H:i:s T', 'd M Y H:i:s T'] as $mask) {
+            $parsed = \DateTimeImmutable::createFromFormat($mask, $value);
+
+            if ($parsed !== false && $parsed->format($mask) === $value) {
+                return $parsed;
+            }
+        }
+
+        return null;
     }
 
     public function describe(): string
@@ -154,6 +202,18 @@ final class ImapMailbox implements Mailbox, MutableByDesign
 
     public function fetchRecent(int $limit = 50): array
     {
+        // Reset FIRST, not beside the loop. Two early `return []` paths sit above that loop — an
+        // empty mailbox, and a `SEARCH` that matched nothing in the window — and a mailbox instance
+        // is built once per source and reused across every `--watch` pass. So a reset placed later
+        // let a pass that fetched NOTHING keep the previous pass's date and report it as its own,
+        // which is exactly what `Pipeline` says must never happen ("the previous pass's freshness
+        // would vouch for a pass that fetched nothing") while guarding only the exception path.
+        //
+        // It was harmless only because `Store::health()` gates the verdict on `$lastCount > 0`, in
+        // a different file, individually deletable. One mechanism accidentally protected by another
+        // is this repo's own named trap: never read "no harm occurred" as "the rule held".
+        $this->newestMessageAt = null;
+
         $this->connect();
 
         try {
@@ -192,7 +252,6 @@ final class ImapMailbox implements Mailbox, MutableByDesign
             }
 
             $messages = [];
-            $this->newestMessageAt = null;
 
             foreach ($sequences as $sequence) {
                 $raw = $this->fetchMessage($sequence);

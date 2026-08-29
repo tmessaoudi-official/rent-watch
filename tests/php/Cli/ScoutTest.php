@@ -339,36 +339,55 @@ final class ScoutTest extends TestCase
     }
 
     /**
-     * An unusable `FEED_SILENT_DAYS` is a REFUSAL, and one the user can read.
+     * A threshold at or above the IMAP window is REPORTED BY `doctor`, never refused.
      *
-     * **This test exists because `tests/sabotage-check.sh` proved the refusal was dead safety code.**
-     * The guard was written, it was correct, and deleting it left the whole suite green — so nothing
-     * would have noticed the day it stopped being enforced. That is the trap the ledger is for.
+     * **This test asserted the opposite until 2026-08-29, and the panel showed why that was wrong.**
+     * The refusal's premise was *"the newest message `SEARCH SINCE` can match is by definition at
+     * most `IMAP_SINCE_DAYS` old"* — false, because `SEARCH SINCE` filters on INTERNALDATE while the
+     * threshold is measured against the message's own `Date:` header, so a message delivered today
+     * and stamped weeks ago is inside the window and arbitrarily old.
      *
-     * It also pins the exception TYPE by pinning the behaviour: a `ConfigError` is caught at the top
-     * of `run()` and printed as a line, while an `InvalidArgumentException` — which the first
-     * implementation threw — escapes as a stack trace and, worse, skips `recordRefusal()`, the Q27
-     * machinery that makes a startup refusal visible on the next successful beat.
+     * And the refusal LOCKED THE TOOL OUT: at `IMAP_SINCE_DAYS=1` no integer satisfies
+     * `1 <= days < 1`, so every store-opening verb exited 2 — including on deployments with no email
+     * source at all, which is a regression, since the value was previously just clamped.
+     *
+     * `doctor` DIAGNOSES, it does not refuse: the same shape this class already applies to an
+     * unusable `TZ`.
      */
-    public function testAThresholdAtOrAboveTheImapWindowIsRefused(): void
+    public function testAThresholdAtOrAboveTheImapWindowIsReportedNotRefused(): void
     {
-        // The reachability constraint, not a preference. The newest message SEARCH SINCE can match
-        // is at most IMAP_SINCE_DAYS old, so at or above the window the count collapses to zero —
-        // and the empty-streak rule takes the verdict — before the age can ever reach the threshold.
-        // feed_silent would be unreachable BY CONSTRUCTION, the shape that kept `!!` dead at 70.
         putenv('FEED_SILENT_DAYS=7');
         putenv('IMAP_SINCE_DAYS=7');
 
         try {
-            $r = $this->scout(['doctor']);
+            $r = $this->scout(['doctor', '--source=fixture_demo']);
         } finally {
             putenv('FEED_SILENT_DAYS');
             putenv('IMAP_SINCE_DAYS');
         }
 
-        self::assertNotSame(0, $r['code'], 'an unreachable threshold must refuse, not warn');
         self::assertStringContainsString('FEED_SILENT_DAYS', $r['out'] . $r['err']);
-        self::assertStringContainsString('inatteignable', $r['out'] . $r['err']);
+        self::assertStringContainsString('bande observable', $r['out'] . $r['err']);
+    }
+
+    /**
+     * THE LOCKOUT ITSELF, pinned — a window of 1 must not make the tool unusable.
+     *
+     * The counterweight to the test above, and the one that would have caught the regression: it is
+     * not enough that `doctor` warns, it must also still RUN. `.env.example` documents
+     * `IMAP_SINCE_DAYS=1` as meaningful and `ImapMailbox` clamps to it happily.
+     */
+    public function testAWindowOfOneDayDoesNotLockTheToolOut(): void
+    {
+        putenv('IMAP_SINCE_DAYS=1');
+
+        try {
+            $r = $this->scout(['doctor', '--source=fixture_demo']);
+        } finally {
+            putenv('IMAP_SINCE_DAYS');
+        }
+
+        self::assertSame(0, $r['code'], 'a one-day window must not refuse every store-opening verb');
     }
 
     /** Zero disables the one signal that tells a dead alert from a quiet market, so it is refused. */

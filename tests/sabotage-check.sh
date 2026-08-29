@@ -3260,14 +3260,16 @@ run_sabotage "an unknown feed date is read as an ancient one" \
 # credibility filter is the mutation; the suite must notice.
 run_sabotage "a future-dated message is trusted, masking a silent feed for ever" \
   src/php/Store/Store.php \
-  's%$credible = array_filter($feedDates, static fn (string $at): bool => self::epoch($at) <= $now);%$credible = $feedDates;%'
+  's%static fn (string \$at): bool => self::epoch(\$at) <= \$cutoff,%static fn (string $at): bool => true,%'
 
-# THE THRESHOLD MUST STAY UNDER THE IMAP WINDOW. At or above it the count collapses to zero before
-# the age can reach the threshold, so feed_silent is unreachable BY CONSTRUCTION -- the shape that
-# kept the `!!` marker dead at 70 while looking configured. Deleting the refusal must go red.
-run_sabotage "the unreachable-threshold refusal is dropped (feed_silent becomes dead config)" \
+# THE THRESHOLD/WINDOW RELATION MUST STILL BE REPORTED. This was a hard refusal until 2026-08-29,
+# when a panel showed its premise was false (SEARCH SINCE filters INTERNALDATE, not the Date header)
+# and that it locked every store-opening verb out at IMAP_SINCE_DAYS=1. It is a `doctor` diagnostic
+# now -- but a diagnostic nobody prints is the dead config the refusal was trying to prevent, one
+# layer over. Silencing it must go red.
+run_sabotage "doctor stops warning that the threshold is at or above the IMAP window" \
   src/php/Cli/Scout.php \
-  's%if ($days >= $window) {%if (false) {%'
+  's%if (\$days === null || \$days < \$window) {%if (true) {%'
 
 # THE DECORATOR MUST FORWARD IT. `wrapAll()` wraps every source under --watch, which is the ONLY
 # mode in which a feed can go silent unnoticed for days -- so a decorator that drops the capability
@@ -3284,6 +3286,70 @@ run_sabotage "the configured threshold never reaches health() (feed_silent dead 
 run_sabotage "PacedSource stops forwarding feed freshness (dead under --watch, green in tests)" \
   src/php/Adapters/PacedSource.php \
   's%return $this->inner instanceof FeedFreshness ? $this->inner->newestFeedItemAt() : null;%return null;%'
+
+# ── round 9b: the links three reviewers each cut with the suite green (2026-08-29) ────────────
+#
+# Every case below was proven UNDETECTED by a certification panel. Together they were the whole
+# production path that PRODUCES a feed date -- the store side was pinned and the source side was not,
+# so `FEED_SILENT` could be judged perfectly on rows nothing would ever write.
+
+# THE MASTER SWITCH. One line, and FEED_SILENT dies for seloger, bienici, leboncoin and pap at once,
+# in production only. The store tests all pass the date by hand, so none of them noticed.
+run_sabotage "EmailAlertSource stops delegating freshness to its mailbox (all email sources)" \
+  src/php/Adapters/EmailAlertSource.php \
+  's%return \$this->mailbox->newestMessageAt();%return null;%'
+
+# THE PARSER ITSELF, which no test had ever executed. `new \DateTimeImmutable` is a RELATIVE
+# expression parser: `Fri, 09 Aug 2026` (a Sunday) advances five days, past the four-day observable
+# band, closing the verdict on that source for ever.
+run_sabotage "the Date header is parsed permissively again (a bad weekday shifts it forward)" \
+  src/php/Adapters/Mail/ImapMailbox.php \
+  's%\$at = self::parseRfc2822(\$header);%$at = @new \\DateTimeImmutable($header) ?: null;%'
+
+# THE ROUND-TRIP is what makes the parse strict; createFromFormat alone accepts the bad weekday and
+# reports no error.
+run_sabotage "the date parse drops its round-trip check (strictness becomes theatre)" \
+  src/php/Adapters/Mail/ImapMailbox.php \
+  's%if (\$parsed !== false \&\& \$parsed->format(\$mask) === \$value) {%if ($parsed !== false) {%'
+
+# FileMailbox reporting a real date reddens the documented MAILBOX_DIR workflow as the calendar
+# advances -- a gate that goes red with no code change.
+run_sabotage "FileMailbox starts reporting fixture dates as feed freshness" \
+  src/php/Adapters/Mail/FileMailbox.php \
+  's%^        return null;$%        return "2026-08-25T00:00:00Z";%'
+
+# THE PIPELINE and THE DOCTOR are the two writers. Either one silently stops populating the column.
+run_sabotage "the pipeline stops recording the feed date it just read" \
+  src/php/Cli/Pipeline.php \
+  's%\$feedNewestAt = \$source instanceof FeedFreshness ? \$source->newestFeedItemAt() : null;%$feedNewestAt = null;%'
+
+run_sabotage "doctor stops recording the feed date (a cron-doctor deployment never populates it)" \
+  src/php/Cli/Scout.php \
+  's%\$error === null \&\& \$source instanceof FeedFreshness ? \$source->newestFeedItemAt() : null,%null,%'
+
+# THE ZERO-COUNT GATE. Widening it lets FEED_SILENT preempt the empty-streak BROKEN verdict that
+# owns the zero case.
+run_sabotage "the zero-count gate is widened, letting a silent feed preempt broken" \
+  src/php/Store/Store.php \
+  's%\&\& \$feedSilentDays !== null \&\& \$lastCount > 0)%\&\& $feedSilentDays !== null \&\& $lastCount >= 0)%'
+
+# WRITE-TIME VALIDATION. Deferring it turns an unreadable date into a permanent ABSENCE of verdict:
+# the source looks watched and is unwatched.
+run_sabotage "recordRun drops write-time validation of the feed date" \
+  src/php/Store/Store.php \
+  's%            self::epoch(\$feedNewestAt);%            ;%'
+
+# INSTANTS, NOT STRINGS. The store accepts any RFC 3339 offset, so a lexical max picks the wrong
+# element across mixed offsets and over-states silence.
+run_sabotage "the newest feed date is chosen lexically instead of by instant" \
+  src/php/Store/Store.php \
+  's%if (\$best === null || self::epoch(\$date) > self::epoch(\$best)) {%if ($best === null || $date > $best) {%'
+
+# THE PER-FETCH RESET. Without it a pass that fetched NOTHING reports the previous pass's date as
+# its own -- the invariant Pipeline states and, until this case, nothing enforced.
+run_sabotage "ImapMailbox keeps a stale feed date across a fetch that returned nothing" \
+  src/php/Adapters/Mail/ImapMailbox.php \
+  's%^        \$this->newestMessageAt = null;$%%'
 
 # THE TALLY LIVES HERE, BELOW EVERY CASE, and that position is load-bearing rather than tidy.
 # It sat mid-file twice: once on 2026-08-20 (295 printed for 303 cases) and again from 2026-08-23,

@@ -169,6 +169,108 @@ final class StoreFeedSilenceTest extends TestCase
         self::assertStringContainsString('26', $health->detail, 'BROKEN must name the last message, not just the empty streak');
     }
 
+    /**
+     * A ZERO-COUNT run belongs to the empty-streak rule, not to this one — and nothing pinned that.
+     *
+     * Widening the gate to `>= 0` let `FEED_SILENT` preempt the `BROKEN` verdict the comment says
+     * owns the zero case, with the suite green: the only zero-count test had a four-run streak, so
+     * `BROKEN` fired from the earlier branch regardless and the gate was never the deciding factor.
+     * Here the streak is ONE run, so the empty-streak rule declines and the gate alone decides.
+     */
+    public function testAZeroCountRunIsNotJudgedOnFeedSilence(): void
+    {
+        $this->store->recordRun('leboncoin', 3, true, null, '2026-08-27T09:00:00Z', feedNewestAt: '2026-08-26T07:33:06Z');
+        $this->store->recordRun('leboncoin', 0, true, null, '2026-08-29T09:00:00Z', feedNewestAt: '2026-08-26T07:33:06Z');
+
+        self::assertNotSame(
+            SourceStatus::FEED_SILENT,
+            $this->store->health('leboncoin', '2026-08-29T09:00:00Z', 3)->status,
+            'at zero items the empty-streak rule owns the verdict',
+        );
+    }
+
+    /**
+     * An unreadable feed date is refused AT WRITE TIME, beside the caller that produced it.
+     *
+     * Dead safety code until this test: no caller ever wrote an invalid one, so deleting the
+     * validation left the suite green. Deferring it to `health()` would turn an unreadable date
+     * into a permanent ABSENCE of verdict — the source would look watched and be unwatched.
+     */
+    public function testAnUnreadableFeedDateIsRefusedWhenItIsWritten(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->store->recordRun('leboncoin', 3, true, null, '2026-08-29T09:00:00Z', feedNewestAt: 'la semaine dernière');
+    }
+
+    /**
+     * `max()` over feed dates must compare INSTANTS, not strings.
+     *
+     * The store accepts any RFC 3339 offset — its own CLI test writes `+02:00` — so a lexical
+     * maximum picks the wrong element across mixed offsets. Here the FIRST value is the newer
+     * instant by 25 hours and sorts lexically LAST, so a string comparison reports a feed one hour
+     * old as a day silent, naming the wrong message.
+     */
+    public function testTheNewestFeedDateIsChosenByInstantNotByString(): void
+    {
+        $newerInstant = '2026-08-29T11:00:00+00:00';
+        $olderInstant = '2026-08-29T22:00:00+14:00'; // 08:00Z — three hours EARLIER, sorts later
+
+        $this->store->recordRun('portalX', 3, true, null, '2026-08-29T11:30:00Z', feedNewestAt: $newerInstant);
+        $this->store->recordRun('portalX', 3, true, null, '2026-08-29T11:40:00Z', feedNewestAt: $olderInstant);
+
+        $health = $this->store->health('portalX', '2026-08-29T12:00:00Z', 1);
+
+        self::assertSame(SourceStatus::OK, $health->status, 'the feed is one hour old, not a day silent');
+    }
+
+    /**
+     * A message stamped slightly AFTER the pass began is pacing, not a broken clock.
+     *
+     * `Pipeline::runOnce()` captures one `$nowIso` at pass start, and Q37 pacing puts 5 s between
+     * hosts and 60 s per host — so a source polled minutes later legitimately sees a message
+     * stamped after that instant. Without a grace, a healthy source's FIRST pass reported
+     * "vérifiez l'horloge du portail" on a source that had just delivered, on a fresh database,
+     * which is exactly when someone is watching a `--seed` run.
+     */
+    public function testASmallForwardSkewIsPacingRatherThanABrokenClock(): void
+    {
+        $this->store->recordRun('bienici', 5, true, null, '2026-08-29T09:00:00Z', feedNewestAt: '2026-08-29T09:00:30Z');
+
+        self::assertSame(SourceStatus::OK, $this->store->health('bienici', '2026-08-29T09:00:00Z', 3)->status);
+    }
+
+    /** The grace is far below any threshold, so it can never mask real silence. */
+    public function testTheGraceDoesNotExtendToAnImplausibleFutureDate(): void
+    {
+        $this->store->recordRun('bienici', 5, true, null, '2026-08-29T09:00:00Z', feedNewestAt: '2030-01-01T00:00:00Z');
+
+        self::assertSame(SourceStatus::FEED_SILENT, $this->store->health('bienici', '2026-08-29T09:00:00Z', 3)->status);
+    }
+
+    /**
+     * The BROKEN detail must name a date the verdict would BELIEVE.
+     *
+     * It used an unfiltered `max()` while the verdict filtered, so a single 2030-stamped message
+     * would have been printed to the operator as the portal's last message — the very value
+     * `testAFutureDatedMessageCannotMaskAnAgeingFeed` exists to reject, surfacing on another branch.
+     * A diagnostic that contradicts its own conclusion is worse than none.
+     */
+    public function testTheBrokenDetailNamesACredibleDateNotAFutureOne(): void
+    {
+        $this->store->recordRun('leboncoin', 3, true, null, '2026-08-27T09:00:00Z', feedNewestAt: '2026-08-26T07:33:06Z');
+        $this->store->recordRun('leboncoin', 3, true, null, '2026-08-27T10:00:00Z', feedNewestAt: '2030-01-01T00:00:00Z');
+
+        for ($i = 0; $i < 4; ++$i) {
+            $this->store->recordRun('leboncoin', 0, true, null, sprintf('2026-09-0%dT09:00:00Z', 2 + $i));
+        }
+
+        $health = $this->store->health('leboncoin', '2026-09-06T09:00:00Z', 3);
+
+        self::assertSame(SourceStatus::BROKEN, $health->status);
+        self::assertStringContainsString('2026-08-26', $health->detail);
+        self::assertStringNotContainsString('2030', $health->detail);
+    }
+
     /** A threshold of zero disables the one signal that distinguishes a dead alert from a quiet market. */
     public function testAThresholdOfZeroIsRefused(): void
     {

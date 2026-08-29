@@ -99,6 +99,15 @@ final readonly class Formatter
             kind: NotificationKind::SOURCE_HEALTH,
             // Not LOW. A broken source is indistinguishable from a quiet market, so the alert is the
             // only thing standing between the developer and weeks of believing nothing is available.
+            //
+            // FEED_SILENT stays LOW, and that is a DECISION rather than a fall-through (recorded
+            // 2026-08-29, after a review round pointed out it had entered the else-branch with
+            // nobody choosing). The argument for NORMAL is the comment directly above — a silent
+            // feed is the purest case of "indistinguishable from a quiet market". The argument that
+            // wins is consistency with its documented twin: `SourceStatus` calls STALE
+            // "FEED_SILENT's twin from the other end", STALE is LOW, and NEVER_PRODUCED — also a
+            // silent absence — is LOW too. Splitting the twins would say the portal stopping matters
+            // more than the watcher stopping, which is not true. Revisit together, not separately.
             priority: $health->status === SourceStatus::BROKEN ? Priority::NORMAL : Priority::LOW,
             title: 'Source ' . $health->sourceName . ' : ' . $health->status->value,
             reasons: array_values(array_filter([

@@ -2033,7 +2033,9 @@ final readonly class Store
                     '%d runs consécutifs à vide alors que la référence précédente était de %.1f annonces%s',
                     $emptyStreak,
                     $baseline,
-                    $feedDates === [] ? '' : sprintf(' — dernier message du portail : %s', max($feedDates)),
+                    self::newestCredibleFeedDate($feedDates, $nowIso) === null
+                        ? ''
+                        : sprintf(' — dernier message du portail : %s', self::newestCredibleFeedDate($feedDates, $nowIso)),
                 ));
             }
         }
@@ -2097,21 +2099,20 @@ final readonly class Store
             // answer -- the empty-streak rule above knows the baseline and fires BROKEN, which now
             // carries the message date in its own detail.
             $now = self::epoch($nowIso);
-            $credible = array_filter($feedDates, static fn (string $at): bool => self::epoch($at) <= $now);
+            $feedNewest = self::newestCredibleFeedDate($feedDates, $nowIso);
 
-            if ($credible === []) {
+            if ($feedNewest === null) {
                 // Dates WERE reported and not one of them is believable. Saying nothing here would
                 // let a portal with a permanently fast clock disable this verdict for ever, which
                 // is the suppressed direction `Core/Heartbeat` rules against. Mirrors the STALE
                 // branch below, which says the same thing about run timestamps.
                 return $health(SourceStatus::FEED_SILENT, sprintf(
                     'toutes les dates de message sont dans le futur (la plus récente : %s) — vérifiez l\'horloge du portail',
-                    max($feedDates),
+                    self::newestFeedDate($feedDates) ?? '?',
                 ));
             }
 
-            $feedNewest = max($credible);
-            $silentFor = $now - self::epoch($feedNewest);
+            $silentFor = max(0, $now - self::epoch($feedNewest));
 
             if ($silentFor >= $feedSilentDays * 86400) {
                 return $health(SourceStatus::FEED_SILENT, sprintf(
@@ -2362,6 +2363,70 @@ final readonly class Store
      *
      * @throws \InvalidArgumentException on anything that is not a full ISO-8601 instant
      */
+    /**
+     * How far a message may be stamped AHEAD of now and still be believed.
+     *
+     * Not slack for a broken clock — slack for THIS process. `Pipeline::runOnce()` captures one
+     * `$nowIso` at the start of a pass, and under Q37 pacing (5 s between hosts, 60 s per host,
+     * order shuffled) a source polled minutes later can legitimately see a message stamped after
+     * that instant. With no grace, a healthy source's very first pass reports
+     * `toutes les dates de message sont dans le futur — vérifiez l'horloge du portail`, on a source
+     * that just delivered, on a fresh database — which is precisely when someone is watching
+     * (`scout run --seed`). An hour is far beyond any pass and far below any threshold, so it
+     * cannot mask real silence: the smallest threshold is one day.
+     */
+    private const int FEED_CLOCK_GRACE_SECONDS = 3600;
+
+    /**
+     * The newest reported feed date, compared as INSTANTS.
+     *
+     * `max()` over these strings is a LEXICAL comparison and the store accepts any RFC 3339 offset —
+     * its own CLI test writes `+02:00`. Measured on the real store: `2026-08-28T23:00:00-12:00`
+     * (the newer instant) loses to `2026-08-29T00:00:00+14:00` (25 h older), so a feed one hour old
+     * was reported as one day silent, naming the wrong message. The error is one-directional — the
+     * lexical max is never a later instant than the true max — so it can only ever OVER-state
+     * silence, which is the safe direction and why this was P2 rather than P0.
+     *
+     * @param list<string> $dates
+     */
+    private static function newestFeedDate(array $dates): ?string
+    {
+        $best = null;
+
+        foreach ($dates as $date) {
+            if ($best === null || self::epoch($date) > self::epoch($best)) {
+                $best = $date;
+            }
+        }
+
+        return $best;
+    }
+
+    /**
+     * The newest reported feed date that is not implausibly in the future, or `null`.
+     *
+     * Future dates are FILTERED rather than clamped: the value is a maximum over what portals stamp
+     * on their own mail, so one message dated 2030 would win that maximum and report the feed fresh
+     * for ever, and clamping it to now makes it read fresher still. Both the `FEED_SILENT` verdict
+     * and the `BROKEN` detail read through here, because a detail line that names a date the verdict
+     * refused to believe is a diagnostic that contradicts its own conclusion.
+     *
+     * @param list<string> $dates
+     */
+    private static function newestCredibleFeedDate(array $dates, ?string $nowIso): ?string
+    {
+        if ($nowIso === null) {
+            return self::newestFeedDate($dates);
+        }
+
+        $cutoff = self::epoch($nowIso) + self::FEED_CLOCK_GRACE_SECONDS;
+
+        return self::newestFeedDate(array_values(array_filter(
+            $dates,
+            static fn (string $at): bool => self::epoch($at) <= $cutoff,
+        )));
+    }
+
     private static function epoch(string $iso): int
     {
         $normalised = str_ends_with($iso, 'Z') ? substr($iso, 0, -1) . '+00:00' : $iso;

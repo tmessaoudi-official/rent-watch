@@ -1649,14 +1649,29 @@ var/claude/                 Reports, review outputs — gitignored scratch (hand
   N days" is also exactly what a quiet market looks like, so it restates hard rule 2's ambiguity
   instead of resolving it (Logirep returns the same 113 listings every pass by design). `STALE` is
   the twin from the other end: that one says the WATCHER stopped, this one says the PORTAL did.
-- **`FEED_SILENT_DAYS` must stay STRICTLY under `IMAP_SINCE_DAYS`, and the loader refuses otherwise.**
-  Not a preference — a reachability constraint. The newest message `SEARCH SINCE` can match is at
-  most `IMAP_SINCE_DAYS` old, so at or above the window the count collapses to zero, and the
-  empty-streak rule takes the verdict, before the age can ever reach the threshold: the status is
-  unreachable **by construction**. Same shape as `high_priority_score: 70`, which sat dead for weeks
-  while looking configured. The default of 3 is measured, not chosen — over 14 days Bien'ici fires
-  ~30/day, PAP ~8/day and SeLoger 160 in a week, none ever quiet for a full day, while leboncoin has
-  sent exactly one alert since creation.
+- **`FEED_SILENT_DAYS` should stay under `IMAP_SINCE_DAYS` — and `doctor` WARNS, it does not refuse.**
+  This shipped as a hard startup refusal on 2026-08-28 and was demoted the next day, because **both
+  of its legs broke under review**. Its premise was *"the newest message `SEARCH SINCE` can match is
+  by definition at most `IMAP_SINCE_DAYS` old"*, which is **false**: `SEARCH SINCE` filters on
+  **INTERNALDATE** (server arrival) while the threshold is measured against the message's own
+  **`Date:` header**, so a message delivered today and stamped weeks ago — a bulk re-label, a delayed
+  relay — is inside the window and arbitrarily old. Demonstrated at twenty days. And the refusal
+  **locked the tool out**: `IMAP_SINCE_DAYS=1` left no satisfiable threshold, so `doctor`, `dump`,
+  `run`, `digest` and `reclassify` all exited 2, *including on deployments with no email source at
+  all* — a regression, since the same value was previously just clamped — while a refused `run` wrote
+  a note meant to be read on the next successful start, which could never come. **`doctor` DIAGNOSES,
+  it does not refuse**, exactly as it already does for an unusable `TZ`. The guidance survives the
+  refusal: the observable band is `(threshold, window)`. The default of 3 is measured, not chosen —
+  over 14 days Bien'ici fires ~30/day, PAP ~8/day and SeLoger 160 in a week, none ever quiet for a
+  full day, while leboncoin has sent exactly one alert since creation.
+- **A `Date:` header needs a STRICT parser, and `new \DateTimeImmutable` is not one.** It is a
+  *relative-expression* parser: it misparses far more often than it throws, and every misparse moves
+  the instant FORWARD. `Date: Fri, 09 Aug 2026` — where 9 August is a Sunday — has `Fri` applied as a
+  relative modifier and records **14 August**, five days on; `now`, `tomorrow` and `+2 days` all
+  parse as literal dates. That silently closed `FEED_SILENT`, whose observable band is only four
+  days. The fix is strictness **by round-trip** — parse, re-format with the same mask, require
+  equality — which is what `Store::epoch()` has done since its own scar. `createFromFormat` alone is
+  NOT sufficient: it also returns 14 August and reports no error.
 - **`prototype/scout.py` has no tenure classifier at all.** It will happily surface PLAI and PLUS
   listings. It is reference material for the field-mapping and adapter shape only — treat its filtering
   logic as incomplete, not as a baseline to preserve.
