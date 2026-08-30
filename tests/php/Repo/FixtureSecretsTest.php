@@ -107,7 +107,7 @@ final class FixtureSecretsTest extends TestCase
      */
     public function testTheGuardSeesThroughQuotedPrintable(): void
     {
-        $jwt = 'eyJhbGciOiJIUzI1NiJ9.eyJlbWFpbCI6InZpY3RpbUBnbWFpbC5jb20ifQ.c2lnbmF0dXJlLXNpZ25hdHVyZS1zaWduYXR1cmU';
+        $jwt = 'eyJhbGciOiJIUzI1NiJ9.eyJlbWFpbCI6InZpY3RpbUBleGFtcGxlLnRlc3QifQ.c2lnbmF0dXJlLXNpZ25hdHVyZS1zaWduYXR1cmU';
 
         self::assertSame(['JWT'], array_column(self::suspects('signedRecipient=' . $jwt), 0), 'plain');
         self::assertSame(['JWT'], array_column(self::suspects('signedRecipient=3D' . $jwt), 0), 'quoted-printable `=3D`');
@@ -120,6 +120,23 @@ final class FixtureSecretsTest extends TestCase
     }
 
     /**
+     * THE NEXT ENCODING OVER. A `Content-Transfer-Encoding: base64` body — a common mailer default
+     * the project's own parser accepts — carries the same JWT as opaque 76-column lines: no `eyJ`
+     * survives in the raw bytes and QP decoding changes nothing. A review panel proved on
+     * 2026-08-30 that both the scrubber and this guard reported success on such a file while the
+     * address was one `base64 -d` away. Decoding base64 BODIES (whole blocks of base64 lines) is the
+     * missing form; base64url RUNS inside them are the scrubber's job, not this guard's.
+     */
+    public function testTheGuardSeesThroughABase64Body(): void
+    {
+        $jwt = 'eyJhbGciOiJIUzI1NiJ9.eyJlbWFpbCI6InZpY3RpbUBleGFtcGxlLnRlc3QifQ.c2lnbmF0dXJlLXNpZ25hdHVyZS1zaWduYXR1cmU';
+        $body = "<p>Bonjour,</p><a href=\"https://portal.test/a?signedRecipient=" . $jwt . "\">Voir</a>";
+        $message = "Content-Type: text/html\r\nContent-Transfer-Encoding: base64\r\n\r\n" . chunk_split(base64_encode($body), 76, "\r\n");
+
+        self::assertStringNotContainsString('eyJ', $message, 'the raw bytes carry no recognisable token');
+        self::assertSame(['JWT'], array_column(self::suspects($message), 0), 'a base64 body is decoded before looking');
+    }
+    /**
      * Every credential-shaped string in `$content`, looked for in the raw bytes AND after
      * quoted-printable decoding, minus the ones that announce themselves as placeholders.
      *
@@ -128,7 +145,13 @@ final class FixtureSecretsTest extends TestCase
     private static function suspects(string $content): array
     {
         $found = [];
+        $forms = [$content, quoted_printable_decode($content)];
         foreach ([$content, quoted_printable_decode($content)] as $text) {
+            foreach (self::base64Blocks($text) as $block) {
+                $forms[] = $block;
+            }
+        }
+        foreach ($forms as $text) {
             foreach (self::patterns() as $kind => $pattern) {
                 if (preg_match_all($pattern, $text, $matches) === 0) {
                     continue;
@@ -143,5 +166,28 @@ final class FixtureSecretsTest extends TestCase
         }
 
         return array_values($found);
+    }
+
+    /**
+     * Every block of consecutive base64 lines (a `Content-Transfer-Encoding: base64` body, or any
+     * base64 blob long enough to hide a token), decoded. A block that does not decode is not a
+     * body and is skipped.
+     *
+     * @return list<string>
+     */
+    private static function base64Blocks(string $text): array
+    {
+        if (preg_match_all('/(?:^[A-Za-z0-9+\/]{40,}={0,2}\r?\n?){2,}/m', $text, $m) === 0) {
+            return [];
+        }
+        $blocks = [];
+        foreach ($m[0] as $block) {
+            $decoded = base64_decode((string) preg_replace('/\s+/', '', $block), true);
+            if ($decoded !== false && $decoded !== '') {
+                $blocks[] = $decoded;
+            }
+        }
+
+        return $blocks;
     }
 }

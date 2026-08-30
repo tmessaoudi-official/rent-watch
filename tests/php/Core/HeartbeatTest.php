@@ -128,6 +128,22 @@ final class HeartbeatTest extends TestCase
         Heartbeat::fromEnv($raw);
     }
 
+    /**
+     * THE REFUSAL NAMES THE KEY THE CALLER READ (2026-08-30). The generic layer must not enumerate
+     * domains, and a refusal naming a key the tool itself rejects (`HEARTBEAT_HOURS` is a legacy
+     * name `LegacyEnv` refuses) tells the operator to fix the wrong line. Each domain passes its own.
+     */
+    #[DataProvider('unusableValues')]
+    public function testTheRefusalNamesTheKeyTheCallerRead(string $raw): void
+    {
+        try {
+            Heartbeat::fromEnv($raw, 'X_HEARTBEAT_HOURS');
+            self::fail('expected a refusal');
+        } catch (\InvalidArgumentException $e) {
+            self::assertStringContainsString('X_HEARTBEAT_HOURS', $e->getMessage());
+            self::assertStringNotContainsString('RENT_', $e->getMessage(), 'no other domain is named');
+        }
+    }
     /** @return iterable<string, array{string}> */
     public static function unusableValues(): iterable
     {

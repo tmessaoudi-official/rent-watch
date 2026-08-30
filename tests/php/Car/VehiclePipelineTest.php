@@ -56,7 +56,7 @@ final class VehiclePipelineTest extends TestCase
         $pipeline->runOnce([$source], '2026-08-29T10:15:00Z');
 
         self::assertSame([], $this->ofKind($channel, NotificationKind::MATCH), 'the market already watched is never announced');
-        self::assertSame([], $this->ofKind($channel, NotificationKind::RENT_DROP));
+        self::assertSame([], $this->ofKind($channel, NotificationKind::PRICE_DROP));
         self::assertFalse($store->isSeenSetEmpty());
     }
 
@@ -73,7 +73,7 @@ final class VehiclePipelineTest extends TestCase
         }
         $pipeline->runOnce([new FakeCarSource('paruvendu', [$older, $newer])], '2026-08-27T14:30:00Z');
 
-        self::assertSame([], $this->ofKind($channel, NotificationKind::RENT_DROP));
+        self::assertSame([], $this->ofKind($channel, NotificationKind::PRICE_DROP));
         self::assertSame([21000, 21500], $store->priceHistory($store->dedupKey($newer)));
     }
 
@@ -85,7 +85,7 @@ final class VehiclePipelineTest extends TestCase
         $pipeline->runOnce([new FakeCarSource('paruvendu', [$this->car('a1', 19500, observedAt: '2026-08-27T10:00:00Z')])], '2026-08-27T10:00:00Z');
         $pipeline->runOnce([new FakeCarSource('paruvendu', [$this->car('a1', 19500, observedAt: '2026-08-27T10:00:00Z')])], '2026-08-27T10:15:00Z');
 
-        $drops = $this->ofKind($channel, NotificationKind::RENT_DROP);
+        $drops = $this->ofKind($channel, NotificationKind::PRICE_DROP);
         self::assertCount(1, $drops);
         self::assertStringStartsWith('paruvendu · Baisse de prix', $drops[0]->title);
     }

@@ -61,7 +61,25 @@ function recoverableForms(string $message): array
     // scanned on the raw message is two short fragments that decode to nothing while the whole
     // token decodes to the address. Scanning only the raw text is how this check would pass on
     // most alert mail there is.
+    // A `Content-Transfer-Encoding: base64` BODY is the encoding after quoted-printable: the token
+    // sits inside opaque 76-column lines, so no run in the raw or unfolded text decodes to anything
+    // and the old check reported `scrubbed` on a file the address was one `base64 -d` away from
+    // (review panel, 2026-08-30). Every block of base64 lines is decoded whole and scanned like the
+    // text it is — including the base64url runs INSIDE it, which is where a JWT payload lives.
+    $texts = [$message, $unfolded];
     foreach ([$message, $unfolded] as $text) {
+        if (preg_match_all('~(?:^[A-Za-z0-9+/]{40,}={0,2}\r?\n?){2,}~m', $text, $blocks) > 0) {
+            foreach ($blocks[0] as $block) {
+                $decoded = base64_decode((string) preg_replace('~\s+~', '', $block), true);
+                if ($decoded !== false && $decoded !== '') {
+                    $forms[] = $decoded;
+                    $texts[] = $decoded;
+                }
+            }
+        }
+    }
+
+    foreach ($texts as $text) {
         preg_match_all('~[A-Za-z0-9_\-]{16,}~', $text, $runs);
 
         foreach ($runs[0] as $run) {

@@ -3588,7 +3588,7 @@ run_sabotage "the startup-refusal note is not migrated (a pre-split refusal is n
 # match push. The twin's verdict now feeds the same funnel as the persisted group veto.
 run_sabotage "an excluded or undetermined twin on the other track no longer vetoes the flat" \
   src/php/Rent/Cli/Pipeline.php \
-  's%if (\$survivor->tenure->isExcluded() || \$twins === \[\]) {%if (true) {%'
+  's%if (\$survivor->tenure->isExcluded()) {%if (true) {%'
 
 # The car heartbeat read health WITHOUT the clock, so FEED_SILENT and STALE could never reach the
 # beat — the rent side's 2026-08-29 defect, on the twin.
@@ -3601,6 +3601,28 @@ run_sabotage "the car heartbeat reads health without the clock (a silent feed co
 run_sabotage "the fixture-secrets guard is blind to quoted-printable again" \
   tests/php/Repo/FixtureSecretsTest.php \
   's%quoted_printable_decode(\$content)%$content%'
+
+# ── The twin fact is PERSISTED (schema v12, 2026-08-30, panel round 2) ─────────────────────────
+# A veto living only in the pass's harvest lapsed the moment the twin was not fetched: the pass
+# that saw the agency copy alone pushed the PLS flat. The fact is written whenever a twin is in
+# hand and read back when it is not.
+run_sabotage "the persisted twin fact is never read back (a veto lapses when the twin is not fetched)" \
+  src/php/Rent/Cli/Pipeline.php \
+  's%\$fact = \$this->store->twinTenure(\$dedupKey);%$fact = $seen;%'
+
+run_sabotage "an excluded twin fact is overwritten by a later eligible reading (the veto is not durable)" \
+  src/php/Rent/Store/Store.php \
+  's%if (\$current !== null \&\& \$current\[.tenure.\]->isExcluded()) {%if (false) {%'
+
+run_sabotage "reclassify re-judges a row its twin vetoed, on a snapshot the twin cannot appear in" \
+  src/php/Rent/Cli/RentScout.php \
+  's%\$twin = \$store->twinTenure(\$key);%$twin = null;%'
+
+# The encoding after quoted-printable: a base64 BODY hides the token in opaque 76-column lines.
+run_sabotage "the fixture-secrets guard is blind to a base64 body again" \
+  tests/php/Repo/FixtureSecretsTest.php \
+  's%foreach (self::base64Blocks(\$text) as \$block) {%foreach ([] as $block) {%'
+
 printf '\n  %d sabotage(s) detected, %d undetected\n' "$pass" "$fail"
 
 if [[ -n "$_filter" ]]; then

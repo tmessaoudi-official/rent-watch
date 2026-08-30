@@ -181,6 +181,34 @@ if [[ -f "$work/jwt.out.eml" ]]; then
   check "the listing URL survives" grep -q '/annonce/abc-123' "$work/jwt.out.eml"
 fi
 
+# ── MUST REFUSE A BASE64 BODY ──────────────────────────────────────────────────────────────────────
+# The encoding after quoted-printable. A `Content-Transfer-Encoding: base64` body carries the same
+# JWT as opaque 76-column lines: no run in the raw or QP-unfolded text decodes to the address, so the
+# old check reported `scrubbed` on a file the address was one `base64 -d` away from (review panel,
+# 2026-08-30). The tool cannot rewrite inside a base64 body without re-encoding it, so the honest
+# answer is a REFUSAL, exit non-zero, no output file.
+message_b64() {
+  body="Appartement 3 pieces 65 m2
+https://www.portal.test/annonce/abc-123?signedRecipient=${jwt}
+1 170 EUR par mois charges comprises"
+  cat <<EOF
+From: Portal <no_reply@portal.test>
+To: <${address}>
+Subject: 1 nouvelle annonce
+Content-Type: text/plain; charset=utf-8
+Content-Transfer-Encoding: base64
+
+$(printf '%s' "$body" | base64 | fold -w 76)
+EOF
+}
+
+message_b64 >"$work/b64.eml"
+b64_status=0
+scrub "$work/b64.eml" "$work/b64.out.eml" >"$work/b64.log" 2>&1 || b64_status=$?
+
+check "a base64-encoded body from which the address is recoverable is REFUSED" test "$b64_status" -ne 0
+refute "and nothing is written" test -f "$work/b64.out.eml"
+check "the refusal says the address is recoverable" grep -qi 'recoverable' "$work/b64.log"
 # ── MUST STRIP THROUGH QUOTED-PRINTABLE ───────────────────────────────────────────────────────────
 # The case the first version of this file did not have, and the one that mattered. Most alert mail
 # is QP-encoded: `=` becomes `=3D`, and every line folds at 76 columns with a trailing `=`. So a

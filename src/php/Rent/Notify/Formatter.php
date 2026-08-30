@@ -95,7 +95,7 @@ final readonly class Formatter
         $pct = $previousCc > 0 ? round($delta * 100 / $previousCc, 1) : 0.0;
 
         return new Notification(
-            kind: NotificationKind::RENT_DROP,
+            kind: NotificationKind::PRICE_DROP,
             priority: $nowQualifies ? Priority::HIGH : Priority::NORMAL,
             title: $listing->sourceName . ' · ' . ($nowQualifies ? 'PASSE SOUS LE PLAFOND' : 'Baisse de loyer')
                 . ' — ' . ($listing->commune ?? 'commune inconnue')

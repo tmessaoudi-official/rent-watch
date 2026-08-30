@@ -10,6 +10,7 @@ use Scout\Core\Notify\ConsoleChannel;
 use Scout\Core\Notify\Notifier;
 use Scout\Tests\Support\DeliveringChannel;
 use Scout\Rent\Core\RawListing;
+use Scout\Rent\Core\Tenure;
 use Scout\Rent\Store\Store;
 
 /**
@@ -468,6 +469,41 @@ final class RentScoutReclassifyTest extends TestCase
      * sabotage ledger proved the gap: reading the group's tenures as excluded regardless of what
      * they say left the whole suite green.
      */
+    /**
+     * THE OTHER TRACK'S WORD IS EVIDENCE TOO (schema v12, 2026-08-30). A row vetoed by its
+     * cross-track twin sits at `tenure = UNKNOWN`, `outcome = REJECT` exactly like a group-vetoed
+     * one, and `staleVerdicts()` selects on `tenure` alone — so without this read the command
+     * re-judged it on a snapshot in which the twin's PLS cannot appear and PROMOTED it. The
+     * round-2 ledger proved the read undetected until this test existed.
+     */
+    public function testAListingVetoedByItsCrossTrackTwinIsSkippedNotRejudged(): void
+    {
+        $root = $this->tempRoot();
+        $key = $this->seed($root, $this->intermediateListing('TWIN-1'), 'UNKNOWN', 'REJECT');
+        Store::open($root . '/state/rent-watch.sqlite3')->recordTwin($key, Tenure::PLS, 'cdc_habitat');
+
+        $r = $this->scout($root, ['reclassify'], $this->delivering());
+
+        self::assertSame(0, $r['code'], $r['err']);
+        self::assertStringContainsString('écartée(s) par un doublon', $r['out'], 'the skip is counted out loud');
+        self::assertStringNotContainsString('1 annonce(s) re-jugée(s)', $r['out'], 'never re-judged on a snapshot the twin cannot appear in');
+        self::assertSame('REJECT', $this->outcomeOf($root, $key), 'the veto stands');
+    }
+
+    public function testAListingWhoseTwinIsUndeterminedIsNotPromoted(): void
+    {
+        // The doubt travels the same way: a twin the pipeline could not classify keeps this row
+        // out of the matches until both are judged together again.
+        $root = $this->tempRoot();
+        $key = $this->seed($root, $this->intermediateListing('TWIN-2'), 'UNKNOWN', 'DIGEST');
+        Store::open($root . '/state/rent-watch.sqlite3')->recordTwin($key, Tenure::UNKNOWN, 'cdc_habitat');
+
+        $r = $this->scout($root, ['reclassify'], $this->delivering());
+
+        self::assertSame(0, $r['code'], $r['err']);
+        self::assertStringContainsString('écartée(s) par un doublon', $r['out']);
+        self::assertNotSame('MATCH', $this->outcomeOf($root, $key), 'a doubt on the other track blocks promotion');
+    }
     public function testAClusteredListingWithEligibleSiblingsIsStillRejudged(): void
     {
         $root = $this->tempRoot();

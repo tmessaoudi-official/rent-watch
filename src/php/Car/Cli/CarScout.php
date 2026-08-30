@@ -231,7 +231,14 @@ final readonly class CarScout
             }),
             rand: static fn (int $min, int $max): int => random_int($min, $max),
         );
-        $heartbeat = Heartbeat::fromEnv(($raw = getenv('CAR_HEARTBEAT_HOURS')) === false ? null : $raw, 'CAR_HEARTBEAT_HOURS');
+        try {
+            $heartbeat = Heartbeat::fromEnv(($raw = getenv('CAR_HEARTBEAT_HOURS')) === false ? null : $raw, 'CAR_HEARTBEAT_HOURS');
+        } catch (\InvalidArgumentException $e) {
+            // A LOUD REFUSAL, not a stack trace (Q27, the car twin — found by the round-2 panel's
+            // key-naming test, which crashed here): `0` would disable the one signal that tells a
+            // dead watcher from a quiet market, and an operator reads exit 2 + one line, not a trace.
+            return $this->fail($e->getMessage());
+        }
         $maxPasses = $this->maxPasses();
         $passes = 0;
         $notified = 0;

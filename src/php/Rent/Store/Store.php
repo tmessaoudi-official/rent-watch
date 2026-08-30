@@ -47,7 +47,7 @@ final readonly class Store
      * without complaint and then threw a raw `no such column` at the first sighting. That is the
      * whole argument for this constant existing, demonstrated against itself.
      */
-    public const int SCHEMA_VERSION = 11;
+    public const int SCHEMA_VERSION = 12;
 
     /**
      * How many undelivered digest rows one `scout digest` may carry.
@@ -736,6 +736,24 @@ final readonly class Store
 
                 if (!\in_array('feed_newest_at', $existing, true)) {
                     $this->pdo->exec('ALTER TABLE source_runs ADD COLUMN feed_newest_at TEXT');
+                }
+            }
+
+            if ($recorded < 12) {
+                // Schema v12 (2026-08-30). What the OTHER track last said about this flat — the one
+                // cross-track datum, beside identities/groups/histories that stay per track by
+                // ruling. It exists because a veto that lived only in the pass's harvest lapsed the
+                // moment the twin was not fetched: a review panel pushed a PLS flat's agency copy on
+                // the pass after its landlord listing failed to load. NOT backfilled — a pre-v12 row
+                // has no fact, which is the truth, and learns one the next time both routes are
+                // judged together.
+                $existing = array_column($this->pdo->query('PRAGMA table_info(listings)')->fetchAll(), 'name');
+
+                if (!\in_array('twin_tenure', $existing, true)) {
+                    $this->pdo->exec('ALTER TABLE listings ADD COLUMN twin_tenure TEXT');
+                }
+                if (!\in_array('twin_source', $existing, true)) {
+                    $this->pdo->exec('ALTER TABLE listings ADD COLUMN twin_source TEXT');
                 }
             }
 
@@ -1745,6 +1763,49 @@ final readonly class Store
      * promoted from DIGEST to MATCH must LEAVE the pending digest, or `scout digest` announces as
      * doubtful something already notified as a match.
      */
+    /**
+     * Record what the OTHER track was judged to be for this flat (schema v12).
+     *
+     * Precedence is the group veto's, read across the track boundary: an EXCLUDED tenure is
+     * DURABLE — once the other route said PLS, no later reading clears it (a portal that stops
+     * printing yesterday's PLS has not changed the flat; stated cost: an over-merged twin rejects a
+     * real flat for the row's life, and the repair is to unpick the row, never to weaken the rule).
+     * Otherwise the LAST reading wins, so a doubt (UNKNOWN) clears when the twin is later judged
+     * eligible — and can return. Developer ruling, 2026-08-30.
+     */
+    public function recordTwin(string $dedupKey, Tenure $tenure, string $source): void
+    {
+        $current = $this->twinTenure($dedupKey);
+
+        if ($current !== null && $current['tenure']->isExcluded()) {
+            return;
+        }
+
+        $this->pdo->prepare('UPDATE listings SET twin_tenure = :tenure, twin_source = :source WHERE dedup_key = :key')
+            ->execute(['tenure' => $tenure->value, 'source' => $source, 'key' => $dedupKey]);
+    }
+
+    /**
+     * What the other track last said about this flat, or `null` when it never said anything.
+     *
+     * @return array{tenure: Tenure, source: string}|null
+     */
+    public function twinTenure(string $dedupKey): ?array
+    {
+        $statement = $this->pdo->prepare('SELECT twin_tenure, twin_source FROM listings WHERE dedup_key = :key');
+        $statement->execute(['key' => $dedupKey]);
+
+        /** @var array{twin_tenure: ?string, twin_source: ?string}|false $row */
+        $row = $statement->fetch(\PDO::FETCH_ASSOC);
+        $tenure = $row === false ? null : Tenure::tryFrom((string) $row['twin_tenure']);
+
+        if ($tenure === null) {
+            return null;
+        }
+
+        return ['tenure' => $tenure, 'source' => (string) $row['twin_source']];
+    }
+
     public function recordOutcome(string $dedupKey, string $outcome): void
     {
         $this->pdo->prepare('UPDATE listings SET outcome = :outcome WHERE dedup_key = :key')

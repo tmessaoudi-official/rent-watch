@@ -249,7 +249,7 @@ final class NotifyTest extends TestCase
         $n = (new Formatter())->rentDrop($this->listing(), 1500, 1400, false);
 
         self::assertSame(Priority::NORMAL, $n->priority);
-        self::assertSame(NotificationKind::RENT_DROP, $n->kind);
+        self::assertSame(NotificationKind::PRICE_DROP, $n->kind);
     }
 
     public function testEveryAlertingSourceStatusCanBeFormatted(): void

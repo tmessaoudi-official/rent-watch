@@ -315,7 +315,7 @@ final readonly class Pipeline
                 $classification,
                 $this->store->groupExcludedTenure($sighting->dedupKey),
             );
-            $judged = $this->twinClassification($judged, $twinsOf[spl_object_id($listing)] ?? [], $observed, $keyOf);
+            $judged = $this->twinClassification($judged, $sighting->dedupKey, $twinsOf[spl_object_id($listing)] ?? [], $observed, $keyOf);
 
             $verdict = $engine->judge($listing, $judged, $this->ageSeconds($sighting->dedupKey, $nowIso));
 
@@ -714,21 +714,31 @@ final readonly class Pipeline
      * bailleur, by a tool whose §1 promise is that this never happens. A review panel proved it
      * through the real pipeline. Two rules, both the schema-v4 group veto read across the track
      * boundary: an EXCLUDED twin vetoes the flat whichever route is being judged, and an
-     * UNDETERMINED twin turns a match into a doubt — the digest, never a push. The twin's tenure is
-     * read as its own cluster would be judged (its persisted group veto included), so a veto that
-     * already binds one route binds the other.
+     * UNDETERMINED twin turns a match into a doubt — the digest, never a push.
+     *
+     * **AND THE FACT IS PERSISTED (schema v12), because a veto that lives only in this pass's
+     * harvest lapses the moment the twin is not fetched.** The first cut read only the twins in
+     * hand; the round-2 panel then fetched the agency copy ALONE on the next pass — a failed CDC
+     * fetch, `--source=seloger`, or the landlord delisting once the flat was allocated — and the
+     * copy was re-judged without its twin and PUSHED. What the other track said is now written to
+     * the row whenever a twin is in hand (`Store::recordTwin()`, with the group veto's precedence:
+     * excluded sticks, otherwise the last reading wins) and read back when it is not. The twin's
+     * tenure is read as its own cluster would be judged (its persisted group veto included), so a
+     * veto that already binds one route binds the other.
      *
      * @param list<array{listing: RawListing, family: string}> $twins
      * @param array<int, array{sighting: mixed, classification: Classification}> $observed
      * @param array<int, string> $keyOf
      */
-    private function twinClassification(Classification $survivor, array $twins, array $observed, array $keyOf): Classification
+    private function twinClassification(Classification $survivor, string $dedupKey, array $twins, array $observed, array $keyOf): Classification
     {
-        if ($survivor->tenure->isExcluded() || $twins === []) {
+        if ($survivor->tenure->isExcluded()) {
             return $survivor;
         }
 
-        $doubt = null;
+        // The most restrictive reading among the twins in hand: excluded > undetermined > eligible.
+        /** @var array{tenure: Tenure, source: string}|null $seen */
+        $seen = null;
         foreach ($twins as $twin) {
             $id = spl_object_id($twin['listing']);
             $classification = $observed[$id]['classification'] ?? null;
@@ -737,35 +747,47 @@ final readonly class Pipeline
             }
             $key = $keyOf[$id] ?? null;
             $judged = $this->clusterClassification($classification, $key === null ? null : $this->store->groupExcludedTenure($key));
-
-            if ($judged->tenure->isExcluded()) {
-                return new Classification(
-                    tenure: $judged->tenure,
-                    confidenceBp: 100,
-                    signals: [new TenureSignal(
-                        tier: 1,
-                        tenure: $judged->tenure,
-                        reason: 'régime exclu (' . $judged->tenure->value . ') relevé sur la même annonce via ' . $twin['listing']->sourceName . ' (autre voie)',
-                        evidence: $judged->tenure->value,
-                    )],
-                    outcome: Outcome::REJECT,
-                );
-            }
-
-            if ($judged->tenure === Tenure::UNKNOWN) {
-                $doubt ??= $twin['listing']->sourceName;
+            $rank = $judged->tenure->isExcluded() ? 2 : ($judged->tenure === Tenure::UNKNOWN ? 1 : 0);
+            $seenRank = $seen === null ? -1 : ($seen['tenure']->isExcluded() ? 2 : ($seen['tenure'] === Tenure::UNKNOWN ? 1 : 0));
+            if ($rank > $seenRank) {
+                $seen = ['tenure' => $judged->tenure, 'source' => $twin['listing']->sourceName];
             }
         }
 
-        if ($doubt !== null && $survivor->outcome === Outcome::MATCH) {
+        if ($seen !== null) {
+            $this->store->recordTwin($dedupKey, $seen['tenure'], $seen['source']);
+        }
+
+        // Read back rather than trusting `$seen`: the store keeps an earlier excluded reading over
+        // today's eligible one, and that durable fact is the whole point.
+        $fact = $this->store->twinTenure($dedupKey);
+        if ($fact === null) {
+            return $survivor;
+        }
+
+        if ($fact['tenure']->isExcluded()) {
+            return new Classification(
+                tenure: $fact['tenure'],
+                confidenceBp: 100,
+                signals: [new TenureSignal(
+                    tier: 1,
+                    tenure: $fact['tenure'],
+                    reason: 'régime exclu (' . $fact['tenure']->value . ') relevé sur la même annonce via ' . $fact['source'] . ' (autre voie)',
+                    evidence: $fact['tenure']->value,
+                )],
+                outcome: Outcome::REJECT,
+            );
+        }
+
+        if ($fact['tenure'] === Tenure::UNKNOWN && $survivor->outcome === Outcome::MATCH) {
             return new Classification(
                 tenure: Tenure::UNKNOWN,
                 confidenceBp: $survivor->confidenceBp,
                 signals: [...$survivor->signals, new TenureSignal(
                     tier: 1,
                     tenure: Tenure::UNKNOWN,
-                    reason: 'régime indéterminé sur la même annonce via ' . $doubt . ' (autre voie) — à vérifier',
-                    evidence: $doubt,
+                    reason: 'régime indéterminé sur la même annonce via ' . $fact['source'] . ' (autre voie) — à vérifier',
+                    evidence: $fact['source'],
                 )],
                 outcome: Outcome::DIGEST,
             );

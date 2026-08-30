@@ -136,6 +136,25 @@ final class CarScoutTest extends TestCase
             putenv('SCOUT_MAX_PASSES');
         }
     }
+    public function testAnUnusableHeartbeatHoursRefusalNamesTheCarKey(): void
+    {
+        // Dropping the key argument at the call site left the suite green (round-2 panel): the
+        // refusal then named `HEARTBEAT_HOURS`, a legacy name the tool itself refuses at startup.
+        putenv('CAR_HEARTBEAT_HOURS=0');
+        putenv('SCOUT_MAX_PASSES=1');
+        try {
+            $seed = $this->scout(['--domain=car', 'run', '--once', '--seed', '--source=paruvendu']);
+            self::assertSame(0, $seed['code'], $seed['err']);
+
+            $r = $this->scout(['--domain=car', 'run', '--watch', '--source=paruvendu']);
+
+            self::assertNotSame(0, $r['code'], 'zero would disable the only liveness signal');
+            self::assertStringContainsString('CAR_HEARTBEAT_HOURS', $r['out'] . $r['err']);
+        } finally {
+            putenv('CAR_HEARTBEAT_HOURS');
+            putenv('SCOUT_MAX_PASSES');
+        }
+    }
     /** @return array{code: int, out: string, err: string} */
     private function scout(array $argv, ?CarRecordingChannel $channel = null, string $now = '2026-08-29T20:00:00+02:00'): array
     {

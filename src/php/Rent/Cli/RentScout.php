@@ -36,6 +36,7 @@ use Scout\Core\Notify\Notifier;
 use Scout\Core\Notify\Priority;
 use Scout\Core\Pacer;
 use Scout\Rent\Core\RawListing;
+use Scout\Rent\Core\Tenure;
 use Scout\Core\Redact;
 use Scout\Core\SourceStatus;
 use Scout\Rent\Core\TenureClassifier;
@@ -1358,6 +1359,17 @@ final readonly class RentScout
             $groupVeto = $store->groupExcludedTenure($key);
 
             if ($groupVeto !== null) {
+                ++$vetoed;
+
+                continue;
+            }
+
+            // The other track's word (schema v12) is part of the original evidence in exactly the
+            // sense the group's is: a row vetoed by its twin must not be re-judged on a snapshot in
+            // which the twin cannot appear, and a row the twin left in doubt must not be PROMOTED.
+            $twin = $store->twinTenure($key);
+
+            if ($twin !== null && ($twin['tenure']->isExcluded() || $twin['tenure'] === Tenure::UNKNOWN)) {
                 ++$vetoed;
 
                 continue;

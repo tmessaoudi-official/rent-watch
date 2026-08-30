@@ -1746,6 +1746,14 @@ var/claude/                 Reports, review outputs — gitignored scratch (hand
   AFTER the agency copy is still pushed once, saying whose push it follows — the better route is
   never hidden. **The source now leads every listing title** (`seloger · 44/100 — …`), because the
   developer prioritises by source and the title is what a phone shows first.
+  **AND THE LINK CARRIES §1 (2026-08-30, two panel rounds):** the twin's judged tenure feeds the
+  same funnel as the persisted group veto — an EXCLUDED twin on the other track REJECTS the flat
+  whichever route is being judged, an UNDETERMINED twin turns the match into a DIGEST — and the
+  fact is PERSISTED on the row (schema v12 `twin_tenure`/`twin_source`, `Store::recordTwin()`),
+  because a veto living only in the pass's harvest lapsed the moment the twin was not fetched: a
+  pass seeing the agency copy alone pushed the PLS flat. Precedence is the group veto's: excluded
+  sticks for the row's life (developer ruling), otherwise the last reading wins, so a doubt clears
+  only when both routes are judged together again. `reclassify` reads it beside the group veto.
 - **`prototype/scout.py` has no tenure classifier at all.** It will happily surface PLAI and PLUS
   listings. It is reference material for the field-mapping and adapter shape only — treat its filtering
   logic as incomplete, not as a baseline to preserve.

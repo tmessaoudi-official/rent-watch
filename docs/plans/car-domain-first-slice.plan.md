@@ -211,6 +211,40 @@
   (CLAUDE.md gotcha, with the `PHP_INI_SCAN_DIR` mitigation); `rentwatch-*` temp prefixes and the
   charters' "rent-watch" prose (cosmetic). Round 2 runs against the fix commit.
 
+- [2026-08-30 09:10] AGREED (developer): certification stays MAXIMAL as ruled — two CONSECUTIVE
+  fully-clean panel rounds against a frozen commit; round 3 runs after the round-2 fixes.
+- [2026-08-30 09:10] AGREED (developer): the cross-track twin fact is DURABLE, the group veto's
+  rule read across the track boundary — once the other route was judged excluded for a flat, the
+  agency copy is rejected for the row's life (stated cost: an over-merged twin rejects a real flat
+  permanently; repair = unpick the row, never weaken the rule); a doubt (twin UNKNOWN) clears only
+  when both routes are judged together again (stated cost: a twin resolved while the copy was
+  absent cannot reach the copy's row until they are seen together).
+
+- [2026-08-30 09:20] AGREED (developer): scope of the goal — certify THIS milestone (MAXIMAL), then
+  build `tests/test-vehicle-guard.sh` and the generic store split as the NEXT milestone with its
+  own panel; the five input-gated rows (ParuVendu *Voir tous les résultats* page, cross-portal car
+  twins, diesel/ZFE penalty size, CapCar alert, real SMTP) stay owed until the developer provides
+  the capture or ruling each needs.
+
+- [2026-08-30 10:30] AGREED (milestone panel, round 2 against `30225fb` — resilience 3 findings,
+  completeness 6, the correctness lens LOST to an API error after a 5.5 h stall and stopped;
+  round 3 re-runs it): **P1 (§1)** the cross-track veto only bound while the twin was FETCHED — a
+  pass seeing the agency copy alone pushed the PLS flat; fixed by persisting the twin fact
+  (schema v12 `twin_tenure`/`twin_source`, `Store::recordTwin()`/`twinTenure()`, precedence per
+  the 09:10 ruling), read by `Pipeline::twinClassification()` when the twin is absent and by
+  `reclassify` beside the group veto — four `PipelineRunTest` cases, a new `StoreTwinTest`
+  category (six cases incl. the v11→v12 migration), two reclassify cases, three ledger cases.
+  **P1** the scrubber and `FixtureSecretsTest` were blind to a base64 BODY — both decode base64
+  blocks now; the scrubber REFUSES such a file (`tests/test-scrub-eml.sh` base64 case), the guard
+  has a self-test and a ledger case. **P2/P3**: the *Two tracks, ONE push* gotcha now carries the
+  veto half; `NotificationKind::RENT_DROP` → `PRICE_DROP` (the generic layer's last domain word);
+  `Heartbeat::fromEnv(…, key)` pinned on the car side — which exposed that `CAR_HEARTBEAT_HOURS=0`
+  ESCAPED as an uncaught exception instead of a refusal (fixed, `CarScout::watch()`); the
+  `HeartbeatTest` key case; `sources.json` REMPLACER sentence and verbs; `Dockerfile:74`; corpus
+  provenance paths; `victim@example.test` in the guard's own payload. **Stated, not durable**: a
+  listing's OWN tenure history — a direct route that stops printing yesterday's PLS is pushed on
+  its own reading (pre-existing; only the TWIN fact is durable).
+
 ## Formal Plan
 
 1. `Vehicle/VehicleListing` + `VehicleSnapshot` (reflection-covered encoder), TDD.

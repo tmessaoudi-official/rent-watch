@@ -17,7 +17,7 @@ enum NotificationKind: string
     case MATCH = 'MATCH';
 
     /** A listing already seen whose rent fell — or which crossed a disqualifier boundary (Q33). */
-    case RENT_DROP = 'RENT_DROP';
+    case PRICE_DROP = 'PRICE_DROP';
 
     /** A source is not healthy. Every alerting `SourceStatus`, not just BROKEN (Q29). */
     case SOURCE_HEALTH = 'SOURCE_HEALTH';

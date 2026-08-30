@@ -38,7 +38,7 @@ final readonly class VehicleFormatter
         $pct = $previousEur > 0 ? round($delta * 100 / $previousEur, 1) : 0.0;
 
         return new Notification(
-            kind: NotificationKind::RENT_DROP,
+            kind: NotificationKind::PRICE_DROP,
             priority: Priority::NORMAL,
             title: $car->sourceName . ' · Baisse de prix — ' . self::name($car) . ' · ' . self::eur($currentEur),
             reasons: [

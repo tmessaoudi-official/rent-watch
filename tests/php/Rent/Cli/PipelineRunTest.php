@@ -378,7 +378,7 @@ final class PipelineRunTest extends TestCase
         // And the other order — a mailbox that yields oldest first must reach the same state.
         $pipeline->runOnce([new FakeSource('bienici', [$older, $newer])], '2026-08-27T14:45:00Z');
 
-        self::assertCount(0, $this->ofKind($channel, NotificationKind::RENT_DROP), '1122 was the rent BEFORE 1146, not after it');
+        self::assertCount(0, $this->ofKind($channel, NotificationKind::PRICE_DROP), '1122 was the rent BEFORE 1146, not after it');
         self::assertSame([1122, 1146], $store->priceHistory($store->dedupKey($newer)), 'changes only: one rise, no oscillation');
         // And the row is dated by the NEWER MESSAGE, not by any of the five passes that read it.
         self::assertSame('2026-08-27T13:34:25Z', $store->snapshot($store->dedupKey($newer))?->lastSeenAt);
@@ -402,7 +402,7 @@ final class PipelineRunTest extends TestCase
         $pipeline->runOnce([new FakeSource('bienici', [$newer, $older])], '2026-08-27T14:00:00Z');
         $pipeline->runOnce([new FakeSource('bienici', [$newer, $older])], '2026-08-27T14:15:00Z');
 
-        self::assertCount(0, $this->ofKind($channel, NotificationKind::RENT_DROP));
+        self::assertCount(0, $this->ofKind($channel, NotificationKind::PRICE_DROP));
         self::assertSame([1122, 1146], $store->priceHistory($store->dedupKey($newer)));
     }
 
@@ -452,7 +452,7 @@ final class PipelineRunTest extends TestCase
         $pipeline->runOnce([new FakeSource('bienici', [$this->dated('ozoir', 1300, '2026-08-26T18:31:09Z')])], '2026-08-26T19:00:00Z');
         $pipeline->runOnce([new FakeSource('bienici', [$this->dated('ozoir', 1100, '2026-08-27T13:34:25Z')])], '2026-08-27T14:00:00Z');
 
-        self::assertCount(1, $this->ofKind($channel, NotificationKind::RENT_DROP));
+        self::assertCount(1, $this->ofKind($channel, NotificationKind::PRICE_DROP));
     }
 
     /** A listing with no observation time is observed NOW — the polling adapters' case, unchanged. */
@@ -642,6 +642,108 @@ final class PipelineRunTest extends TestCase
         self::assertCount(0, $this->ofKind($channel, NotificationKind::MATCH), 'an undetermined twin is a doubt about the flat, not about one route');
         self::assertSame(2, $result->digested, 'both routes land in the à-vérifier digest');
         self::assertCount(1, $this->ofKind($channel, NotificationKind::DIGEST));
+    }
+    /**
+     * THE VETO MUST SURVIVE THE TWIN'S ABSENCE (round-2 panel, 2026-08-30). The first cut of the
+     * cross-track veto read only THIS pass's harvest, so one pass that fetched the agency copy alone
+     * — a failed CDC fetch, `--source=seloger`, or the landlord delisting once the flat was
+     * allocated by commission — re-judged the copy without its twin and PUSHED the PLS flat. The
+     * fact is persisted on the row (schema v12), read when the twin is not in hand, with the group
+     * veto's precedence: an excluded tenure sticks for the row's life.
+     */
+    public function testAnExcludedTwinSeenOnAnEarlierPassStillVetoesTheAgencyCopyWhenItComesAlone(): void
+    {
+        $store = $this->store();
+        $channel = new RecordingChannel();
+        $pipeline = $this->pipeline($store, new Notifier([$channel]));
+        [, $agency] = $this->twins();
+        $direct = $this->directRoute(['financement' => 'PLS'], '4 pieces de 88 m2. Logement social PLS, commission d\'attribution.');
+
+        $pipeline->runOnce([
+            new FakeSource('cdc_habitat', [$direct], mixedTenure: true),
+            new FakeSource('seloger', [$agency], family: 'private'),
+        ], '2026-08-07T12:00:00+02:00');
+        $second = $pipeline->runOnce([new FakeSource('seloger', [$agency], family: 'private')], '2026-08-07T12:20:00+02:00');
+
+        self::assertCount(0, $this->ofKind($channel, NotificationKind::MATCH), 'the PLS veto learned on pass 1 binds the agency copy on pass 2');
+        self::assertSame(1, $second->rejectedCount);
+        self::assertFalse($store->wasNotifiedAs($store->dedupKey($agency), 'MATCH'));
+    }
+
+    public function testAnUndeterminedTwinSeenEarlierKeepsTheAgencyCopyOutOfTheMatchesWhenItComesAlone(): void
+    {
+        $store = $this->store();
+        $channel = new RecordingChannel();
+        $pipeline = $this->pipeline($store, new Notifier([$channel]));
+        [, $agency] = $this->twins();
+        $direct = $this->directRoute([], 'Bel appartement de 4 pieces de 88 m2, proche gare.');
+
+        $pipeline->runOnce([
+            new FakeSource('cdc_habitat', [$direct], mixedTenure: true),
+            new FakeSource('seloger', [$agency], family: 'private'),
+        ], '2026-08-07T12:00:00+02:00');
+        $pipeline->runOnce([new FakeSource('seloger', [$agency], family: 'private')], '2026-08-07T12:20:00+02:00');
+
+        self::assertCount(0, $this->ofKind($channel, NotificationKind::MATCH), 'the doubt learned on pass 1 binds on pass 2');
+        self::assertFalse($store->wasNotifiedAs($store->dedupKey($agency), 'MATCH'));
+    }
+
+    public function testADoubtIsClearedWhenTheTwinIsLaterJudgedEligibleTogether(): void
+    {
+        // Precedence mirrors the group veto: excluded sticks, otherwise the LAST judged tenure of
+        // the twin is the fact. A doubt clears only when the two are judged together again — a
+        // twin resolved while the copy was absent cannot reach the copy's row (stated cost).
+        $store = $this->store();
+        $pipeline = $this->pipeline($store, new Notifier([new RecordingChannel()]));
+        [, $agency] = $this->twins();
+
+        $pipeline->runOnce([
+            new FakeSource('cdc_habitat', [$this->directRoute([], 'Bel appartement de 4 pieces de 88 m2, proche gare.')], mixedTenure: true),
+            new FakeSource('seloger', [$agency], family: 'private'),
+        ], '2026-08-07T12:00:00+02:00');
+        self::assertSame(Tenure::UNKNOWN, $store->twinTenure($store->dedupKey($agency))['tenure'] ?? null, 'pass 1 records the doubt');
+
+        $pipeline->runOnce([
+            new FakeSource('cdc_habitat', [$this->directRoute(['financement' => 'LLI'], '4 pieces de 88 m2, logement intermediaire.')], mixedTenure: true),
+            new FakeSource('seloger', [$agency], family: 'private'),
+        ], '2026-08-07T12:20:00+02:00');
+        self::assertSame(Tenure::LLI, $store->twinTenure($store->dedupKey($agency))['tenure'] ?? null, 'pass 2 clears it');
+    }
+
+    public function testAnExcludedTwinFactIsNeverOverwrittenByALaterEligibleReading(): void
+    {
+        // A portal that stops printing the PLS it printed yesterday has not changed the flat.
+        $store = $this->store();
+        $channel = new RecordingChannel();
+        $pipeline = $this->pipeline($store, new Notifier([$channel]));
+        [, $agency] = $this->twins();
+
+        $pipeline->runOnce([
+            new FakeSource('cdc_habitat', [$this->directRoute(['financement' => 'PLS'], 'Logement social PLS.')], mixedTenure: true),
+            new FakeSource('seloger', [$agency], family: 'private'),
+        ], '2026-08-07T12:00:00+02:00');
+        $pipeline->runOnce([
+            new FakeSource('cdc_habitat', [$this->directRoute(['financement' => 'LLI'], '4 pieces de 88 m2, logement intermediaire.')], mixedTenure: true),
+            new FakeSource('seloger', [$agency], family: 'private'),
+        ], '2026-08-07T12:20:00+02:00');
+
+        self::assertSame(Tenure::PLS, $store->twinTenure($store->dedupKey($agency))['tenure'] ?? null, 'the veto is durable');
+        // The DIRECT route may be pushed on its own reading — a listing's OWN tenure history is not
+        // durable today (pre-existing, unchanged here); the COPY, whose twin fact says PLS, is not.
+        foreach ($this->ofKind($channel, NotificationKind::MATCH) as $pushed) {
+            self::assertNotSame('seloger', $pushed->sourceName, 'the copy itself is never pushed');
+        }
+    }
+
+    /** @param array<string, string> $fields */
+    private function directRoute(array $fields, string $description): RawListing
+    {
+        return new RawListing(
+            sourceName: 'cdc_habitat', externalId: 'c1', title: '4 pièces - 2ème étage - 88m²',
+            description: $description, fields: $fields,
+            url: 'https://cdc.test/c1', commune: 'Sartrouville', postcode: '78500',
+            rentCc: 1450, surfaceM2: 88.0, rooms: 4,
+        );
     }
     private function twins(): array
     {
@@ -1746,14 +1848,14 @@ final class PipelineRunTest extends TestCase
 
     // ---------------------------------------------------------------- schema
 
-    public function testTheSchemaVersionIsEleven(): void
+    public function testTheSchemaVersionIsTwelve(): void
     {
         // A bare constant assertion, and it earns its place: lowering `SCHEMA_VERSION` makes
         // `migrate()` return early on an EXISTING database, so an older one opens cleanly and then
         // throws `no such column` on the first write. A fresh database hides it entirely, because
         // `CREATE TABLE IF NOT EXISTS` always writes the current DDL.
-        self::assertSame(11, Store::SCHEMA_VERSION);
-        self::assertSame(11, $this->store()->schemaVersion());
+        self::assertSame(12, Store::SCHEMA_VERSION);
+        self::assertSame(12, $this->store()->schemaVersion());
     }
 
     public function testAVersionOneDatabaseIsUpgradedThroughEveryLaterStep(): void
@@ -1771,7 +1873,7 @@ final class PipelineRunTest extends TestCase
         unset($pdo, $store);
 
         $reopened = Store::open((string) $this->dbPath);
-        self::assertSame(11, $reopened->schemaVersion());
+        self::assertSame(12, $reopened->schemaVersion());
 
         // v5's table and v6's column are created by their own migration steps, not by the
         // fresh-database DDL, and this is the only path that proves the difference: a v1 database
@@ -1817,7 +1919,7 @@ final class PipelineRunTest extends TestCase
         $pdo->exec("UPDATE schema_meta SET value = '5' WHERE key = 'schema_version'");
         unset($pdo);
 
-        self::assertSame(11, Store::open($path)->schemaVersion(), 'a re-run migration must not throw');
+        self::assertSame(12, Store::open($path)->schemaVersion(), 'a re-run migration must not throw');
     }
 
     // ---------------------------------------------------------------- helpers
