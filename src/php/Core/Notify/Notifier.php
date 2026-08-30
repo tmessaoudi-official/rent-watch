@@ -116,7 +116,7 @@ final readonly class Notifier
 
         if ($this->channels === []) {
             return 'no notification channel is enabled — nothing would ever be delivered. '
-                . 'Set `notify.channels` in config/rent/criteria.json';
+                . 'Set `notify.channels` in config/<domain>/criteria.json';
         }
 
         $lines = [];

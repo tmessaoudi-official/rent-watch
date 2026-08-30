@@ -23,7 +23,7 @@ final readonly class FileMailbox implements Mailbox
     /**
      * Always `null` — a directory of frozen fixtures is not a feed.
      *
-     * Deliberate, and asserted, rather than inherited. `MAILBOX_DIR=tests/fixtures/<source> scout
+     * Deliberate, and asserted, rather than inherited. `MAILBOX_DIR=tests/fixtures/rent/<source> scout
      * doctor` is a documented workflow and `doctor` passes a real clock, so a `FileMailbox` that
      * reported its files' `Date` headers would make every fixture run drift into `FEED_SILENT` as
      * the calendar advances — a gate that goes red on a future date with no code change, which is

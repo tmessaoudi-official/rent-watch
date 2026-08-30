@@ -112,15 +112,39 @@ final class CarScoutTest extends TestCase
         self::assertStringContainsString('source inconnue', $r['err']);
     }
 
+    public function testTheHeartbeatSeesAVerdictOnlyTheClockCanDerive(): void
+    {
+        // The beat must read health WITH the clock. `FEED_SILENT` and `STALE` are underivable
+        // without one, so a portal that stopped sending — or a watcher that did — counted as
+        // healthy on the one channel whose job is to say otherwise: the rent side's 2026-08-29
+        // defect, unfixed on the car twin until a review panel proved it at the store on
+        // 2026-08-30. Pinned through `STALE` rather than `FEED_SILENT` because the offline
+        // `FileMailbox` deliberately reports no message date (an unknown date yields no verdict);
+        // in production the IMAP mailbox does, and the same clock carries both. Seeded on one day,
+        // watched a month later (outside the 7-day rolling window): the startup beat (cold start, no marker) must name the source.
+        putenv('SCOUT_MAX_PASSES=1');
+        try {
+            $seed = $this->scout(['--domain=car', 'run', '--once', '--seed', '--source=paruvendu']);
+            self::assertSame(0, $seed['code'], $seed['err']);
+
+            $r = $this->scout(['--domain=car', 'run', '--watch', '--source=paruvendu'], null, '2026-10-01T20:00:00+02:00');
+
+            self::assertStringContainsString('[HEARTBEAT]', $r['out'], 'a cold start beats');
+            self::assertStringContainsString('en alerte : paruvendu (stale)', $r['out'], 'the beat sees what only the clock can derive');
+            self::assertStringNotContainsString('toutes les sources sont OK', substr($r['out'], 0, (int) strpos($r['out'], 'annonce(s) analysées')), 'the STARTUP beat, before any pass, must not call a week-old run healthy');
+        } finally {
+            putenv('SCOUT_MAX_PASSES');
+        }
+    }
     /** @return array{code: int, out: string, err: string} */
-    private function scout(array $argv, ?CarRecordingChannel $channel = null): array
+    private function scout(array $argv, ?CarRecordingChannel $channel = null, string $now = '2026-08-29T20:00:00+02:00'): array
     {
         $out = fopen('php://memory', 'r+');
         $err = fopen('php://memory', 'r+');
         self::assertIsResource($out);
         self::assertIsResource($err);
 
-        $code = (new Scout(self::ROOT, $out, $err, '2026-08-29T20:00:00+02:00', null, $channel === null ? null : new Notifier([$channel])))->run($argv);
+        $code = (new Scout(self::ROOT, $out, $err, $now, null, $channel === null ? null : new Notifier([$channel])))->run($argv);
 
         rewind($out);
         rewind($err);

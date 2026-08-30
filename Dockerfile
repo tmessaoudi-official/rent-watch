@@ -77,7 +77,7 @@ COPY composer.json ./
 COPY tests/fixtures/rent/fixture_demo/ ./tests/fixtures/rent/fixture_demo/
 
 # `state/` is the MOUNTED VOLUME (Q8): the seen-set, the price history, the run log, the Q27
-# heartbeat marker and `last-refusal.txt`. Created here so the image runs even unmounted — but see
+# heartbeat marker and `rent-last-refusal.txt`. Created here so the image runs even unmounted — but see
 # Q36: an empty seen-set makes `run` REFUSE rather than notify the entire back catalogue, which is
 # precisely what a forgotten volume looks like.
 RUN mkdir -p /app/state

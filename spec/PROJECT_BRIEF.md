@@ -323,7 +323,7 @@ Build it early.
 ## 11. Testing
 
 - **Fixture-based parser tests.** Save a real payload per source under
-  `tests/fixtures/<source>/`. Parser tests run offline against fixtures. No network in CI.
+  `tests/fixtures/rent/<source>/`. Parser tests run offline against fixtures. No network in CI.
 - **Classifier tests** — the hand-labelled corpus from §4. Non-negotiable.
 - **Criteria tests** — table-driven, covering every hard disqualifier and score component.
 - **Dedup tests** — including the cross-portal fuzzy case.

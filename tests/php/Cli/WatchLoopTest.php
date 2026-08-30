@@ -13,7 +13,7 @@ use Scout\Core\Pacer;
 /**
  * The loop that turns `scout run --once` into a watcher.
  *
- * IT IS A SEPARATE CLASS SO THAT THIS FILE CAN EXIST. Written inline in `Scout::runCommand()` the
+ * IT IS A SEPARATE CLASS SO THAT THIS FILE CAN EXIST. Written inline in `RentScout::runCommand()` the
  * same behaviour would need config files, a store path, a notifier and a database on disk before it
  * could be exercised at all — so in practice it would be tested by running it, which for a
  * fifteen-minute cadence means it would not be tested.

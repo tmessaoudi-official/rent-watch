@@ -1,5 +1,5 @@
 {
-  "$comment": "Frozen payload for the `fixture_demo` source. NOT a capture from any real landlord — every value is invented, and it is shaped to exercise the pipeline's known traps rather than to look realistic. A real captured payload replaces this per source, under tests/fixtures/<source>/, scrubbed before committing.",
+  "$comment": "Frozen payload for the `fixture_demo` source. NOT a capture from any real landlord — every value is invented, and it is shaped to exercise the pipeline's known traps rather than to look realistic. A real captured payload replaces this per source, under tests/fixtures/rent/<source>/, scrubbed before committing.",
   "$traps": {
     "item-2": "an excluded tenure (PLAI) stated in a structured field — must REJECT, never notify",
     "item-3": "a mixed-source listing with no tenure signal at all — must DIGEST, never match (fail-closed). Also the only item using the ALTERNATE payload shape (address.city, price, nbRooms), so the field map's fallback candidates are genuinely exercised rather than merely declared",

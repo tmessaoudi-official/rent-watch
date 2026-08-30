@@ -82,27 +82,66 @@ final class FixtureSecretsTest extends TestCase
     #[DataProvider('fixtureProvider')]
     public function testFixtureCarriesNoLiveCredential(string $path, string $label): void
     {
-        $content = (string) file_get_contents($path);
-
-        foreach (self::patterns() as $kind => $pattern) {
-            if (preg_match_all($pattern, $content, $matches) === 0) {
-                continue;
-            }
-
-            foreach ($matches[0] as $hit) {
-                self::assertMatchesRegularExpression(
-                    self::PLACEHOLDER,
-                    $hit,
-                    $label . ' carries what looks like a live ' . $kind . '. Scrub it: replace the '
-                        . 'value with a visibly fake placeholder of the same shape (see '
-                        . 'tests/fixtures/rent/inli/search.html), so the parser still sees the structure '
-                        . 'it would see live. Do not narrow the pattern and do not add an exception.',
-                );
-            }
+        foreach (self::suspects((string) file_get_contents($path)) as [$kind, $hit]) {
+            self::assertMatchesRegularExpression(
+                self::PLACEHOLDER,
+                $hit,
+                $label . ' carries what looks like a live ' . $kind . '. Scrub it: replace the '
+                    . 'value with a visibly fake placeholder of the same shape (see '
+                    . 'tests/fixtures/rent/inli/search.html), so the parser still sees the structure '
+                    . 'it would see live. Do not narrow the pattern and do not add an exception.',
+            );
         }
 
         // Reaching here with no credential-shaped string at all is the ordinary case, and PHPUnit
         // needs an assertion to not call the test risky.
         self::assertTrue(true);
+    }
+    /**
+     * THE GUARD MUST SEE WHAT THE SCRUBBER SEES. Every real `.eml` fixture in the tree is
+     * quoted-printable, where a JWT reads `=3DeyJ…` — and `\beyJ` never matches after `=3D`,
+     * because `D`→`e` is not a word boundary. A review panel proved on 2026-08-30 that a live-shaped
+     * JWT was REFUSED plain and PASSED in QP: the committed Bien'ici tokens had never been matched,
+     * while CLAUDE.md said this test "already matches JWTs". Decoding QP before looking is the
+     * scrubber's own 2026-08-25 lesson, applied to the second line of defence.
+     */
+    public function testTheGuardSeesThroughQuotedPrintable(): void
+    {
+        $jwt = 'eyJhbGciOiJIUzI1NiJ9.eyJlbWFpbCI6InZpY3RpbUBnbWFpbC5jb20ifQ.c2lnbmF0dXJlLXNpZ25hdHVyZS1zaWduYXR1cmU';
+
+        self::assertSame(['JWT'], array_column(self::suspects('signedRecipient=' . $jwt), 0), 'plain');
+        self::assertSame(['JWT'], array_column(self::suspects('signedRecipient=3D' . $jwt), 0), 'quoted-printable `=3D`');
+        self::assertSame(
+            ['JWT'],
+            array_column(self::suspects("signedRecipient=3D" . substr($jwt, 0, 30) . "=\r\n" . substr($jwt, 30)), 0),
+            'a QP soft line break inside the token',
+        );
+        self::assertSame([], self::suspects('signedRecipient=3DeyJFAKE.FAKEFAKEFAKE.FAKEFAKEFAKE'), 'a placeholder is not a suspect');
+    }
+
+    /**
+     * Every credential-shaped string in `$content`, looked for in the raw bytes AND after
+     * quoted-printable decoding, minus the ones that announce themselves as placeholders.
+     *
+     * @return list<array{0: string, 1: string}> [kind, hit]
+     */
+    private static function suspects(string $content): array
+    {
+        $found = [];
+        foreach ([$content, quoted_printable_decode($content)] as $text) {
+            foreach (self::patterns() as $kind => $pattern) {
+                if (preg_match_all($pattern, $text, $matches) === 0) {
+                    continue;
+                }
+                foreach ($matches[0] as $hit) {
+                    if (preg_match(self::PLACEHOLDER, $hit) === 1) {
+                        continue;
+                    }
+                    $found[$kind . "\0" . $hit] = [$kind, $hit];
+                }
+            }
+        }
+
+        return array_values($found);
     }
 }

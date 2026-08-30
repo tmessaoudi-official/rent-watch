@@ -20,10 +20,12 @@ namespace Scout\Core\Notify;
  */
 final readonly class NtfyChannel implements Channel
 {
+    /** @param string $topicKey the environment key the caller read the topic from — the domain's own, so a refusal names the line to fix */
     public function __construct(
         private string $topic,
         private string $server = 'https://ntfy.sh',
         private int $timeoutSeconds = 10,
+        private string $topicKey = 'NTFY_TOPIC',
     ) {}
 
     public function name(): string
@@ -52,7 +54,7 @@ final readonly class NtfyChannel implements Channel
     public function check(): ?string
     {
         if (trim($this->topic) === '') {
-            return 'the ntfy topic is not set (RENT_NTFY_TOPIC or CAR_NTFY_TOPIC, per domain). Treat the topic as a secret — anyone who knows it can read every notification';
+            return 'the ntfy topic is not set (' . $this->topicKey . '). Treat the topic as a secret — anyone who knows it can read every notification';
         }
         if (trim($this->server) === '' || preg_match('~^https?://~i', $this->server) !== 1) {
             return 'NTFY_SERVER must be an http(s) URL, got ' . var_export($this->server, true);

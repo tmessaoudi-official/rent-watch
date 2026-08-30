@@ -186,7 +186,7 @@ Changes: whether `src/php/Rent/Enrich/Transit.php` is milestone-1 infrastructure
 > repo keeps re-learning: the ceiling did not move alone. The region went to all eight departements
 > and the surface floor to 50 m² in the same change, opening a pool the old criteria never looked
 > at. The eight became zero and a different 83 appeared. **Never predict a yield from the previous
-> filter's matches** — one poll on a throwaway `SCOUT_DB` settles it.
+> filter's matches** — one poll on a throwaway `RENT_SCOUT_DB` settles it.
 >
 > Two consequences of the 83, both real, neither a defect to quietly fix:
 >
@@ -308,7 +308,7 @@ afford.
 > allowed to start, because `run --once` at a terminal is that shape. What changed instead: nothing
 > is marked notified, the run warns at startup, `doctor` names every channel and whether it counts,
 > and `test-notify` exits 1. Reversing this means making `hasRemoteChannel()` false a startup
-> refusal in `Scout::runCommand()`. LIBRE listings go fast, which is the argument for push; email is the argument for a readable
+> refusal in `RentScout::runCommand()`. LIBRE listings go fast, which is the argument for push; email is the argument for a readable
 record. Having both, gated on config, costs one interface and two small classes.
 
 

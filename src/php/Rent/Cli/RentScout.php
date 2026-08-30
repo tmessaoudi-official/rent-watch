@@ -221,7 +221,7 @@ final readonly class RentScout
         $sources = $this->sources($store, $this->onlySources($flags), $criteria, $flags);
         $now = $this->now();
 
-        $this->line('scout doctor · ' . $now);
+        $this->line('scout --domain=rent doctor · ' . $now);
         $this->line('  base    : ' . $this->dbPath() . ' (schéma v' . $store->schemaVersion()
             . ', journal ' . $store->journalMode() . ')');
 
@@ -279,7 +279,7 @@ final readonly class RentScout
         } catch (\InvalidArgumentException $e) {
             // Doctor DIAGNOSES, it does not refuse — but it must not print a plausible hour derived
             // from a zone that would stop `run` at startup.
-            $zoneNote = 'TZ INUTILISABLE — `scout run --watch` refusera de démarrer : ' . $e->getMessage();
+            $zoneNote = 'TZ INUTILISABLE — `scout --domain=rent run --watch` refusera de démarrer : ' . $e->getMessage();
         }
 
         $this->line('  fuseau  : PHP=' . date_default_timezone_get() . ' · récapitulatif=' . $zoneNote);
@@ -310,7 +310,7 @@ final readonly class RentScout
         // deployment gets the two event-driven paths and no floor — and a line promising a daily
         // rollup to an operator who runs `--once` repeats the hard-rule-2 shape this line was
         // rewritten to stop repeating, one scope narrower.
-        $this->line('  digest  : à la fin de toute passe produisant du nouveau, sur demande (`scout digest`), '
+        $this->line('  digest  : à la fin de toute passe produisant du nouveau, sur demande (`scout --domain=rent digest`), '
             . 'et en plancher quotidien à ' . $criteria->notify->digestHour . 'h en `--watch` (Q34) '
             . '— silencieux si rien n\'est en attente');
         $this->line('');
@@ -395,7 +395,7 @@ final readonly class RentScout
      * @param list<string> $flags
      */
     /**
-     * `scout replay <source> [--file=<payload>]`.
+     * `scout --domain=rent replay <source> [--file=<payload>]`.
      *
      * Bare, it is the alias of `dump` it has always been. With `--file`, it is the half spec §10
      * asked for and the alias never delivered: a frozen page run through a NETWORK source's own
@@ -428,7 +428,7 @@ final readonly class RentScout
 
         $name = self::firstBareArgument($flags);
         if ($name === null) {
-            return $this->fail('usage : scout replay <source> --file=<charge utile figée>');
+            return $this->fail('usage : scout --domain=rent replay <source> --file=<charge utile figée>');
         }
 
         $definitions = ConfigLoader::loadSources($this->rootDir . '/config/rent/sources.json');
@@ -439,10 +439,10 @@ final readonly class RentScout
 
         if ($definition->type === 'email_alert') {
             return $this->fail('--file ne s\'applique qu\'aux sources html/json : pour une source email_alert, '
-                . 'relisez un dossier de .eml avec MAILBOX_DIR=<dossier> scout dump ' . $name);
+                . 'relisez un dossier de .eml avec MAILBOX_DIR=<dossier> scout --domain=rent dump ' . $name);
         }
         if ($definition->type === 'fixture') {
-            return $this->fail('la source ' . $name . ' est de type `fixture` : `scout dump ' . $name
+            return $this->fail('la source ' . $name . ' est de type `fixture` : `scout --domain=rent dump ' . $name
                 . '` relit déjà sa charge utile figée (--file est pour les sources html/json)');
         }
 
@@ -503,7 +503,7 @@ final readonly class RentScout
         $name = self::firstBareArgument($flags);
 
         if ($name === null) {
-            return $this->fail('usage : scout dump <source>');
+            return $this->fail('usage : scout --domain=rent dump <source>');
         }
 
         $store ??= $this->store();
@@ -586,7 +586,7 @@ final readonly class RentScout
             // the process looked perfectly healthy — a watcher that watches and never speaks.
             return $this->failRun(
                 '`--seed` amorce le seen-set en une passe ; combiné à `--watch` il n\'émettrait '
-                . 'jamais aucune notification. Lancez `scout run --once --seed`, puis `--watch`.',
+                . 'jamais aucune notification. Lancez `scout --domain=rent run --once --seed`, puis `--watch`.',
             );
         }
 
@@ -597,7 +597,7 @@ final readonly class RentScout
         // from a healthy one — and with nothing batched, every historic listing would push at once.
         //
         // The question asked is whether anything has ever been RECORDED, not whether this process
-        // created the file: `scout doctor` opens the database, and while the guard read the latter,
+        // created the file: `scout --domain=rent doctor` opens the database, and while the guard read the latter,
         // running doctor once — the first thing a new machine invites you to do — let the next run
         // notify the entire back catalogue.
         if ($store->isSeenSetEmpty() && !$seed) {
@@ -684,7 +684,7 @@ final readonly class RentScout
         // successful start reports it, which is the case Q27's refusal note exists for — an operator
         // who typo'd this in a compose file would otherwise see nothing at all.
         try {
-            $heartbeat = Heartbeat::fromEnv(($raw = getenv('RENT_HEARTBEAT_HOURS')) === false ? null : $raw);
+            $heartbeat = Heartbeat::fromEnv(($raw = getenv('RENT_HEARTBEAT_HOURS')) === false ? null : $raw, 'RENT_HEARTBEAT_HOURS');
 
             // Q34's daily floor, built here for the same reason and refusing at the same moment: an
             // unusable `digest_hour` or `TZ` must stop the watcher at startup, not a day into an
@@ -911,7 +911,7 @@ final readonly class RentScout
             // on a listing whose prose is clean, so the row classifies normally and can be a
             // NOTIFIED MATCH — and `staleVerdicts()` selects `tenure IS NULL OR tenure = 'UNKNOWN'`,
             // so such a row is not SKIPPED by reclassify, it is INVISIBLE to it, and invisible to
-            // `pendingDigest()` too. `scout doctor`'s `preuves` line is the only thing that ever
+            // `pendingDigest()` too. `scout --domain=rent doctor`'s `preuves` line is the only thing that ever
             // surfaces it. This was the FOURTH live copy of that premise; the previous three were
             // corrected in three separate review rounds, and a fifth round found this one sitting
             // directly above the operator line it explains.
@@ -927,7 +927,7 @@ final readonly class RentScout
 
         if ($result->digestOverflow > 0) {
             $this->warn(sprintf(
-                '%d annonce(s) à vérifier non émise(s) ce passage (lot de %d) — `scout digest` pour la suite.',
+                '%d annonce(s) à vérifier non émise(s) ce passage (lot de %d) — `scout --domain=rent digest` pour la suite.',
                 $result->digestOverflow,
                 Store::DIGEST_BATCH,
             ));
@@ -1043,7 +1043,7 @@ final readonly class RentScout
             // Said out loud, because a capped batch that stayed silent about the remainder would
             // look like the whole backlog — and the operator would stop running the command.
             $this->line(sprintf(
-                '%d autre(s) en attente — relancer `scout digest` pour la suite (lot de %d).',
+                '%d autre(s) en attente — relancer `scout --domain=rent digest` pour la suite (lot de %d).',
                 $batch->overflow(),
                 Store::DIGEST_BATCH,
             ));
@@ -1093,7 +1093,7 @@ final readonly class RentScout
     }
 
     /**
-     * Collect one drain of the *à vérifier* bin — the half `scout digest` and Q34's daily floor share.
+     * Collect one drain of the *à vérifier* bin — the half `scout --domain=rent digest` and Q34's daily floor share.
      *
      * CAPPED, and the remainder is reported by {@see DigestBatch::overflow()}. The query was once
      * unbounded and the send is all-or-nothing, so a rejection that is a function of payload size
@@ -1430,7 +1430,7 @@ final readonly class RentScout
 
         if ($overflow > 0) {
             $this->line(sprintf(
-                '%d promotion(s) au-delà du lot de %d — relancer `scout reclassify` pour la suite.',
+                '%d promotion(s) au-delà du lot de %d — relancer `scout --domain=rent reclassify` pour la suite.',
                 $overflow,
                 Store::DIGEST_BATCH,
             ));
@@ -1873,7 +1873,7 @@ final readonly class RentScout
      * Q34's DAILY FLOOR: drain the *à vérifier* bin if the local `digest_hour` has come round again.
      *
      * The gap this closes: both other emission paths are event-driven — the pipeline emits at the end
-     * of a pass that produced NEW entries, and `scout digest` emits when a human types it. So a
+     * of a pass that produced NEW entries, and `scout --domain=rent digest` emits when a human types it. So a
      * backlog that failed to send, or that was left over by the batch cap, sat in §1's only landing
      * zone until somebody thought to look. Q34 rules a daily floor for exactly that, and it was the
      * one third of the ruling never built.
@@ -1906,7 +1906,7 @@ final readonly class RentScout
         }
 
         if ($batch->withoutSnapshot > 0) {
-            // Voiced here too, not only by `scout digest`. This count does not mean "old rows": the
+            // Voiced here too, not only by `scout --domain=rent digest`. This count does not mean "old rows": the
             // query filters on `outcome`, a v7 column that is not backfilled, so a pre-v7 row is
             // never returned at all. The only reachable cause is a listing whose own payload could
             // not be JSON-encoded — a LIVE SOURCE FAULT. A floor that announced those rows silently
@@ -2115,7 +2115,7 @@ final readonly class RentScout
             if (!$definition->enabled) {
                 // `--source=<name>` FORCE-RUNS a disabled source, and only an explicit name does.
                 //
-                // Without this, `/add-source` step 5 — "run `scout doctor` against the new block,
+                // Without this, `/add-source` step 5 — "run `scout --domain=rent doctor` against the new block,
                 // flip `enabled: true` once it is green" — could not be followed in that order: the
                 // block had to be enabled before anything would run it, which is the edit to
                 // committed config the flag exists to avoid. `dump` has always resolved a source by
@@ -2440,7 +2440,7 @@ final readonly class RentScout
         $this->warn(
             'aucun canal n\'atteint de destinataire : les annonces seront écrites ici et RIEN '
             . 'ne sera marqué notifié. `console` et `email` via SMTP_TRANSPORT=file ne '
-            . 'comptent pas — voir `scout doctor`. Configurez `ntfy`, ou `email` via '
+            . 'comptent pas — voir `scout --domain=rent doctor`. Configurez `ntfy`, ou `email` via '
             . 'SMTP_TRANSPORT=smtp|sendmail.',
         );
     }
@@ -2469,7 +2469,7 @@ final readonly class RentScout
         // with its own prefix, From default and ntfy topic, and two copies of this logic is how
         // one drifts. The unknown-name refusal — hard rule 2's "computed and never sent" — lives
         // there now, still as a separate one-line guard a sabotage can remove.
-        return ChannelFactory::build($name, $this->out, $this->rootDir, '[rent-watch]', 'rent-watch@localhost', (string) (getenv('RENT_NTFY_TOPIC') ?: ''));
+        return ChannelFactory::build($name, $this->out, $this->rootDir, '[rent-watch]', 'rent-watch@localhost', (string) (getenv('RENT_NTFY_TOPIC') ?: ''), 'RENT_NTFY_TOPIC');
     }
 
     /**
@@ -2560,7 +2560,7 @@ final readonly class RentScout
     }
 
     /**
-     * A startup refusal from `scout run`: reported now, and RECORDED for the next start (Q27).
+     * A startup refusal from `scout --domain=rent run`: reported now, and RECORDED for the next start (Q27).
      *
      * Scoped to `run` on purpose. A `doctor` refusal is read by whoever typed it, in the terminal
      * they typed it in, so recording it would make the next watch start report noise the operator
@@ -2574,7 +2574,7 @@ final readonly class RentScout
     }
 
     /**
-     * Record why `scout run` refused to start, for the next successful start to report (Q27).
+     * Record why `scout --domain=rent run` refused to start, for the next successful start to report (Q27).
      *
      * A startup refusal is the one failure that reaches nobody: the process exits before any
      * notification channel is used, and under Docker its stderr scrolls past in a log the operator

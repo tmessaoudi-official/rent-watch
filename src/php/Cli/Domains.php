@@ -9,9 +9,10 @@ use Scout\Rent\Cli\RentScout;
 
 /**
  * The domain registry. Adding a domain is ONE entry here plus its own `Scout\<Slug>\` namespace,
- * `config/<slug>/` and `<SLUG>_*` keys in `.env.example` — nothing in the generic layer names a
- * domain anywhere else, and `ScoutDispatchTest` asserts the usage text is generated from this table
- * rather than typed beside it.
+ * `config/<slug>/` and `<SLUG>_*` keys in `.env.example` — no generic-layer CODE imports a domain
+ * class, generic messages speak of `<SLUG>_*` / `config/<domain>/` rather than enumerating domains,
+ * and `ScoutDispatchTest` asserts the usage text is generated from this table rather than typed
+ * beside it.
  */
 final class Domains
 {

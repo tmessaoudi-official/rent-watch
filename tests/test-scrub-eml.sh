@@ -110,7 +110,7 @@ EOF
 message_with_personal_ids() {
   cat <<'EOF'
 From: no.reply@portal.test
-To: takieddine.messaoudi.official@gmail.com
+To: subscriber@example.test
 Subject: 3 nouveaux biens a louer
 Content-Type: text/html; charset=UTF-8
 Content-Transfer-Encoding: quoted-printable

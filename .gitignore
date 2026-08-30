@@ -18,7 +18,7 @@
 # The seen-set and the listings DB. Deleting these makes the next run RE-NOTIFY
 # EVERYTHING and loses price history for good — see CLAUDE.md § "Credentials & stateful data".
 seen.json
-# The default SCOUT_DB location. Deliberately NOT under /var/, which is documented two blocks
+# The default RENT_SCOUT_DB location. Deliberately NOT under /var/, which is documented two blocks
 # down as container-lifetime scratch — the seen-set is the opposite of scratch.
 /state/
 *.db
@@ -96,4 +96,3 @@ Thumbs.db
 *.rej
 *.log
 
-# the car domain's personal overrides, like config/rent/criteria.local.json

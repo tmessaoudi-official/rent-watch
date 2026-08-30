@@ -315,6 +315,7 @@ final readonly class Pipeline
                 $classification,
                 $this->store->groupExcludedTenure($sighting->dedupKey),
             );
+            $judged = $this->twinClassification($judged, $twinsOf[spl_object_id($listing)] ?? [], $observed, $keyOf);
 
             $verdict = $engine->judge($listing, $judged, $this->ageSeconds($sighting->dedupKey, $nowIso));
 
@@ -704,6 +705,75 @@ final readonly class Pipeline
      * called — disabling the in-pass scan left the whole suite green. Dead safety code is worse
      * than none: it reads as a second line of defence and is not one. Removed rather than kept.
      */
+    /**
+     * §1 ACROSS THE TWO TRACKS (2026-08-30). The cross-track link of 2026-08-29 reused the
+     * positive evidence that a landlord's listing and its agency copy are ONE flat — for the "one
+     * push" bookkeeping only. It consulted nothing else, so a direct route REJECTED as `PLS` on its
+     * detail page was still named, with its URL, as the *voie directe, candidature au bailleur* in
+     * the match push of its tenure-less agency copy: the user told to apply for a PLS flat at the
+     * bailleur, by a tool whose §1 promise is that this never happens. A review panel proved it
+     * through the real pipeline. Two rules, both the schema-v4 group veto read across the track
+     * boundary: an EXCLUDED twin vetoes the flat whichever route is being judged, and an
+     * UNDETERMINED twin turns a match into a doubt — the digest, never a push. The twin's tenure is
+     * read as its own cluster would be judged (its persisted group veto included), so a veto that
+     * already binds one route binds the other.
+     *
+     * @param list<array{listing: RawListing, family: string}> $twins
+     * @param array<int, array{sighting: mixed, classification: Classification}> $observed
+     * @param array<int, string> $keyOf
+     */
+    private function twinClassification(Classification $survivor, array $twins, array $observed, array $keyOf): Classification
+    {
+        if ($survivor->tenure->isExcluded() || $twins === []) {
+            return $survivor;
+        }
+
+        $doubt = null;
+        foreach ($twins as $twin) {
+            $id = spl_object_id($twin['listing']);
+            $classification = $observed[$id]['classification'] ?? null;
+            if ($classification === null) {
+                continue;
+            }
+            $key = $keyOf[$id] ?? null;
+            $judged = $this->clusterClassification($classification, $key === null ? null : $this->store->groupExcludedTenure($key));
+
+            if ($judged->tenure->isExcluded()) {
+                return new Classification(
+                    tenure: $judged->tenure,
+                    confidenceBp: 100,
+                    signals: [new TenureSignal(
+                        tier: 1,
+                        tenure: $judged->tenure,
+                        reason: 'régime exclu (' . $judged->tenure->value . ') relevé sur la même annonce via ' . $twin['listing']->sourceName . ' (autre voie)',
+                        evidence: $judged->tenure->value,
+                    )],
+                    outcome: Outcome::REJECT,
+                );
+            }
+
+            if ($judged->tenure === Tenure::UNKNOWN) {
+                $doubt ??= $twin['listing']->sourceName;
+            }
+        }
+
+        if ($doubt !== null && $survivor->outcome === Outcome::MATCH) {
+            return new Classification(
+                tenure: Tenure::UNKNOWN,
+                confidenceBp: $survivor->confidenceBp,
+                signals: [...$survivor->signals, new TenureSignal(
+                    tier: 1,
+                    tenure: Tenure::UNKNOWN,
+                    reason: 'régime indéterminé sur la même annonce via ' . $doubt . ' (autre voie) — à vérifier',
+                    evidence: $doubt,
+                )],
+                outcome: Outcome::DIGEST,
+            );
+        }
+
+        return $survivor;
+    }
+
     private function clusterClassification(Classification $survivor, ?Tenure $groupTenure): Classification
     {
         // No re-check that `$groupTenure` is excluded: `Store::groupExcludedTenure()` returns

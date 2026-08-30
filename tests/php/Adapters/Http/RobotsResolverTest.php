@@ -147,7 +147,7 @@ final class RobotsResolverTest extends TestCase
     public function testTheResolverItselfDoesNotCacheAndSaysSo(): void
     {
         // Stated as a test rather than left implicit, because the guarantee "one robots.txt per host
-        // per pass" is real and lives ELSEWHERE — in `Scout::sources()`, keyed on `originFor()`. A
+        // per pass" is real and lives ELSEWHERE — in `RentScout::sources()`, keyed on `originFor()`. A
         // future reader who assumes this class memoises would remove that local and reintroduce a
         // per-page robots fetch, which is load a landlord did not need to serve.
         $client = new CountingHttpClient([

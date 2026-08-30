@@ -24,7 +24,7 @@ use Scout\Adapters\SourceError;
  * alert has been seen yet, so every extraction rule here is written against generic structures — a
  * link per listing, a rent that looks like a rent, a commune from the configured list — rather than
  * against any one portal's layout. It is built to be SHAPED by a real message, not to guess one:
- * the moment an actual alert lands in `tests/fixtures/<portal>/`, its quirks become a fixture and
+ * the moment an actual alert lands in `tests/fixtures/rent/<portal>/`, its quirks become a fixture and
  * this class grows a per-portal override under `Adapters/sites/`.
  *
  * The consequence is honest and stated: **a listing this parser cannot read confidently gets no

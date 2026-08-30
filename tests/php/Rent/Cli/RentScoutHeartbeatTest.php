@@ -250,6 +250,26 @@ final class RentScoutHeartbeatTest extends TestCase
 
         self::assertSame('2026-08-22T11:00:00+02:00', file_get_contents($root . '/state/rent-heartbeat.txt'));
     }
+    public function testAllThreePreSplitMarkersAreRenamedNotOnlyTheHeartbeat(): void
+    {
+        // A review panel deleted the `digest.txt` entry of the migration map and the suite stayed
+        // green: only the heartbeat half was pinned. A deployment carrying `digest.txt` would
+        // re-serve today's digest window on its first start after the redeploy.
+        // No heartbeat marker: a cold start beats, and that beat is what REPORTS the migrated
+        // refusal note (Q27) and then clears it — so the note's migration is proven by the report.
+        $root = $this->tempRoot();
+        file_put_contents($root . '/state/digest.txt', '2026-08-22T08:00:00+02:00');
+        file_put_contents($root . '/state/last-refusal.txt', '2026-08-21T07:00:00+02:00 — refus précédent');
+
+        $r = $this->watchIn($root, $this->delivering());
+
+        self::assertStringContainsString('refus précédent', $r['out'], 'the pre-split refusal note is read under its new name and reported');
+        foreach (['digest', 'last-refusal'] as $name) {
+            self::assertFileDoesNotExist($root . "/state/$name.txt", "$name.txt must be renamed away");
+        }
+        self::assertSame('2026-08-22T08:00:00+02:00', (string) file_get_contents($root . '/state/rent-digest.txt'), 'the digest window survives under its new name');
+        self::assertFileDoesNotExist($root . '/state/rent-last-refusal.txt', 'reported, therefore cleared');
+    }
     public function testAnExistingRecentMarkerSuppressesTheStartupBeat(): void
     {
         // A container restarted twice in a minute must not beat twice.

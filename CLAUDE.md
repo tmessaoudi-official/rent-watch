@@ -637,9 +637,13 @@ portal applies the saved search's own criteria before sending and those criteria
 > `D` of `=3D` and refuses to start — the unit test passed on an unencoded fixture while the tool
 > failed on every real one. `tests/test-scrub-eml.sh` now carries the QP case.
 >
-> `tests/php/Repo/FixtureSecretsTest.php` would have refused the committed fixture (it already
-> matches JWTs). It would not have caught the scrubber reporting success, which is the half that
-> matters: a tool nobody doubts is a tool nobody checks.
+> `tests/php/Repo/FixtureSecretsTest.php` **was supposed to be the second line of defence and was not
+> one until 2026-08-30**: its JWT pattern began with `\b`, and in a quoted-printable body a token reads
+> `=3DeyJ…` — `D`→`e` is no boundary — so it never matched the committed Bien'ici tokens, plain OR
+> placeholder. A review panel proved a live-shaped JWT REFUSED plain and PASSED in QP. It now decodes
+> QP before it looks (the scrubber's own lesson) and carries a self-test; a ledger case removes the
+> decode. It still would not catch the scrubber reporting success, which is the half that matters: a
+> tool nobody doubts is a tool nobody checks.
 
 ### leboncoin — source #7, and the first HTML-only alert (2026-08-26)
 
@@ -917,7 +921,7 @@ in `.env.example` read by no code at all: `NotificationKind::HEARTBEAT` existed,
 quiet market until somebody thought to look. `scout --domain=rent run --watch` now emits a LOW-priority beat
 every `RENT_HEARTBEAT_HOURS` (default 24) — **whether or not anything matched**, which is the
 entire point — carrying passes completed, listings notified and sources OK. **The startup beat is
-`isDue()`-gated, not unconditional** (`Scout::runCommand()`, the startup `isDue()` check — cited by LINE for one round, and the line moved twice; a symbol survives an edit above it): the marker is on the mounted volume, so a
+`isDue()`-gated, not unconditional** (`RentScout::runCommand()`, the startup `isDue()` check — cited by LINE for one round, and the line moved twice; a symbol survives an edit above it): the marker is on the mounted volume, so a
 restart inside the interval sends nothing, and only a cold start — no marker — beats immediately.
 That is the correct behaviour (a redeploy loop must not spam the channel) but it is NOT a
 channel-health check, and reading it as one costs time: a redeploy on 2026-08-23 15:48 left the
@@ -973,7 +977,7 @@ prescribes running `scout --domain=rent doctor` against a new block *before* fli
 impossible while a disabled source could not run. `dump` always behaved this way; the verbs now
 agree. Three things travel with it. The run SAYS the source is disabled, because a `--source` left
 behind in a deployment is otherwise indistinguishable from one somebody enabled on purpose. Hard
-rule 1's `REMPLACER` refusal moved into `Scout::buildSource()` — the single funnel every verb passes
+rule 1's `REMPLACER` refusal moved into `RentScout::buildSource()` — the single funnel every verb passes
 through — because the loader's `enabled: true` check was the entire guard for as long as a disabled
 source could never be polled. And hard rule 4's scraping opt-in still fires on a force-run private
 portal, asserted, because the enabled check sits above it.
@@ -1279,9 +1283,9 @@ this way" is never authority, and extending it in place contradicts the brief.
    **`robots.txt` is enforced at RUNTIME as of 2026-08-21, and was not before.** `Robots` was fully
    implemented and both network adapters consulted it — index, every paginated page, each detail
    page — but every check was guarded by `$this->robots !== null` and both production construction
-   sites in `Scout::buildSource()` passed `null`. So it was enforced in tests, by injection, and
+   sites in `RentScout::buildSource()` passed `null`. So it was enforced in tests, by injection, and
    never once on a real poll. Two things follow for anyone touching this. **A `null` robots does not
-   mean "check later", it means "never check"** — which is why `Scout::robotsFor()` returns a
+   mean "check later", it means "never check"** — which is why `RentScout::robotsFor()` returns a
    fail-closed verdict for a source it cannot derive an origin for, rather than `null`. And **the
    status table is not uniform**: a 2xx parses ONLY IF IT LOOKS LIKE A ROBOTS FILE (2026-08-25 — an
    SPA catch-all answers `200 text/html` with its app shell, which parses to zero directives and so
@@ -1488,7 +1492,7 @@ store's own suite the day that was added.
 
 Required coverage, per spec §11 — non-negotiable once `src/` exists:
 
-- **Fixture-based parser tests.** One frozen payload per source under `tests/fixtures/<source>/`.
+- **Fixture-based parser tests.** One frozen payload per source under `tests/fixtures/rent/<source>/`.
   Offline. No network in CI. A parser test that reaches the network is a monitoring check, not a test.
 - **Classifier tests.** ≥30 hand-labelled listing texts covering pure-LLI In'li, mixed CDC Habitat,
   an explicit PLAI, an explicit PLS, and an ambiguous case. The suite must go red if the classifier
@@ -1798,6 +1802,14 @@ var/claude/                 Reports, review outputs — gitignored scratch (hand
   there is still no Python manifest — so
   `.claude/hooks/lint-on-write.sh` is live and will report on `prototype/scout.py`. Those findings are
   known and deliberately unfixed: the prototype is kept verbatim as received.
+- **The local PHP's tracing JIT crashes the sabotage ledger nondeterministically.** `php` here is
+  phpbrew's `8.5.9 (ZTS DEBUG)` with `opcache.jit=tracing` and `opcache.enable_cli=1`; under the
+  ledger the suite dies mid-run with `zend_jit_trace.c … Assertion !p->op_array failed` (exit 134),
+  which `tests/sabotage-check.sh` rightly counts as *harness broke*, not as a detection — observed on
+  three different cases across two runs on 2026-08-30, each detecting fine on the other run. CI is
+  unaffected. For a local run, disable the JIT WITHOUT dropping the original ini scan dir:
+  `PHP_INI_SCAN_DIR="<phpbrew var/db/cli>:<a dir holding opcache.jit=off>"` — dropping the original
+  loses `iconv` and reddens the baseline for an unrelated reason (measured: 18 errors).
 
 ## Credentials & stateful data
 

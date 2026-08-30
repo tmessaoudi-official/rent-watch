@@ -1,6 +1,6 @@
 ---
 name: source-resilience-reviewer
-description: Read-only adversarial reviewer for rent-watch's failure modes, legal posture and secrets hygiene — silent source breakage and health baselines, exception paths that turn a broken source into an empty result set, parser fragility against frozen fixtures, the opt-in gate on private-portal scraping, robots.txt and request rates, and any credential or personal financial figure reaching a committed file or a log. Use as the resilience+safety lens of the certification panel at any 3C/6C gate, or whenever a change touches src/php/Adapters/**, src/php/Core/Health*.php, config/rent/sources.json, a fixture, .env.example, or anything that makes a network request. It reads the diff and the code itself and tries to REFUTE the claim that a broken source will be noticed. Never edits anything.
+description: Read-only adversarial reviewer for rent-watch's failure modes, legal posture and secrets hygiene — silent source breakage and health baselines, exception paths that turn a broken source into an empty result set, parser fragility against frozen fixtures, the opt-in gate on private-portal scraping, robots.txt and request rates, and any credential or personal financial figure reaching a committed file or a log. Use as the resilience+safety lens of the certification panel at any 3C/6C gate, or whenever a change touches src/php/Adapters/**, src/php/Core/SourceHealth.php, config/rent/sources.json, a fixture, .env.example, or anything that makes a network request. It reads the diff and the code itself and tries to REFUTE the claim that a broken source will be noticed. Never edits anything.
 tools: Read, Grep, Glob, Bash
 ---
 
@@ -69,7 +69,7 @@ which is why it needs an adversarial reviewer rather than a test.
    evidence ⇒ **P0**, replace it with a root-cause fix. A retry added because "the site is sometimes
    slow" with no captured timing is a bandaid.
 4. **Parser fragility and fixtures.** Parser tests must run **offline** against frozen payloads under
-   `tests/fixtures/<source>/`. A parser test that reaches the network is not a test — it is a
+   `tests/fixtures/rent/<source>/`. A parser test that reaches the network is not a test — it is a
    monitoring check that will fail in CI for unrelated reasons. Verify every `map:` path in a source
    block actually exists in that source's committed fixture; a mapping no fixture exercises fails
    silently at runtime instead of loudly in a test. Check that a fixture captured from a live payload

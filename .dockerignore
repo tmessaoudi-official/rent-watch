@@ -8,7 +8,7 @@
 .env
 .env.*
 !.env.example
-config/*/criteria.local.json
+config/*/*.local.json
 
 # `state/` is the mounted volume, and a development seen-set is a record of flats a real person
 # looked at. Baking it into a layer both ships that and masks a forgotten volume mount, since the

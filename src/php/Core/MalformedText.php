@@ -20,7 +20,7 @@ namespace Scout\Core;
  * are ordinary — a French institutional site serving cp1252 under a `utf-8` declaration, and a
  * description truncated mid-multibyte-character.
  *
- * Callers must not convert this back into an empty result. {@see TenureClassifier::classify()}
+ * Callers must not convert this back into an empty result. {@see \Scout\Rent\Core\TenureClassifier::classify()}
  * turns it into `UNKNOWN` → digest with a reason that names the encoding, so the listing is visible
  * and unclassified rather than invisible or wrongly matched.
  */

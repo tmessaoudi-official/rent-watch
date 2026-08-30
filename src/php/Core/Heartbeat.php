@@ -32,10 +32,10 @@ final readonly class Heartbeat
      *                           from a quiet market is not something a stray env value may do
      *                           silently.
      */
-    public function __construct(public int $intervalHours = self::DEFAULT_INTERVAL_HOURS)
+    public function __construct(public int $intervalHours = self::DEFAULT_INTERVAL_HOURS, string $key = 'HEARTBEAT_HOURS')
     {
         if ($intervalHours < 1) {
-            throw new \InvalidArgumentException('RENT_HEARTBEAT_HOURS / CAR_HEARTBEAT_HOURS must be at least 1 hour, got ' . $intervalHours);
+            throw new \InvalidArgumentException($key . ' must be at least 1 hour, got ' . $intervalHours);
         }
     }
 
@@ -46,9 +46,14 @@ final readonly class Heartbeat
      * a value that is present but unusable is a LOUD refusal, because somebody exported it meaning
      * something, and guessing which thing is how a watcher ends up silently unmonitored.
      *
+     * @param string $key the environment key the caller read — the domain's own
+     *                    (`RENT_HEARTBEAT_HOURS`, `CAR_HEARTBEAT_HOURS`), so a refusal names
+     *                    the line to fix rather than enumerating every domain's (generic layer,
+     *                    2026-08-30)
+     *
      * @throws \InvalidArgumentException on a present-but-unusable value
      */
-    public static function fromEnv(?string $raw): self
+    public static function fromEnv(?string $raw, string $key = 'HEARTBEAT_HOURS'): self
     {
         if ($raw === null || trim($raw) === '') {
             return new self();
@@ -58,11 +63,11 @@ final readonly class Heartbeat
 
         if (preg_match('/^\d+$/', $raw) !== 1) {
             throw new \InvalidArgumentException(
-                'RENT_HEARTBEAT_HOURS / CAR_HEARTBEAT_HOURS doit être un nombre entier d\'heures, reçu `' . $raw . '`',
+                $key . ' doit être un nombre entier d\'heures, reçu `' . $raw . '`',
             );
         }
 
-        return new self((int) $raw);
+        return new self((int) $raw, $key);
     }
 
     /**

@@ -231,7 +231,7 @@ final readonly class CarScout
             }),
             rand: static fn (int $min, int $max): int => random_int($min, $max),
         );
-        $heartbeat = Heartbeat::fromEnv(($raw = getenv('CAR_HEARTBEAT_HOURS')) === false ? null : $raw);
+        $heartbeat = Heartbeat::fromEnv(($raw = getenv('CAR_HEARTBEAT_HOURS')) === false ? null : $raw, 'CAR_HEARTBEAT_HOURS');
         $maxPasses = $this->maxPasses();
         $passes = 0;
         $notified = 0;
@@ -240,7 +240,7 @@ final readonly class CarScout
         $this->line(sprintf('car-watch · surveillance active · %d source(s) · toutes les %d min ± %d (Q37)%s', count($sources), (int) (Pacer::PASS_INTERVAL_SECONDS / 60), (int) (Pacer::JITTER_SECONDS / 60), $maxPasses === null ? '' : ' · SCOUT_MAX_PASSES=' . $maxPasses));
 
         $beat = function () use (&$passes, &$notified, $sources, $notifier, $formatter): void {
-            $health = array_map(static fn (VehicleSource $s) => $s->health(), $sources);
+            $health = array_map(fn (VehicleSource $s) => $s->health($this->now()), $sources);
             $n = $formatter->heartbeat($passes, $notified, $health, $this->now());
             if ($notifier->delivered($notifier->send($n))) {
                 @file_put_contents($this->stateFile('car-heartbeat.txt'), $this->now());
@@ -353,7 +353,7 @@ final readonly class CarScout
         }
         $channels = [];
         foreach ($criteria->notify->channels as $name) {
-            $channels[] = ChannelFactory::build($name, $this->out, $this->rootDir, '[car-watch]', 'car-watch@localhost', (string) (getenv('CAR_NTFY_TOPIC') ?: ''));
+            $channels[] = ChannelFactory::build($name, $this->out, $this->rootDir, '[car-watch]', 'car-watch@localhost', (string) (getenv('CAR_NTFY_TOPIC') ?: ''), 'CAR_NTFY_TOPIC');
         }
 
         return new Notifier($channels);

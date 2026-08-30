@@ -282,7 +282,7 @@ A path may be a list — the first non-empty one wins.
 ## Step 3 — Capture a fixture. No network in CI.
 
 ```bash
-scout --domain=rent dump <name> --raw > tests/fixtures/<name>/search.json
+scout --domain=rent dump <name> --raw > tests/fixtures/rent/<name>/search.json
 ```
 
 **Scrub anything personal from the payload before committing it** — agent names, phone numbers, internal

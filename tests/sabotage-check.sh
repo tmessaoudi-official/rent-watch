@@ -3466,7 +3466,7 @@ run_sabotage "the direct route is no longer judged first, so source order decide
 # A ROOM IS A NOUN, NOT A POSITION. The anchored form let three live titles through in a week.
 run_sabotage "the room pattern is anchored at the start of the title again (an emoji defeats it)" \
   config/rent/criteria.json \
-  's%\\\\bchambres?\\\\b"%^\\\\s*chambre\\\\b"%'
+  's%\\\\bchambres?\\\\b(?!%^\\\\s*chambre\\\\b(?!%'
 
 # THE SOURCE LEADS THE TITLE — the developer's own ordering signal.
 run_sabotage "the source no longer leads a match title" \
@@ -3573,6 +3573,34 @@ run_sabotage "a legacy marker overwrites a newer one already under the per-domai
   src/php/Rent/Cli/RentScout.php \
   's%if (is_file(\$from) \&\& !is_file(\$to)) {%if (is_file($from)) {%'
 
+# Two of the three migrated markers were unpinned: a review panel deleted the `digest.txt` entry of
+# the map and the whole suite stayed green.
+run_sabotage "the digest window marker is not migrated (re-serves today's window after redeploy)" \
+  src/php/Rent/Cli/RentScout.php \
+  "s%'digest.txt' => 'rent-digest.txt', %%"
+
+run_sabotage "the startup-refusal note is not migrated (a pre-split refusal is never reported)" \
+  src/php/Rent/Cli/RentScout.php \
+  "s%, 'last-refusal.txt' => 'rent-last-refusal.txt'%%"
+
+# ── §1 across the two tracks (2026-08-30) ────────────────────────────────────────────────────────
+# The cross-track link named a REJECTED (PLS) direct route as the *voie directe* in its agency copy's
+# match push. The twin's verdict now feeds the same funnel as the persisted group veto.
+run_sabotage "an excluded or undetermined twin on the other track no longer vetoes the flat" \
+  src/php/Rent/Cli/Pipeline.php \
+  's%if (\$survivor->tenure->isExcluded() || \$twins === \[\]) {%if (true) {%'
+
+# The car heartbeat read health WITHOUT the clock, so FEED_SILENT and STALE could never reach the
+# beat — the rent side's 2026-08-29 defect, on the twin.
+run_sabotage "the car heartbeat reads health without the clock (a silent feed counts as healthy)" \
+  src/php/Car/Cli/CarScout.php \
+  's%\$s->health(\$this->now())%$s->health()%'
+
+# The fixture-secrets guard decodes quoted-printable before it looks; without that, a JWT in any real
+# .eml fixture reads `=3DeyJ…` and `\beyJ` never matches.
+run_sabotage "the fixture-secrets guard is blind to quoted-printable again" \
+  tests/php/Repo/FixtureSecretsTest.php \
+  's%quoted_printable_decode(\$content)%$content%'
 printf '\n  %d sabotage(s) detected, %d undetected\n' "$pass" "$fail"
 
 if [[ -n "$_filter" ]]; then

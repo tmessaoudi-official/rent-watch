@@ -10,7 +10,7 @@
 # The seed step is not optional and skipping it is not silent-but-fine. Q36 makes `run` REFUSE on an
 # empty seen-set, because an empty seen-set is what a forgotten volume mount looks like and the
 # alternative is notifying the entire back catalogue at once. Combined with `restart: unless-stopped`
-# that refusal becomes a restart loop — visible, thanks to Q27's `last-refusal.txt`, but a loop. Seed
+# that refusal becomes a restart loop — visible, thanks to Q27's `rent-last-refusal.txt`, but a loop. Seed
 # first and it starts clean.
 
 services:
@@ -38,7 +38,7 @@ services:
     user: "${SCOUT_UID:-1000}:${SCOUT_GID:-1000}"
     volumes:
       # THE mounted volume of Q8. Everything that must outlive the container lives here: the
-      # seen-set, the price history, the run log, the Q27 heartbeat marker and `last-refusal.txt`.
+      # seen-set, the price history, the run log, the Q27 heartbeat marker and `rent-last-refusal.txt`.
       # Deleting it makes the next run re-notify the entire market, and the price history is not
       # reconstructible — a listing only ever shows its CURRENT rent.
       #

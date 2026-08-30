@@ -185,6 +185,32 @@
   Historical plan text keeps its old spellings, except three citations of a path meant to be
   EXECUTED (`drift-scan.sh`), which the drift gate rightly refused.
 
+- [2026-08-30 02:30] AGREED (milestone panel, round 1 against `dc71e18` — THREE lenses, 18
+  findings, 0 clean): every P0–P2 fixed in the follow-up commit, P3s where cheap. **P0
+  (correctness)**: the cross-track twin link named a direct route REJECTED as `PLS` — or
+  UNDETERMINED — as the *voie directe* in its agency copy's match push; it now feeds the twin's
+  judged tenure through the same funnel as the persisted group veto (`Pipeline::twinClassification()`:
+  excluded twin → REJECT, undetermined twin → DIGEST), pinned by two `PipelineRunTest` cases and a
+  ledger case. **P1 (resilience)**: the car heartbeat read `health()` without the clock, so
+  `FEED_SILENT`/`STALE` never reached the beat — fixed and pinned through `STALE` (the offline
+  `FileMailbox` reports no message date by design, so the fixture route cannot show `FEED_SILENT`;
+  production IMAP does, as the rent `leboncoin` verdict proves); and `FixtureSecretsTest`'s JWT
+  pattern was blind to quoted-printable (`\beyJ` after `=3D`), so it had never matched the committed
+  Bien'ici tokens — it decodes QP before looking now, with a self-test and a ledger case; CLAUDE.md's
+  claim corrected. **P2**: the room pattern rejected `3 belles chambres` / `chambre de service` /
+  `chambre d'amis` (hard-rule-8 silent over-rejection) — adjective-tolerant lookbehinds and a
+  room-type lookahead, re-measured over 1 107 stored titles (same 40 caught, zero flats), four new
+  `ConfigTest` cases; `.dockerignore` aligned on `config/*/*.local.json`; generic-layer messages
+  name the key the caller read (`Heartbeat::fromEnv(…, $key)`, `NtfyChannel(…, topicKey:)`) instead
+  of enumerating domains; every rent-CLI advice string carries `--domain=rent`; `SCOUT_DB`
+  instructions → `RENT_SCOUT_DB`; `RentScout::…` symbol citations; `tests/fixtures/rent/<source>/`
+  in current-tense instructions; reviewer trigger globs on real paths; `SMTP_FROM` shipped EMPTY so
+  each domain sends as its own label; sources.json comment counts; composer name `tmessaoudi/scout`.
+  **P3 pinned too**: the digest and refusal marker migrations (deleting either left the suite green).
+  **Recorded, not fixed**: the local tracing JIT crashes the ledger nondeterministically
+  (CLAUDE.md gotcha, with the `PHP_INI_SCAN_DIR` mitigation); `rentwatch-*` temp prefixes and the
+  charters' "rent-watch" prose (cosmetic). Round 2 runs against the fix commit.
+
 ## Formal Plan
 
 1. `Vehicle/VehicleListing` + `VehicleSnapshot` (reflection-covered encoder), TDD.

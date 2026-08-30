@@ -587,6 +587,62 @@ final class PipelineRunTest extends TestCase
     }
 
     /** @return array{RawListing, RawListing} the same Sartrouville T4 on the direct and the agency route */
+    /**
+     * §1 ACROSS THE TWO TRACKS. The cross-track link (2026-08-29) reused positive evidence that two
+     * listings are one flat for the "one push" bookkeeping, and consulted nothing else — so a
+     * landlord's listing REJECTED as PLS on the detail page was named, with its URL, as the
+     * *voie directe, candidature au bailleur* in the match push of its tenure-less agency copy.
+     * The user was told to apply for a PLS flat at the bailleur. Found by a review panel on
+     * 2026-08-30. The rule is the schema-v4 group veto read across the track boundary: an
+     * excluded twin vetoes the flat, whichever route is being judged.
+     */
+    public function testAnAgencyCopyWhoseDirectRouteIsExcludedIsRejectedNotPushed(): void
+    {
+        $store = $this->store();
+        $channel = new RecordingChannel();
+        $pipeline = $this->pipeline($store, new Notifier([$channel]));
+        [, $agency] = $this->twins();
+        $direct = new RawListing(
+            sourceName: 'cdc_habitat', externalId: 'c1', title: '4 pièces - 2ème étage - 88m²',
+            description: '4 pieces de 88 m2. Logement social PLS, commission d\'attribution.', fields: ['financement' => 'PLS'],
+            url: 'https://cdc.test/c1', commune: 'Sartrouville', postcode: '78500',
+            rentCc: 1450, surfaceM2: 88.0, rooms: 4,
+        );
+
+        $result = $pipeline->runOnce([
+            new FakeSource('cdc_habitat', [$direct], mixedTenure: true),
+            new FakeSource('seloger', [$agency], family: 'private'),
+        ], '2026-08-07T12:00:00+02:00');
+
+        self::assertCount(0, $this->ofKind($channel, NotificationKind::MATCH), 'a flat whose direct route says PLS is never pushed, via any route');
+        self::assertCount(0, $this->ofKind($channel, NotificationKind::DIGEST), 'and not digested either: an excluded twin is a veto, not a doubt');
+        self::assertSame(2, $result->rejectedCount, 'both routes rejected, the copy because of its twin');
+        self::assertFalse($store->wasNotifiedAs($store->dedupKey($agency), 'MATCH'));
+    }
+
+    /** The doubt travels too: an UNDETERMINED direct route sends the agency copy to the digest, never to a match. */
+    public function testAnAgencyCopyWhoseDirectRouteIsUndeterminedGoesToTheDigest(): void
+    {
+        $store = $this->store();
+        $channel = new RecordingChannel();
+        $pipeline = $this->pipeline($store, new Notifier([$channel]));
+        [, $agency] = $this->twins();
+        $direct = new RawListing(
+            sourceName: 'cdc_habitat', externalId: 'c1', title: '4 pièces - 2ème étage - 88m²',
+            description: 'Bel appartement de 4 pieces de 88 m2, proche gare.', fields: [],
+            url: 'https://cdc.test/c1', commune: 'Sartrouville', postcode: '78500',
+            rentCc: 1450, surfaceM2: 88.0, rooms: 4,
+        );
+
+        $result = $pipeline->runOnce([
+            new FakeSource('cdc_habitat', [$direct], mixedTenure: true),
+            new FakeSource('seloger', [$agency], family: 'private'),
+        ], '2026-08-07T12:00:00+02:00');
+
+        self::assertCount(0, $this->ofKind($channel, NotificationKind::MATCH), 'an undetermined twin is a doubt about the flat, not about one route');
+        self::assertSame(2, $result->digested, 'both routes land in the à-vérifier digest');
+        self::assertCount(1, $this->ofKind($channel, NotificationKind::DIGEST));
+    }
     private function twins(): array
     {
         $direct = new RawListing(

@@ -66,7 +66,7 @@ A raw alert contains your email address, often several times and often encoded. 
 before it can be committed as a fixture.
 
 ```bash
-php tools/scrub-eml.php <in.eml> <out.eml> takieddine.messaoudi.official@gmail.com
+php tools/scrub-eml.php <in.eml> <out.eml> <your-subscriber-address>
 ```
 
 The address argument is optional but pass it explicitly — it is what the tool searches for.
@@ -89,7 +89,7 @@ mkdir -p var/claude/captures
 php tools/scrub-eml.php ~/Downloads/whatever.eml var/claude/captures/alcopa-01.eml
 ```
 
-I will place the scrubbed file into `tests/fixtures/<source>/` under the existing convention —
+I will place the scrubbed file into `tests/fixtures/rent/<source>/` under the existing convention —
 `YYYY-MM-DD-NNN-<short-slug>.eml`, e.g. `2026-08-26-002-meulan-en-yvelines.eml`. **Captures are
 appended, never renumbered**: the number is an identity, and a renumbered fixture silently
 invalidates every assertion that names it.

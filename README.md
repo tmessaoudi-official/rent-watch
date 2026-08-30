@@ -106,8 +106,10 @@ Everything a domain owns follows ONE scheme, so the next domain is one registry 
 
 The generic layer is what no domain owns: `Text`, `Redact`, `Pacer`, `Heartbeat`, source health,
 the notification channels and transports, the HTTP and IMAP clients, `WatchLoop`, `ChannelFactory`.
-It names no domain anywhere, and `ScoutDispatchTest` pins that the usage text is generated from the
-registry rather than typed beside it.
+Its CODE names no domain (no `use` of a `Scout\Rent\…` or `Scout\Car\…` class), and
+`ScoutDispatchTest` pins that the usage text is generated from the registry rather than typed beside
+it; its user-facing messages speak of `<SLUG>_*` keys and `config/<domain>/` paths rather than
+enumerating domains by hand.
 ## Getting started
 
 ```bash
@@ -518,8 +520,8 @@ mailbox rather than a page. Subscribe a dedicated mailbox to the portal's own al
 message, and capture it:
 
 ```bash
-php tools/scrub-eml.php captured.eml tests/fixtures/<portal>/alert.eml you@example.com
-MAILBOX_DIR=tests/fixtures/<portal> php bin/scout --domain=rent doctor --source=<portal>   # force-runs a disabled source
+php tools/scrub-eml.php captured.eml tests/fixtures/rent/<portal>/alert.eml you@example.com
+MAILBOX_DIR=tests/fixtures/rent/<portal> php bin/scout --domain=rent doctor --source=<portal>   # force-runs a disabled source
 ```
 
 `tools/scrub-eml.php` removes the subscriber's identity — the address, the bounce and reply tokens,

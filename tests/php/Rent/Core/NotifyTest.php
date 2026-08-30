@@ -538,10 +538,10 @@ final class NotifyTest extends TestCase
 
     public function testAnUnconfiguredNtfyChannelRefusesAtCheckRatherThanAtSend(): void
     {
-        $problem = (new NtfyChannel(''))->check();
+        $problem = (new NtfyChannel('', topicKey: 'RENT_NTFY_TOPIC'))->check();
 
         self::assertNotNull($problem);
-        self::assertStringContainsString('RENT_NTFY_TOPIC', (string) $problem);
+        self::assertStringContainsString('RENT_NTFY_TOPIC', (string) $problem, 'the refusal names the key the domain read');
         self::assertStringContainsString('secret', (string) $problem);
     }
 

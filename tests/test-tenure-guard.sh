@@ -274,7 +274,7 @@ expect_fire "a non-tenure denylist in criteria.json (accepted noise, see pattern
 expect_fire "an emptied excluded-set accessor whose docblock mentions a source" \
   '/** Hard disqualifiers applied to every listing from every source. */
 public static function excluded(): array { return []; }' \
-  "$repo/src/php/Core/Criteria.php"
+  "$repo/src/php/Rent/Config/Criteria.php"
 expect_fire "an emptied per-source excluded list in sources.json" \
   '"sources": { "cdc_habitat": { "excluded": [] } }' \
   "$repo/config/rent/sources.json"

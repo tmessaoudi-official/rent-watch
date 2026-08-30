@@ -34,7 +34,7 @@ final class ChannelFactory
         string $rootDir,
         string $subjectPrefix,
         string $fromDefault,
-        string $ntfyTopic = '',
+        string $ntfyTopic, string $ntfyTopicKey = '',
     ): Channel {
         // The topic arrives as a VALUE, read by the caller from its own domain's key
         // (`RENT_NTFY_TOPIC` / `CAR_NTFY_TOPIC`), so each read is a literal `getenv()` the drift
@@ -44,6 +44,7 @@ final class ChannelFactory
             'ntfy' => new NtfyChannel(
                 $ntfyTopic,
                 (string) (getenv('NTFY_SERVER') ?: 'https://ntfy.sh'),
+                topicKey: $ntfyTopicKey,
             ),
             'email' => new EmailChannel(
                 (string) (getenv('SMTP_TO') ?: ''),

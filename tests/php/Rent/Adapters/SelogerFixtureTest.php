@@ -440,13 +440,13 @@ final class SelogerFixtureTest extends TestCase
         );
 
         self::assertSame(
-            '(?<![0-9])(?<![0-9]\s)(?<!une\s)(?<!deux\s)(?<!trois\s)(?<!quatre\s)(?<!cinq\s)(?<!six\s)\bchambres?\b',
+            '(?<![0-9])(?<![0-9]\s)(?<![0-9]\s\w{1,14}\s)(?<!(?:une|deux|trois|quatre|cinq|six)\s)(?<!(?:une|deux|trois|quatre|cinq|six)\s\w{1,14}\s)\bchambres?\b(?!\s+(?:de\s+service|d\'amis|parentale|d\'enfants?))',
             $criteria->excludedBy($withCardTitle->title, $withCardTitle->description),
             'the card\'s own title reaches the title-only rule',
         );
 
         self::assertNotSame(
-            '(?<![0-9])(?<![0-9]\s)(?<!une\s)(?<!deux\s)(?<!trois\s)(?<!quatre\s)(?<!cinq\s)(?<!six\s)\bchambres?\b',
+            '(?<![0-9])(?<![0-9]\s)(?<![0-9]\s\w{1,14}\s)(?<!(?:une|deux|trois|quatre|cinq|six)\s)(?<!(?:une|deux|trois|quatre|cinq|six)\s\w{1,14}\s)\bchambres?\b(?!\s+(?:de\s+service|d\'amis|parentale|d\'enfants?))',
             $criteria->excludedBy($withSubject->title, $withSubject->description),
             'and the subject line does not — which is what the fallback was costing on 27 of 72 '
                 . 'live cards measured 2026-08-26',

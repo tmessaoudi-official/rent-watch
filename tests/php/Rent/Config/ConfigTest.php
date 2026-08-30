@@ -1028,6 +1028,36 @@ final class ConfigTest extends TestCase
             true,
             '630 € for one room of a 53 m² flat — the coliving shape a fourth way',
         ];
+        // ADJECTIVE TOLERANCE (2026-08-30). A review panel measured the first noun form against
+        // plausible titles: "3 belles chambres" was REJECTED because the lookbehind exempted a count
+        // only when it sat IMMEDIATELY before the noun, and "chambre de service" / "chambre d'amis"
+        // — room TYPES that describe a flat — were rejected as room rentals. Silent over-rejection
+        // on a hard disqualifier (hard rule 8). Re-measured over 1 107 stored titles: the same 40
+        // room rentals caught, zero flats, and the four shapes below now survive.
+        yield 'a count with an adjective before the noun is wanted' => [
+            'Appartement 3 belles chambres',
+            'Proche gare.',
+            false,
+            'the count is one word away from the noun, and it is still a count',
+        ];
+        yield 'a chambre de service describes the flat, not a room to let' => [
+            'Appartement 4 pièces, chambre de service au 6e',
+            'Proche gare.',
+            false,
+            'a room TYPE that a family flat is sold with',
+        ];
+        yield 'a chambre d\'amis describes the flat too' => [
+            'Appartement avec chambre d\'amis et balcon',
+            'Proche gare.',
+            false,
+            'same class: the noun names a feature of the flat',
+        ];
+        yield 'a maid\'s room to let is still a room to let' => [
+            'Chambre de bonne 9m²',
+            '450 €/mois charges comprises. 1 pièce . 9 m².',
+            true,
+            'the tolerance is for counts and flat features, never for the rental itself',
+        ];
         yield 'a house counting its bedrooms is wanted' => [
             'Maison 3 chambres au haras du château de abondant',
             '1 100 €/mois charges comprises. 4 pièces . 79 m².',

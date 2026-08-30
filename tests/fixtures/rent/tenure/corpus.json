@@ -55,7 +55,7 @@
       "family": "institutional",
       "default_tenure": "LLI",
       "mixed_tenure": true,
-      "$why": "FLIPPED to true on 2026-08-06 after review. CLAUDE.md's reviewer charter names ICF among the landlords that publish social AND intermediate stock. Novedis is genuinely ICF Habitat's non-social arm, so `false` is defensible for a Novedis-only endpoint and wrong for the group portal — and nothing in this repo yet says which the adapter will target, because config/sources.json does not exist. mixed_tenure is the single flag that disarms the fail-closed rule, so it takes the safe value until that is decided. Tracked as an open question."
+      "$why": "FLIPPED to true on 2026-08-06 after review. CLAUDE.md's reviewer charter names ICF among the landlords that publish social AND intermediate stock. Novedis is genuinely ICF Habitat's non-social arm, so `false` is defensible for a Novedis-only endpoint and wrong for the group portal — and nothing in this repo yet says which the adapter will target, because config/rent/sources.json does not exist. mixed_tenure is the single flag that disarms the fail-closed rule, so it takes the safe value until that is decided. Tracked as an open question."
     },
     "seloger": {
       "name": "seloger",
@@ -88,7 +88,7 @@
       "mixed_tenure": true
     },
     "example_pure_lli": {
-      "$comment": "SYNTHETIC, and deliberately not a real landlord. Until 2026-08-23 In'li carried this shape, and hydration disproved it: the source publishes PLS stock its cards never mention. No LIVE source is pure-LLI today. The classifier still SUPPORTS the shape -- a source with no social stock has nothing to confuse a thin signal with, so `mixed_tenure: false` lets it MATCH below the floor -- and spec/PROJECT_BRIEF.md §11 requires the shape to be covered. Leaning that coverage on a real source is what let a false premise sit in the corpus for weeks, so it is a fixture now. It is absent from config/sources.json on purpose; testEveryCorpusSourceAgreesWithConfig skips sources it cannot find there.",
+      "$comment": "SYNTHETIC, and deliberately not a real landlord. Until 2026-08-23 In'li carried this shape, and hydration disproved it: the source publishes PLS stock its cards never mention. No LIVE source is pure-LLI today. The classifier still SUPPORTS the shape -- a source with no social stock has nothing to confuse a thin signal with, so `mixed_tenure: false` lets it MATCH below the floor -- and spec/PROJECT_BRIEF.md §11 requires the shape to be covered. Leaning that coverage on a real source is what let a false premise sit in the corpus for weeks, so it is a fixture now. It is absent from config/rent/sources.json on purpose; testEveryCorpusSourceAgreesWithConfig skips sources it cannot find there.",
       "name": "example_pure_lli",
       "family": "institutional",
       "default_tenure": "LLI",

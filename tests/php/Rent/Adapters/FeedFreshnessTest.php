@@ -147,7 +147,7 @@ final class FeedFreshnessTest extends TestCase
      *
      * **Load-bearing today, not hypothetically.** The committed fixtures are dated 25–26 August and
      * the default threshold is three days, so the moment this returns a real date the documented
-     * `MAILBOX_DIR=tests/fixtures/<source> scout doctor` workflow reports `feed_silent` — a gate
+     * `MAILBOX_DIR=tests/fixtures/rent/<source> scout doctor` workflow reports `feed_silent` — a gate
      * that reddens with the calendar and no code change.
      */
     public function testAFileMailboxReportsNoFreshnessAtAll(): void

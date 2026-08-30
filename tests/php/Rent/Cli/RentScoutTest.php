@@ -1180,7 +1180,7 @@ final class RentScoutTest extends TestCase
 
         self::assertStringContainsString('à vérifier non émise(s)', $r['err']);
         self::assertStringContainsString((string) ($over - Store::DIGEST_BATCH), $r['err']);
-        self::assertStringContainsString('scout digest', $r['err'], 'and it must say how to drain it');
+        self::assertStringContainsString('scout --domain=rent digest', $r['err'], 'and it must say how to drain it — with the domain, or the command it names is refused');
     }
 
     /** A temp root carrying one fixture source of `$count` listings with NO tenure signal at all. */
