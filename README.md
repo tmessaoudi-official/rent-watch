@@ -20,7 +20,7 @@ Single language, single user, single machine. CLI plus push notifications — **
 > listed the transit layer and classifier tier 4 as "genuinely absent" — all four claims had been
 > false since 2026-08-26, when leboncoin and PAP went live (sources #7 and #8), `src/php/Rent/Enrich/`
 > landed with the IDFM/PRIM commute component, and the `plafonds` figures were fetched and armed.
-> The store is at **schema v11** (v9 commute cache, v10 destination fingerprint, v11 feed
+> The store is at **schema v12** (v9 commute cache, v10 destination fingerprint, v11 feed
 > freshness). The per-source detail lives in `CLAUDE.md`; this page is the summary and it drifted.
 
 > That paragraph replaced one saying *"the pure core and the store are built, nothing else is —
@@ -32,7 +32,7 @@ Single language, single user, single machine. CLI plus push notifications — **
 and PAP** on the Q37 cadence, hydrates detail pages behind a novelty gate, classifies every listing
 by tenure, enriches it with a door-to-door commute, scores it, and pushes what matches. `doctor`,
 `dump`, `run --once/--seed/--watch`, `test-notify`, `digest` and `reclassify` all work end to end.
-The store is at schema v11, and `doctor` now also says when a portal's feed has gone silent behind a
+The store is at schema v12 (v12: the cross-track twin fact), and `doctor` now also says when a portal's feed has gone silent behind a
 steady count (`FEED_SILENT`, 2026-08-28).
 
 **SeLoger went live on 2026-08-25** — the first Tier B portal and the first source that is not a

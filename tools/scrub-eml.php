@@ -36,8 +36,9 @@ declare(strict_types=1);
  * a real capture: the literal address is absent from the decoded body, and one `base64 -d` recovers
  * it in full. This wrote that file and reported `scrubbed`.
  *
- * So the verification decodes before it looks — every long base64url run, and the quoted-printable
- * form — and refuses when the address surfaces in any of them. That is stated as a general rule
+ * So the verification decodes before it looks — every long base64url run, the quoted-printable
+ * form, and every base64-encoded BODY (which it can only REFUSE, not rewrite) — and refuses when
+ * the address surfaces in any of them. That is stated as a general rule
  * rather than as a Bien'ici special case on purpose: the next portal's encoding is not known, and a
  * check that only understands the encodings already seen is the same defect with a later date.
  */
@@ -68,12 +69,26 @@ function recoverableForms(string $message): array
     // text it is — including the base64url runs INSIDE it, which is where a JWT payload lives.
     $texts = [$message, $unfolded];
     foreach ([$message, $unfolded] as $text) {
-        if (preg_match_all('~(?:^[A-Za-z0-9+/]{40,}={0,2}\r?\n?){2,}~m', $text, $blocks) > 0) {
+        // Lines of 20+ base64 characters plus an optional SHORTER last line: the tail of a
+        // 76-column body was dropped by a floor on every line, and the footer carrying the address
+        // is the last thing in every alert (round-3 panel). A 36-column fold is all short lines.
+        if (preg_match_all('~(?:^[A-Za-z0-9+/]{20,}={0,2}\r?\n?)+(?:^[A-Za-z0-9+/]{4,19}={0,2}\r?\n?)?~m', $text, $blocks) > 0) {
             foreach ($blocks[0] as $block) {
-                $decoded = base64_decode((string) preg_replace('~\s+~', '', $block), true);
+                $stripped = (string) preg_replace('~\s+~', '', $block);
+                if (strlen($stripped) < 40) {
+                    continue;
+                }
+                $decoded = base64_decode($stripped, true);
                 if ($decoded !== false && $decoded !== '') {
                     $forms[] = $decoded;
                     $texts[] = $decoded;
+                    // A `charset=utf-16` body: every ASCII byte is followed by a NUL, so `stripos`
+                    // on the raw bytes never matches the address (round-3 panel). Both orders.
+                    if (str_contains($decoded, "\0")) {
+                        foreach (['UTF-16LE', 'UTF-16BE'] as $order) {
+                            $forms[] = (string) @mb_convert_encoding($decoded, 'UTF-8', $order);
+                        }
+                    }
                 }
             }
         }
@@ -304,9 +319,10 @@ if ($address !== null && $address !== '' && stripos($message, $address) !== fals
 if ($address !== null && $address !== '') {
     foreach (recoverableForms($message) as $form) {
         if (stripos($form, $address) !== false) {
-            $leaks[] = 'the address is RECOVERABLE from the output — it survives ENCODED (base64url '
-                . 'or quoted-printable) inside a token this scrubber does not know how to strip. '
-                . 'Teach it that token, or drop the parameter; do not relax this check.';
+            $leaks[] = 'the address is RECOVERABLE from the output — it survives ENCODED (a base64url '
+                . 'token, the quoted-printable form, or a base64-encoded BODY, which this tool cannot '
+                . 'rewrite without re-encoding it). Teach it that token, or capture the message in a '
+                . 'form it can scrub; do not relax this check.';
 
             break;
         }

@@ -745,6 +745,83 @@ final class PipelineRunTest extends TestCase
             rentCc: 1450, surfaceM2: 88.0, rooms: 4,
         );
     }
+    /**
+     * THE FACT ON EVERY MEMBER, READ ACROSS THE CLUSTER (round-3 panel, 2026-08-30). The fact was
+     * written on the SURVIVOR's row only, and judgement is per cluster while survivorship follows
+     * the harvest order: a second private-portal copy of the same flat, absorbed into the seloger
+     * row's cluster on pass 1, learned nothing — fetched alone on pass 2 it was pushed, and fetched
+     * with seloger on pass 3 it survived the cluster, read its own row, and was pushed again while
+     * the seloger row's PLS sat on disk beside it. Proven by execution. Now every member carries
+     * the fact and the judgement reads the most restrictive one across the cluster.
+     */
+    public function testASecondAgencyCopyAbsorbedIntoTheClusterLearnsTheTwinFactToo(): void
+    {
+        $store = $this->store();
+        $channel = new RecordingChannel();
+        $pipeline = $this->pipeline($store, new Notifier([$channel]));
+        [, $agency] = $this->twins();
+        $second = new RawListing(
+            sourceName: 'bienici', externalId: 'b1', title: 'Appartement T4',
+            description: 'Beau 4 pieces de 88 m2, proche gare.', fields: ['financement' => 'LLI'],
+            url: 'https://bienici.test/b1', commune: 'Sartrouville', postcode: '78500',
+            rentCc: 1450, surfaceM2: 88.0, rooms: 4,
+        );
+
+        $pipeline->runOnce([
+            new FakeSource('cdc_habitat', [$this->directRoute(['financement' => 'PLS'], 'Logement social PLS, commission d\'attribution.')], mixedTenure: true),
+            new FakeSource('seloger', [$agency], family: 'private'),
+            new FakeSource('bienici', [$second], family: 'private'),
+        ], '2026-08-07T12:00:00+02:00');
+        self::assertSame(Tenure::PLS, $store->twinTenure($store->dedupKey($second))['tenure'] ?? null, 'the absorbed copy carries the fact');
+
+        $pipeline->runOnce([new FakeSource('bienici', [$second], family: 'private')], '2026-08-07T12:20:00+02:00');
+        $pipeline->runOnce([
+            new FakeSource('bienici', [$second], family: 'private'),
+            new FakeSource('seloger', [$agency], family: 'private'),
+        ], '2026-08-07T12:40:00+02:00');
+
+        self::assertCount(0, $this->ofKind($channel, NotificationKind::MATCH), 'neither copy is ever pushed, whichever survives');
+    }
+
+    /**
+     * A LISTING'S OWN EXCLUDED READING IS DURABLE TOO (round-3 panel). The tool can drop its own
+     * evidence — a hydration fingerprint mismatch serves the card alone — and a row read as PLS
+     * yesterday was re-judged on the card today, LIBRE by default, and PUSHED; the overwrite then
+     * took the row outside `staleVerdicts()` and `pendingDigest()`. `reclassify` already enforces
+     * *evidence ⊇ original, never ⊂*; the pipeline now does too: a stored excluded tenure holds
+     * until an explicit command, the twin fact's rule turned inward.
+     */
+    public function testAnOwnExcludedReadingHoldsWhenTheEvidenceLaterDrops(): void
+    {
+        $store = $this->store();
+        $channel = new RecordingChannel();
+        $pipeline = $this->pipeline($store, new Notifier([$channel]));
+
+        $pipeline->runOnce([new FakeSource('cdc_habitat', [$this->directRoute(['financement' => 'PLS'], 'Logement social PLS.')], mixedTenure: true)], '2026-08-07T12:00:00+02:00');
+        $r = $pipeline->runOnce([new FakeSource('cdc_habitat', [$this->directRoute(['financement' => 'LLI'], '4 pieces de 88 m2, logement intermediaire.')], mixedTenure: true)], '2026-08-07T12:20:00+02:00');
+
+        self::assertCount(0, $this->ofKind($channel, NotificationKind::MATCH), 'yesterday\'s PLS is not undone by today\'s thinner reading');
+        self::assertSame(1, $r->rejectedCount);
+    }
+
+    /** The row records the JUDGED verdict, so `scout digest` announces the doubt's cause, not the row's own reading. */
+    public function testTheStoredVerdictIsTheJudgedOneNotTheRowsOwnReading(): void
+    {
+        $store = $this->store();
+        $pipeline = $this->pipeline($store, new Notifier([new RecordingChannel()]));
+        [, $agency] = $this->twins();
+
+        $pipeline->runOnce([
+            new FakeSource('cdc_habitat', [$this->directRoute([], 'Bel appartement de 4 pieces de 88 m2, proche gare.')], mixedTenure: true),
+            new FakeSource('seloger', [$agency], family: 'private'),
+        ], '2026-08-07T12:00:00+02:00');
+
+        $row = (new \PDO('sqlite:' . (string) $this->dbPath))
+            ->query("SELECT tenure, signals_json FROM listings WHERE source = 'seloger'")
+            ->fetch(\PDO::FETCH_ASSOC);
+        self::assertSame('UNKNOWN', $row['tenure'], 'the doubt is what the row says now');
+        self::assertStringContainsString('autre voie', (string) $row['signals_json'], 'and the drain can say what to verify');
+    }
     private function twins(): array
     {
         $direct = new RawListing(

@@ -221,6 +221,9 @@ final readonly class Pipeline
                 // time otherwise. The store orders sightings by this instant, and that ordering is
                 // the whole defence against a re-read older card manufacturing a rent drop.
                 $sighting = $this->store->record($member, $member->effectiveRentCc(), $member->observedAt ?? $nowIso);
+                // What this row said LAST time, read before today's reading overwrites it: an
+                // excluded tenure is durable (see durableOwnReading()).
+                $previousTenure = $this->store->tenure($sighting->dedupKey);
                 $captured = $this->store->recordVerdict(
                     $sighting->dedupKey,
                     $classification->tenure->value,
@@ -250,7 +253,7 @@ final readonly class Pipeline
                     ++$unencodable;
                 }
 
-                $observed[spl_object_id($member)] = ['sighting' => $sighting, 'classification' => $classification];
+                $observed[spl_object_id($member)] = ['sighting' => $sighting, 'classification' => $classification, 'previous' => $previousTenure];
                 $keyOf[spl_object_id($member)] = $sighting->dedupKey;
                 $memberKeys[] = $sighting->dedupKey;
             }
@@ -315,9 +318,20 @@ final readonly class Pipeline
                 $classification,
                 $this->store->groupExcludedTenure($sighting->dedupKey),
             );
-            $judged = $this->twinClassification($judged, $sighting->dedupKey, $twinsOf[spl_object_id($listing)] ?? [], $observed, $keyOf);
+            $judged = $this->durableOwnReading($judged, $observation['previous'] ?? null);
+            $judged = $this->twinClassification($judged, $sighting->dedupKey, $clusterKeys[spl_object_id($listing)] ?? [$sighting->dedupKey], $twinsOf[spl_object_id($listing)] ?? [], $observed, $keyOf);
 
             $verdict = $engine->judge($listing, $judged, $this->ageSeconds($sighting->dedupKey, $nowIso));
+
+            // THE ROW RECORDS THE JUDGED VERDICT (round-3 panel). The recording loop stored the
+            // row's OWN reading before the group, twin and durable readings had their say, so
+            // `scout digest` — which drains the STORE — announced a demoted row with reasons that
+            // could not say what to verify, while the in-pass digest did. Two drains disagreeing on
+            // one row is what the Q34 single-drain rule exists to prevent. Re-recording the judged
+            // reading also makes an excluded verdict visible to the next pass's durable read.
+            if ($judged !== $classification) {
+                $this->store->recordVerdict($sighting->dedupKey, $judged->tenure->value, $judged->confidenceBp, $judged->reasons(), $listing);
+            }
 
             // Schema v7. Recorded for ALL THREE outcomes and BEFORE the branches below, because
             // both of them `continue` — writing it inside the digest branch alone would leave a
@@ -706,6 +720,35 @@ final readonly class Pipeline
      * than none: it reads as a second line of defence and is not one. Removed rather than kept.
      */
     /**
+     * A LISTING'S OWN EXCLUDED READING IS DURABLE (round-3 panel, 2026-08-30). The tool can drop
+     * its own evidence — a hydration fingerprint mismatch serves the card alone until the re-fetch
+     * budget reaches it — and a row read as `PLS` yesterday was re-judged on the card today, LIBRE
+     * by source default, and PUSHED; the overwrite then took the row outside `staleVerdicts()` and
+     * `pendingDigest()`, beyond either repair command. `reclassify` enforces *evidence ⊇ original,
+     * never ⊂*; the pipeline now does too, by the same rule the twin fact obeys: once excluded,
+     * excluded, until an explicit command says otherwise. Stated cost: a genuine re-labelling by
+     * the portal is not honoured automatically — the safe direction (§1).
+     */
+    private function durableOwnReading(Classification $judged, ?Tenure $previous): Classification
+    {
+        if ($previous === null || !$previous->isExcluded() || $judged->tenure->isExcluded()) {
+            return $judged;
+        }
+
+        return new Classification(
+            tenure: $previous,
+            confidenceBp: 100,
+            signals: [new TenureSignal(
+                tier: 1,
+                tenure: $previous,
+                reason: 'régime exclu (' . $previous->value . ') relevé lors d\'une lecture précédente de cette annonce — conservé (§1)',
+                evidence: $previous->value,
+            )],
+            outcome: Outcome::REJECT,
+        );
+    }
+
+    /**
      * §1 ACROSS THE TWO TRACKS (2026-08-30). The cross-track link of 2026-08-29 reused the
      * positive evidence that a landlord's listing and its agency copy are ONE flat — for the "one
      * push" bookkeeping only. It consulted nothing else, so a direct route REJECTED as `PLS` on its
@@ -716,25 +759,29 @@ final readonly class Pipeline
      * boundary: an EXCLUDED twin vetoes the flat whichever route is being judged, and an
      * UNDETERMINED twin turns a match into a doubt — the digest, never a push.
      *
-     * **AND THE FACT IS PERSISTED (schema v12), because a veto that lives only in this pass's
-     * harvest lapses the moment the twin is not fetched.** The first cut read only the twins in
-     * hand; the round-2 panel then fetched the agency copy ALONE on the next pass — a failed CDC
-     * fetch, `--source=seloger`, or the landlord delisting once the flat was allocated — and the
-     * copy was re-judged without its twin and PUSHED. What the other track said is now written to
-     * the row whenever a twin is in hand (`Store::recordTwin()`, with the group veto's precedence:
-     * excluded sticks, otherwise the last reading wins) and read back when it is not. The twin's
-     * tenure is read as its own cluster would be judged (its persisted group veto included), so a
-     * veto that already binds one route binds the other.
+     * **THE FACT IS PERSISTED (schema v12), ON EVERY MEMBER OF THE CLUSTER, AND READ ACROSS IT.**
+     * A veto living only in this pass's harvest lapsed the moment the twin was not fetched (round
+     * 2: the agency copy fetched ALONE was pushed). A fact written on the survivor's row only lapsed
+     * the moment survivorship changed (round 3: a second private-portal copy, absorbed on pass 1,
+     * pushed alone on pass 2 and again on pass 3 when it survived the seloger row whose PLS sat on
+     * disk beside it — judgement is per cluster, the fact was per row, and the pacer shuffles the
+     * harvest). So what the other track said is written to every member's row whenever a twin is
+     * in hand (`Store::recordTwin()`, precedence: excluded sticks, otherwise the last reading wins)
+     * and the most restrictive fact across the cluster's rows is what judges. The twin's tenure is
+     * read as its own cluster would be judged (its persisted group veto included).
      *
+     * @param list<string> $memberKeys every row of this cluster, the survivor's included
      * @param list<array{listing: RawListing, family: string}> $twins
      * @param array<int, array{sighting: mixed, classification: Classification}> $observed
      * @param array<int, string> $keyOf
      */
-    private function twinClassification(Classification $survivor, string $dedupKey, array $twins, array $observed, array $keyOf): Classification
+    private function twinClassification(Classification $survivor, string $dedupKey, array $memberKeys, array $twins, array $observed, array $keyOf): Classification
     {
         if ($survivor->tenure->isExcluded()) {
             return $survivor;
         }
+
+        $rank = static fn (Tenure $t): int => $t->isExcluded() ? 2 : ($t === Tenure::UNKNOWN ? 1 : 0);
 
         // The most restrictive reading among the twins in hand: excluded > undetermined > eligible.
         /** @var array{tenure: Tenure, source: string}|null $seen */
@@ -747,20 +794,28 @@ final readonly class Pipeline
             }
             $key = $keyOf[$id] ?? null;
             $judged = $this->clusterClassification($classification, $key === null ? null : $this->store->groupExcludedTenure($key));
-            $rank = $judged->tenure->isExcluded() ? 2 : ($judged->tenure === Tenure::UNKNOWN ? 1 : 0);
-            $seenRank = $seen === null ? -1 : ($seen['tenure']->isExcluded() ? 2 : ($seen['tenure'] === Tenure::UNKNOWN ? 1 : 0));
-            if ($rank > $seenRank) {
+            if ($seen === null || $rank($judged->tenure) > $rank($seen['tenure'])) {
                 $seen = ['tenure' => $judged->tenure, 'source' => $twin['listing']->sourceName];
             }
         }
 
         if ($seen !== null) {
-            $this->store->recordTwin($dedupKey, $seen['tenure'], $seen['source']);
+            foreach ($memberKeys as $memberKey) {
+                $this->store->recordTwin($memberKey, $seen['tenure'], $seen['source']);
+            }
         }
 
-        // Read back rather than trusting `$seen`: the store keeps an earlier excluded reading over
-        // today's eligible one, and that durable fact is the whole point.
-        $fact = $this->store->twinTenure($dedupKey);
+        // Read back across the cluster rather than trusting `$seen`: the store keeps an earlier
+        // excluded reading over today's eligible one, and an absorbed member may carry a fact this
+        // survivor's own row never received.
+        /** @var array{tenure: Tenure, source: string}|null $fact */
+        $fact = null;
+        foreach ($memberKeys as $readKey) {
+            $candidate = $this->store->twinTenure($readKey);
+            if ($candidate !== null && ($fact === null || $rank($candidate['tenure']) > $rank($fact['tenure']))) {
+                $fact = $candidate;
+            }
+        }
         if ($fact === null) {
             return $survivor;
         }

@@ -209,7 +209,49 @@ scrub "$work/b64.eml" "$work/b64.out.eml" >"$work/b64.log" 2>&1 || b64_status=$?
 check "a base64-encoded body from which the address is recoverable is REFUSED" test "$b64_status" -ne 0
 refute "and nothing is written" test -f "$work/b64.out.eml"
 check "the refusal says the address is recoverable" grep -qi 'recoverable' "$work/b64.log"
-# ── MUST STRIP THROUGH QUOTED-PRINTABLE ───────────────────────────────────────────────────────────
+# The tail (round-3 panel): every line short. A 36-column fold was written outright.
+message_b64_short() {
+  body="Appartement 3 pieces 65 m2
+https://www.portal.test/annonce/abc-123?signedRecipient=${jwt}
+1 170 EUR par mois charges comprises"
+  cat <<EOF
+From: Portal <no_reply@portal.test>
+To: <${address}>
+Subject: 1 nouvelle annonce
+Content-Type: text/plain; charset=utf-8
+Content-Transfer-Encoding: base64
+
+$(printf '%s' "$body" | base64 -w 0 | fold -w 36)
+EOF
+}
+
+message_b64_short >"$work/b64s.eml"
+b64s_status=0
+scrub "$work/b64s.eml" "$work/b64s.out.eml" >"$work/b64s.log" 2>&1 || b64s_status=$?
+
+check "a base64 body folded at 36 columns is REFUSED as well" test "$b64s_status" -ne 0
+refute "and nothing is written for it" test -f "$work/b64s.out.eml"
+
+# And UTF-16 (round-3 panel): every ASCII byte followed by a NUL, so a byte search never matches.
+message_b64_utf16() {
+  body="https://www.portal.test/annonce/abc-123?signedRecipient=${jwt} — envoye a ${address}"
+  cat <<EOF
+From: Portal <no_reply@portal.test>
+To: <${address}>
+Subject: 1 nouvelle annonce
+Content-Type: text/plain; charset=utf-16le
+Content-Transfer-Encoding: base64
+
+$(printf '%s' "$body" | iconv -f UTF-8 -t UTF-16LE | base64 -w 0 | fold -w 76)
+EOF
+}
+
+message_b64_utf16 >"$work/b64u.eml"
+b64u_status=0
+scrub "$work/b64u.eml" "$work/b64u.out.eml" >"$work/b64u.log" 2>&1 || b64u_status=$?
+
+check "a UTF-16 base64 body from which the address is recoverable is REFUSED" test "$b64u_status" -ne 0
+refute "and nothing is written for it either" test -f "$work/b64u.out.eml"# ── MUST STRIP THROUGH QUOTED-PRINTABLE ───────────────────────────────────────────────────────────
 # The case the first version of this file did not have, and the one that mattered. Most alert mail
 # is QP-encoded: `=` becomes `=3D`, and every line folds at 76 columns with a trailing `=`. So a
 # real capture reads `signedRecipient=3DeyJhbGciOi…` with soft breaks through the middle of the

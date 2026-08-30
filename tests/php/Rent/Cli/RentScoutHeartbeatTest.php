@@ -7,6 +7,7 @@ namespace Scout\Tests\Rent\Cli;
 use PHPUnit\Framework\Attributes\CoversNothing;
 use PHPUnit\Framework\TestCase;
 use Scout\Rent\Cli\RentScout;
+use Scout\Rent\Store\Store;
 use Scout\Core\Notify\ConsoleChannel;
 use Scout\Core\Notify\Notifier;
 use Scout\Tests\Support\DeliveringChannel;
@@ -269,6 +270,22 @@ final class RentScoutHeartbeatTest extends TestCase
         }
         self::assertSame('2026-08-22T08:00:00+02:00', (string) file_get_contents($root . '/state/rent-digest.txt'), 'the digest window survives under its new name');
         self::assertFileDoesNotExist($root . '/state/rent-last-refusal.txt', 'reported, therefore cleared');
+    }
+    public function testANewerStoreIsARecordedRefusalNotATrace(): void
+    {
+        // Round-3 panel: a rollback image opening a v12 store died with an uncaught RuntimeException
+        // and no note — the one failure Q27's note exists for, on the deployment path that
+        // produces it (a redeploy that migrated, then a rollback).
+        $root = $this->tempRoot();
+        Store::open($root . '/state/rent-watch.sqlite3');
+        (new \PDO('sqlite:' . $root . '/state/rent-watch.sqlite3'))->exec("UPDATE schema_meta SET value = '99' WHERE key = 'schema_version'");
+
+        $r = $this->watchIn($root, $this->delivering());
+
+        self::assertSame(2, $r['code']);
+        self::assertStringContainsString('version 99', $r['err']);
+        self::assertStringNotContainsString('Stack trace', $r['err'] . $r['out']);
+        self::assertFileExists($root . '/state/rent-last-refusal.txt');
     }
     public function testAnExistingRecentMarkerSuppressesTheStartupBeat(): void
     {

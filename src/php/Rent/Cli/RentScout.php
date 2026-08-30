@@ -202,6 +202,13 @@ final readonly class RentScout
                 . '. Le volume est-il monté et accessible en écriture par l\'utilisateur du conteneur ?';
 
             return $command === 'run' ? $this->failRun($text) : $this->fail($text);
+        } catch (\RuntimeException $e) {
+            // The store's own refusals — a database a NEWER image migrated, opened by this older one
+            // after a rollback (round-3 panel: an uncaught trace and no note, on exactly the path
+            // Q27's note exists for). Recorded when it refused `run`, like a ConfigError.
+            $text = Redact::text($e->getMessage()) ?? 'erreur';
+
+            return $command === 'run' ? $this->failRun($text) : $this->fail($text);
         }
     }
 
@@ -1461,7 +1468,7 @@ final readonly class RentScout
             // Counted out loud, because a silent skip is indistinguishable from a bug — and this
             // one skips a listing the operator can see sitting in the store as undetermined.
             $this->line(sprintf(
-                '%d annonce(s) écartée(s) par un doublon au régime exclu — leur verdict a été formé '
+                '%d annonce(s) écartée(s) par un doublon ou un jumeau (autre voie) au régime exclu ou indéterminé — leur verdict a été formé '
                 . 'sur la preuve du groupe, que leur propre instantané ne contient pas.',
                 $vetoed,
             ));

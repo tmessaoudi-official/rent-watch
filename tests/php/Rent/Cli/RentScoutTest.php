@@ -892,7 +892,7 @@ final class RentScoutTest extends TestCase
      * reads EVERY message in the shared label within the window and ingests other portals' alerts
      * as its own, under its own `default_tenure`.
      *
-     * Nothing is exposed today — leboncoin is stopped by its REMPLACER ref and `email_demo` names a
+     * Nothing is exposed today — leboncoin went live 2026-08-26 (no REMPLACER anywhere since) and `email_demo` names a
      * sender — which is exactly the state the REMPLACER guard was in on the day it was found.
      */
     public function testAnExplicitlyNamedEmailSourceStillNeedsItsSender(): void

@@ -245,6 +245,31 @@
   listing's OWN tenure history — a direct route that stops printing yesterday's PLS is pushed on
   its own reading (pre-existing; only the TWIN fact is durable).
 
+- [2026-08-30 11:30] AGREED (milestone panel, round 3 against `cf468e3` — correctness 4, resilience
+  6, completeness 7; all fixed in the follow-up commit): **P0 (§1)** the twin fact was written on the
+  SURVIVOR's row only, and judgement is per cluster while survivorship follows the harvest — a second
+  private-portal copy absorbed on one pass was pushed alone on the next and again when it survived
+  the seloger row whose PLS sat on disk beside it; now `Store::recordTwin()` writes EVERY member of
+  the cluster and `twinClassification()` reads the most restrictive fact across the cluster's rows.
+  **P1 (§1)** a row's OWN excluded reading was not durable — a hydration fingerprint mismatch served
+  the card alone and a PLS row was re-judged LIBRE and pushed; now `durableOwnReading()` keeps a
+  stored excluded tenure until an explicit command (stated cost: a genuine portal re-labelling is
+  not honoured automatically — the safe direction), and the row records the JUDGED verdict so
+  `scout digest` announces the doubt's cause. **P1** the base64-body decode dropped a short LAST
+  line (the footer carrying the address) and any fold under 40 columns, in the scrubber AND the
+  guard; both now take lines of 20+ with an optional short tail and decode UTF-16 bodies. **P2**
+  a car startup refusal now writes `state/car-last-refusal.txt` and the next beat reports it
+  (`démarrage précédent refusé : …`); a store a NEWER image migrated is a RECORDED refusal on both
+  CLIs, not a trace; `recordTwin()` on an unknown row throws. **P3** schema-v12 status lines, the
+  **twin** store category in CLAUDE.md, SOURCES.md, the reclassify skip message, scrubber docblock
+  and ALERT-CAPTURE, a test comment, the ugrep `SABOTAGE_FILTER` note, the uncounted-single-room
+  shape recorded beside `_exclude_title_patterns` (zero real occurrences). Twelve new tests, five
+  ledger cases. **STOP POINT (developer instruction 11:20, "finish and stop at a working tested
+  state"):** committed, pushed and redeployed with the suite (2 332), scrubber (33), shell battery,
+  drift gate and apply-sweep green. **NOT run, owed:** the filtered ledger over the five round-3
+  cases, and panel round 4 — the MAXIMAL two-consecutive-clean requirement is therefore NOT met at
+  this stop point; the next session resumes at round 4 against the frozen commit.
+
 ## Formal Plan
 
 1. `Vehicle/VehicleListing` + `VehicleSnapshot` (reflection-covered encoder), TDD.

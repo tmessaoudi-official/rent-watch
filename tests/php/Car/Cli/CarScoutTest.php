@@ -37,6 +37,7 @@ final class CarScoutTest extends TestCase
             @unlink($f);
         }
         @unlink(\dirname($this->db) . '/car-heartbeat.txt');
+        @unlink(\dirname($this->db) . '/car-last-refusal.txt');
     }
 
     public function testTheDomainFlagIsDispatchedFromTheGenericEntryPoint(): void
@@ -154,6 +155,45 @@ final class CarScoutTest extends TestCase
             putenv('CAR_HEARTBEAT_HOURS');
             putenv('SCOUT_MAX_PASSES');
         }
+    }
+    public function testARunRefusalIsRecordedAndReportedOnTheNextBeat(): void
+    {
+        // Q27's second half, the car twin (round-3 panel): under `restart: unless-stopped` a
+        // startup refusal is a crash loop whose stderr nobody reads. The note goes on the mounted
+        // volume and the next successful start says it on the beat, then clears it.
+        putenv('SCOUT_MAX_PASSES=1');
+        try {
+            $refused = $this->scout(['--domain=car', 'run', '--once', '--source=paruvendu']);
+            self::assertSame(2, $refused['code']);
+            $note = \dirname($this->db) . '/car-last-refusal.txt';
+            self::assertFileExists($note, 'the refusal is written where the next start can find it');
+            self::assertStringContainsString('seen-set', (string) file_get_contents($note));
+
+            $seed = $this->scout(['--domain=car', 'run', '--once', '--seed', '--source=paruvendu']);
+            self::assertSame(0, $seed['code'], $seed['err']);
+            $r = $this->scout(['--domain=car', 'run', '--watch', '--source=paruvendu']);
+
+            self::assertStringContainsString('démarrage précédent refusé', $r['out'], 'the beat reports it');
+            self::assertStringContainsString('seen-set', $r['out']);
+            self::assertFileDoesNotExist($note, 'reported, therefore cleared');
+        } finally {
+            putenv('SCOUT_MAX_PASSES');
+        }
+    }
+
+    public function testANewerStoreIsARecordedRefusalNotATrace(): void
+    {
+        // A rollback image opening a store a newer image migrated: the schema check throws, and
+        // that must land as a refusal (exit 2, one line, the note written), never a stack trace.
+        $seed = $this->scout(['--domain=car', 'run', '--once', '--seed', '--source=paruvendu']);
+        self::assertSame(0, $seed['code'], $seed['err']);
+        (new \PDO('sqlite:' . $this->db))->exec("UPDATE schema_meta SET value = '99' WHERE key = 'schema_version'");
+
+        $r = $this->scout(['--domain=car', 'run', '--once', '--source=paruvendu']);
+
+        self::assertSame(2, $r['code']);
+        self::assertStringContainsString('version 99', $r['err']);
+        self::assertFileExists(\dirname($this->db) . '/car-last-refusal.txt');
     }
     /** @return array{code: int, out: string, err: string} */
     private function scout(array $argv, ?CarRecordingChannel $channel = null, string $now = '2026-08-29T20:00:00+02:00'): array

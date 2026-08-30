@@ -1781,8 +1781,27 @@ final readonly class Store
             return;
         }
 
-        $this->pdo->prepare('UPDATE listings SET twin_tenure = :tenure, twin_source = :source WHERE dedup_key = :key')
-            ->execute(['tenure' => $tenure->value, 'source' => $source, 'key' => $dedupKey]);
+        $statement = $this->pdo->prepare('UPDATE listings SET twin_tenure = :tenure, twin_source = :source WHERE dedup_key = :key');
+        $statement->execute(['tenure' => $tenure->value, 'source' => $source, 'key' => $dedupKey]);
+
+        if ($statement->rowCount() === 0) {
+            // A 0-row UPDATE returning quietly is a fact never stored, reported as stored (round-3
+            // panel). Every key this is called with was recorded in the same pass, so this is a
+            // programming error, not an input.
+            throw new \LogicException('recordTwin: no listing under dedup key ' . $dedupKey);
+        }
+    }
+
+    /** The tenure this row was last recorded as, or `null` when it has none (never judged, or pre-v3). */
+    public function tenure(string $dedupKey): ?Tenure
+    {
+        $statement = $this->pdo->prepare('SELECT tenure FROM listings WHERE dedup_key = :key');
+        $statement->execute(['key' => $dedupKey]);
+
+        /** @var string|false|null $tenure */
+        $tenure = $statement->fetchColumn();
+
+        return is_string($tenure) ? Tenure::tryFrom($tenure) : null;
     }
 
     /**

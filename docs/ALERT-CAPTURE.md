@@ -72,7 +72,9 @@ php tools/scrub-eml.php <in.eml> <out.eml> <your-subscriber-address>
 The address argument is optional but pass it explicitly — it is what the tool searches for.
 
 **If the tool REFUSES to write, that is it working, not failing.** It decodes every long base64url
-run and the quoted-printable form *before* it looks, because *"the address is absent"* is the wrong
+run, the quoted-printable form and every base64-encoded body *before* it looks (a base64 body it
+can only refuse, never rewrite — such an alert cannot become a fixture with this tool; capture the
+`text/plain` or quoted-printable form instead), because *"the address is absent"* is the wrong
 test: every Bien'ici link carries a JWT whose payload base64-decodes to your address, and an earlier
 version of this tool reported `scrubbed` on a file the address was one `base64 -d` away from. If it
 refuses, send me the message it printed — do not edit the file by hand.

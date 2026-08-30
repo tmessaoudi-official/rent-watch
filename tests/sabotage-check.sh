@@ -3608,7 +3608,7 @@ run_sabotage "the fixture-secrets guard is blind to quoted-printable again" \
 # hand and read back when it is not.
 run_sabotage "the persisted twin fact is never read back (a veto lapses when the twin is not fetched)" \
   src/php/Rent/Cli/Pipeline.php \
-  's%\$fact = \$this->store->twinTenure(\$dedupKey);%$fact = $seen;%'
+  's%foreach (\$memberKeys as \$readKey) {%foreach ([] as $readKey) {%'
 
 run_sabotage "an excluded twin fact is overwritten by a later eligible reading (the veto is not durable)" \
   src/php/Rent/Store/Store.php \
@@ -3623,6 +3623,26 @@ run_sabotage "the fixture-secrets guard is blind to a base64 body again" \
   tests/php/Repo/FixtureSecretsTest.php \
   's%foreach (self::base64Blocks(\$text) as \$block) {%foreach ([] as $block) {%'
 
+# ── Round 3 (2026-08-30): the fact on every member, the own reading durable ───────────────────
+run_sabotage "the twin fact is written on the survivor's row only (an absorbed copy never learns it)" \
+  src/php/Rent/Cli/Pipeline.php \
+  's%foreach (\$memberKeys as \$memberKey) {%foreach ([$dedupKey] as $memberKey) {%'
+
+run_sabotage "a row's own excluded reading is forgotten when today's evidence is thinner" \
+  src/php/Rent/Cli/Pipeline.php \
+  's%\$previousTenure = \$this->store->tenure(\$sighting->dedupKey);%$previousTenure = null;%'
+
+run_sabotage "the row records its own reading, not the judged verdict (the drain cannot say what to verify)" \
+  src/php/Rent/Cli/Pipeline.php \
+  's%if (\$judged !== \$classification) {%if (false) {%'
+
+run_sabotage "the fixture-secrets guard drops the short last line of a base64 body again" \
+  tests/php/Repo/FixtureSecretsTest.php \
+  's%{20,}={0,2}%{40,}={0,2}%'
+
+run_sabotage "a car startup refusal is not recorded for the next beat" \
+  src/php/Car/Cli/CarScout.php \
+  's%@file_put_contents(\$this->stateFile(.car-last-refusal.txt.), \$this->now()%@file_put_contents("/dev/null", $this->now()%'
 printf '\n  %d sabotage(s) detected, %d undetected\n' "$pass" "$fail"
 
 if [[ -n "$_filter" ]]; then

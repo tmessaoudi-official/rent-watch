@@ -121,6 +121,13 @@ final class StoreTwinTest extends TestCase
         }
     }
 
+    public function testRecordingAFactOnAnUnknownRowIsLoud(): void
+    {
+        // A 0-row UPDATE that returns quietly is a fact that was never stored, reported as stored.
+        $this->expectException(\LogicException::class);
+
+        $this->store->recordTwin('never-recorded', Tenure::PLS, 'cdc_habitat');
+    }
     private function recorded(string $id): string
     {
         $listing = $this->listing($id);

@@ -137,6 +137,31 @@ final class FixtureSecretsTest extends TestCase
         self::assertSame(['JWT'], array_column(self::suspects($message), 0), 'a base64 body is decoded before looking');
     }
     /**
+     * THE TAIL LINE (round-3 panel). A 76-column body whose LAST line is shorter than the block
+     * regex's floor was decoded WITHOUT that line — and the footer carrying the address is the last
+     * thing in every alert. Same class one line lower. Also a body folded at 36 columns, where
+     * every line is short.
+     */
+    public function testTheGuardSeesTheTailOfABase64BodyAndShortFolds(): void
+    {
+        $jwt = 'eyJhbGciOiJIUzI1NiJ9.eyJlbWFpbCI6InZpY3RpbUBleGFtcGxlLnRlc3QifQ.c2lnbmF0dXJlLXNpZ25hdHVyZS1zaWduYXR1cmU';
+        $pad = 0;
+        do {
+            $body = str_repeat('x', $pad) . ' signedRecipient=' . $jwt;
+            $encoded = base64_encode($body);
+            ++$pad;
+        } while (strlen($encoded) % 76 < 4 || strlen($encoded) % 76 > 30);
+
+        $tail = "Content-Transfer-Encoding: base64\r\n\r\n" . chunk_split($encoded, 76, "\r\n");
+        self::assertSame(['JWT'], array_column(self::suspects($tail), 0), 'a short last line is part of the body');
+
+        $folded = "Content-Transfer-Encoding: base64\r\n\r\n" . chunk_split(base64_encode($body), 36, "\r\n");
+        self::assertSame(['JWT'], array_column(self::suspects($folded), 0), 'a 36-column fold is still a body');
+
+        $utf16 = "Content-Type: text/plain; charset=utf-16le\r\nContent-Transfer-Encoding: base64\r\n\r\n" . chunk_split(base64_encode((string) mb_convert_encoding($body, 'UTF-16LE', 'UTF-8')), 76, "\r\n");
+        self::assertSame(['JWT'], array_column(self::suspects($utf16), 0), 'a UTF-16 body is read as text');
+    }
+    /**
      * Every credential-shaped string in `$content`, looked for in the raw bytes AND after
      * quoted-printable decoding, minus the ones that announce themselves as placeholders.
      *
@@ -177,14 +202,28 @@ final class FixtureSecretsTest extends TestCase
      */
     private static function base64Blocks(string $text): array
     {
-        if (preg_match_all('/(?:^[A-Za-z0-9+\/]{40,}={0,2}\r?\n?){2,}/m', $text, $m) === 0) {
+        // Lines of 20+ base64 characters, then an optional SHORTER last line — the tail of a
+        // 76-column body, which a floor on every line dropped (round-3 panel); a body folded at 36
+        // is all short lines, hence the low floor. A block is a body only from 40 characters up.
+        if (preg_match_all('/(?:^[A-Za-z0-9+\/]{20,}={0,2}\r?\n?)+(?:^[A-Za-z0-9+\/]{4,19}={0,2}\r?\n?)?/m', $text, $m) === 0) {
             return [];
         }
         $blocks = [];
         foreach ($m[0] as $block) {
-            $decoded = base64_decode((string) preg_replace('/\s+/', '', $block), true);
+            $stripped = (string) preg_replace('/\s+/', '', $block);
+            if (strlen($stripped) < 40) {
+                continue;
+            }
+            $decoded = base64_decode($stripped, true);
             if ($decoded !== false && $decoded !== '') {
                 $blocks[] = $decoded;
+                // A `charset=utf-16` body: every ASCII byte is followed by a NUL, so no pattern
+                // can match the raw bytes (round-3 panel). Both byte orders are tried.
+                if (str_contains($decoded, "\0")) {
+                    foreach (['UTF-16LE', 'UTF-16BE'] as $order) {
+                        $blocks[] = (string) @mb_convert_encoding($decoded, 'UTF-8', $order);
+                    }
+                }
             }
         }
 

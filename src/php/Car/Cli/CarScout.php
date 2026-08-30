@@ -85,11 +85,11 @@ final readonly class CarScout
                 default => $this->fail('commande inconnue : ' . $command) + $this->help(2) - 2,
             };
         } catch (ConfigError $e) {
-            return $this->fail('configuration : ' . $e->getMessage());
+            return $this->refuse($command, 'configuration : ' . $e->getMessage());
         } catch (SourceError $e) {
-            return $this->fail('source ' . $e->sourceName . ' : ' . Redact::text($e->getMessage()));
+            return $this->refuse($command, 'source ' . $e->sourceName . ' : ' . Redact::text($e->getMessage()));
         } catch (\RuntimeException $e) {
-            return $this->fail(Redact::text($e->getMessage()) ?? 'erreur');
+            return $this->refuse($command, Redact::text($e->getMessage()) ?? 'erreur');
         }
     }
 
@@ -192,7 +192,7 @@ final readonly class CarScout
         $seed = in_array('--seed', $flags, true);
         $watch = in_array('--watch', $flags, true);
         if ($watch && $seed) {
-            return $this->fail('`--seed` amorce le seen-set en une passe ; combiné à `--watch` il n\'émettrait jamais rien. Lancez `run --once --seed`, puis `--watch`.');
+            return $this->failRun('`--seed` amorce le seen-set en une passe ; combiné à `--watch` il n\'émettrait jamais rien. Lancez `run --once --seed`, puis `--watch`.');
         }
         $criteria = $this->criteria();
         $store = $this->store();
@@ -200,13 +200,13 @@ final readonly class CarScout
         // Q36, the car analog: an empty VEHICLE seen-set is a fresh file or a missing mount, and
         // the alternative is pushing the whole Autohero catalogue at once.
         if (!$seed && $store->isSeenSetEmpty()) {
-            return $this->fail('seen-set véhicules VIDE : `scout --domain=car run --once --seed` d\'abord — sinon tout le catalogue serait notifié d\'un coup (Q36)');
+            return $this->failRun('seen-set véhicules VIDE : `scout --domain=car run --once --seed` d\'abord — sinon tout le catalogue serait notifié d\'un coup (Q36)');
         }
 
         $notifier = $this->notifier($criteria);
         $sources = $this->sources($store, $this->onlySources($flags));
         if ($sources === []) {
-            return $this->fail('aucune source activée');
+            return $this->failRun('aucune source activée');
         }
         $pipeline = new VehiclePipeline($criteria, $store, $notifier);
 
@@ -237,7 +237,7 @@ final readonly class CarScout
             // A LOUD REFUSAL, not a stack trace (Q27, the car twin — found by the round-2 panel's
             // key-naming test, which crashed here): `0` would disable the one signal that tells a
             // dead watcher from a quiet market, and an operator reads exit 2 + one line, not a trace.
-            return $this->fail($e->getMessage());
+            return $this->failRun($e->getMessage());
         }
         $maxPasses = $this->maxPasses();
         $passes = 0;
@@ -246,9 +246,13 @@ final readonly class CarScout
 
         $this->line(sprintf('car-watch · surveillance active · %d source(s) · toutes les %d min ± %d (Q37)%s', count($sources), (int) (Pacer::PASS_INTERVAL_SECONDS / 60), (int) (Pacer::JITTER_SECONDS / 60), $maxPasses === null ? '' : ' · SCOUT_MAX_PASSES=' . $maxPasses));
 
-        $beat = function () use (&$passes, &$notified, $sources, $notifier, $formatter): void {
+        // Cleared at startup rather than after sending, so a refusal is reported once even if
+        // the beat that carries it does not deliver (same choice as the rent side).
+        $refusal = $this->takeLastRefusal();
+        $beat = function () use (&$passes, &$notified, $sources, $notifier, $formatter, &$refusal): void {
             $health = array_map(fn (VehicleSource $s) => $s->health($this->now()), $sources);
-            $n = $formatter->heartbeat($passes, $notified, $health, $this->now());
+            $n = $formatter->heartbeat($passes, $notified, $health, $this->now(), $refusal);
+            $refusal = null;
             if ($notifier->delivered($notifier->send($n))) {
                 @file_put_contents($this->stateFile('car-heartbeat.txt'), $this->now());
             }
@@ -527,4 +531,36 @@ final readonly class CarScout
 
         return 2;
     }
-}
+
+    /** A refusal of `run` is RECORDED for the next successful start to report (Q27); any other verb's is stderr only. */
+    private function refuse(string $command, string $text): int
+    {
+        return $command === 'run' ? $this->failRun($text) : $this->fail($text);
+    }
+
+    /**
+     * Q27's second half, the car twin (round-3 panel, 2026-08-30): under `restart: unless-stopped`
+     * a startup refusal is a crash loop whose stderr nobody reads. The note goes on the mounted
+     * volume — beside `car-heartbeat.txt`, for the same reason — and the next successful start
+     * says it on the beat, then clears it. Redacted before it touches the disk, like the rent one.
+     */
+    private function failRun(string $text): int
+    {
+        @file_put_contents($this->stateFile('car-last-refusal.txt'), $this->now() . ' — ' . Redact::text($text) . "\n");
+
+        return $this->fail($text);
+    }
+
+    private function takeLastRefusal(): ?string
+    {
+        $path = $this->stateFile('car-last-refusal.txt');
+
+        if (!is_file($path)) {
+            return null;
+        }
+
+        $raw = file_get_contents($path);
+        @unlink($path);
+
+        return \is_string($raw) && trim($raw) !== '' ? trim($raw) : null;
+    }}

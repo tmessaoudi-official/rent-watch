@@ -61,15 +61,20 @@ final readonly class VehicleFormatter
     }
 
     /** @param list<SourceHealth> $health */
-    public function heartbeat(int $runs, int $matches, array $health, string $sinceIso): Notification
+    public function heartbeat(int $runs, int $matches, array $health, string $sinceIso, ?string $refusal = null): Notification
     {
         $n = $this->shared->heartbeat($runs, $matches, $health, $sinceIso);
+        $reasons = $n->reasons;
+        if ($refusal !== null) {
+            // Q27: what the previous start refused, now that this one reached the channel.
+            $reasons[] = 'démarrage précédent refusé : ' . $refusal;
+        }
 
         return new Notification(
             kind: $n->kind,
             priority: $n->priority,
             title: 'car-watch tourne — ' . $matches . ' correspondance(s) depuis ' . $sinceIso,
-            reasons: $n->reasons,
+            reasons: $reasons,
         );
     }
 

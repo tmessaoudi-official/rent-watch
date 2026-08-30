@@ -16,7 +16,7 @@ for the product, and **every constraint in it is a ruling**, not a draft to be i
 before touching anything under `src/`.
 
 Status: **milestone 1 is functionally complete against a frozen payload.** The pure core, the store
-(schema v11 as of 2026-08-28), the config layer, the adapter contract, the criteria engine, dedup, the notification
+(schema v12 as of 2026-08-30), the config layer, the adapter contract, the criteria engine, dedup, the notification
 layer and the `scout` CLI all exist. What is missing is a NETWORK adapter, and that is blocked on an
 input rather than a decision. As of 2026-08-07 there is a PHP 8.5
 implementation of `models` + `tenure` under `src/php/Core/`, a 130-case language-neutral classifier
@@ -1438,6 +1438,9 @@ composer dump-autoload --dev            # if the corpus suite errors with "Class
 php tools/phpunit.phar                  # the core suite — must stay green
 bash tests/sabotage-check.sh            # proves the suite would CATCH a broken classifier
 SABOTAGE_FILTER='<regex on labels>' bash tests/sabotage-check.sh   # one new case, not the 2 h ledger
+                                        #   join labels with a plain `|` — `/bin/grep` here is ugrep,
+                                        #   where `\|` is LITERAL: a `\|` filter skips EVERY case and
+                                        #   still exits 0 ("0 detected, 0 undetected", PARTIAL RUN)
                                         #   prints a loud PARTIAL RUN line; never a ledger result
 bash tests/test-tenure-guard.sh         # proves the §1 tripwire still fires, and stays quiet on PHP
 bash tests/test-fetch-phpunit.sh        # proves the runner fetch refuses a bad signature
@@ -1560,7 +1563,10 @@ Required coverage, per spec §11 — non-negotiable once `src/` exists:
   a newer one refused; a snapshot carries every field it claims); **concurrency** (WAL, and a second
   writer that WAITS rather than failing — demonstrated, because a deferred transaction silently
   skips SQLite's busy handler); **failure paths** (every refusal is loud and leaves nothing
-  half-written); **secrets** (`Redact` masks before anything is persisted or shown, and does not eat
+  half-written); **twin** (schema v12: what the OTHER track last said about this flat — recorded on
+  EVERY member of the cluster, read as the most restrictive across it, an excluded reading durable
+  for the row's life and never backfilled; the one cross-track datum beside identities and groups
+  that stay per track); **secrets** (`Redact` masks before anything is persisted or shown, and does not eat
   the diagnostic). A new store behaviour without a category is a behaviour nobody decided to
   guarantee.
 
@@ -1754,6 +1760,11 @@ var/claude/                 Reports, review outputs — gitignored scratch (hand
   pass seeing the agency copy alone pushed the PLS flat. Precedence is the group veto's: excluded
   sticks for the row's life (developer ruling), otherwise the last reading wins, so a doubt clears
   only when both routes are judged together again. `reclassify` reads it beside the group veto.
+  **Round 3 added two more halves**: the fact is written on EVERY member of the cluster and read
+  as the most restrictive across it (a second private-portal copy absorbed on one pass and surviving
+  on another had been pushed twice), and a row's OWN excluded reading is durable too (a hydration
+  fingerprint mismatch served the card alone, and a PLS row was re-judged LIBRE and pushed). The
+  row records the JUDGED verdict, so `scout digest` announces the doubt's cause.
 - **`prototype/scout.py` has no tenure classifier at all.** It will happily surface PLAI and PLUS
   listings. It is reference material for the field-mapping and adapter shape only — treat its filtering
   logic as incomplete, not as a baseline to preserve.
