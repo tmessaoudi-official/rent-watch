@@ -198,10 +198,10 @@
       "params": {
         "from": "users-alertes@pap.fr",
         "link_host": "www.pap.fr/annonces/",
-        "title_pattern": "~^\\h*([^\\n]{2,80}?)\\h*\\n[^\\n]*\\(\\d{5}\\)\\h*$~mu",
-        "commune_pattern": "~^\\h*([^\\n\\d(]{2,60}?)\\h*\\(\\d{5}\\)\\h*$~mu",
-        "surface_pattern": "~\\(\\d{5}\\)\\h*\\n\\h*([\\d.,]+)\\h*m²~u",
-        "rooms_pattern": "~^[^\\n]*?(\\d+)\\h*pi[eè]ces?[^\\n]*\\n[^\\n]*\\(\\d{5}\\)~mu"
+        "title_pattern": "~^\\h*([^\\n]{2,80}?)\\h*\\n[^\\n]+\\n\\h*(?:\\d+\\h*pi[eè]ces?\\h*[-–]\\h*)?[\\d.,]+\\h*m²\\h*$~mu",
+        "commune_pattern": "~^\\h*([^\\n\\d(]{2,60}?)\\h*(?:\\(\\d{2,5}\\))?\\h*\\n\\h*(?:\\d+\\h*pi[eè]ces?\\h*[-–]\\h*)?[\\d.,]+\\h*m²\\h*$~mu",
+        "surface_pattern": "~^\\h*(?:\\d+\\h*pi[eè]ces?\\h*[-–]\\h*)?([\\d.,]+)\\h*m²\\h*$~mu",
+        "rooms_pattern": "~(?|^\\h*(\\d+)\\h*pi[eè]ces?\\h*[-–]\\h*[\\d.,]+\\h*m²\\h*$|^[^\\n]*?(\\d+)\\h*pi[eè]ces?\\h*$)~mu"
       },
       "map": {
         "ref": "url",

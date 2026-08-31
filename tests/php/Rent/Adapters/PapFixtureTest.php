@@ -104,6 +104,61 @@ final class PapFixtureTest extends TestCase
         self::assertSame('https://www.pap.fr/annonces/-r453201284', (string) $listing->externalId);
     }
 
+    /**
+     * THE 2026-08-28 TEMPLATE CHANGE, and the anchor that was never a landmark.
+     *
+     * PAP moved rooms out of the title line into a combined line BELOW the location
+     * (`3 pièces - 63 m²`) and switched `EUR` to `€`. Both positional patterns anchored on the line
+     * AFTER the postcode carrying the surface FIRST, so both missed — measured in the production
+     * store: **23 rows with a null surface and rooms, 19 of them notified as MATCH**, because a null
+     * surface passes `min_surface_m2` by hard rule 9. Sub-50 m² flats were notifying.
+     *
+     * The ownership rule behaved correctly throughout — a configured pattern that misses yields
+     * null, never the generic scan — so the search floor of 45 was never substituted. The safety
+     * held; the pattern went stale.
+     */
+    public function testTheCombinedRoomsAndSurfaceLineOfTheNewTemplateIsRead(): void
+    {
+        $listing = $this->byCommune()['Lieusaint'];
+
+        self::assertSame('77127', $listing->postcode);
+        self::assertSame(63.0, $listing->surfaceM2, 'the flat\'s 63 m², from `3 pièces - 63 m²`, not the search floor of 45');
+        self::assertSame(3, $listing->rooms, 'and the rooms from the same line, which is BELOW the postcode now');
+        self::assertSame(1150, $listing->rentHc, '`1.150 €` — the dot is still a thousands group when the currency changes');
+        self::assertSame('Location appartement', $listing->title, 'the bare title of the new template, not the subject line');
+    }
+
+    /**
+     * A LOCATION LINE NEED NOT CARRY A POSTCODE, and all four patterns anchored on one.
+     *
+     * `Saint-Maur-des-Fossés (94)` states a DEPARTMENT; `Paris 16e` states neither. On those shapes
+     * `title_pattern`, `commune_pattern`, `surface_pattern` and `rooms_pattern` all failed together,
+     * so the row stored an EMPTY title, a null commune, a null postcode, a null surface and null
+     * rooms — and an empty title makes every `exclude_title_patterns` entry inert, which is the
+     * In'li/SeLoger lesson a third time. The register listed those rows separately as "empty-title
+     * rows"; they are this defect, not another one.
+     *
+     * The anchor is the LAYOUT now — a line that is entirely the facts, which the prose criteria
+     * line can never be — so the postcode stops being load-bearing.
+     */
+    public function testALocationLineWithNoPostcodeStillYieldsTitleCommuneSurfaceAndRooms(): void
+    {
+        $listing = $this->byCommune()['Saint-Maur-des-Fossés'];
+
+        self::assertSame('Location appartement', $listing->title, 'an empty title would make exclude_title_patterns inert');
+        self::assertSame(55.0, $listing->surfaceM2);
+        self::assertSame(3, $listing->rooms);
+        self::assertSame(1050, $listing->rentHc);
+
+        // STATED COST, asserted so it cannot be quietly "improved" into a guess: the payload states a
+        // DEPARTMENT, not a postcode, and `postcodeIn()` refuses to invent one — its own comment says
+        // a wrong postcode is worse than none, because it can pass the prefix filter for a listing
+        // that is nowhere near. In region mode the postcode IS the location filter, so this listing
+        // is still rejected on location. That is the safe direction, and it is now VISIBLE (a fully
+        // read row) instead of an empty one.
+        self::assertNull($listing->postcode, 'a department is not a postcode and must never be widened into one');
+    }
+
     public function testTheCardsOwnFactsBeatTheSearchCriteriaQuotedAboveThem(): void
     {
         $listing = $this->byCommune()['Milly-la-Forêt'];
@@ -137,10 +192,12 @@ final class PapFixtureTest extends TestCase
         sort($communes);
 
         self::assertSame(
-            ['Meulan-en-Yvelines', 'Milly-la-Forêt'],
+            ['Lieusaint', 'Meulan-en-Yvelines', 'Milly-la-Forêt', 'Saint-Maur-des-Fossés'],
             $communes,
-            'both captures name a commune, and NEITHER is a ranked one — sorted, because the '
-            . 'mailbox does not promise an order and pinning an incidental one is a false guarantee',
+            'EVERY capture names a commune, and NONE is a ranked one — sorted, because the '
+            . 'mailbox does not promise an order and pinning an incidental one is a false guarantee. '
+            . 'Saint-Maur-des-Fossés is the one that matters: its location line carries a DEPARTMENT '
+            . 'and no postcode, so under the old postcode anchor it yielded no commune at all',
         );
     }
 
