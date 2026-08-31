@@ -192,6 +192,7 @@ read-only) and the merged prose as one review deep.
 | F6 | Empty-title rows (3 seloger + 4 pap) | Every `exclude_title_patterns` entry inert on them (nothing matches an empty string) | Track 3 audit item |
 | F7 | La Centrale truncation | Email carries ~3 of 900+ stated cards; `FEED_SILENT` keys on message DATE, so health stays green while 99.7% blind | Track 2 step 4 (documented cost) |
 | F8 | SeLoger `id_from: content` + a misread surface | A bad surface reading changes the dedup key → one flat can notify twice under two identities | Noted in 1g; same root class |
+| F12 | `docker compose up -d` wedges on recreate and leaves a watcher DOWN | **LIVE, twice on 2026-08-31.** `stop_grace_period: 5m` + a renamed old container = the orchestration stalls; once it then failed outright on `Conflict. The container name … is already in use`. rent-scout was down ~13 min and nothing said so | see the redeploy note below |
 | F10 | SeLoger `Baisse de prix` yields an EMPTY title | **LIVE** — `title_pattern` refuses any line containing `€`, and a price-drop card's own text starts with one; `exclude_title_patterns` is inert on the whole template. 2 of 4 empty-title rows were NOTIFIED | Track 3 finding, fix owed against a captured fixture |
 | F11 | A SeLoger card with no `pièces` line has no title anchor at all | **LIVE, and narrower than F10** — the pattern anchors on the `pièces` line, so a card stating no room count (a room rental, a parking, an atypical ad) yields `''`. Two such rows; both were REJECTED, by the description-matching `exclude_patterns` rather than by the title ones | same |
 | F9 | n=1 separators/patterns (leboncoin rent, PAP) | Measured on one capture each; PAP already proved what that costs | standing; each new alert is the regression test |
@@ -548,6 +549,36 @@ unilaterally.
    notified_as distribution per source (flag 100%-UNKNOWN or zero-match sources).
 3. Count reconciliation per source: the portal's own stated count vs what the run log ingested.
 4. Targeted raw-email sampling only where 1–3 flag something.
+### Redeploying is not `docker compose up -d` — F12, hit twice on 2026-08-31
+
+Both watchers set `stop_grace_period: 5m` and `WatchLoop` stops only after the pass in flight
+finishes, so a recreate can sit for minutes. Compose renames the old container while it waits, and
+that is where it goes wrong:
+
+- **Attempt 1** failed outright — `Error when allocating new name: Conflict. The container name
+  "/scout-car-scout-1" is already in use by container ec3ce4f13a26…` — `up exit=1`, rent-scout left
+  in `Created`, i.e. NOT RUNNING.
+- **Attempt 2** wedged for ~13 minutes with `d9272b63ebf1_scout-car-scout-1` in `Created` beside a
+  still-`Up` original, rent-scout again `Created` and down.
+
+**Nothing announced either.** `docker compose ps` (no `-a`) simply omits a non-running service, so
+the failure looks like a shorter list — the same silent-absence shape hard rule 2 is about, one
+layer down in the deployment.
+
+Recipe that works, and check the IMAGE ID rather than trusting the command:
+
+```bash
+docker compose build
+docker compose ps -a --format '{{.Service}} {{.Name}} {{.Status}}'   # -a, always: a down service is INVISIBLE without it
+docker rm -f <any hex-prefixed leftover>                            # e.g. d9272b63ebf1_scout-car-scout-1
+docker compose up -d --no-deps <service>                            # one service at a time
+docker inspect --format '{{.Name}} {{.Image}}' scout-rent-scout-1 scout-car-scout-1
+docker image inspect scout:local --format 'current {{.Id}}'          # all three must match
+```
+
+A watcher down is worse than a stale one: a stale watcher still pushes, wrongly; a stopped one
+pushes nothing, and *nothing arriving* is exactly what a quiet market looks like.
+
 ### Track 3 — STARTED 2026-08-31. The structural half of step 2, over the rent store.
 
 ```
