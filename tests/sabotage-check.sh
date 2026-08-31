@@ -3730,6 +3730,13 @@ run_sabotage "a car startup refusal is not recorded for the next beat" \
 # F10 — the title pattern's price guard. Refusing a candidate that merely CONTAINS a € makes
 # exclude_title_patterns inert across SeLoger's whole `Baisse de prix` template; refusing NOTHING
 # makes the rent line itself the title, which is the worse half. Both directions must redden.
+# R6-1 — the commune reader's digit rule. Forbidding digits in the name loses every Paris
+# arrondissement while the listing still matches on its postcode: a null commune, no S1 score, a
+# weaker dedup key and a push that cannot say where the flat is. Silent, which is why it needs this.
+run_sabotage "the commune reader forbids digits again (every Paris arrondissement loses its name)" \
+  config/rent/sources.json \
+  's%(\[^\\\\n\\\\d(\]\[^\\\\n(\]{1,59}?)%([^\\\\n\\\\d(]{2,60}?)%'
+
 run_sabotage "the title pattern refuses any candidate carrying a euro sign again (a whole template goes untitled)" \
   config/rent/sources.json \
   's%(?!\[\\\\h\\\\d.,\]\*€\[\\\\h/a-zA-Zéè\]\*\$)(\[^\\\\n\]{2,80}?)%([^\\\\n€]{2,80}?)%'

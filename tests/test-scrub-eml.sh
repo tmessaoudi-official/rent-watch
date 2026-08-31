@@ -486,5 +486,39 @@ check "a named identifier recoverable only by decoding REFUSES the write" \
   test "$needle_status" -ne 0
 check "and nothing is written" test ! -f "$work/needle.out.eml"
 
+# R6-5 — THE ADDRESS IS REQUIRED, and it is the VERIFICATION that makes it so.
+#
+# It used to be optional, and omitting it made this tool a silent no-op that reported success: the
+# literal replace had nothing to replace, and the final recoverability check had no needle to look
+# for, so it passed VACUOUSLY and the file was written with a green light. `docs/ALERT-CAPTURE.md`
+# already said to pass the address, so the gap only ever caught someone following the shorter of two
+# documented forms — and caught them with a `scrubbed … 0 named identifier(s) replaced` line.
+#
+# Both halves are asserted, because a refusal that still writes the file is not a refusal.
+printf 'From: a@b.test\nSubject: x\n\nBonjour, votre alerte.\n' >"$work/noaddr.eml"
+noaddr_status=0
+php "$repo/tools/scrub-eml.php" "$work/noaddr.eml" "$work/noaddr.out.eml" \
+  >"$work/noaddr.log" 2>&1 || noaddr_status=$?
+check "omitting the subscriber address REFUSES rather than writing a no-op" \
+  test "$noaddr_status" -ne 0
+check "and nothing is written" test ! -f "$work/noaddr.out.eml"
+check "and the refusal SAYS the address is mandatory, not just 'usage'" \
+  grep -qi 'OBLIGATOIRE' "$work/noaddr.log"
+
+# An EMPTY address is the same trap wearing an argument, so it is refused on the same terms.
+empty_status=0
+php "$repo/tools/scrub-eml.php" "$work/noaddr.eml" "$work/empty.out.eml" "" \
+  >"$work/empty.log" 2>&1 || empty_status=$?
+check "an EMPTY address argument is refused too" test "$empty_status" -ne 0
+check "and nothing is written for it either" test ! -f "$work/empty.out.eml"
+
+# THE COUNTERWEIGHT: the ordinary invocation must still work, or the guard is satisfied by breaking
+# the tool.
+ok_status=0
+php "$repo/tools/scrub-eml.php" "$work/noaddr.eml" "$work/ok.out.eml" "$address" \
+  >"$work/ok.log" 2>&1 || ok_status=$?
+check "a call WITH an address still scrubs and writes" test "$ok_status" -eq 0
+check "and its output exists" test -f "$work/ok.out.eml"
+
 printf '\n  %d passed, %d failed\n\n' "$pass" "$fail"
 [[ "$fail" -eq 0 ]]

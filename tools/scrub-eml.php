@@ -160,14 +160,32 @@ function recoverableForms(string $message): array
 
 $argvLocal = $_SERVER['argv'] ?? [];
 
-if (count($argvLocal) < 3) {
-    fwrite(STDERR, "usage: php tools/scrub-eml.php <in.eml> <out.eml> [address]\n");
+// THE ADDRESS IS REQUIRED, and it used to be optional (R6-5). Omitting it made this tool a SILENT
+// NO-OP that reported success: `str_replace($address)` had nothing to replace, the local-part
+// fallback had nothing to match, and — the half that matters — the final RECOVERABILITY check had
+// no needle to look for, so it passed vacuously. The run printed `scrubbed … 0 named identifier(s)
+// replaced` and exited 0 on a file it had barely touched.
+//
+// That is the worst shape a secrets tool can take: `docs/ALERT-CAPTURE.md` already says to pass the
+// address, so the gap only ever caught someone following the shorter of two documented forms, and
+// it caught them with a green light. Refusing is the safe direction and costs nothing real — every
+// alert this repo captures is addressed to the subscriber, which is the whole reason it needs
+// scrubbing. There is deliberately NO opt-out flag: one would be the same trap with an extra step.
+if (count($argvLocal) < 4 || trim((string) $argvLocal[3]) === '') {
+    fwrite(STDERR, "usage: php tools/scrub-eml.php <in.eml> <out.eml> <address> [needle …]\n");
+    fwrite(
+        STDERR,
+        "\nl'adresse de l'abonné est OBLIGATOIRE : sans elle ce script ne remplace rien et,\n"
+            . "surtout, sa vérification finale n'a aucune aiguille à chercher — elle passe à vide et\n"
+            . "le fichier est écrit avec un feu vert. Passez aussi vos nom/prénom en aiguilles pour\n"
+            . "les portails qui vous saluent par votre nom (voir docs/ALERT-CAPTURE.md).\n",
+    );
 
     exit(2);
 }
 
 [$in, $out] = [$argvLocal[1], $argvLocal[2]];
-$address = $argvLocal[3] ?? null;
+$address = $argvLocal[3];
 
 /**
  * Extra identifiers to mask, named by the operator.

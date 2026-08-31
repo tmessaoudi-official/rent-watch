@@ -314,6 +314,51 @@ final class PapFixtureTest extends TestCase
     }
 
     /** @return list<RawListing> */
+    /**
+     * R6-1 — AN ARRONDISSEMENT HAS A DIGIT IN ITS NAME, and the capture class forbade digits.
+     *
+     * `commune_pattern`'s class was `[^\n\d(]`, so `Paris 16e (75016)` came back null while
+     * `Milly-la-Forêt (91490)` read fine. PAP covers Paris and `75` is in `postcode_prefixes`, so
+     * such a listing still MATCHED on its postcode while losing its commune — no S1 score, a weaker
+     * dedup key, and a push that cannot say where the flat is. That is the SeLoger regression of
+     * 2026-08-25 rebuilt on another source, and the safe direction only in the sense that a null
+     * commune cannot over-match; it is silent, which is what makes it worth a test.
+     *
+     * The capture may now CONTAIN a digit but not START with one, so a numeric line is still not a
+     * place name.
+     *
+     * @return iterable<string, array{0: string, 1: ?string}>
+     */
+    public static function communeLines(): iterable
+    {
+        yield 'arrondissement, short ordinal' => ['Paris 16e (75016)', 'Paris 16e'];
+        yield 'arrondissement, long ordinal' => ['Paris 16ème (75016)', 'Paris 16ème'];
+        yield 'arrondissement, single digit' => ['Paris 5e (75005)', 'Paris 5e'];
+        yield 'ordinary commune' => ['Milly-la-Forêt (91490)', 'Milly-la-Forêt'];
+        yield 'hyphenated commune' => ['Saint-Germain-en-Laye (78100)', 'Saint-Germain-en-Laye'];
+        yield 'commune with an article' => ['Le Perreux-sur-Marne (94170)', 'Le Perreux-sur-Marne'];
+    }
+
+    #[\PHPUnit\Framework\Attributes\DataProvider('communeLines')]
+    public function testTheCommuneReaderAcceptsAnArrondissement(string $line, ?string $expected): void
+    {
+        $pattern = (string) ConfigLoader::loadSources(self::ROOT . '/config/rent/sources.json')['pap']->params['commune_pattern'];
+        $body = "Location appartement\n" . $line . "\n4 pièces - 80 m²\n";
+
+        self::assertSame(1, preg_match($pattern, $body, $m), $line . ' must yield a commune');
+        self::assertSame($expected, trim($m[1]));
+    }
+
+    /** The counterweight: a line that STARTS with a digit is a measurement, not a place. */
+    public function testANumericLineIsNotReadAsACommune(): void
+    {
+        $pattern = (string) ConfigLoader::loadSources(self::ROOT . '/config/rent/sources.json')['pap']->params['commune_pattern'];
+        $body = "Lardy (91510)\n4 pièces - 80 m²\n";
+
+        self::assertSame(1, preg_match($pattern, $body, $m));
+        self::assertSame('Lardy', trim($m[1]), 'the commune line wins, not the pièces line');
+    }
+
     private function listings(): array
     {
         $this->dbPath ??= sys_get_temp_dir() . '/rentwatch-pap-' . bin2hex(random_bytes(8)) . '.sqlite3';
