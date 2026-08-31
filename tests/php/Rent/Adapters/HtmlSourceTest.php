@@ -342,6 +342,88 @@ final class HtmlSourceTest extends TestCase
         $this->paged($client, ['maxPages' => 4])->fetch();
     }
 
+    /**
+     * A WALK THAT FINISHES ON ITS LAST PERMITTED PAGE IS NOT A FAILURE (round-6 finding, 2026-08-31).
+     *
+     * The bound check ran unconditionally after the loop, so it could not tell a walk that ENDED
+     * correctly on page `maxPages` from one that ran out of road there. Both threw.
+     *
+     * CDC Habitat walked into exactly that in production and reported `broken / 0 annonces` for a
+     * day: 315 declared listings at 16 a page is 19.7 pages, the bound is 20, so the walk completed
+     * ON page 20, hit the declared total, broke — and was then thrown away. Worse, the message named
+     * a cause that was measurably untrue ("the path template is probably ignored by the site, so
+     * every page returns the first one"): the template worked, the pages differed, the selectors
+     * matched 16 cards each. Verified live before this fix.
+     */
+    public function testAWalkThatReachesTheDeclaredTotalOnItsLastPermittedPageSucceeds(): void
+    {
+        // Four cards over two pages, a declared total of four, and a bound of exactly two.
+        $client = new PagedHttpClient([
+            1 => self::page(['a', 'b'], 4),
+            2 => self::page(['c', 'd'], 4),
+        ]);
+
+        $listings = $this->paged($client, ['maxPages' => 2])->fetch();
+
+        self::assertCount(4, $listings, 'the walk completed on its last permitted page and must be kept');
+        self::assertSame([null, '2'], $client->pages, 'and it stopped there rather than asking for a third');
+    }
+
+    /**
+     * A SHORT FINAL PAGE ENDS THE WALK, and it is proof of the end in a way the declared total is
+     * not (round-6 finding, 2026-08-31, measured live).
+     *
+     * CDC Habitat serves 20 pages of 16 except the last, which serves 8, and DECLARES 315 while
+     * actually serving 312. So `count >= total` never fired, the walk ran to the bound, and the
+     * source was permanently `broken / 0 annonces` — with a message blaming the path template, which
+     * was measurably fine. Raising the bound would not have helped: the shortfall is in the site's
+     * own arithmetic, not in the walk.
+     *
+     * A shortfall UNDER ONE PAGE is therefore tolerated once a short page has proven the end. A lost
+     * PAGE — which is what that assertion exists to catch — is a page-size shortfall or more, and
+     * still throws. The next test pins that half.
+     */
+    public function testAShortFinalPageEndsTheWalkAndForgivesASmallDeclaredOvercount(): void
+    {
+        // Declares 6, serves 4 + 1: a partial last page and a total the site overstates.
+        $client = new PagedHttpClient([
+            1 => self::page(['a', 'b', 'c', 'd'], 6),
+            2 => self::page(['e'], 6),
+        ]);
+
+        $listings = $this->paged($client, ['maxPages' => 9])->fetch();
+
+        self::assertCount(5, $listings, 'the short page ended the walk and its cards were kept');
+        self::assertSame([null, '2'], $client->pages, 'and no page 3 was requested');
+    }
+
+    /** A shortfall of a WHOLE PAGE is a lost page, and still fails — the guard is not switched off. */
+    public function testAShortfallOfAWholePageStillFails(): void
+    {
+        // Declares 12, serves 4 + 1 = 5. The gap is 7, which is more than one 4-card page.
+        $client = new PagedHttpClient([
+            1 => self::page(['a', 'b', 'c', 'd'], 12),
+            2 => self::page(['e'], 12),
+        ]);
+
+        $this->expectException(SourceError::class);
+        $this->expectExceptionMessageMatches('~pagination lost results~');
+
+        $this->paged($client, ['maxPages' => 9])->fetch();
+    }
+
+    /** The other half: running OUT of road on the bound is still a failure, and still says so. */
+    public function testAWalkThatNeverEndsStillFailsOnTheBound(): void
+    {
+        // Every page yields cards and NO total is declared, so nothing can terminate the walk.
+        $client = new PagedHttpClient([], self::page(['same'], null));
+
+        $this->expectException(SourceError::class);
+        $this->expectExceptionMessageMatches('~reached the 3-page bound~');
+
+        $this->paged($client, ['maxPages' => 3])->fetch();
+    }
+
     public function testASourceWithNoPageParamMakesExactlyOneRequest(): void
     {
         $client = new PagedHttpClient([1 => self::page(['a'], null)]);

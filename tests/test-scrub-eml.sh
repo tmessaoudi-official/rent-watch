@@ -363,6 +363,39 @@ PY
     test "$(longest "$work/qp.out.eml")" -le "$(longest "$work/qp.eml")"
 fi
 
+# ── A NEEDLE THAT OVERLAPS THE ADDRESS MUST NOT DESTROY IT FIRST ─────────────────────────────────
+# Round-6 panel, 2026-08-31. The needle loop ran BEFORE the address replacement, and a needle is
+# typically the subscriber's NAME — which is usually IN the address. So `Takieddine` + `MESSAOUDI`
+# rewrote `takieddine.messaoudi.official@gmail.com` into `abonne.abonne.official@gmail.com` before
+# anything looked for the address; `str_replace($address)` then matched nothing, the local-part
+# fallback matched nothing, and the final verification matched nothing either — so the tool wrote
+# the file, printed `scrubbed` and exited 0 while the remainder reconstructed the address beside the
+# commit author. Two fixtures shipped exactly that, hours after ALERT-CAPTURE.md started telling
+# operators to pass the name. This is the procedure the docs prescribe, so it is the procedure the
+# suite must exercise.
+message_needle_overlaps_address() {
+  cat <<EOF
+From: Portal <no_reply@portal.test>
+To: <jeanne.dubois.official@example.test>
+Subject: 1 nouvelle annonce
+
+Bonjour Jeanne DUBOIS,
+https://www.portal.test/annonce/abc?email=jeanne.dubois.official%40example.test&md5=aa
+EOF
+}
+
+message_needle_overlaps_address >"$work/overlap.eml"
+overlap_status=0
+php "$repo/tools/scrub-eml.php" "$work/overlap.eml" "$work/overlap.out.eml" \
+  'jeanne.dubois.official@example.test' Jeanne DUBOIS >"$work/overlap.log" 2>&1 || overlap_status=$?
+
+check "a capture whose NEEDLE overlaps the address is scrubbed rather than refused" test "$overlap_status" -eq 0
+refute "and no fragment of the local part survives beside an untouched remainder" \
+  grep -qiE 'abonne[.-]?abonne' "$work/overlap.out.eml"
+refute "and the greeting name is gone" grep -qiF 'DUBOIS' "$work/overlap.out.eml"
+check "and the listing survives, because it is the payload" \
+  grep -qF 'annonce/abc' "$work/overlap.out.eml"
+
 # ── MUST REFUSE ───────────────────────────────────────────────────────────────────────────────────
 message_with_opaque >"$work/opaque.eml"
 opaque_status=0

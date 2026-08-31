@@ -1683,14 +1683,14 @@ run_sabotage "the field map's regex capture is ignored (surface reads the room c
 # the declared-total check, 24 of 92 listings is reported as a complete pass.
 run_sabotage "pagination stops checking the total the page declares" \
   src/php/Rent/Adapters/HtmlSource.php \
-  's%if (\$total !== null \&\& count(\$out) < \$total) {%if (false) {%'
+  's%if (\$total !== null \&\& count(\$out) + \$tolerance < \$total) {%if (false) {%'
 
 # Unbounded pagination against a site that ignores the page parameter is an infinite request loop
 # on somebody else's server — the one bug in this adapter that could actually get an IP banned,
 # which under hard rule 5 is the thing polite pacing exists to prevent.
 run_sabotage "the pagination page bound stops being enforced" \
   src/php/Rent/Adapters/HtmlSource.php \
-  's%if (\$page >= \$this->definition->maxPages) {%if (false) {%'
+  's%if (!\$finished \&\& \$page >= \$this->definition->maxPages) {%if (false) {%'
 
 # A pattern that does not match yields the UNPARSED text instead of null. Hard rule 9's neighbour:
 # the field is then a string that happens to contain a number somewhere, and the parser will find

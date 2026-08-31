@@ -361,11 +361,20 @@ $message = preg_replace_callback(
     $message,
 ) ?? $message;
 
-foreach ($needles as $needle) {
-    // Case-insensitively, because a portal's greeting capitalises what its account record does not.
-    $message = (string) preg_replace('~' . preg_quote($needle, '~') . '~i', 'abonne', $message);
-}
-
+// THE ADDRESS GOES FIRST, AND THE ORDER IS THE WHOLE POINT (round-6 panel, 2026-08-31).
+//
+// It used to run needles first, and that turned this tool's own documented procedure into a leak.
+// A needle is typically the subscriber's NAME, and the name is usually IN the address — so
+// `Takieddine` + `MESSAOUDI` rewrote `takieddine.messaoudi.official@gmail.com` into
+// `abonne.abonne.official@gmail.com` BEFORE the address replacement ran. `str_replace($address)`
+// then matched nothing, the local-part fallback matched nothing, and the final verification
+// (`stripos($message, $address)`) matched nothing either — so the tool wrote the file and exited 0
+// while the remainder, `.official@gmail.com`, sat beside the commit author on the same commit and
+// reconstructs the address verbatim. Two fixtures shipped exactly that, six times each, hours after
+// `docs/ALERT-CAPTURE.md` started telling operators to pass the name.
+//
+// Replacing the address first leaves the needles nothing of it to damage: what remains for them is
+// the greeting and the display name, which is what they are for.
 if ($address !== null && $address !== '') {
     $message = str_replace($address, 'alertes@example.invalid', $message);
     // The local part alone appears in some ESP ids.
@@ -373,6 +382,11 @@ if ($address !== null && $address !== '') {
     if ($local !== '') {
         $message = str_replace($local, 'alertes', $message);
     }
+}
+
+foreach ($needles as $needle) {
+    // Case-insensitively, because a portal's greeting capitalises what its account record does not.
+    $message = (string) preg_replace('~' . preg_quote($needle, '~') . '~i', 'abonne', $message);
 }
 
 // The ESP's list/subscriber ids, which survive in bounce addresses and campaign strings.

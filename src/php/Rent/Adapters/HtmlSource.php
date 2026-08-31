@@ -255,6 +255,28 @@ final readonly class HtmlSource implements Source
         $total = $this->declaredTotal($body);
         $page = 1;
 
+        // Set by either LEGITIMATE terminator — a page with no cards, or the site's own count being
+        // reached. Without it the bound check below cannot tell a walk that FINISHED on its last
+        // permitted page from one that ran out of road, and throws on both.
+        //
+        // CDC Habitat walked into exactly that on 2026-08-31 and the source reported `broken / 0
+        // annonces` for a day: 315 declared listings at 16 a page is 19.7 pages, so the walk
+        // completed correctly ON page 20 with the bound at 20, hit `count($out) >= $total`, broke —
+        // and was then thrown away by `$page >= maxPages`. The message it threw named a cause that
+        // was not true ("the path template is probably ignored by the site, so every page returns
+        // the first one"): the template worked, the pages differed, the selectors matched. A true
+        // symptom with an invented cause, which is this repo's own named failure and is worse than
+        // no message, because it sends the next reader to check the one thing that is fine.
+        $finished = false;
+
+        // Set only by a SHORT final page — see below. It is the difference between "the walk ended"
+        // and "the walk ended AND nothing was lost", which is what the declared-total assertion
+        // needs to know.
+        $reachedLastPage = false;
+
+        // The first page's card count is the page size every later page is measured against.
+        $pageSize = count($out) > 0 ? count($out) : null;
+
         while ($page < $this->definition->maxPages) {
             ++$page;
 
@@ -292,6 +314,24 @@ final readonly class HtmlSource implements Source
             } catch (SourceError) {
                 // A page past the last one legitimately has no cards. Only the FIRST page's
                 // emptiness is a breakage — that one is rethrown above, before this loop starts.
+                $finished = true;
+                break;
+            }
+
+            // A SHORT PAGE IS THE END OF THE WALK, and it is PROOF of it in a way the declared
+            // total is not. A site whose last page is partial never satisfies `count >= total`, so
+            // without this the walk runs to the bound and is thrown away — which is what CDC
+            // Habitat does: 20 pages of 16 except the last, which serves 8.
+            // ONLY WHERE A TOTAL IS DECLARED, and that restriction is the safety. A short page is
+            // the last page on every site seen so far, but a site could serve a short page in the
+            // MIDDLE — filtered cards, a partial render — and stopping there would truncate
+            // silently, which is the one failure this adapter exists to prevent. With a declared
+            // total the assertion below verifies the shortcut; without one nothing could, so the
+            // walk keeps its existing empty-page terminator and behaves exactly as before.
+            if ($total !== null && $pageSize !== null && count($rows) > 0 && count($rows) < $pageSize) {
+                $out = [...$out, ...$rows];
+                $finished = true;
+                $reachedLastPage = true;
                 break;
             }
 
@@ -310,11 +350,12 @@ final readonly class HtmlSource implements Source
             // against somebody else's server, which is hard rule 5's direction anyway. With no
             // declared total there is nothing to stop on, and the empty-page probe still applies.
             if ($total !== null && count($out) >= $total) {
+                $finished = true;
                 break;
             }
         }
 
-        if ($page >= $this->definition->maxPages) {
+        if (!$finished && $page >= $this->definition->maxPages) {
             throw new SourceError(
                 $this->name(),
                 'pagination reached the ' . $this->definition->maxPages . '-page bound without ending — '
@@ -324,7 +365,15 @@ final readonly class HtmlSource implements Source
             );
         }
 
-        if ($total !== null && count($out) < $total) {
+        // A SHORTFALL UNDER ONE PAGE IS THE SITE'S OWN COUNTER BEING OFF, NOT A LOST PAGE — but only
+        // once a short final page has PROVEN the walk reached the end. CDC Habitat declares 315 and
+        // serves 312; demanding `count >= declared` made it permanently `broken`, and raising the
+        // bound would not have helped because the shortfall is in the site's arithmetic, not in the
+        // walk. What the assertion exists to catch is a LOST PAGE, and a page is 16 listings here,
+        // so anything short of one page is tolerated and anything from one page up still throws.
+        $tolerance = $reachedLastPage && $pageSize !== null ? $pageSize - 1 : 0;
+
+        if ($total !== null && count($out) + $tolerance < $total) {
             // The assertion the walk exists to make. Fewer listings than the site itself declares
             // means pages were lost, and a run that quietly reports 24 of 92 looks exactly like a
             // thin market — forever, and with a healthy source badge on it.
