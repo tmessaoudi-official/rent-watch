@@ -663,7 +663,29 @@ final readonly class RentScout
             return $this->watch($criteria, $store, $notifier, $sources, $verbose);
         }
 
-        return $this->onePass($criteria, $store, $notifier, $sources, $seed, $verbose);
+        $code = $this->onePass($criteria, $store, $notifier, $sources, $seed, $verbose);
+
+        // A PENDING REFUSAL FORCES A BEAT ON `--once` (round-5 panel, 2026-08-31). Q27's promise is
+        // that "the next successful start reports it on the beat and clears it" — and `--once` has
+        // no beat at all, so on the cron-driven deployment `CLAUDE.md` names as supported, the note
+        // was written by every refused run and read by nothing. `doctor` reports it now, but a
+        // diagnostic nobody runs is not a report, and since the note is only cleared on delivery it
+        // would sit there for ever: "an alert nobody retracts becomes furniture", from the other end.
+        //
+        // Ignoring the interval is deliberate and is not the per-pass spam Q27 guards against. This
+        // fires only when a note is actually pending — i.e. after a refusal, which is rare and is
+        // exactly the event worth one push — and delivering it is what clears it, so it cannot
+        // repeat. `--seed` is excluded because a seeding run notifies nothing by construction.
+        if ($code === 0 && !$seed && $this->pendingRefusal() !== null) {
+            $watched = [];
+            foreach ($sources as $source) {
+                $watched[$source->name()] = $source;
+            }
+
+            $this->beat($notifier, $store, 1, 0, $this->pendingRefusal(), $watched);
+        }
+
+        return $code;
     }
 
     /**

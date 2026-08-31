@@ -230,8 +230,23 @@ final readonly class CarScout
         if (!$watch) {
             $result = $pipeline->runOnce($sources, $this->now(), $seed);
             $this->report($result, $seed, $verbose);
+            $code = $result->sourcesFailed > 0 && $result->sourcesRun === 0 ? 1 : 0;
 
-            return $result->sourcesFailed > 0 && $result->sourcesRun === 0 ? 1 : 0;
+            // A PENDING REFUSAL FORCES ONE BEAT, exactly as on the rent side and for the same
+            // reason: `--once` has no beat, so on a cron deployment the note was written by every
+            // refused run and read by nothing, and since it is now cleared only on delivery it would
+            // sit there for ever. Fires only when a note is pending, and delivering it clears it, so
+            // it cannot repeat. `--seed` notifies nothing by construction and is excluded.
+            if ($code === 0 && !$seed && $this->pendingRefusal() !== null) {
+                $health = array_map(fn (VehicleSource $s) => $s->health($this->now()), $sources);
+                $n = (new VehicleFormatter())->heartbeat(1, 0, $health, $this->now(), $this->pendingRefusal());
+
+                if ($notifier->delivered($notifier->send($n))) {
+                    $this->clearLastRefusal();
+                }
+            }
+
+            return $code;
         }
 
         return $this->watch($pipeline, $sources, $store, $notifier, $verbose);

@@ -467,6 +467,39 @@ final class RentScoutHeartbeatTest extends TestCase
         );
     }
 
+    /**
+     * ON A CRON `--once` DEPLOYMENT THE NOTE STILL GETS OUT (round-5 panel, 2026-08-31).
+     *
+     * Q27's promise is that the next successful start reports the refusal and clears it — and
+     * `--once` has no beat at all, so on the deployment `CLAUDE.md` names as supported the note was
+     * written by every refused run and read by nothing. Since round 5 the note is also only cleared
+     * on delivery, so it would have sat there for ever: "an alert nobody retracts becomes
+     * furniture", from the other end.
+     *
+     * A pending note therefore forces ONE beat after a successful `--once`. That is not the
+     * per-pass spam Q27 guards against: it fires only when a note is actually pending, and
+     * delivering it is what clears it, so it cannot repeat.
+     */
+    public function testASuccessfulOncePassCarriesAPendingRefusalAndClearsIt(): void
+    {
+        $root = $this->tempRoot();
+        $channel = $this->delivering();
+
+        // Seed first, or Q36 refuses and there is no successful pass to hang the beat on.
+        $this->scoutIn($root, ['run', '--once', '--seed'], null, $channel);
+        file_put_contents($root . '/state/rent-last-refusal.txt', '2026-08-21T22:00:00+02:00 — canal ntfy sans RENT_NTFY_TOPIC');
+
+        $r = $this->scoutIn($root, ['run', '--once'], null, $channel);
+
+        self::assertSame(0, $r['code'], $r['err']);
+        self::assertStringContainsString('refus au démarrage précédent', $r['out'], 'the note reaches a channel on a deployment that never watches');
+        self::assertFileDoesNotExist($root . '/state/rent-last-refusal.txt', 'delivered, therefore cleared — it cannot become furniture');
+
+        // And it does not repeat: a second successful pass with no note pending must not beat.
+        $second = $this->scoutIn($root, ['run', '--once'], null, $channel);
+        self::assertStringNotContainsString('refus au démarrage précédent', $second['out'], 'one push, not one per run');
+    }
+
     public function testARunRefusalWritesTheNoteForTheNextStart(): void
     {
         // The producing half. An empty seen-set is Q36's refusal and is the easiest to provoke.
