@@ -79,7 +79,7 @@ final class SelogerFixtureTest extends TestCase
      *
      * 6 → 8 on 2026-08-31, when the `Baisse de prix` template was frozen for the first time (004,
      * 005). It is a SECOND template from the same sender and it had never been captured, which is
-     * how F10 went a month unnoticed: a price-drop alert leads its card with the agency's own text
+     * how F23 went a month unnoticed: a price-drop alert leads its card with the agency's own text
      * starting `600€ TOUT COMPRIS…`, and `title_pattern` refuses any candidate containing `€`.
      * Neither of these two captures reproduces that — both extract a title — so they pin the
      * template's ordinary shape, and the `€`-leading variant is covered by

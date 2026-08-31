@@ -3727,7 +3727,7 @@ run_sabotage "a car startup refusal is not recorded for the next beat" \
   src/php/Car/Cli/CarScout.php \
   's%@file_put_contents(\$this->stateFile(.car-last-refusal.txt.), \$this->now()%@file_put_contents("/dev/null", $this->now()%'
 
-# F10 — the title pattern's price guard. Refusing a candidate that merely CONTAINS a € makes
+# F23 — the title pattern's price guard. Refusing a candidate that merely CONTAINS a € makes
 # exclude_title_patterns inert across SeLoger's whole `Baisse de prix` template; refusing NOTHING
 # makes the rent line itself the title, which is the worse half. Both directions must redden.
 # R6-1 — the commune reader's digit rule. Forbidding digits in the name loses every Paris

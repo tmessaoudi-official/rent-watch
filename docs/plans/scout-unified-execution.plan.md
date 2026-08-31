@@ -181,6 +181,22 @@ read-only) and the merged prose as one review deep.
 
 ## Fragile implementations register (the developer asked; keep this list honest)
 
+> **IDS ARE UNIQUE AND NEVER REUSED, and this note exists because they were.** On 2026-08-31/09-01
+> four rows were appended as F10–F13 without checking those numbers were taken — the register
+> already ran to F22, and F10–F15 were all live. A first repair renumbered the wrong side and
+> collided again. The rows added then are now **F23 (SeLoger `Baisse de prix` empty title), F24 (no
+> `pièces` anchor), F25 (compose wedge), F26 (fixture-backed doctor)**, and the originals F10–F15
+> are untouched.
+>
+> **Commits `d60a183`, `67e2828`, `8590db7` and `94962d2` cite the old numbers** (F10 for what is
+> now F23, F13 for what is now F26). Git history cannot be corrected, so it is recorded here
+> instead; the in-tree citations in `config/rent/sources.json`, `PriceLedTitleTest`,
+> `SelogerFixtureTest` and `tests/sabotage-check.sh` were updated to the new numbers.
+>
+> This is the concrete half of R6-8, which called the register's bookkeeping "a real breach of this
+> file's own rule". **Before appending a row, read the LAST id in the table, not the last one you
+> remember.**
+
 | # | Surface | State | Where handled |
 |---|---|---|---|
 | F1 | PAP positional anchors (all FOUR params) | **BROKEN since ~08-28**, and worse than recorded: 100% null on 08-29/30/31, **23 null rows, 19 notified MATCH**. Two independent axes — the body layout changed, AND all four params anchor on `\(\d{5}\)`, which 3 of PAP's location shapes do not carry | Track 1h — patterns measured, 39/39 vs 16/39 today |
@@ -192,13 +208,13 @@ read-only) and the merged prose as one review deep.
 | F6 | Empty-title rows (3 seloger + 4 pap) | Every `exclude_title_patterns` entry inert on them (nothing matches an empty string) | Track 3 audit item |
 | F7 | La Centrale truncation | Email carries ~3 of 900+ stated cards; `FEED_SILENT` keys on message DATE, so health stays green while 99.7% blind | Track 2 step 4 (documented cost) |
 | F8 | SeLoger `id_from: content` + a misread surface | A bad surface reading changes the dedup key → one flat can notify twice under two identities | Noted in 1g; same root class |
-| F13 | A fixture-backed `doctor` writes its run into the LIVE store | **HIT 2026-09-01, and it is the DOCUMENTED workflow that does it.** `MAILBOX_DIR=` swaps the mailbox, not the database, so a fixture run's item count joins the 7-day baseline every live run is judged against — it made car `leboncoin` report `broken` on a 5-annonce premise made of fixtures. Fixed in CLAUDE.md: every documented offline proof now pairs with a throwaway DB | closed, guidance fixed |
-| F12 | `docker compose up -d` wedges on recreate and leaves a watcher DOWN | **LIVE, twice on 2026-08-31.** `stop_grace_period: 5m` + a renamed old container = the orchestration stalls; once it then failed outright on `Conflict. The container name … is already in use`. rent-scout was down ~13 min and nothing said so | see the redeploy note below |
-| F10 | SeLoger `Baisse de prix` yields an EMPTY title | **CLOSED 2026-09-01** (`d60a183`) — the pattern refused any candidate CONTAINING a `€`; it now refuses only one that IS a price. Measured over the store: 552 unchanged, 2 gained a title, 0 changed, 0 lost. Template frozen as fixtures 004/005 | — |
-| F11 | A SeLoger card with no `pièces` line has no title anchor at all | **LIVE, and the remaining half of F10** — the anchor IS the `pièces` line, so a card stating no room count (a room rental, a parking, an atypical ad) yields `''` whatever the `€` rule does. Two such rows; both REJECTED, by the description-matching `exclude_patterns` rather than the title ones — luck rather than a guard. Needs a SECOND anchor, and a captured card of that shape to measure one against | fix owed |
 | F9 | n=1 separators/patterns (leboncoin rent, PAP) | Measured on one capture each; PAP already proved what that costs | standing; each new alert is the regression test |
 | F10 | Generic `ROOMS_PATTERN` reads hex out of photo-URL UUIDs | `(?:T\|F)\s?(\d)\b` is case-insensitive, so `…90F8-…` → 8 rooms. **14 wrong on seloger, 6 notified; 7 on bienici.** Too LOW loses real matches, too HIGH clears `min_rooms` on a number nobody stated | **NEW Track 1j** (2026-08-31) |
 | F11 | Startup refusal reachable only under `--watch` | *FIXED 2026-08-31* — it was also consumed above the `isDue()` test, so a restart inside the beat interval destroyed it unreported; `doctor` now reports it without consuming | round-4 fix commit |
+| F23 | SeLoger `Baisse de prix` yields an EMPTY title | **CLOSED 2026-09-01** (`d60a183`) — the pattern refused any candidate CONTAINING a `€`; it now refuses only one that IS a price. Measured over the store: 552 unchanged, 2 gained a title, 0 changed, 0 lost. Template frozen as fixtures 004/005 | — |
+| F24 | A SeLoger card with no `pièces` line has no title anchor at all | **LIVE, and the remaining half of F10** — the anchor IS the `pièces` line, so a card stating no room count (a room rental, a parking, an atypical ad) yields `''` whatever the `€` rule does. Two such rows; both REJECTED, by the description-matching `exclude_patterns` rather than the title ones — luck rather than a guard. Needs a SECOND anchor, and a captured card of that shape to measure one against | fix owed |
+| F25 | `docker compose up -d` wedges on recreate and leaves a watcher DOWN | **LIVE, twice on 2026-08-31.** `stop_grace_period: 5m` + a renamed old container = the orchestration stalls; once it then failed outright on `Conflict. The container name … is already in use`. rent-scout was down ~13 min and nothing said so | see the redeploy note below |
+| F26 | A fixture-backed `doctor` writes its run into the LIVE store | **HIT 2026-09-01, and it is the DOCUMENTED workflow that does it.** `MAILBOX_DIR=` swaps the mailbox, not the database, so a fixture run's item count joins the 7-day baseline every live run is judged against — it made car `leboncoin` report `broken` on a 5-annonce premise made of fixtures. Fixed in CLAUDE.md: every documented offline proof now pairs with a throwaway DB | closed, guidance fixed |
 | F12 | Car heartbeat inside the pass closure | *FIXED 2026-08-31* — a throwing pass silenced the watcher entirely, the one state the beat exists to make visible | round-4 fix commit |
 | F13 | Scrubber `To:`/`Cc:` display name, and any base64 fold ≤19 columns | *FIXED 2026-08-31* — two committed fixtures had shipped the subscriber's real name; a 19-column fold was written and reported `scrubbed` with the address one `base64 -d` away | round-4 fix commit |
 | F14 | Three Bien'ici fixtures carried the subscriber's address behind a DOUBLE base64 layer | *FIXED `3d24525`* — detection in `8f0c526`, stripping once the QP-eating hex replacer was fixed; all three re-scrubbed, 0 of 15 fixtures leak four levels deep, and `FixtureSecretsTest` is now armed with the same recursive decode. HISTORY still carries the blobs — the developer's call (hard rule 7's new note) | closed, remote exposure stated |
@@ -578,7 +594,7 @@ against the live folder — the only test that settles it, because IMAP `SUBJECT
 RFC 2047-encoded subjects and returned 0 for every probe — yields **0 listings**. The five real
 `vous propose` alerts remain unlabelled in INBOX, which is what the owed developer action is about.
 
-**And that run exposed F13.** It reported `broken · 6 runs consécutifs à vide alors que la référence
+**And that run exposed F26.** It reported `broken · 6 runs consécutifs à vide alors que la référence
 précédente était de 5.0 annonces` — a `SOURCE_BROKEN` verdict whose baseline was *my own offline
 fixture run*, written into the live car store by `MAILBOX_DIR=… doctor`. `MAILBOX_DIR` swaps the
 mailbox, not the database. Recovered by backing up (`tools/backup-state.sh`), deleting the one
@@ -636,7 +652,7 @@ moving the wrong thing. (The 4 title misses are F10/F11 above.)
 one problem is `leboncoin feed_silent` — true, that portal has sent nothing since 26 August and its
 routing filter does not exist yet.
 
-### Redeploying is not `docker compose up -d` — F12, hit twice on 2026-08-31
+### Redeploying is not `docker compose up -d` — F25, hit twice on 2026-08-31
 
 Both watchers set `stop_grace_period: 5m` and `WatchLoop` stops only after the pass in flight
 finishes, so a recreate can sit for minutes. Compose renames the old container while it waits, and
@@ -697,13 +713,13 @@ Two findings that ARE real:
   are unchanged, so listings notified as MATCH on a null surface stay recorded that way — the
   evidence is repaired, the history of what was announced is not. A row for a delisted ad would
   keep its nulls; none did.
-- **F10/F11 above** — SeLoger's empty titles, with the cause measured rather than guessed:
+- **F23/F24 above** — SeLoger's empty titles, with the cause measured rather than guessed:
   `title_pattern` is `~^\h*(?!https?://)([^\n€]{2,80}?)\h*\n(?:\h*\n|\h*https?://[^\n]*\n)+\h*\d+\h*pi[eè]ces?\b~mu`.
   The `[^\n€]` class forbids `€` in the captured line — a guard against capturing the rent line —
   and a `Baisse de prix` card's own agency text begins `600€ TOUT COMPRIS – électricité…`, so it is
   refused and the title comes back empty. The other two rows have no `pièces` line at all, so the
   anchor is absent.
-  **F10 IS NOW FIXED** (`d60a183`), and the route is worth repeating. The two `Baisse de prix`
+  **F23 IS NOW FIXED** (`d60a183`), and the route is worth repeating. The two `Baisse de prix`
   messages still in the IMAP window were captured — `php tools/dump-eml.php alertes.seloger.com 40
   var/claude/captures 'rent-watch/portails'`, note the sender is a DOMAIN not an address — scrubbed
   and frozen as fixtures 004/005. **Neither reproduces the failing variant**: both extract a title,
@@ -712,7 +728,7 @@ Two findings that ARE real:
   was read back byte for byte and encoded in `PriceLedTitleTest`. Measured over every stored seloger
   snapshot: 552 unchanged, 2 gained a title, 0 changed, 0 lost.
 
-  **F11 IS NOT FIXED**, and it is not the same bug: the anchor IS the `pièces` line, so a card
+  **F24 IS NOT FIXED**, and it is not the same bug: the anchor IS the `pièces` line, so a card
   stating no room count has no anchor at all regardless of the `€` rule. Fixing it needs a second
   anchor and a captured card of that shape to measure one against.
 

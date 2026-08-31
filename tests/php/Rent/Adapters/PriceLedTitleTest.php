@@ -11,7 +11,8 @@ use Scout\Rent\Adapters\EmailAlertSource;
 use Scout\Rent\Config\ConfigLoader;
 
 /**
- * F10 — SeLoger's `Baisse de prix` template yielded an EMPTY title, so `exclude_title_patterns`
+ * F23 (cited as F10 in commit d60a183, before an id collision was found) — SeLoger's
+ * `Baisse de prix` template yielded an EMPTY title, so `exclude_title_patterns`
  * was inert across the whole template. The In'li/PAP inert-exclusion lesson a fourth time.
  *
  * **THE LAYOUT HERE IS MEASURED, NOT INVENTED.** Both `Baisse de prix` messages still in the IMAP
