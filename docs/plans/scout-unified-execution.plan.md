@@ -158,6 +158,11 @@ read-only) and the merged prose as one review deep.
 | F11 | Startup refusal reachable only under `--watch` | *FIXED 2026-08-31* — it was also consumed above the `isDue()` test, so a restart inside the beat interval destroyed it unreported; `doctor` now reports it without consuming | round-4 fix commit |
 | F12 | Car heartbeat inside the pass closure | *FIXED 2026-08-31* — a throwing pass silenced the watcher entirely, the one state the beat exists to make visible | round-4 fix commit |
 | F13 | Scrubber `To:`/`Cc:` display name, and any base64 fold ≤19 columns | *FIXED 2026-08-31* — two committed fixtures had shipped the subscriber's real name; a 19-column fold was written and reported `scrubbed` with the address one `base64 -d` away | round-4 fix commit |
+| **F14** | **Three Bien'ici fixtures still carry the subscriber's address**, behind a DOUBLE base64 layer | Detection FIXED (`8f0c526` — recursive worklist, entities, percent-encoding); **stripping is OWED**. The wrapped runs are whole URLs and two attempts at rewriting them destroyed the listing links (`BieniciFixtureTest`: "aucune annonce n'a pu en être extraite"), so both were reverted. `FixtureSecretsTest` is deliberately left un-armed for this shape — arming it reddens the suite on a condition nothing can currently fix, and the guard forbids an exception list | **OPEN — round 5, O1** |
+| F15 | The refusal note is consumed at beat-COMPOSE time, not on delivery | An undelivered beat destroys it, and the commonest refusal IS a channel misconfiguration — so the beat that should carry the note is the one most likely to fail | **OPEN — round 5, O3** |
+| F16 | Cron `--once` never clears the refusal note; `doctor` prints a promise that deployment cannot keep | `takeLastRefusal()` is called only in `watch()`, so `doctor` reports a fixed outage for ever while saying it will be carried on the next beat | **OPEN — round 5, O4** |
+| F17 | Car `doctor` has no `pendingRefusal` | The gap round 4 closed for rent is fully open on car (`grep -c pendingRefusal`: rent 3, car 0) | **OPEN — round 5, O5** |
+| F18 | A plain `grep` silently skips the Latin-1 PAP fixtures | `grep -c .` prints nothing and exits 0; `grep -ac .` prints 145. Any grep-based "N fixtures scanned, 0 hits" sweep is unsound on this tree — use a byte-level scanner | **OPEN — round 5, O6 (method)** |
 
 ---
 
