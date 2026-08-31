@@ -66,6 +66,12 @@ print(f"{fp}\t{blob}")
 # outside without consulting this file at all.
 case "$file_path" in
   */tests/test-tenure-guard.sh) exit 0 ;;
+  # Its vehicle sibling, for the identical reason: `tests/test-vehicle-guard.sh` is nothing but the
+  # payloads the vehicle patterns exist to catch — an emptied NEGATABLE set, `accidente is now
+  # allowed`, a term put on an allow-list. It tripped this hook on the very write that created it,
+  # which is the guard working; and left unexempted it would fire on every edit to the file that
+  # proves the guard still fires, forever.
+  */tests/test-vehicle-guard.sh) exit 0 ;;
   # sabotage-check.sh is the same case for the same reason: its whole content is `sed` expressions
   # that lower FLOOR_BP, empty the excluded set and disable the classifier, because its job is to
   # prove the PHPUnit suite CATCHES each of those. It joined this list on 2026-08-06, when pattern 3
@@ -168,6 +174,60 @@ fi
 _empty='(remove|delete|drop|pop|clear|[^!=<>] *= *\[\]|=> *\[\]|return *\[\]|[^!=<>] *= *none|[^!=<>] *= *null|[^!=<>] *= *array\(\)|[^!=<>] *= *\(\)|: *\[\]|: *\{\}|: *null|: *~)'
 if grep -Eq "(exclude|excluded|denied|blocked|forbidden|never)[^.]{0,80}$_empty" <<<"$blob"; then
   hits+=("the excluded-tenure set looks like it is being emptied or shrunk")
+fi
+
+# 2b. THE VEHICLE EXCLUDED SET — the same rule, on the domain that had no tripwire at all.
+#
+# `CLAUDE.md` records this as owed: the car domain's `VehicleClassifier` carries its own
+# non-overridable excluded set — `accidenté`, `gagé`, `opposition`, `épave`, `VEI`, `VGE`,
+# `procédure VE`, `économiquement irréparable`, `pour pièces`, `sans carte grise`, `CT non fourni`,
+# `non roulant` — and nothing watched it. A relaxation there is the exact §1 shape: a wrecked or
+# impounded car surfaced as a match is a wasted trip and, unlike a housing false positive, a
+# potentially unsafe purchase.
+#
+# EXTENDING THIS HOOK RATHER THAN ADDING A SECOND. The plan calls for `tests/test-vehicle-guard.sh`,
+# which implies a `vehicle-guard.sh` beside it; one hook is better here because the relaxation
+# SHAPES are identical (an allow-list, an emptied set, a weakened test) and only the vocabulary
+# differs. Two hooks would be two log formats, two exclusion lists and two places to forget — and
+# the exclusions this file already carries (its own test, the sabotage ledger) apply verbatim.
+#
+# `_empty` is REUSED deliberately: it is the shape half of pattern 2, hardened over three review
+# rounds against PHP's `$a[] =` append and `!== []` comparison. Re-deriving it here would be a
+# second implementation of a rule that has already been got wrong twice.
+#
+# TWO GAPS ITS OWN TEST FOUND on the first run, both worth recording because both are the shape
+# this repo keeps paying for. `opposition` was simply MISSING from the alternation — a term dropped
+# from the hook is a silent hole exactly like a term dropped from the classifier, which is why
+# `tests/test-vehicle-guard.sh` iterates the vocabulary as a SET rather than spot-checking two of
+# them. And the multi-word terms were written with SPACES only, so `"pour_pieces_enabled": true` —
+# the config spelling, and the likeliest way anyone would actually re-enable one — went straight
+# through. `[ _-]` covers the three separators these terms are written with in prose, in JSON keys
+# and in identifiers.
+_gs_veh='(accident|gage|epave|vei|vge|opposition|procedure[ _-]ve|economiquement[ _-]irreparable|pour[ _-]piece|sans[ _-]carte[ _-]grise|non[ _-]roulant|controle[ _-]technique)'
+if grep -Eq "(allow|allowed|include|included|accept|accepted|in_scope|whitelist|enabled)[^.]{0,80}$_gs_veh" <<<"$blob" \
+|| grep -Eq "${_gs_veh}[^.]{0,80}(allow|allowed|include|included|accept|accepted|in_scope|whitelist|: *true)" <<<"$blob"; then
+  hits+=("an excluded VEHICLE condition (accidenté/gagé/épave/VEI/VGE/pour pièces…) appears next to an inclusion keyword")
+fi
+#
+# THE DOMAIN SIGNAL IS THE PATH, not the text, and the first draft got that wrong: it required a
+# vehicle word in the WRITE, so `private const array NEGATABLE = [];` — the literal way to empty
+# this set — went silent, because the only vehicle word in sight was in the filename. A probe
+# caught it. `src/php/Car/` and the `Vehicle*` classes ARE the car domain; nothing else needs to say
+# so. The text alternative is kept for a write that relaxes the set from somewhere else.
+_gs_car_path=0
+#
+# `config/car/` IS DELIBERATELY NOT IN THIS LIST. The §1 vehicle set is CODE — `NEGATABLE` and
+# `LITERAL` in `VehicleClassifier`, non-overridable by design — while `config/car/criteria.json`
+# carries `exclude_patterns`, the ordinary user list, which SHIPS EMPTY on purpose (the ParuVendu
+# alert is already scoped to `Voiture d'occasion`). A first draft included it and fired on the
+# shipped config, which is the false positive this file's own header warns is fatal: a tripwire
+# that fires on correct work is waved through within a day.
+case "$file_path" in
+  */src/php/Car/*|*/Vehicle*.php) _gs_car_path=1 ;;
+esac
+if grep -Eq "(negatable|literal|exclude|excluded|denied|blocked|forbidden|never)[^.]{0,80}$_empty" <<<"$blob" \
+   && { [[ "$_gs_car_path" == 1 ]] || grep -Eq "${_gs_veh}|vehicleclassifier" <<<"$blob"; }; then
+  hits+=("the excluded-VEHICLE set looks like it is being emptied or shrunk")
 fi
 
 # 3. Fail-closed confidence threshold being weakened.
@@ -323,7 +383,20 @@ esac
 # important line the log can carry — it must be greppable after the session is gone.
 log_obs WARN tenure-guard "FIRED on $file_path — ${#hits[@]} signal(s): ${hits[*]}" || true
 {
-  echo "⛔ tenure-guard: this write may relax the non-negotiable social-housing rule."
+  # THE BANNER NAMES THE DOMAIN THAT ACTUALLY FIRED. It said "social-housing rule" unconditionally,
+  # which was true of every hit until the vehicle patterns arrived — and a VEHICLE relaxation
+  # announced as a housing one sends the reader to the wrong file, where they find nothing wrong and
+  # learn to distrust the hook. Derived from the hits rather than from the path, because a single
+  # write can trip both.
+  if printf '%s\n' "${hits[@]}" | grep -q 'VEHICLE'; then
+    if printf '%s\n' "${hits[@]}" | grep -qv 'VEHICLE'; then
+      echo "⛔ tenure-guard: this write may relax a non-negotiable exclusion (housing AND vehicle)."
+    else
+      echo "⛔ tenure-guard: this write may relax the non-negotiable EXCLUDED-VEHICLE rule."
+    fi
+  else
+    echo "⛔ tenure-guard: this write may relax the non-negotiable social-housing rule."
+  fi
   echo "   file: $file_path"
   for h in "${hits[@]}"; do
     echo "   • $h"
