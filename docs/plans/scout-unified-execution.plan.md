@@ -192,6 +192,8 @@ read-only) and the merged prose as one review deep.
 | F6 | Empty-title rows (3 seloger + 4 pap) | Every `exclude_title_patterns` entry inert on them (nothing matches an empty string) | Track 3 audit item |
 | F7 | La Centrale truncation | Email carries ~3 of 900+ stated cards; `FEED_SILENT` keys on message DATE, so health stays green while 99.7% blind | Track 2 step 4 (documented cost) |
 | F8 | SeLoger `id_from: content` + a misread surface | A bad surface reading changes the dedup key → one flat can notify twice under two identities | Noted in 1g; same root class |
+| F10 | SeLoger `Baisse de prix` yields an EMPTY title | **LIVE** — `title_pattern` refuses any line containing `€`, and a price-drop card's own text starts with one; `exclude_title_patterns` is inert on the whole template. 2 of 4 empty-title rows were NOTIFIED | Track 3 finding, fix owed against a captured fixture |
+| F11 | A SeLoger card with no `pièces` line has no title anchor at all | **LIVE, and narrower than F10** — the pattern anchors on the `pièces` line, so a card stating no room count (a room rental, a parking, an atypical ad) yields `''`. Two such rows; both were REJECTED, by the description-matching `exclude_patterns` rather than by the title ones | same |
 | F9 | n=1 separators/patterns (leboncoin rent, PAP) | Measured on one capture each; PAP already proved what that costs | standing; each new alert is the regression test |
 | F10 | Generic `ROOMS_PATTERN` reads hex out of photo-URL UUIDs | `(?:T\|F)\s?(\d)\b` is case-insensitive, so `…90F8-…` → 8 rooms. **14 wrong on seloger, 6 notified; 7 on bienici.** Too LOW loses real matches, too HIGH clears `min_rooms` on a number nobody stated | **NEW Track 1j** (2026-08-31) |
 | F11 | Startup refusal reachable only under `--watch` | *FIXED 2026-08-31* — it was also consumed above the `isDue()` test, so a restart inside the beat interval destroyed it unreported; `doctor` now reports it without consuming | round-4 fix commit |
@@ -546,6 +548,49 @@ unilaterally.
    notified_as distribution per source (flag 100%-UNKNOWN or zero-match sources).
 3. Count reconciliation per source: the portal's own stated count vs what the run log ingested.
 4. Targeted raw-email sampling only where 1–3 flag something.
+### Track 3 — STARTED 2026-08-31. The structural half of step 2, over the rent store.
+
+```
+source       rows  no_title  no_snapshot  notified   MATCH DIGEST REJECT
+seloger      529   4         0            241        227   4      298
+inli         469   0         36           121         76   0      357
+cdc_habitat  445   0         18            86         77   4      346
+bienici      245   0         0            165        161   2       82
+logirep      120   0         3             10          0  10      107
+cityloger     60   0         1              1          1   0        58
+pap           51   0         0             45         45   0         6
+leboncoin      3   0         0              1          1   0         2
+```
+
+Read carefully, because two columns look like defects and are not. **`no_snapshot` is
+pre-v7 rows**, not a failed capture — `evidence_json`, `outcome` and the commune all go null
+together on exactly those rows, which is the documented non-backfill. And **`logirep`'s 0 MATCH /
+10 DIGEST is correct**: its rent is `h.c.`, so `max_rent_cc` never fires and the ceiling is
+unverifiable there by design.
+
+Two findings that ARE real:
+
+- **PAP's 21 null-surface rows have SELF-HEALED, and the plan's stated cost was wrong.** The
+  Decisions Log says *"No backfill of the 21 null-extraction rows — stated cost, they stay null"*.
+  Measured after 1h landed: **0 null surfaces and 0 null rooms on every PAP day, 26–31 August.**
+  `Store::record()` rewrites the snapshot on every sighting, so a row whose ad is still published
+  re-extracts itself on the next pass once the patterns work. The cost that DOES stand is the one
+  nobody stated: the `outcome` and `notified_at` of the passes that ran while the surface was null
+  are unchanged, so listings notified as MATCH on a null surface stay recorded that way — the
+  evidence is repaired, the history of what was announced is not. A row for a delisted ad would
+  keep its nulls; none did.
+- **F10/F11 above** — SeLoger's empty titles, with the cause measured rather than guessed:
+  `title_pattern` is `~^\h*(?!https?://)([^\n€]{2,80}?)\h*\n(?:\h*\n|\h*https?://[^\n]*\n)+\h*\d+\h*pi[eè]ces?\b~mu`.
+  The `[^\n€]` class forbids `€` in the captured line — a guard against capturing the rent line —
+  and a `Baisse de prix` card's own agency text begins `600€ TOUT COMPRIS – électricité…`, so it is
+  refused and the title comes back empty. The other two rows have no `pièces` line at all, so the
+  anchor is absent.
+  **NOT FIXED HERE, deliberately.** The narrow repair is to reject a line that is ONLY a price
+  rather than any line containing one — but that is a pattern change on the highest-volume source,
+  and this repo's rule is that a real payload is the input. Capture the `Baisse de prix` template
+  (`php tools/dump-eml.php alertes@seloger.com … "$IMAP_MAILBOX"`), freeze it, then change the
+  pattern against it.
+
 5. Deliverable `var/claude/audit-<date>.md` with the falsifiable checklist: per label and per
    source it MUST state (a) message/row count, (b) reconciliation result, (c) unmatched
    senders/templates, (d) structural outliers. Missing any of the four per label/source = the
