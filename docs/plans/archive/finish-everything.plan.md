@@ -1,3 +1,6 @@
+> SUPERSEDED (2026-08-31) by docs/plans/scout-unified-execution.plan.md. Kept for its
+> Decisions Log and measurements; do not execute from this file.
+
 # Finish everything except phorj
 
 > **Written 2026-08-23** on the developer's instruction: *"let's finish everything! except for phorj!

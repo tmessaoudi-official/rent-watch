@@ -142,7 +142,7 @@ nothing errors, the source simply looks like a quiet market.
 
 ## Checklist
 
-- [x] **Alcopa** — captured and read 2026-08-28. **It does NOT carry a closing time**, nor a price, nor a per-lot link, and it shows 3 of 108 results. **Email route REFUSED** under rule 2 of the auction ruling. ~~Polling route still UNRESOLVED~~ **Polling route REFUSED too, 2026-08-29** — the sale pages and the calendar are JavaScript shells; nothing server-rendered carries a price or a closing time (`docs/plans/scout-rename-and-car-domain.plan.md`, 22:00 entry)
+- [x] **Alcopa** — captured and read 2026-08-28. **It does NOT carry a closing time**, nor a price, nor a per-lot link, and it shows 3 of 108 results. **Email route REFUSED** under rule 2 of the auction ruling. ~~Polling route still UNRESOLVED~~ **Polling route REFUSED too, 2026-08-29** — the sale pages and the calendar are JavaScript shells; nothing server-rendered carries a price or a closing time (`docs/plans/archive/scout-rename-and-car-domain.plan.md`, 22:00 entry)
 - [x] **Alcopa** — calendar reminder ~24/09 to renew the alert before it expires on 27/09 — **set 2026-08-28**
 - [ ] **leboncoin `Voitures`** — capture; how many cards for a subject counting 58?
 - [ ] **leboncoin `vous propose`** — `From:` header first, then capture

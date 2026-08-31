@@ -29,7 +29,7 @@ bundle integration raised on its own.
 >    because they need data only the developer can obtain: the DevTools cURL captures for the first
 >    sources (hard rule 1 forbids writing an endpoint from memory), IMAP credentials for the alert
 >    mailbox, one real portal alert email to shape the parser against, and the `plafonds` figures for
->    Q19. Those are inputs, not decisions — they are listed in `docs/plans/milestone-1-pipeline.plan.md`.
+>    Q19. Those are inputs, not decisions — they are listed in `docs/plans/archive/milestone-1-pipeline.plan.md`.
 >    **Three of the four are now closed:** the alert email and the IMAP credentials arrived
 >    2026-08-25, and the `plafonds` figures were FETCHED and committed 2026-08-26 — hard rule 1
 >    forbids writing a ceiling from memory, not verifying one against a dated official source. Only
@@ -730,7 +730,7 @@ social. Above that the tier emits nothing: never an intermediate verdict (`Plafo
 a band at construction), and never a doubt (a numeric doubt contradicts a correct tier-2 label into
 the digest, as `loyer plafonné` did to `lli-004` and `lli-011`). Measured after arming, it fires on
 **0** of 165 live listings and 0 of the 20 captured In'li descriptions — the shape it catches is real
-and no live source currently emits it. Full reasoning: `docs/plans/plafonds-tier-4.plan.md`.
+and no live source currently emits it. Full reasoning: `docs/plans/archive/plafonds-tier-4.plan.md`.
 
 **Everything below this line is the pre-2026-08-26 record**, kept because the refuted premise is the
 useful part. `PlafondBands` shipped empty and the test that asserted the tier stayed inert
@@ -1281,7 +1281,7 @@ over-rejection cost VISIBLE rather than merely documented.
   phorj and then we will do it when it's ready"*. `core/models` + `core/tenure` need none of phorj's
   three missing modules, no mailbox and no endpoint, so they were written in PHP 8.5 first. The
   corpus is language-neutral JSON, so the phorj port reads the same file and the two can be diffed
-  fixture-by-fixture. See `docs/plans/core-tenure-classifier.plan.md`.
+  fixture-by-fixture. See `docs/plans/archive/core-tenure-classifier.plan.md`.
 - [2026-08-06] AGREED: **PHP 8.5, latest of everything** — *"use php 8.5"*, *"latest of everything"*.
   PHP 8.5.9, Composer 2.10.2, PHPUnit 13.2.6. Zero Composer dependencies: the container's egress
   policy blocks GitHub dist downloads, so Composer falls back to full git clones and a PHPUnit dev

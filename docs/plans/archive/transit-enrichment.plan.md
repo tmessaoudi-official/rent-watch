@@ -1,3 +1,6 @@
+> SUPERSEDED (2026-08-31) by docs/plans/scout-unified-execution.plan.md. Kept for its
+> Decisions Log and measurements; do not execute from this file.
+
 # Transit enrichment (IDFM/PRIM) Plan
 
 > **Built 2026-08-26.** `src/php/Enrich/` was the last spec layer with no code at all. It exists

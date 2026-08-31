@@ -1,3 +1,6 @@
+> SUPERSEDED (2026-08-31) by docs/plans/scout-unified-execution.plan.md. Kept for its
+> Decisions Log and measurements; do not execute from this file.
+
 # core/tenure + core/models Plan
 
 The first application code in this repo. Builds the **pure core** — the part that needs nothing from

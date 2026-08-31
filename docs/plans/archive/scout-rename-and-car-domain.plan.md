@@ -1,3 +1,6 @@
+> SUPERSEDED (2026-08-31) by docs/plans/scout-unified-execution.plan.md. Kept for its
+> Decisions Log and measurements; do not execute from this file.
+
 # `scout` rename + the car domain
 
 > **Written 2026-08-26 as a RECOVERY.** The session that asked these two questions and received

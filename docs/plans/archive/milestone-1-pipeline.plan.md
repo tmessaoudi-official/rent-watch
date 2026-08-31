@@ -1,3 +1,6 @@
+> SUPERSEDED (2026-08-31) by docs/plans/scout-unified-execution.plan.md. Kept for its
+> Decisions Log and measurements; do not execute from this file.
+
 # Milestone 1 — end-to-end pipeline Plan
 
 Milestone 1 is the first run that goes all the way through: one source fetched, classified, filtered,

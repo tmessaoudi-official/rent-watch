@@ -50,7 +50,7 @@ namespace Scout\Adapters\Http;
  * a watcher running longer than a day is outside that norm. That is a known, bounded limitation
  * rather than an oversight — closing it means handing the adapters a resolver instead of a
  * `Robots`, which changes the `Source` construction contract. Recorded in
- * `docs/plans/milestone-1-pipeline.plan.md`.
+ * `docs/plans/archive/milestone-1-pipeline.plan.md`.
  */
 final readonly class RobotsResolver
 {

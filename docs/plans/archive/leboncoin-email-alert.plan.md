@@ -1,3 +1,6 @@
+> SUPERSEDED (2026-08-31) by docs/plans/scout-unified-execution.plan.md. Kept for its
+> Decisions Log and measurements; do not execute from this file.
+
 # leboncoin — email-alert source #7 Plan
 
 leboncoin fired its first alert ever on **2026-08-26 at 07:33 Paris**. Before that morning the

@@ -1,3 +1,6 @@
+> SUPERSEDED (2026-08-31) by docs/plans/scout-unified-execution.plan.md. Kept for its
+> Decisions Log and measurements; do not execute from this file.
+
 # PAP email-alert source Plan
 
 > **Source #8, live 2026-08-26.** De Particulier à Particulier — the first DIRECT-FROM-OWNER portal

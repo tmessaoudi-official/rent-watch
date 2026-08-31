@@ -1,3 +1,6 @@
+> SUPERSEDED (2026-08-31) by docs/plans/scout-unified-execution.plan.md. Kept for its
+> Decisions Log and measurements; do not execute from this file.
+
 # SeLoger email-alert adapter
 
 > **Written 2026-08-25**, the day the first real portal alert landed. Spec milestone 6 is

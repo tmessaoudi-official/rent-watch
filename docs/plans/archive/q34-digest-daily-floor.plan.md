@@ -1,3 +1,6 @@
+> SUPERSEDED (2026-08-31) by docs/plans/scout-unified-execution.plan.md. Kept for its
+> Decisions Log and measurements; do not execute from this file.
+
 # Q34 — the daily digest floor Plan
 
 Q34 is `PARTIALLY BUILT`. Both emission paths exist and are tested: the automatic one at the end of

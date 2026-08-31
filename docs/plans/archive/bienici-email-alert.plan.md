@@ -1,3 +1,6 @@
+> SUPERSEDED (2026-08-31) by docs/plans/scout-unified-execution.plan.md. Kept for its
+> Decisions Log and measurements; do not execute from this file.
+
 # Bien'ici email-alert source
 
 Source #6, and the second portal on the Tier B email-alert route. Its alerts landed on

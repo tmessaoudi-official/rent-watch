@@ -1,3 +1,6 @@
+> SUPERSEDED (2026-08-31) by docs/plans/scout-unified-execution.plan.md. Kept for its
+> Decisions Log and measurements; do not execute from this file.
+
 # Car domain — first slice Plan
 
 > The developer's go (2026-08-29 22:20, `AskUserQuestion`, recorded in

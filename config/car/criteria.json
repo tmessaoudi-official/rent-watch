@@ -1,5 +1,5 @@
 {
-  "_comment": "The car domain's criteria — decisions 5–11 of docs/plans/scout-rename-and-car-domain.plan.md. ONE hard ceiling (the displayed price), a geography filter that acts only on a STATED location, and score components for everything else. A gitignored criteria.local.json beside this file overrides field by field. Unknown keys are refused.",
+  "_comment": "The car domain's criteria — decisions 5–11 of docs/plans/archive/scout-rename-and-car-domain.plan.md. ONE hard ceiling (the displayed price), a geography filter that acts only on a STATED location, and score components for everything else. A gitignored criteria.local.json beside this file overrides field by field. Unknown keys are refused.",
   "_max_price_eur": "Decision 5: 0–30 000 € on the DISPLAYED price — wide on purpose, the score discriminates.",
   "max_price_eur": 30000,
   "_postcode_prefixes": "Decision 6: Île-de-France, settable to any set (empty = national). INERT on the first two sources — neither ParuVendu's card nor Autohero's page carries a location — and an unknown location never rejects (hard rule 9).",

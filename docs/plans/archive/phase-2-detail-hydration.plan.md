@@ -1,3 +1,6 @@
+> SUPERSEDED (2026-08-31) by docs/plans/scout-unified-execution.plan.md. Kept for its
+> Decisions Log and measurements; do not execute from this file.
+
 # Phase 2 — persistent detail hydration
 
 > **Status: BUILT, DEPLOYED 2026-08-23** (schema v4→v6 in production; see

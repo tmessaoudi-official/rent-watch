@@ -864,7 +864,7 @@ configures no pattern is bit-for-bit unchanged. Three rules travel with it:
 > the source** — the In'li lesson of 2026-08-23, *"not §1 satisfied, it is the tool switched off"*.
 > PLAI and PLUS are allocated by commission and are not advertised on commercial portals; **PLS
 > occasionally is, and that is the residual.** Reversed by one line — `mixed_tenure: true` — and
-> `docs/plans/seloger-email-alert.plan.md` records what that costs.
+> `docs/plans/archive/seloger-email-alert.plan.md` records what that costs.
 
 > **ONE MAILBOX SERVING MANY PORTALS IS A SHARED BUDGET, and it zeroed a live source hours after it
 > went live (2026-08-25).** The developer widened their Gmail filter to catch five portals and
@@ -908,8 +908,8 @@ with positional card readers; `SitemapVehicleSource`, the detail-hydration patte
 source), `VehiclePipeline`, `VehicleFormatter`, `Car/Cli/CarScout` (was `Cli/VehicleScout`). The rent path changed in two
 places only: the `--domain=car` dispatch line and `Cli/ChannelFactory`, extracted so both CLIs build
 channels from one place. First slice: ParuVendu (email, samples its feed — 3 cards per message) and
-Autohero (sitemap + JSON-LD, seed before watching). Rulings: `docs/plans/scout-rename-and-car-domain.plan.md`;
-build record: `docs/plans/car-domain-first-slice.plan.md`. **The §1 tripwire hook does not cover
+Autohero (sitemap + JSON-LD, seed before watching). Rulings: `docs/plans/archive/scout-rename-and-car-domain.plan.md`;
+build record: `docs/plans/archive/car-domain-first-slice.plan.md`. **The §1 tripwire hook does not cover
 the vehicle set** — a `tests/test-vehicle-guard.sh` is owed, recorded there.
 
 `src/phorj/` is **ON INDEFINITE HOLD** (developer ruling, 2026-08-19) — not blocked, deprioritised.
@@ -1016,7 +1016,7 @@ SMTP-without-STARTTLS proven refused via a scripted loopback server and its wire
 `SmtpTransport::secrets()` wiring proven by a server that echoes the base64 credential back; the
 rent plausibility band exercised end to end; and a fifth found while closing them — the block-tag
 test covered `</li>` while the sabotage degraded `</p>`; it now iterates the whole tag class. The
-full-ledger count is recorded in `docs/plans/milestone-1-pipeline.plan.md` as each run completes.
+full-ledger count is recorded in `docs/plans/archive/milestone-1-pipeline.plan.md` as each run completes.
 
 Anything below describing `enrich` or a real landlord endpoint is the **target**, not
 the present. Do not report findings against files that do not exist yet, and do not name `pytest` as
@@ -1296,7 +1296,7 @@ this way" is never authority, and extending it in place contradicts the brief.
    of the web), everything else including `403` and `5xx` **fails closed**. `Scout` takes an
    injectable `HttpClient` purely so this is observable at all; the once-per-host cache is a local
    in `sources()`, not a property, because `RobotsResolver` must stay `readonly`. Full reasoning:
-   `docs/plans/milestone-1-pipeline.plan.md` § Decisions Log, 2026-08-21.
+   `docs/plans/archive/milestone-1-pipeline.plan.md` § Decisions Log, 2026-08-21.
 6. **No auto-application** or auto-form-submission to landlords. No multi-user support. No web UI (a
    read-only HTML digest is acceptable later). These are ruled non-goals, not gaps.
 7. **Secrets live in `.env`, gitignored.** IMAP credentials, notification tokens, the IDFM API key, the

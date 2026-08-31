@@ -1,3 +1,6 @@
+> SUPERSEDED (2026-08-31) by docs/plans/scout-unified-execution.plan.md. Kept for its
+> Decisions Log and measurements; do not execute from this file.
+
 # Plafonds — classifier signal tier 4 Plan
 
 Tier 4 is the last unimplemented rung of the classifier's documented signal ladder

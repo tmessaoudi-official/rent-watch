@@ -63,7 +63,7 @@ before sending and those criteria mirror `criteria.json`.
 > must-stay-quiet proof.
 
 **What is genuinely absent, as of 2026-08-29:** AL'in (needs an authenticated capture, and is parked
-on a §1 question — see `docs/plans/scout-rename-and-car-domain.plan.md`), a VPS host to deploy to
+on a §1 question — see `docs/plans/archive/scout-rename-and-car-domain.plan.md`), a VPS host to deploy to
 (the watcher runs on the developer's machine), the second domain — a car watcher, designed and ruled
 in that same plan but not built — and `src/phorj/` (on indefinite hold). The transit layer and tier 4
 were absent when this paragraph was first written and are not any more.
@@ -484,7 +484,7 @@ floor — and `scout --domain=rent doctor` prints the hour, the resolved local z
 using the schema-v7 snapshot of the listing the verdict was formed from. A row stored before v7 has
 no snapshot and is **skipped, not judged on whatever text remains** — re-judging on less evidence
 than the original saw is how a social listing becomes a match. `--since` is deliberately refused;
-see `docs/plans/finish-everything.plan.md` for why.
+see `docs/plans/archive/finish-everything.plan.md` for why.
 
 A listing whose dedup CLUSTER holds an excluded tenure is skipped for the same reason and counted
 out loud. The pipeline judges a cluster on its most restrictive member but stores each member's own
@@ -552,8 +552,8 @@ on its own database (`state/car-watch.sqlite3`), its own config (`config/car/`),
 marker and its own push topic (`CAR_NTFY_TOPIC`), with the generic machinery — mailboxes, HTTP
 client, robots, channels, pacer, watch loop, the run-log/health half of the store — shared
 byte-identical. Every ruling it implements is in
-`docs/plans/scout-rename-and-car-domain.plan.md`; the build record is
-`docs/plans/car-domain-first-slice.plan.md`.
+`docs/plans/archive/scout-rename-and-car-domain.plan.md`; the build record is
+`docs/plans/archive/car-domain-first-slice.plan.md`.
 
 Two sources, both built against a real payload read the same day:
 
