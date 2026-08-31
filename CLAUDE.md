@@ -909,8 +909,21 @@ source), `VehiclePipeline`, `VehicleFormatter`, `Car/Cli/CarScout` (was `Cli/Veh
 places only: the `--domain=car` dispatch line and `Cli/ChannelFactory`, extracted so both CLIs build
 channels from one place. First slice: ParuVendu (email, samples its feed — 3 cards per message) and
 Autohero (sitemap + JSON-LD, seed before watching). Rulings: `docs/plans/archive/scout-rename-and-car-domain.plan.md`;
-build record: `docs/plans/archive/car-domain-first-slice.plan.md`. **The §1 tripwire hook does not cover
-the vehicle set** — a `tests/test-vehicle-guard.sh` is owed, recorded there.
+build record: `docs/plans/archive/car-domain-first-slice.plan.md`. **The §1 tripwire covers the vehicle
+set as of 2026-08-31** — `tenure-guard.sh` gained the car patterns and `tests/test-vehicle-guard.sh`
+proves both halves (22 cases). ONE hook, not two: the relaxation shapes are identical — an
+allow-list, an emptied set, a weakened test — and only the vocabulary differs, so a second hook
+would be two log formats, two self-exclusion lists and two places to forget. Four defects turned up
+while building it, none by design and each worth knowing before touching the patterns: **the domain
+signal must be the PATH** (`src/php/Car/`, `Vehicle*.php`), because a first draft keyed on a vehicle
+word in the WRITE and so went silent on `private const array NEGATABLE = [];` — the literal way to
+empty the set, whose only vehicle word was the filename; **`opposition` was missing outright**,
+which is why the test iterates the vocabulary as a SET rather than spot-checking; **the multi-word
+terms matched spaces only**, so the config spelling `"pour_pieces_enabled": true` went straight
+through (`[ _-]` now); and **`config/car/` is deliberately NOT a domain signal**, because the §1
+vehicle set is CODE and non-overridable while that file's `exclude_patterns: []` is the ordinary
+user list and ships empty on purpose — a draft that included it fired on a shipped file, which is
+how a tripwire gets waved through. The banner names whichever domain actually fired.
 
 `src/phorj/` is **ON INDEFINITE HOLD** (developer ruling, 2026-08-19) — not blocked, deprioritised.
 Do not start it; `docs/PHORJ-REQUIREMENTS.md` remains the record of what it would need.
@@ -1453,6 +1466,9 @@ SABOTAGE_FILTER='<regex on labels>' bash tests/sabotage-check.sh   # one new cas
                                         #   still exits 0 ("0 detected, 0 undetected", PARTIAL RUN)
                                         #   prints a loud PARTIAL RUN line; never a ledger result
 bash tests/test-tenure-guard.sh         # proves the §1 tripwire still fires, and stays quiet on PHP
+bash tests/test-vehicle-guard.sh        # the CAR half of that same hook — the excluded-vehicle set
+                                        #   (accidenté/gagé/opposition/épave/VEI/VGE/pour pièces…),
+                                        #   which nothing watched until 2026-08-31
 bash tests/test-fetch-phpunit.sh        # proves the runner fetch refuses a bad signature
 bash tests/test-ci-workflow.sh          # proves ci.yml still wires every step CLAUDE.md claims,
                                         #   AND that the ledger's baseline gate cannot redden itself
@@ -1634,6 +1650,12 @@ tools/scrub-eml.php         Turns a captured .eml into a committable fixture; RE
                             quoted-printable before it looks, not merely grepping for it
 tests/sabotage-check.sh     Proves the classifier suite detects a regression
 tests/test-tenure-guard.sh  Proves the §1 tripwire fires, and stays quiet on ordinary PHP
+tests/test-vehicle-guard.sh Same, for the CAR excluded set. ONE hook covers both domains:
+                            the relaxation shapes are identical and only the vocabulary
+                            differs, so a second hook would be two log formats and two
+                            places to forget. Its own creation tripped the guard — the file
+                            is nothing but the payloads it exists to catch — so it is
+                            exempted by exact path beside its sibling
 tests/test-fetch-phpunit.sh Proves the runner fetch refuses a bad signature
 tests/test-drift-scan.sh    Proves drift-scan's S8 still fires — a gate nobody has seen red is untested
 tests/test-sabotage-applies.sh   Proves no sabotage expression has rotted into matching nothing
@@ -1895,6 +1917,13 @@ CLAUDE.md                          This file — project scope, wins on any conf
 .claude/settings.json              Allow-list permissions, defaultMode auto, hook wiring
 .claude/hooks/tenure-guard.sh      PostToolUse tripwire on the §1 rule; exits 2 when it fires
 tests/test-tenure-guard.sh         Sabotage test FOR that hook — must-fire and must-stay-silent halves
+tests/test-vehicle-guard.sh        The CAR half. Found four defects in the patterns it tests,
+                                   none by design: the domain signal had to be the PATH,
+                                   `opposition` was missing outright, the multi-word terms
+                                   matched spaces only (so the config spelling `pour_pieces`
+                                   went through), and `config/car/` was wrongly a domain
+                                   signal — firing on a shipped file whose empty list is
+                                   the ordinary user one, not the §1 set
 .claude/hooks/lint-on-write.sh     Lints the file just written (ruff / yamllint / shellcheck / json)
 .claude/hooks/format-on-write.sh   Reports formatting drift; never rewrites behind Claude's back
 (log_obs(): the three hooks above source the GLOBAL ~/.claude/hooks/log-helpers.sh when it

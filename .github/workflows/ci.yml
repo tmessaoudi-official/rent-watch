@@ -91,6 +91,9 @@ jobs:
       - name: Tenure §1 tripwire self-test
         run: bash tests/test-tenure-guard.sh
 
+      - name: Vehicle §1 tripwire self-test
+        run: bash tests/test-vehicle-guard.sh
+
       - name: Runner fetch refuses a bad signature
         run: bash tests/test-fetch-phpunit.sh
 

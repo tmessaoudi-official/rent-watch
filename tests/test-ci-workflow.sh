@@ -68,6 +68,7 @@ check "fetches the pinned runner"            has "tools/fetch-phpunit.sh"
 # run mean less than it claims.
 check "runs the PHPUnit suite"               has "tools/phpunit.phar"
 check "runs the tenure §1 tripwire test"     has "tests/test-tenure-guard.sh"
+check "runs the vehicle §1 tripwire test"    has "tests/test-vehicle-guard.sh"
 check "runs the runner-fetch signature test" has "tests/test-fetch-phpunit.sh"
 # The one line of `.env` loading PHPUnit cannot reach — it lives in `bin/scout` so the suite
 # never loads a developer's real credentials. Uncovered by PHP, covered by that shell test,
