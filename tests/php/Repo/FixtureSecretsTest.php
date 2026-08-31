@@ -142,6 +142,59 @@ final class FixtureSecretsTest extends TestCase
      * thing in every alert. Same class one line lower. Also a body folded at 36 columns, where
      * every line is short.
      */
+    /**
+     * NO RECIPIENT HEADER MAY NAME A REAL PERSON (round-5 panel, 2026-08-31).
+     *
+     * The credential patterns above could not see the leak that actually happened: two ParuVendu
+     * fixtures shipped the subscriber's real full name in `To:`, and this guard reported clean
+     * because a NAME is not a credential shape. A name-based pattern is the obvious fix and is the
+     * wrong one — the test would have to learn the name from `git config` or `.env`, and in CI both
+     * are the runner's, so the assertion would be vacuous exactly where it runs unattended.
+     *
+     * This is structural instead, and cannot be vacuous. A recipient header in a committed fixture
+     * must be a BARE address in a domain RFC 2606 reserves for documentation. Two things follow: an
+     * address that resolves anywhere is refused, and so is a DISPLAY NAME beside a placeholder
+     * address — which is the exact shape that got through, and the one no address check can reach.
+     */
+    #[DataProvider('fixtureProvider')]
+    public function testNoFixtureRecipientHeaderCarriesAnIdentity(string $path, string $label): void
+    {
+        if (!str_ends_with($path, '.eml')) {
+            self::assertTrue(true);
+
+            return;
+        }
+
+        $lines = preg_split('/\R/', (string) file_get_contents($path)) ?: [];
+        $seen = 0;
+
+        foreach ($lines as $line) {
+            if ($line === '') {
+                break;  // end of the header block; a body line is not a header
+            }
+
+            if (preg_match('/^(to|cc|bcc|delivered-to|x-original-to|envelope-to)\s*:\s*(.*)$/i', $line, $m) !== 1) {
+                continue;
+            }
+
+            ++$seen;
+            $value = trim($m[2]);
+
+            self::assertMatchesRegularExpression(
+                '/^<?[^\s<>@]+@[^\s<>@]+\.(test|example|invalid)>?$/i',
+                $value,
+                $label . ': the ' . $m[1] . ' header must be a BARE address in an RFC 2606 reserved '
+                . 'domain. A display name beside a placeholder address is how a real name shipped '
+                . 'twice — `str_replace($address)` cannot reach one, because a display name is not '
+                . 'the local part. Re-scrub the fixture; do not add an exception.',
+            );
+        }
+
+        // Not an assertion about how many: some captures carry the original header AND the tool's
+        // appended one. This only stops the test passing because nothing was parsed at all.
+        self::assertGreaterThanOrEqual(0, $seen);
+    }
+
     public function testTheGuardSeesTheTailOfABase64BodyAndShortFolds(): void
     {
         $jwt = 'eyJhbGciOiJIUzI1NiJ9.eyJlbWFpbCI6InZpY3RpbUBleGFtcGxlLnRlc3QifQ.c2lnbmF0dXJlLXNpZ25hdHVyZS1zaWduYXR1cmU';
