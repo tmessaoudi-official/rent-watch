@@ -1050,7 +1050,9 @@ final readonly class Store
         $rows = $statement->fetchAll(\PDO::FETCH_ASSOC);
 
         foreach ($rows as $row) {
-            $tenure = Tenure::tryFrom((string) $row['tenure']);
+            // Refuses loudly on a corrupt value rather than reading it as "nothing said" — see
+            // {@see decodeTenure()}. This is the group half of the same §1 fail-open.
+            $tenure = self::decodeTenure((string) $row['tenure'], 'tenure', 'groupe ' . $group);
 
             if ($tenure !== null && $tenure->isExcluded()) {
                 return $tenure;
@@ -1801,7 +1803,50 @@ final readonly class Store
         /** @var string|false|null $tenure */
         $tenure = $statement->fetchColumn();
 
-        return is_string($tenure) ? Tenure::tryFrom($tenure) : null;
+        return self::decodeTenure(is_string($tenure) ? $tenure : null, 'tenure', $dedupKey);
+    }
+
+    /**
+     * A stored tenure, refusing LOUDLY on a value that does not decode (round-5 panel, 2026-08-31).
+     *
+     * All three §1 vetoes read a `Tenure` out of the database with `Tenure::tryFrom()`, and all
+     * three treated its `null` as "nothing was ever said": the row's own durable reading
+     * ({@see tenure()}), the schema-v4 group veto ({@see groupExcludedTenure()}) and the schema-v12
+     * twin veto ({@see twinTenure()}). But `tryFrom()` returns `null` for a value it cannot parse
+     * just as readily as for a column that is genuinely NULL — so a single case-flip, a hand-edited
+     * row, or ANY future rename of a `Tenure` case releases all three at once, silently, and the
+     * flat is pushed.
+     *
+     * §1's own instruction is to bias every ambiguous decision toward NOT notifying, and this is the
+     * one place the ambiguity was resolved toward notifying. A NULL column still means nothing was
+     * said, which is the truth and is what a pre-v3 row carries; a non-empty string that does not
+     * decode is a corrupt row and is refused by name, the same posture the store already takes for a
+     * database whose schema it cannot read.
+     *
+     * Deliberately a throw and not a silent excluded value: pretending a corrupt row said `PLS`
+     * would fail closed while inventing evidence, and the whole point of the durable reading is that
+     * a stored verdict can be re-examined. The refusal is visible everywhere it can occur — a
+     * `--watch` pass reports it on the heartbeat, and `--once` records it for `doctor`.
+     */
+    private static function decodeTenure(?string $raw, string $column, string $dedupKey): ?Tenure
+    {
+        if ($raw === null || trim($raw) === '') {
+            return null;
+        }
+
+        $tenure = Tenure::tryFrom($raw);
+
+        if ($tenure === null) {
+            throw new \RuntimeException(sprintf(
+                'régime « %s » illisible en colonne %s pour %s — ligne corrompue : '
+                . 'la traiter comme « rien de dit » relâcherait le veto §1 de cette ligne',
+                $raw,
+                $column,
+                $dedupKey,
+            ));
+        }
+
+        return $tenure;
     }
 
     /**
@@ -1816,7 +1861,8 @@ final readonly class Store
 
         /** @var array{twin_tenure: ?string, twin_source: ?string}|false $row */
         $row = $statement->fetch(\PDO::FETCH_ASSOC);
-        $tenure = $row === false ? null : Tenure::tryFrom((string) $row['twin_tenure']);
+        // The twin half of the same §1 fail-open — see {@see decodeTenure()}.
+        $tenure = $row === false ? null : self::decodeTenure($row['twin_tenure'], 'twin_tenure', $dedupKey);
 
         if ($tenure === null) {
             return null;

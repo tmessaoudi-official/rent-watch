@@ -159,11 +159,51 @@ final class StoreTwinTest extends TestCase
 
         // A value no `Tenure` case matches — the shape a corrupt row or a future rename would leave.
         $this->store->recordVerdict($key, 'NOT_A_TENURE', 9000, ['corrompu'], $this->listing('a1'));
-        self::assertNull(
-            $this->store->tenure($key),
-            'an unrecognised value reads as no-reading — documented here because that is INDISTINGUISHABLE '
-            . 'from a never-judged row, and so releases a durable excluded reading',
-        );
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessageMatches('/illisible en colonne tenure/');
+        $this->store->tenure($key);
+    }
+
+    /**
+     * THE SAME FAIL-CLOSED ON THE OTHER TWO §1 VETOES. `tryFrom()` returns `null` for an
+     * unparseable value exactly as it does for a genuinely NULL column, so ONE case-flip or enum
+     * rename used to release the row's own durable reading, the schema-v4 group veto and the
+     * schema-v12 twin veto together — three §1 mechanisms, silently, in the direction §1 forbids.
+     */
+    public function testACorruptStoredTenureIsRefusedOnTheGroupAndTwinVetoesToo(): void
+    {
+        // A FILE-backed store, because the corruption has to be applied behind its back and a
+        // `:memory:` database cannot be reached by a second connection.
+        $path = sys_get_temp_dir() . '/rentwatch-twin-corrupt-' . bin2hex(random_bytes(8)) . '.sqlite3';
+        $store = Store::open($path);
+
+        try {
+            $a = $store->dedupKey($this->listing('a1'));
+            $b = $store->dedupKey($this->listing('b1'));
+            $store->record($this->listing('a1'), 1450, '2026-08-30T10:00:00+02:00');
+            $store->record($this->listing('b1'), 1450, '2026-08-30T10:00:00+02:00');
+            $store->assignGroup([$a, $b]);
+            $store->recordTwin($a, Tenure::PLS, 'cdc_habitat');
+
+            (new \PDO('sqlite:' . $path))->exec("UPDATE listings SET tenure = 'pls', twin_tenure = 'pls'");
+
+            foreach ([
+                'group' => fn () => $store->groupExcludedTenure($b),
+                'twin' => fn () => $store->twinTenure($a),
+            ] as $which => $read) {
+                try {
+                    $read();
+                    self::fail($which . ' veto read a corrupt tenure as "nothing said" — that releases it');
+                } catch (\RuntimeException $e) {
+                    self::assertStringContainsString('illisible', $e->getMessage(), $which);
+                }
+            }
+        } finally {
+            foreach (glob($path . '*') ?: [] as $f) {
+                @unlink($f);
+            }
+        }
     }
 
     private function recorded(string $id): string

@@ -3649,6 +3649,14 @@ run_sabotage "the twin scan reads the twin's raw reading instead of its durable 
   src/php/Rent/Cli/Pipeline.php \
   "s%'classification' => \\\$own\\]%'classification' => \$classification]%"
 
+# Round 5. All three §1 vetoes decode a stored `Tenure`, and `tryFrom()` returns null for a value it
+# cannot parse exactly as for a genuinely NULL column — so one case-flip or enum rename released the
+# row's own durable reading, the group veto and the twin veto together, silently and in the direction
+# §1 forbids. Going back to a silent null is the regression.
+run_sabotage "a corrupt stored tenure reads as 'nothing was ever said' and releases the §1 veto" \
+  src/php/Rent/Store/Store.php \
+  's%if (\$raw === null || trim(\$raw) === \x27\x27) {%if (true) {%'
+
 # The READ side of the same claim. The existing case mutates this loop to `foreach ([] as $readKey)`,
 # which proves the fact is read at ALL — not that it is read ACROSS the cluster. Reducing it to the
 # survivor's own key left the whole suite green until round 4.
