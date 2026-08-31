@@ -549,6 +549,24 @@ unilaterally.
    notified_as distribution per source (flag 100%-UNKNOWN or zero-match sources).
 3. Count reconciliation per source: the portal's own stated count vs what the run log ingested.
 4. Targeted raw-email sampling only where 1–3 flag something.
+### The pattern-miss fix, confirmed on a LIVE pass (2026-08-31/09-01)
+
+A fixture run proves the parser; only a live `doctor` proves the ratio an operator reads.
+
+```
+bienici   commune_pattern   117/364   ->   3/250
+```
+
+114 furniture segments left the denominator, which now counts LISTINGS (250) rather than segments
+(364); 3 genuine misses remain. **seloger's `residence_pattern 201/399` and `title_pattern 4/399`
+are UNCHANGED, and that is equally the point** — measured, that source carries only ~3 furniture
+segments, so its numbers were genuine all along, and a fix that had moved both would have been
+moving the wrong thing. (The 4 title misses are F10/F11 above.)
+
+`doctor` exits 1 here and that is CORRECT, not a fault: it returns `$problems > 0 ? 1 : 0` and the
+one problem is `leboncoin feed_silent` — true, that portal has sent nothing since 26 August and its
+routing filter does not exist yet.
+
 ### Redeploying is not `docker compose up -d` — F12, hit twice on 2026-08-31
 
 Both watchers set `stop_grace_period: 5m` and `WatchLoop` stops only after the pass in flight
