@@ -192,6 +192,7 @@ read-only) and the merged prose as one review deep.
 | F6 | Empty-title rows (3 seloger + 4 pap) | Every `exclude_title_patterns` entry inert on them (nothing matches an empty string) | Track 3 audit item |
 | F7 | La Centrale truncation | Email carries ~3 of 900+ stated cards; `FEED_SILENT` keys on message DATE, so health stays green while 99.7% blind | Track 2 step 4 (documented cost) |
 | F8 | SeLoger `id_from: content` + a misread surface | A bad surface reading changes the dedup key → one flat can notify twice under two identities | Noted in 1g; same root class |
+| F13 | A fixture-backed `doctor` writes its run into the LIVE store | **HIT 2026-09-01, and it is the DOCUMENTED workflow that does it.** `MAILBOX_DIR=` swaps the mailbox, not the database, so a fixture run's item count joins the 7-day baseline every live run is judged against — it made car `leboncoin` report `broken` on a 5-annonce premise made of fixtures. Fixed in CLAUDE.md: every documented offline proof now pairs with a throwaway DB | closed, guidance fixed |
 | F12 | `docker compose up -d` wedges on recreate and leaves a watcher DOWN | **LIVE, twice on 2026-08-31.** `stop_grace_period: 5m` + a renamed old container = the orchestration stalls; once it then failed outright on `Conflict. The container name … is already in use`. rent-scout was down ~13 min and nothing said so | see the redeploy note below |
 | F10 | SeLoger `Baisse de prix` yields an EMPTY title | **CLOSED 2026-09-01** (`d60a183`) — the pattern refused any candidate CONTAINING a `€`; it now refuses only one that IS a price. Measured over the store: 552 unchanged, 2 gained a title, 0 changed, 0 lost. Template frozen as fixtures 004/005 | — |
 | F11 | A SeLoger card with no `pièces` line has no title anchor at all | **LIVE, and the remaining half of F10** — the anchor IS the `pièces` line, so a card stating no room count (a room rental, a parking, an atypical ad) yields `''` whatever the `€` rule does. Two such rows; both REJECTED, by the description-matching `exclude_patterns` rather than the title ones — luck rather than a guard. Needs a SECOND anchor, and a captured card of that shape to measure one against | fix owed |
@@ -549,6 +550,74 @@ unilaterally.
    notified_as distribution per source (flag 100%-UNKNOWN or zero-match sources).
 3. Count reconciliation per source: the portal's own stated count vs what the run log ingested.
 4. Targeted raw-email sampling only where 1–3 flag something.
+### Track 3 step 1, the LABEL CENSUS — and the one it turned up
+
+Message counts per sender, per folder, against what the configs consume:
+
+```
+                                  rent-watch/portails   car-watch/portails
+alertes.seloger.com                      793                    0
+no_reply@bienici.com                     214                    0
+no.reply@leboncoin.fr                    208                  182
+users-alertes@pap.fr                      51                    0
+info@paruvendu.fr                          0                   41
+info@mail-alerte.lacentrale.fr             0                   11
+support@agorastore.fr                      0                    4
+autoscout24                                0                    5
+jinka                                     41                    0
+```
+
+Unmatched senders — mail no source consumes — are `jinka` (41, rent folder) and `autoscout24`
+(5, car folder). Both are harmless rather than lost: since 2026-08-25 each source pushes its own
+`FROM` into the IMAP `SEARCH`, so an unconsumed sender costs no other source's window. Jinka stays
+out of scope (a 78-byte `text/plain`, and an aggregator needs its own §1 evaluation); AutoScout24's
+five are newsletters, its per-listing alert still never sent.
+
+**The 182 leboncoin messages in the CAR folder are not car alerts.** Running the source itself
+against the live folder — the only test that settles it, because IMAP `SUBJECT` search cannot see
+RFC 2047-encoded subjects and returned 0 for every probe — yields **0 listings**. The five real
+`vous propose` alerts remain unlabelled in INBOX, which is what the owed developer action is about.
+
+**And that run exposed F13.** It reported `broken · 6 runs consécutifs à vide alors que la référence
+précédente était de 5.0 annonces` — a `SOURCE_BROKEN` verdict whose baseline was *my own offline
+fixture run*, written into the live car store by `MAILBOX_DIR=… doctor`. `MAILBOX_DIR` swaps the
+mailbox, not the database. Recovered by backing up (`tools/backup-state.sh`), deleting the one
+provably-synthetic `source_runs` row by id, and re-running: `ok · 0 annonces`, which is the truthful
+verdict for a source with nothing yet to read. Every documented offline proof in `CLAUDE.md` now
+pairs with a throwaway DB.
+
+> **A smaller thing found while backing up:** `tools/backup-state.sh` reported `0 annonces` for the
+> car store. The copy is a full and integrity-checked one — no data risk — but it counts the rent
+> `listings` table, and the car store keeps its vehicles in `vehicle_listings`. A confirmation line
+> that says zero for a 3 536-row database is the wrong kind of reassuring.
+
+### Track 3 step 2, the CAR store — and why a 100 % match rate is not a broken filter here
+
+```
+source     rows  no_title  no_snapshot  notified  MATCH  REJECT
+autohero   3452  3387      3387         3449         62       3
+paruvendu    84     0         0           84         84       0
+```
+
+**autohero's 3387 empty rows are the documented `--seed`, not a failure** — every one of them was
+first seen inside a SINGLE hour (`2026-08-29T22`), and everything after it (6 rows on 08-30, 59 on
+08-31) carries a snapshot and a real outcome. Seeding marks the back catalogue seen-and-notified so
+it cannot flood the channel; `notified_at` being set is how that works.
+
+**paruvendu never rejects, and that is the portal, not an inert filter.** Its 84 rows top out at
+exactly `30 000 €` — the saved search applies `max_price_eur` before sending, the same shape as
+Bien'ici on the rent side. The distinguishing evidence is autohero, which is a sitemap crawl with
+no pre-filter: it rejects 3, and the boundary is exact —
+
+```
+35 990  REJECT      30 090  REJECT
+33 990  REJECT      29 990  MATCH
+```
+
+That pairing is the whole point of auditing two sources rather than one. A source that never
+rejects is exactly the shape a broken ceiling would take, and only a source WITHOUT a pre-filter can
+tell the two readings apart. If autohero is ever dropped, the car ceiling stops being observable.
+
 ### The pattern-miss fix, confirmed on a LIVE pass (2026-08-31/09-01)
 
 A fixture run proves the parser; only a live `doctor` proves the ratio an operator reads.

@@ -591,7 +591,7 @@ live the same evening: `scout --domain=rent doctor --source=bienici` returns **1
 seeded pass matches **10 of 13** — the best hit rate in the tree by a wide margin, because the
 portal applies the saved search's own criteria before sending and those criteria mirror
 `criteria.json`. Prove a change offline with
-`MAILBOX_DIR=tests/fixtures/rent/bienici scout --domain=rent doctor --source=bienici`. Four things carry forward:
+`RENT_SCOUT_DB=$(mktemp -u) MAILBOX_DIR=tests/fixtures/rent/bienici scout --domain=rent doctor --source=bienici`. Four things carry forward:
 
 - **IT PUBLISHES A REAL LISTING ID, so identity is the LINK.** `/annonce/laforet-immo-facile-
   22588736` survives `stableId()` stripping the query. Content-addressing was invented for SeLoger,
@@ -651,7 +651,7 @@ Its first alert ever fired at 07:33 Paris and the source was live the same morni
 `scout --domain=rent doctor --source=leboncoin` returns **3 annonces, `ok`, 864 ms**, and a seeded pass matches
 **1 of 3** (Combs-la-Ville, 59,9 m², 935 €; the other two rejected at 48 m² and 45 m² against the
 50 m² floor). Prove a change offline with
-`MAILBOX_DIR=tests/fixtures/rent/leboncoin scout --domain=rent doctor --source=leboncoin`.
+`RENT_SCOUT_DB=$(mktemp -u) MAILBOX_DIR=tests/fixtures/rent/leboncoin scout --domain=rent doctor --source=leboncoin`.
 
 **IT NEEDED A PARSER CHANGE, not config alone — and the failure it would otherwise have produced is
 this project's defining one.** leboncoin sends **no `text/plain` alternative**, the first portal to
@@ -705,7 +705,7 @@ cost: the rent ceiling is not checkable for this source.**
 ### PAP — source #8, and the numeric twin of the title lesson (2026-08-26)
 
 `scout --domain=rent doctor --source=pap` returns **2 annonces, `ok`, 483 ms**. Prove a change offline with
-`MAILBOX_DIR=tests/fixtures/rent/pap scout --domain=rent doctor --source=pap`. It is the first **direct-from-owner**
+`RENT_SCOUT_DB=$(mktemp -u) MAILBOX_DIR=tests/fixtures/rent/pap scout --domain=rent doctor --source=pap`. It is the first **direct-from-owner**
 portal, so its inventory does not overlap the agency portals every other private source draws from,
 and structurally the simplest alert in the tree: a real `text/plain` part, **one listing per
 message** (no `card_separator` at all), and a real ad id — `/annonces/-r458301723` — so identity is
@@ -819,7 +819,7 @@ run commute OFF, and the component is exercised by `tests/fixtures/rent/criteria
 **`seloger` IS LIVE as of 2026-08-25 — source #5, and the first that is not a landlord.** The IMAP
 credentials arrived, and `scout --domain=rent doctor --source=seloger` against the real mailbox returns **9
 annonces, `ok`, ~19 s**. Prove a change without touching the network with
-`MAILBOX_DIR=tests/fixtures/rent/seloger scout --domain=rent doctor --source=seloger`; a seeded run over the two
+`RENT_SCOUT_DB=$(mktemp -u) MAILBOX_DIR=tests/fixtures/rent/seloger scout --domain=rent doctor --source=seloger`; a seeded run over the two
 fixtures yields one match (Dourdan, 3p, 52,37 m², 915 € CC) and one rejection (Conflans, 44,71 m²
 under the 50 m² floor).
 
@@ -1682,6 +1682,20 @@ var/claude/                 Reports, review outputs — gitignored scratch (hand
 
 ## Gotchas & pitfalls
 
+- **A FIXTURE-BACKED `doctor` WRITES A RUN INTO THE LIVE STORE, and that is how a healthy source is
+  made to report `broken`.** `MAILBOX_DIR=…` swaps the mailbox; it does NOT swap the database, so the
+  run is recorded against the default `RENT_SCOUT_DB` / `CAR_SCOUT_DB` and its item count becomes
+  part of the 7-day baseline every later LIVE run is judged against. Observed 2026-09-01: proving
+  the new car source offline wrote `leboncoin item_count=5` into `state/car-watch.sqlite3`; every
+  live pass after it returned 0, because that portal's alerts are unlabelled and the source reads a
+  label — so `SourceHealth` said `broken · 6 runs consécutifs à vide alors que la référence
+  précédente était de 5.0 annonces`, a **SOURCE_BROKEN alert on a premise made of fixture data**.
+  The rent store took the same treatment more mildly (a `bienici item_count=10` run beside a live
+  mean of ~250). Hard rule 2 is about health verdicts being BELIEVABLE, and this makes one that is
+  not. **Always pair `MAILBOX_DIR=` with a throwaway database** — the invocations above do — exactly
+  as `--seed` is already documented to need one. Recovering from it means deleting the synthetic
+  `source_runs` row: back up first (`tools/backup-state.sh <db>`), delete by exact id, then re-run
+  `doctor` and confirm the verdict changed.
 - **A green tree says nothing about what the watcher is running — `src/` is baked into the image.**
   `compose.yaml` mounts `./config` and `./state`; the code comes from `scout:local`. So a fix
   can be committed, pushed, CI-green and *still not protecting anyone*. Measured 2026-08-23: the
