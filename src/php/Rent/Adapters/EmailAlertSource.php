@@ -81,7 +81,28 @@ final readonly class EmailAlertSource implements FeedFreshness, Source
 
     private const string SURFACE_PATTERN = '~(\d{1,4}(?:[.,]\d{1,2})?)\s*(?:m²|m2|m\^2)~iu';
 
-    private const string ROOMS_PATTERN = '~(?:T|F)\s?(\d)\b|\b(\d)\s*pi[eè]ces?\b~iu';
+    /**
+     * THE `T3` BRANCH NEEDS A LEFT ANCHOR, and for a month it had only a right one (Track 1j).
+     *
+     * `(?:T|F)\s?(\d)\b` is case-insensitive and bounded only AFTER the digit, so it matched any
+     * `t`/`f` followed by a digit — and every alert card opens with image URLs full of hexadecimal
+     * UUIDs. `preg_match` is first-match-wins and the photo sits near the TOP of the card, so
+     * `…90F8-739278F557C5.jpg` beat the real `3 pièces` three lines below and stored 8.
+     *
+     * Measured across the store by comparing each row's own TITLE — the portal's words, independent
+     * of anything here — against the stored count: 21 rows wrong, 12 of them too HIGH, and 6 already
+     * NOTIFIED carrying a room count the listing never stated. Four genuine 3-pièces flats were
+     * stored as 1 or 2 and silently REJECTED by `min_rooms`. Fifth instance of *URLs are classified
+     * text*, and the same first-match-wins shape as the PAP criteria-line defect.
+     *
+     * `(?<![A-Za-z0-9])` is the whole fix and it is deliberately not `\b`: inside `92F5` the `F` is
+     * preceded by a DIGIT, and `\b` sees no boundary between two word characters, so it never
+     * refused any of these. Every real writing of the notation — line start, after a space, after a
+     * bracket — is preceded by a non-alphanumeric or nothing at all, which
+     * `tests/php/Rent/Adapters/RoomsFromUuidTest.php` pins as its counterweight so the branch cannot
+     * be "fixed" by deleting it.
+     */
+    private const string ROOMS_PATTERN = '~(?<![A-Za-z0-9])(?:T|F)\s?(\d)\b|\b(\d)\s*pi[eè]ces?\b~iu';
 
     public function __construct(
         private SourceDefinition $definition,

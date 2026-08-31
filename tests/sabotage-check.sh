@@ -3741,6 +3741,13 @@ run_sabotage "no brand preference configured silently shrinks the scale to 90 (h
   src/php/Car/VehicleScorer.php \
   "s%            \$score += \$w\['brand'\]; // unique on purpose: the ledger addresses this arm by this line%%"
 
+# TRACK 1j — the rooms reader's LEFT anchor. Losing it reads hex out of a photo URL's UUID as a
+# room count: measured over the store, 20 rows read a number the listing never stated, 4 genuine
+# 3-pièces flats were rejected by min_rooms and 6 were notified with a fabricated count.
+run_sabotage "the T3/F4 rooms branch loses its left anchor (hex in a photo UUID becomes a room count)" \
+  src/php/Rent/Adapters/EmailAlertSource.php \
+  "s%(?<!\[A-Za-z0-9\])(?:T|F)%(?:T|F)%"
+
 run_sabotage "a brand that folds to nothing is accepted (a configured preference that matches no make)" \
   src/php/Car/VehicleCriteriaLoader.php \
   "s%            if (\$folded === '') {%            if (false) {%"
