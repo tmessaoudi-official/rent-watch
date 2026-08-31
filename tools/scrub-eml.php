@@ -335,7 +335,20 @@ $message = preg_replace_callback(
 
 $hexSeq = 0;
 $message = preg_replace_callback(
-    '~(?<![0-9a-fA-F])(?:[0-9a-fA-F]|=\r?\n){24,}(?![0-9a-fA-F])~',
+    // `(?<!=)` IS LOAD-BEARING, and its absence corrupted every link it touched (round-5 panel,
+    // 2026-08-31). A quoted-printable escape is `=3D`, and `3` and `D` are HEX — so the run happily
+    // started at the `3D`, swallowed it, and emitted `=f0f0f0…` in its place. That is itself a valid
+    // QP escape (`=f0` means byte 0xF0), so the URL decoded to `fromSavedSearchId<0xF0>f0f0…` and the
+    // listing link was destroyed. It also joined the two lines the escape had spanned, leaving the
+    // 152-column line in the ParuVendu fixture that a reviewer flagged.
+    //
+    // Not starting after `=` leaves the escape intact and matches the value on its far side, which
+    // is what was meant all along: `fromSavedSearchId=3Df0f0f0…` decodes to `…=f0f0f0…`.
+    // Two lookbehinds, and each one alone is wrong. `(?<!=)` stops the run beginning ON the escape;
+    // the alternation is what lets it begin immediately AFTER one — without it the escape's own `D`
+    // is a hex character, so the ordinary `(?<![0-9a-fA-F])` blocked the real value from starting
+    // and the analytics hex went unscrubbed entirely. Measured both ways against the suite.
+    '~(?:(?<![0-9a-fA-F])|(?<==[0-9a-fA-F]{2}))(?<!=)(?:[0-9a-fA-F]|=\r?\n){24,}(?![0-9a-fA-F])~',
     static function (array $m) use (&$hexSeq, $unfold, $refold): string {
         $flat = $unfold($m[0]);
         if (preg_match('~^[0-9a-fA-F]{24,}$~', $flat) !== 1) {
@@ -364,6 +377,51 @@ if ($address !== null && $address !== '') {
 
 // The ESP's list/subscriber ids, which survive in bounce addresses and campaign strings.
 $message = preg_replace('~\b51000[0-9]\b~', '510000', $message) ?? $message;
+
+// A TOKEN WRAPPED IN AN OUTER BASE64 LAYER (round-5 panel, 2026-08-31). Bien'ici wraps its links in
+// one, so the literal `eyJ` the JWT replacer above anchors on never appears in the message at all,
+// and three committed, PUSHED fixtures carried the subscriber's address one `base64 -d | base64 -d`
+// away while this tool and `FixtureSecretsTest` both reported clean. Detecting it is not enough:
+// without a way to STRIP it the refusal is unresolvable and no clean fixture of this portal could
+// ever be produced.
+//
+// **LAST, AND THAT IS THE WHOLE TRICK.** Two earlier attempts put this above the UUID and hex
+// replacers and broke the fixtures: a re-encoded base64 blob is full of hex-looking runs, so the
+// hex replacer then rewrote the middle of it and the link decoded to rubbish. Running after every
+// other replacement means nothing downstream touches the blob — measured, the parser reads back the
+// same 61 links and a byte-identical body.
+//
+// The decoded blob is a whole URL, so only the JWT INSIDE it is rewritten and the rest is
+// re-encoded unchanged: the link keeps its host, its path and its query, which is the identity
+// Bien'ici is keyed on. A run is touched only when it decodes AND carries a JWT, so an ordinary long
+// token is left alone.
+$wrappedSeq = 0;
+$message = preg_replace_callback(
+    '~(?<![A-Za-z0-9_\-])(?:[A-Za-z0-9_\-]|=\r?\n){80,}(?![A-Za-z0-9_\-])~',
+    static function (array $m) use (&$wrappedSeq, $unfold, $refold): string {
+        $flat = $unfold($m[0]);
+        $decoded = base64_decode(strtr($flat . str_repeat('=', (4 - strlen($flat) % 4) % 4), '-_', '+/'), true);
+
+        if ($decoded === false || $decoded === '' || !str_contains($decoded, 'eyJ')) {
+            return $m[0];
+        }
+
+        $clean = (string) preg_replace(
+            '~eyJ[A-Za-z0-9_\-]{6,}\.[A-Za-z0-9_\-]{6,}\.[A-Za-z0-9_\-]{6,}~',
+            'eyJhbGciOiJub25lIiwidHlwIjoiSldUIn0.eyJQTEFDRUhPTERFUiI6IkZJWFRVUkUifQ.PLACEHOLDER0SIGNATURE0FIXTURE',
+            $decoded,
+        );
+
+        if ($clean === $decoded) {
+            return $m[0];
+        }
+
+        ++$wrappedSeq;
+
+        return $refold(rtrim(strtr(base64_encode($clean), '+/', '-_'), '='), $m[0]);
+    },
+    $message,
+) ?? $message;
 
 // ---- verification. Refuse rather than write something that looks scrubbed and is not.
 $leaks = [];

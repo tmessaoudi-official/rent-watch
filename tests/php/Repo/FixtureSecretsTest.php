@@ -229,6 +229,34 @@ final class FixtureSecretsTest extends TestCase
                 $forms[] = $block;
             }
         }
+        // A WORKLIST, NOT ONE PASS (round-5 panel, 2026-08-31), the twin of the same fix in
+        // `tools/scrub-eml.php`. A run whose decode contains ANOTHER run was never decoded twice —
+        // and Bien'ici wraps its links in an OUTER base64 layer, so the literal `eyJ` a JWT pattern
+        // anchors on never appears in the raw, quoted-printable or base64-block form at all. Three
+        // committed fixtures carried a live JWT past this guard for a week. It is the second line of
+        // defence for exactly the case the tool got wrong, so the two must not diverge.
+        $queue = $forms;
+        for ($depth = 0; $depth < 3 && $queue !== []; ++$depth) {
+            $next = [];
+
+            foreach ($queue as $text) {
+                if (preg_match_all('/[A-Za-z0-9_\-]{16,}/', $text, $runs) === 0) {
+                    continue;
+                }
+
+                foreach ($runs[0] as $run) {
+                    $decoded = base64_decode(strtr($run . str_repeat('=', (4 - strlen($run) % 4) % 4), '-_', '+/'), true);
+
+                    if ($decoded !== false && $decoded !== '') {
+                        $forms[] = $decoded;
+                        $next[] = $decoded;
+                    }
+                }
+            }
+
+            $queue = $next;
+        }
+
         foreach ($forms as $text) {
             foreach (self::patterns() as $kind => $pattern) {
                 if (preg_match_all($pattern, $text, $matches) === 0) {

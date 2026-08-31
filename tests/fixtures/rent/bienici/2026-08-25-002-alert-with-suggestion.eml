@@ -1,6 +1,5 @@
 MIME-Version: 1.0
 From: Bien'ici <no_reply@bienici.com>
-To: alertes@example.invalid
 Subject: =?UTF-8?Q?1_nouvelle_annonce_pour_=22Louer_?=
  =?UTF-8?Q?r=C3=A9gion_=C3=8Ele-de-France=22?=
 Date: Tue, 25 Aug 2026 18:56:31 +0000
@@ -9,11 +8,11 @@ X-Kimono-Smtp-Relay: general-public
 X-Mc-Tags: type-search_alert
 X-MJ-Mid:
 	AMcAAKQVviEAAc28NcAAAQedZGYAARpdxNUAAAAAAAfAswBqjeVfsbNX3x6aTFi8sdSFeyVlFwAHYd4
-X-MJ-SMTPGUID: b1b357df-1e9a-4c58-bcb1-d4857b256517
+X-MJ-SMTPGUID: ffffffff-0000-4000-8000-000000000001
 X-REPORT-ABUSE-TO: Message sent by Mailjet please report to
 	abuse@mailjet.com with a copy of the message
 Content-Type: multipart/alternative; boundary=--_NmP-33a2ac1bd9a4a87e-Part_1
-Message-ID: <fixture-5c4885bdbe01@example.invalid>
+Message-ID: <fixture-c8349c3e8366@example.invalid>
 To: <alertes@example.invalid>
 
 ----_NmP-33a2ac1bd9a4a87e-Part_1
@@ -23,7 +22,7 @@ Content-Transfer-Encoding: quoted-printable
 Bien=E2=80=99ici [https://mail-sender.bienici.com/static/emails/logo-bienic=
 i.png]
 [https://www.bienici.com/?at_canal=3DCRM&at_medium=3Dalertes&at_campaign=3D=
-search_alert&at_link=3DLien_HP&at_id_compte=3D651d7babb7659c00b1b48d3c&at_t=
+search_alert&at_link=3DLien_HP&at_id_compte=3Df0f0f0f01000000000000000&at_t=
 ype_emailing=3Demail_auto&signedRecipient=3DeyJhbGciOiJub25lIiwidHlwIjoiSldUIn0.eyJQTEFDRUhPTERFUiI6IkZJ=
 WFRVUkUwMDEifQ.PLACEHOLDER0SIGNATURE0FIXTURE]  [https=
 ://mail-sender.bienici.com/static/emails/transparent.png]
@@ -47,10 +46,10 @@ correspond =C3=A0 votre alerte !
 [https://mail-sender.bienici.com/static/emails/bell.png]Louer r=C3=A9gion
 =C3=8Ele-de-France - Maison, appartement - 1 200 =E2=82=AC max - 3 pi=C3=A8=
 ces min - 45 m=C2=B2 min
-[https://www.bienici.com/mon-alerte/c779a7b00fe737fb0862325fd4dacd6cf208921=
-d2c8c8f36441c1b8cc49ad362/louer-region-ile-de-france?at_canal=3DCRM&at_medi=
+[https://www.bienici.com/mon-alerte/f0f0f0f02000000000000000000000000000000000000000000000000000=
+0000/louer-region-ile-de-france?at_canal=3DCRM&at_medi=
 um=3Dalertes&at_campaign=3Dsearch_alert&at_link=3DLien_MaRecherche&at_id_co=
-mpte=3D651d7babb7659c00b1b48d3c&at_type_emailing=3Demail_auto&signedRecipie=
+mpte=3Df0f0f0f03000000000000000&at_type_emailing=3Demail_auto&signedRecipie=
 nt=3DeyJhbGciOiJub25lIiwidHlwIjoiSldUIn0.eyJQTEFDRUhPTERFUiI6IkZJ=
 WFRVUkUwMDIifQ.PLACEHOLDER0SIGNATURE0FIXTURE]
 +Ajouter ou modifier des crit=C3=A8res
@@ -61,63 +60,63 @@ Photo
 -1-a-3-ffff-39-dc-12588-cb-005-cd-47-d-jpg?width=3D200&height=3D160&fit=3Dc=
 over]
 [https://www.bienici.com/annonce/mgc-ancien-SNI_0000_318609?fromSavedSearch=
-Id=3Dc779a7b00fe737fb0862325fd4dacd6cf208921d2c8c8f36441c1b8cc49ad362&at_ca=
+Id=3Df0f0f0f040000000000000000000000000000000000000000000000000000000&at_ca=
 nal=3DCRM&at_medium=3Dalertes&at_campaign=3Dsearch_alert&at_link=3DVoir_Ann=
-once&at_id_compte=3D651d7babb7659c00b1b48d3c&at_type_emailing=3Demail_auto&=
+once&at_id_compte=3Df0f0f0f05000000000000000&at_type_emailing=3Demail_auto&=
 signedRecipient=3DeyJhbGciOiJub25lIiwidHlwIjoiSldUIn0.eyJQTEFDRUhPTERFUiI6IkZJ=
 WFRVUkUwMDQifQ.PLACEHOLDER0SIGNATURE0FIXTURE]
 Appartement 3 pi=C3=A8ces 62 m=C2=B2
 [https://www.bienici.com/annonce/mgc-ancien-SNI_0000_318609?fromSavedSearch=
-Id=3Dc779a7b00fe737fb0862325fd4dacd6cf208921d2c8c8f36441c1b8cc49ad362&at_ca=
+Id=3Df0f0f0f060000000000000000000000000000000000000000000000000000000&at_ca=
 nal=3DCRM&at_medium=3Dalertes&at_campaign=3Dsearch_alert&at_link=3DVoir_Ann=
-once&at_id_compte=3D651d7babb7659c00b1b48d3c&at_type_emailing=3Demail_auto&=
+once&at_id_compte=3Df0f0f0f07000000000000000&at_type_emailing=3Demail_auto&=
 signedRecipient=3DeyJhbGciOiJub25lIiwidHlwIjoiSldUIn0.eyJQTEFDRUhPTERFUiI6IkZJ=
 WFRVUkUwMDUifQ.PLACEHOLDER0SIGNATURE0FIXTURE]
 78520 Limay
 [https://www.bienici.com/annonce/mgc-ancien-SNI_0000_318609?fromSavedSearch=
-Id=3Dc779a7b00fe737fb0862325fd4dacd6cf208921d2c8c8f36441c1b8cc49ad362&at_ca=
+Id=3Df0f0f0f080000000000000000000000000000000000000000000000000000000&at_ca=
 nal=3DCRM&at_medium=3Dalertes&at_campaign=3Dsearch_alert&at_link=3DVoir_Ann=
-once&at_id_compte=3D651d7babb7659c00b1b48d3c&at_type_emailing=3Demail_auto&=
+once&at_id_compte=3Df0f0f0f09000000000000000&at_type_emailing=3Demail_auto&=
 signedRecipient=3DeyJhbGciOiJub25lIiwidHlwIjoiSldUIn0.eyJQTEFDRUhPTERFUiI6IkZJ=
 WFRVUkUwMDYifQ.PLACEHOLDER0SIGNATURE0FIXTURE]
 985 =E2=82=ACpar mois charges comprises
 [https://www.bienici.com/annonce/mgc-ancien-SNI_0000_318609?fromSavedSearch=
-Id=3Dc779a7b00fe737fb0862325fd4dacd6cf208921d2c8c8f36441c1b8cc49ad362&at_ca=
+Id=3Df0f0f0f010000000000000000000000000000000000000000000000000000000&at_ca=
 nal=3DCRM&at_medium=3Dalertes&at_campaign=3Dsearch_alert&at_link=3DVoir_Ann=
-once&at_id_compte=3D651d7babb7659c00b1b48d3c&at_type_emailing=3Demail_auto&=
+once&at_id_compte=3Df0f0f0f01100000000000000&at_type_emailing=3Demail_auto&=
 signedRecipient=3DeyJhbGciOiJub25lIiwidHlwIjoiSldUIn0.eyJQTEFDRUhPTERFUiI6IkZJ=
 WFRVUkUwMDcifQ.PLACEHOLDER0SIGNATURE0FIXTURE]=20
 [https://www.bienici.com/annonce/mgc-ancien-SNI_0000_318609?fromSavedSearch=
-Id=3Dc779a7b00fe737fb0862325fd4dacd6cf208921d2c8c8f36441c1b8cc49ad362&at_ca=
+Id=3Df0f0f0f012000000000000000000000000000000000000000000000000000000&at_ca=
 nal=3DCRM&at_medium=3Dalertes&at_campaign=3Dsearch_alert&at_link=3DVoir_Ann=
-once&at_id_compte=3D651d7babb7659c00b1b48d3c&at_type_emailing=3Demail_auto&=
+once&at_id_compte=3Df0f0f0f01300000000000000&at_type_emailing=3Demail_auto&=
 signedRecipient=3DeyJhbGciOiJub25lIiwidHlwIjoiSldUIn0.eyJQTEFDRUhPTERFUiI6IkZJ=
 WFRVUkUwMDgifQ.PLACEHOLDER0SIGNATURE0FIXTURE]
 Voir l=E2=80=99annonce
 [https://www.bienici.com/annonce/mgc-ancien-SNI_0000_318609?fromSavedSearch=
-Id=3Dc779a7b00fe737fb0862325fd4dacd6cf208921d2c8c8f36441c1b8cc49ad362&at_ca=
+Id=3Df0f0f0f014000000000000000000000000000000000000000000000000000000&at_ca=
 nal=3DCRM&at_medium=3Dalertes&at_campaign=3Dsearch_alert&at_link=3DVoir_Ann=
-once&at_id_compte=3D651d7babb7659c00b1b48d3c&at_type_emailing=3Demail_auto&=
+once&at_id_compte=3Df0f0f0f01500000000000000&at_type_emailing=3Demail_auto&=
 signedRecipient=3DeyJhbGciOiJub25lIiwidHlwIjoiSldUIn0.eyJQTEFDRUhPTERFUiI6IkZJ=
 WFRVUkUwMDkifQ.PLACEHOLDER0SIGNATURE0FIXTURE]
 R=C3=89F=C3=89RENCE : SNI_0000_318609
 [https://www.bienici.com/annonce/mgc-ancien-SNI_0000_318609?fromSavedSearch=
-Id=3Dc779a7b00fe737fb0862325fd4dacd6cf208921d2c8c8f36441c1b8cc49ad362&at_ca=
+Id=3Df0f0f0f016000000000000000000000000000000000000000000000000000000&at_ca=
 nal=3DCRM&at_medium=3Dalertes&at_campaign=3Dsearch_alert&at_link=3DVoir_Ann=
-once&at_id_compte=3D651d7babb7659c00b1b48d3c&at_type_emailing=3Demail_auto&=
+once&at_id_compte=3Df0f0f0f01700000000000000&at_type_emailing=3Demail_auto&=
 signedRecipient=3DeyJhbGciOiJub25lIiwidHlwIjoiSldUIn0.eyJQTEFDRUhPTERFUiI6IkZJ=
 WFRVUkUwMTAifQ.PLACEHOLDER0SIGNATURE0FIXTURE]
 Voir toutes les annonces de cette recherche
-[https://www.bienici.com/mon-alerte/c779a7b00fe737fb0862325fd4dacd6cf208921=
-d2c8c8f36441c1b8cc49ad362/louer-region-ile-de-france?at_canal=3DCRM&at_medi=
+[https://www.bienici.com/mon-alerte/f0f0f0f01800000000000000000000000000000000000000000000000000=
+0000/louer-region-ile-de-france?at_canal=3DCRM&at_medi=
 um=3Dalertes&at_campaign=3Dsearch_alert&at_link=3DLien_MaRecherche&at_id_co=
-mpte=3D651d7babb7659c00b1b48d3c&at_type_emailing=3Demail_auto&signedRecipie=
+mpte=3Df0f0f0f01900000000000000&at_type_emailing=3Demail_auto&signedRecipie=
 nt=3DeyJhbGciOiJub25lIiwidHlwIjoiSldUIn0.eyJQTEFDRUhPTERFUiI6IkZJ=
 WFRVUkUwMTEifQ.PLACEHOLDER0SIGNATURE0FIXTURE]
 G=C3=A9rer mes alertes
 [https://www.bienici.com/mes-alertes?timedToken=3DeyJhbGciOiJub25lIiwidHlwIjoiSldUIn0.eyJQTEFDRUhPTERFUiI6IkZJ=
 WFRVUkUwMTIifQ.PLACEHOLDER0SIGNATURE0FIXTURE&at_canal=3DCRM&at_medium=3Dalertes&at_campaign=3Dsearch_alert&at_link=
-=3DLien_MesAlertes&at_id_compte=3D651d7babb7659c00b1b48d3c&at_type_emailing=
+=3DLien_MesAlertes&at_id_compte=3Df0f0f0f02000000000000000&at_type_emailing=
 =3Demail_auto]
 Cette annonce peut =C3=A9galement vous int=C3=A9resser :
 
@@ -125,51 +124,51 @@ Photo
 [https://file.bienici.com/photo/era-2-61432492_media.immo-facile.com_office=
 8_era_mennecy_catalog_images_pr_p_6_1_4_3_2_4_9_2_61432492a.jpg_DATEMAJ_25_=
 08_2026-18_26_10?width=3D200&height=3D160&fit=3Dcover]
-[https://www.bienici.com/annonce/era-2-61432492?fromSavedSearchId=3Dc779a7b=
-00fe737fb0862325fd4dacd6cf208921d2c8c8f36441c1b8cc49ad362&at_canal=3DCRM&at=
+[https://www.bienici.com/annonce/era-2-61432492?fromSavedSearchId=3Df0f0f0f02100000000000000000000000000000000000000000000000000=
+0000&at_canal=3DCRM&at=
 _medium=3Dalertes&at_campaign=3Dsearch_alert&at_link=3DVoir_Suggestion&at_i=
-d_compte=3D651d7babb7659c00b1b48d3c&at_type_emailing=3Demail_auto&signedRec=
+d_compte=3Df0f0f0f02200000000000000&at_type_emailing=3Demail_auto&signedRec=
 ipient=3DeyJhbGciOiJub25lIiwidHlwIjoiSldUIn0.eyJQTEFDRUhPTERFUiI6IkZJ=
 WFRVUkUwMTMifQ.PLACEHOLDER0SIGNATURE0FIXTURE]
 Maison 3 pi=C3=A8ces 44 m=C2=B2
-[https://www.bienici.com/annonce/era-2-61432492?fromSavedSearchId=3Dc779a7b=
-00fe737fb0862325fd4dacd6cf208921d2c8c8f36441c1b8cc49ad362&at_canal=3DCRM&at=
+[https://www.bienici.com/annonce/era-2-61432492?fromSavedSearchId=3Df0f0f0f02300000000000000000000000000000000000000000000000000=
+0000&at_canal=3DCRM&at=
 _medium=3Dalertes&at_campaign=3Dsearch_alert&at_link=3DVoir_Suggestion&at_i=
-d_compte=3D651d7babb7659c00b1b48d3c&at_type_emailing=3Demail_auto&signedRec=
+d_compte=3Df0f0f0f02400000000000000&at_type_emailing=3Demail_auto&signedRec=
 ipient=3DeyJhbGciOiJub25lIiwidHlwIjoiSldUIn0.eyJQTEFDRUhPTERFUiI6IkZJ=
 WFRVUkUwMTQifQ.PLACEHOLDER0SIGNATURE0FIXTURE]
 91610 Ballancourt-sur-Essonne
-[https://www.bienici.com/annonce/era-2-61432492?fromSavedSearchId=3Dc779a7b=
-00fe737fb0862325fd4dacd6cf208921d2c8c8f36441c1b8cc49ad362&at_canal=3DCRM&at=
+[https://www.bienici.com/annonce/era-2-61432492?fromSavedSearchId=3Df0f0f0f02500000000000000000000000000000000000000000000000000=
+0000&at_canal=3DCRM&at=
 _medium=3Dalertes&at_campaign=3Dsearch_alert&at_link=3DVoir_Suggestion&at_i=
-d_compte=3D651d7babb7659c00b1b48d3c&at_type_emailing=3Demail_auto&signedRec=
+d_compte=3Df0f0f0f02600000000000000&at_type_emailing=3Demail_auto&signedRec=
 ipient=3DeyJhbGciOiJub25lIiwidHlwIjoiSldUIn0.eyJQTEFDRUhPTERFUiI6IkZJ=
 WFRVUkUwMTUifQ.PLACEHOLDER0SIGNATURE0FIXTURE]
 725 =E2=82=ACpar mois charges comprises
-[https://www.bienici.com/annonce/era-2-61432492?fromSavedSearchId=3Dc779a7b=
-00fe737fb0862325fd4dacd6cf208921d2c8c8f36441c1b8cc49ad362&at_canal=3DCRM&at=
+[https://www.bienici.com/annonce/era-2-61432492?fromSavedSearchId=3Df0f0f0f02700000000000000000000000000000000000000000000000000=
+0000&at_canal=3DCRM&at=
 _medium=3Dalertes&at_campaign=3Dsearch_alert&at_link=3DVoir_Suggestion&at_i=
-d_compte=3D651d7babb7659c00b1b48d3c&at_type_emailing=3Demail_auto&signedRec=
+d_compte=3Df0f0f0f02800000000000000&at_type_emailing=3Demail_auto&signedRec=
 ipient=3DeyJhbGciOiJub25lIiwidHlwIjoiSldUIn0.eyJQTEFDRUhPTERFUiI6IkZJ=
 WFRVUkUwMTYifQ.PLACEHOLDER0SIGNATURE0FIXTURE]=20
-[https://www.bienici.com/annonce/era-2-61432492?fromSavedSearchId=3Dc779a7b=
-00fe737fb0862325fd4dacd6cf208921d2c8c8f36441c1b8cc49ad362&at_canal=3DCRM&at=
+[https://www.bienici.com/annonce/era-2-61432492?fromSavedSearchId=3Df0f0f0f02900000000000000000000000000000000000000000000000000=
+0000&at_canal=3DCRM&at=
 _medium=3Dalertes&at_campaign=3Dsearch_alert&at_link=3DVoir_Suggestion&at_i=
-d_compte=3D651d7babb7659c00b1b48d3c&at_type_emailing=3Demail_auto&signedRec=
+d_compte=3Df0f0f0f03000000000000000&at_type_emailing=3Demail_auto&signedRec=
 ipient=3DeyJhbGciOiJub25lIiwidHlwIjoiSldUIn0.eyJQTEFDRUhPTERFUiI6IkZJ=
 WFRVUkUwMTcifQ.PLACEHOLDER0SIGNATURE0FIXTURE]
 Voir l=E2=80=99annonce
-[https://www.bienici.com/annonce/era-2-61432492?fromSavedSearchId=3Dc779a7b=
-00fe737fb0862325fd4dacd6cf208921d2c8c8f36441c1b8cc49ad362&at_canal=3DCRM&at=
+[https://www.bienici.com/annonce/era-2-61432492?fromSavedSearchId=3Df0f0f0f03100000000000000000000000000000000000000000000000000=
+0000&at_canal=3DCRM&at=
 _medium=3Dalertes&at_campaign=3Dsearch_alert&at_link=3DVoir_Suggestion&at_i=
-d_compte=3D651d7babb7659c00b1b48d3c&at_type_emailing=3Demail_auto&signedRec=
+d_compte=3Df0f0f0f03200000000000000&at_type_emailing=3Demail_auto&signedRec=
 ipient=3DeyJhbGciOiJub25lIiwidHlwIjoiSldUIn0.eyJQTEFDRUhPTERFUiI6IkZJ=
 WFRVUkUwMTgifQ.PLACEHOLDER0SIGNATURE0FIXTURE]
 R=C3=89F=C3=89RENCE : 3204
-[https://www.bienici.com/annonce/era-2-61432492?fromSavedSearchId=3Dc779a7b=
-00fe737fb0862325fd4dacd6cf208921d2c8c8f36441c1b8cc49ad362&at_canal=3DCRM&at=
+[https://www.bienici.com/annonce/era-2-61432492?fromSavedSearchId=3Df0f0f0f03300000000000000000000000000000000000000000000000000=
+0000&at_canal=3DCRM&at=
 _medium=3Dalertes&at_campaign=3Dsearch_alert&at_link=3DVoir_Suggestion&at_i=
-d_compte=3D651d7babb7659c00b1b48d3c&at_type_emailing=3Demail_auto&signedRec=
+d_compte=3Df0f0f0f03400000000000000&at_type_emailing=3Demail_auto&signedRec=
 ipient=3DeyJhbGciOiJub25lIiwidHlwIjoiSldUIn0.eyJQTEFDRUhPTERFUiI6IkZJ=
 WFRVUkUwMTkifQ.PLACEHOLDER0SIGNATURE0FIXTURE]
 =C3=80 bient=C3=B4t.
@@ -179,16 +178,16 @@ L=E2=80=99=C3=A9quipe Bien=E2=80=99ici
 France]
 [https://advertisement.bienici.com/redirect/mail-rent-w728h90-1?postalcodes=
 =3DFrance&at_canal=3DCRM&at_medium=3Dalertes&at_campaign=3Dsearch_alert&at_=
-link=3Dlien_movinga&at_id_compte=3D651d7babb7659c00b1b48d3c&at_type_emailin=
+link=3Dlien_movinga&at_id_compte=3Df0f0f0f03500000000000000&at_type_emailin=
 g=3Demail_auto&signedRecipient=3DeyJhbGciOiJub25lIiwidHlwIjoiSldUIn0.eyJQTEFDRUhPTERFUiI6IkZJ=
 WFRVUkUwMjAifQ.PLACEHOLDER0SIGNATURE0FIXTURE]
 Vous avez choisi de recevoir les alertes e-mail de Bien=E2=80=99ici.
 Pour ne plus recevoir d=E2=80=99alerte par e-mail, vous pouvez vous d=C3=A9=
 sinscrire
-[https://www.bienici.com/desinscription-alerte-nouvelle-annonce/c779a7b00fe=
-737fb0862325fd4dacd6cf208921d2c8c8f36441c1b8cc49ad362?at_canal=3DCRM&at_med=
+[https://www.bienici.com/desinscription-alerte-nouvelle-annonce/f0f0f0f03600000000000000000000000000000000000000000000000000=
+0000?at_canal=3DCRM&at_med=
 ium=3Dalertes&at_campaign=3Dsearch_alert&at_link=3DLien_Desinscription&at_i=
-d_compte=3D651d7babb7659c00b1b48d3c&at_type_emailing=3Demail_auto&signedRec=
+d_compte=3Df0f0f0f03700000000000000&at_type_emailing=3Demail_auto&signedRec=
 ipient=3DeyJhbGciOiJub25lIiwidHlwIjoiSldUIn0.eyJQTEFDRUhPTERFUiI6IkZJ=
 WFRVUkUwMjEifQ.PLACEHOLDER0SIGNATURE0FIXTURE]
 .
@@ -197,13 +196,12 @@ Une question ? Contactez-nous : support@bienici.com [support@bienici.com]
 Mentions l=C3=A9gales et Conditions G=C3=A9n=C3=A9rales d=E2=80=99Utilisati=
 on
 [https://www.bienici.com/informations-legales?at_canal=3DCRM&at_medium=3Dal=
-ertes&at_campaign=3Dsearch_alert&at_link=3DCGU&at_id_compte=3D651d7babb7659=
-c00b1b48d3c&at_type_emailing=3Demail_auto&signedRecipient=3DeyJhbGciOiJub25lIiwidHlwIjoiSldUIn0.eyJQTEFDRUhPTERFUiI6IkZJ=
+ertes&at_campaign=3Dsearch_alert&at_link=3DCGU&at_id_compte=3Df0f0f0f03800000000000000&at_type_emailing=3Demail_auto&signedRecipient=3DeyJhbGciOiJub25lIiwidHlwIjoiSldUIn0.eyJQTEFDRUhPTERFUiI6IkZJ=
 WFRVUkUwMjIifQ.PLACEHOLDER0SIGNATURE0FIXTURE]
 Politique de confidentialit=C3=A9
 [https://www.bienici.com/politique-de-confidentialite?at_canal=3DCRM&at_med=
 ium=3Dalertes&at_campaign=3Dsearch_alert&at_link=3DLien_Politique_Confident=
-ialite&at_id_compte=3D651d7babb7659c00b1b48d3c&at_type_emailing=3Demail_aut=
+ialite&at_id_compte=3Df0f0f0f03900000000000000&at_type_emailing=3Demail_aut=
 o&signedRecipient=3DeyJhbGciOiJub25lIiwidHlwIjoiSldUIn0.eyJQTEFDRUhPTERFUiI6IkZJ=
 WFRVUkUwMjMifQ.PLACEHOLDER0SIGNATURE0FIXTURE]=
 
@@ -332,13 +330,13 @@ m: 20px;"><table border=3D"0" cellpadding=3D"0" cellspacing=3D"0" width=3D"=
 rspace: 0pt;"><tr><td align=3D"left" width=3D"100%" style=3D"mso-table-lspa=
 ce: 0pt; mso-table-rspace: 0pt;"><a href=3D"https://link.bienici.com/lnk/AM=
 cAAKQVviEAAc28NcAAAQedZGYAARpdxNUAAAAAAAfAswBqjeVfsbNX3x6aTFi8sdSFeyVlFwAHY=
-d4/1/wEzGzNYpVMcfOGqfc_QjTg/aHR0cHM6Ly93d3cuYmllbmljaS5jb20vP2F0X2NhbmFsPUN=
-STSZhdF9tZWRpdW09YWxlcnRlcyZhdF9jYW1wYWlnbj1zZWFyY2hfYWxlcnQmYXRfbGluaz1MaW=
-VuX0hQJmF0X2lkX2NvbXB0ZT02NTFkN2JhYmI3NjU5YzAwYjFiNDhkM2MmYXRfdHlwZV9lbWFpb=
-GluZz1lbWFpbF9hdXRvJnNpZ25lZFJlY2lwaWVudD1leUpoYkdjaU9pSklVekkxTmlJc0luUjVj=
-Q0k2SWtwWFZDSjkuZXlKbGJXRnBiQ0k2SW5SaGEybGxaR1JwYm1VdWJXVnpjMkZ2ZFdScExtOW1=
-abWxqYVdGc1FHZHRZV2xzTG1OdmJTSXNJbWxoZENJNk1UYzROelk0TkRFNU1YMC4xcWt2N1ZWQm=
-FaZVlYRkVfNXlpalJxcjRlVUpteE1paEVJSDFxR0Z2UGk4" target=3D"_blank" style=3D"=
+d4/1/wEzGzNYpVMcfOGqfc_QjTg/aHR0cHM6Ly93d3cuYmllbmljaS5jb20vP2F0X2NhbmFsPUNSTSZhdF9tZWRp=
+dW09YWxlcnRlcyZhdF9jYW1wYWlnbj1zZWFyY2hfYWxlcnQmYXRfbGluaz1M=
+aWVuX0hQJmF0X2lkX2NvbXB0ZT02NTFkN2JhYmI3NjU5YzAwYjFiNDhkM2Mm=
+YXRfdHlwZV9lbWFpbGluZz1lbWFpbF9hdXRvJnNpZ25lZFJlY2lwaWVudD1l=
+eUpoYkdjaU9pSnViMjVsSWl3aWRIbHdJam9pU2xkVUluMC5leUpRVEVGRFJV=
+aFBURVJGVWlJNklrWkpXRlJWVWtVaWZRLlBMQUNFSE9MREVSMFNJR05BVFVS=
+RTBGSVhUVVJF" target=3D"_blank" style=3D"=
 text-decoration: none; color: #009db0; cursor: pointer;"><img src=3D"https:=
 //mail-sender.bienici.com/static/emails/logo-bienici.png" alt=3D"Bien=E2=80=
 =99ici" height=3D"34" style=3D"border: 0; outline: none; text-decoration: n=
@@ -412,15 +410,15 @@ ensed', arial; color: #495960; -webkit-font-smoothing: antialiased; display=
 : block; padding: 0; font-size: 14px; letter-spacing: 1.1px; padding-top: 2=
 0px; padding-bottom: 20px;"><a href=3D"https://link.bienici.com/lnk/AMcAAKQ=
 VviEAAc28NcAAAQedZGYAARpdxNUAAAAAAAfAswBqjeVfsbNX3x6aTFi8sdSFeyVlFwAHYd4/6/=
-GQ2M5RE_5h3qBzEz2PBcAg/aHR0cHM6Ly93d3cuYmllbmljaS5jb20vbW9uLWFsZXJ0ZS9jNzc5=
-YTdiMDBmZTczN2ZiMDg2MjMyNWZkNGRhY2Q2Y2YyMDg5MjFkMmM4YzhmMzY0NDFjMWI4Y2M0OWF=
-kMzYyL2xvdWVyLXJlZ2lvbi1pbGUtZGUtZnJhbmNlP2F0X2NhbmFsPUNSTSZhdF9tZWRpdW09YW=
-xlcnRlcyZhdF9jYW1wYWlnbj1zZWFyY2hfYWxlcnQmYXRfbGluaz1MaWVuX01hUmVjaGVyY2hlJ=
-mF0X2lkX2NvbXB0ZT02NTFkN2JhYmI3NjU5YzAwYjFiNDhkM2MmYXRfdHlwZV9lbWFpbGluZz1l=
-bWFpbF9hdXRvJnNpZ25lZFJlY2lwaWVudD1leUpoYkdjaU9pSklVekkxTmlJc0luUjVjQ0k2SWt=
-wWFZDSjkuZXlKbGJXRnBiQ0k2SW5SaGEybGxaR1JwYm1VdWJXVnpjMkZ2ZFdScExtOW1abWxqYV=
-dGc1FHZHRZV2xzTG1OdmJTSXNJbWxoZENJNk1UYzROelk0TkRFNU1YMC4xcWt2N1ZWQmFaZVlYR=
-kVfNXlpalJxcjRlVUpteE1paEVJSDFxR0Z2UGk4" target=3D"_blank" style=3D"text-de=
+GQ2M5RE_5h3qBzEz2PBcAg/aHR0cHM6Ly93d3cuYmllbmljaS5jb20vbW9uLWFsZXJ0ZS9jNzc5YTdiMDBm=
+ZTczN2ZiMDg2MjMyNWZkNGRhY2Q2Y2YyMDg5MjFkMmM4YzhmMzY0NDFjMWI4=
+Y2M0OWFkMzYyL2xvdWVyLXJlZ2lvbi1pbGUtZGUtZnJhbmNlP2F0X2NhbmFs=
+PUNSTSZhdF9tZWRpdW09YWxlcnRlcyZhdF9jYW1wYWlnbj1zZWFyY2hfYWxl=
+cnQmYXRfbGluaz1MaWVuX01hUmVjaGVyY2hlJmF0X2lkX2NvbXB0ZT02NTFk=
+N2JhYmI3NjU5YzAwYjFiNDhkM2MmYXRfdHlwZV9lbWFpbGluZz1lbWFpbF9h=
+dXRvJnNpZ25lZFJlY2lwaWVudD1leUpoYkdjaU9pSnViMjVsSWl3aWRIbHdJ=
+am9pU2xkVUluMC5leUpRVEVGRFJVaFBURVJGVWlJNklrWkpXRlJWVWtVaWZR=
+LlBMQUNFSE9MREVSMFNJR05BVFVSRTBGSVhUVVJF" target=3D"_blank" style=3D"text-de=
 coration: none; cursor: pointer; font-family: 'Roboto-Condensed', arial; co=
 lor: #495960; -webkit-font-smoothing: antialiased; display: block; padding:=
  0; font-size: 14px; letter-spacing: 1.1px;"><img src=3D"https://mail-sende=
@@ -434,11 +432,10 @@ yle=3D"mso-table-lspace: 0pt; mso-table-rspace: 0pt; padding-bottom: 20px;"=
 ><span class=3D"cross" style=3D"color: #009db0; font-size: 14px; font-weigh=
 t: bold; margin-right: 5px;">+</span><a href=3D"https://link.bienici.com/ln=
 k/AMcAAKQVviEAAc28NcAAAQedZGYAARpdxNUAAAAAAAfAswBqjeVfsbNX3x6aTFi8sdSFeyVlF=
-wAHYd4/7/leEucMG2UE3UWgewtcQVgA/aHR0cHM6Ly93d3cuYmllbmljaS5jb20vbWVzLWFsZXJ=
-0ZXM_dGltZWRUb2tlbj1leUpoYkdjaU9pSklVekkxTmlJc0luUjVjQ0k2SWtwWFZDSjkuZXlKaF=
-kyTnZkVzUwU1dRaU9pSTJOVEZrTjJKaFltSTNOalU1WXpBd1lqRmlORGhrTTJNaUxDSnBZWFFpT=
-2pFM09EYzJPRFF4T1RFc0ltVjRjQ0k2TVRjNE56YzNNRFU1TVgwLjltcUlnWFpVa0s3UG5BSUp5=
-aHdqX0tkN2x2UXpudmxnS2lMVTI3S19BNG8" class=3D"configureMySearchLink" style=
+wAHYd4/7/leEucMG2UE3UWgewtcQVgA/aHR0cHM6Ly93d3cuYmllbmljaS5jb20vbWVzLWFsZXJ0ZXM_dGltZWRUb2tl=
+bj1leUpoYkdjaU9pSnViMjVsSWl3aWRIbHdJam9pU2xkVUluMC5leUpRVEVG=
+RFJVaFBURVJGVWlJNklrWkpXRlJWVWtVaWZRLlBMQUNFSE9MREVSMFNJR05B=
+VFVSRTBGSVhUVVJF" class=3D"configureMySearchLink" style=
 =3D"text-decoration: none; cursor: pointer; font-family: 'Roboto-Condensed'=
 , arial; -webkit-font-smoothing: antialiased; padding: 0; letter-spacing: 1=
 .1px; color: #009db0; display: inline-block; font-size: 13px;">Ajouter ou m=
@@ -450,15 +447,15 @@ e: 0pt;"><tr><td width=3D"40%" class=3D"realEstateAdPhoto" style=3D"mso-tab=
 le-lspace: 0pt; mso-table-rspace: 0pt; vertical-align: middle;" valign=3D"m=
 iddle"><a href=3D"https://link.bienici.com/lnk/AMcAAKQVviEAAc28NcAAAQedZGYA=
 ARpdxNUAAAAAAAfAswBqjeVfsbNX3x6aTFi8sdSFeyVlFwAHYd4/8/E9TblX7LNrb7BOb1YJ7il=
-Q/aHR0cHM6Ly93d3cuYmllbmljaS5jb20vYW5ub25jZS9tZ2MtYW5jaWVuLVNOSV8wMDAwXzMxO=
-DYwOT9mcm9tU2F2ZWRTZWFyY2hJZD1jNzc5YTdiMDBmZTczN2ZiMDg2MjMyNWZkNGRhY2Q2Y2Yy=
-MDg5MjFkMmM4YzhmMzY0NDFjMWI4Y2M0OWFkMzYyJmF0X2NhbmFsPUNSTSZhdF9tZWRpdW09YWx=
-lcnRlcyZhdF9jYW1wYWlnbj1zZWFyY2hfYWxlcnQmYXRfbGluaz1Wb2lyX0Fubm9uY2UmYXRfaW=
-RfY29tcHRlPTY1MWQ3YmFiYjc2NTljMDBiMWI0OGQzYyZhdF90eXBlX2VtYWlsaW5nPWVtYWlsX=
-2F1dG8mc2lnbmVkUmVjaXBpZW50PWV5SmhiR2NpT2lKSVV6STFOaUlzSW5SNWNDSTZJa3BYVkNK=
-OS5leUpsYldGcGJDSTZJblJoYTJsbFpHUnBibVV1YldWemMyRnZkV1JwTG05bVptbGphV0ZzUUd=
-kdFlXbHNMbU52YlNJc0ltbGhkQ0k2TVRjNE56WTROREU1TVgwLjFxa3Y3VlZCYVplWVhGRV81eW=
-lqUnFyNGVVSm14TWloRUlIMXFHRnZQaTg" target=3D"_blank" style=3D"text-decorati=
+Q/aHR0cHM6Ly93d3cuYmllbmljaS5jb20vYW5ub25jZS9tZ2MtYW5jaWVuLVNO=
+SV8wMDAwXzMxODYwOT9mcm9tU2F2ZWRTZWFyY2hJZD1jNzc5YTdiMDBmZTcz=
+N2ZiMDg2MjMyNWZkNGRhY2Q2Y2YyMDg5MjFkMmM4YzhmMzY0NDFjMWI4Y2M0=
+OWFkMzYyJmF0X2NhbmFsPUNSTSZhdF9tZWRpdW09YWxlcnRlcyZhdF9jYW1w=
+YWlnbj1zZWFyY2hfYWxlcnQmYXRfbGluaz1Wb2lyX0Fubm9uY2UmYXRfaWRf=
+Y29tcHRlPTY1MWQ3YmFiYjc2NTljMDBiMWI0OGQzYyZhdF90eXBlX2VtYWls=
+aW5nPWVtYWlsX2F1dG8mc2lnbmVkUmVjaXBpZW50PWV5SmhiR2NpT2lKdWIy=
+NWxJaXdpZEhsd0lqb2lTbGRVSW4wLmV5SlFURUZEUlVoUFRFUkZVaUk2SWta=
+SldGUlZVa1VpZlEuUExBQ0VIT0xERVIwU0lHTkFUVVJFMEZJWFRVUkU" target=3D"_blank" style=3D"text-decorati=
 on: none; color: #009db0; cursor: pointer;"><img src=3D"https://file.bienic=
 i.com/photo/mgc-ancien-SNI_0000_318609_photos-1-a-66-bf-1-a-3-ffff-39-dc-12=
 588-cb-005-cd-47-d-jpg?width=3D200&amp;height=3D160&amp;fit=3Dcover" alt=3D=
@@ -472,15 +469,15 @@ tle" style=3D"mso-table-lspace: 0pt; mso-table-rspace: 0pt; font-family: 'R=
 oboto-Condensed', arial; padding-top: 5px; color: #495960; font-size: 18px;=
  line-height: 22px; font-weight: bold;"><a href=3D"https://link.bienici.com=
 /lnk/AMcAAKQVviEAAc28NcAAAQedZGYAARpdxNUAAAAAAAfAswBqjeVfsbNX3x6aTFi8sdSFey=
-VlFwAHYd4/9/v1HvSckYPA7DyCVVVu2wsA/aHR0cHM6Ly93d3cuYmllbmljaS5jb20vYW5ub25j=
-ZS9tZ2MtYW5jaWVuLVNOSV8wMDAwXzMxODYwOT9mcm9tU2F2ZWRTZWFyY2hJZD1jNzc5YTdiMDB=
-mZTczN2ZiMDg2MjMyNWZkNGRhY2Q2Y2YyMDg5MjFkMmM4YzhmMzY0NDFjMWI4Y2M0OWFkMzYyJm=
-F0X2NhbmFsPUNSTSZhdF9tZWRpdW09YWxlcnRlcyZhdF9jYW1wYWlnbj1zZWFyY2hfYWxlcnQmY=
-XRfbGluaz1Wb2lyX0Fubm9uY2UmYXRfaWRfY29tcHRlPTY1MWQ3YmFiYjc2NTljMDBiMWI0OGQz=
-YyZhdF90eXBlX2VtYWlsaW5nPWVtYWlsX2F1dG8mc2lnbmVkUmVjaXBpZW50PWV5SmhiR2NpT2l=
-KSVV6STFOaUlzSW5SNWNDSTZJa3BYVkNKOS5leUpsYldGcGJDSTZJblJoYTJsbFpHUnBibVV1Yl=
-dWemMyRnZkV1JwTG05bVptbGphV0ZzUUdkdFlXbHNMbU52YlNJc0ltbGhkQ0k2TVRjNE56WTROR=
-EU1TVgwLjFxa3Y3VlZCYVplWVhGRV81eWlqUnFyNGVVSm14TWloRUlIMXFHRnZQaTg" target=
+VlFwAHYd4/9/v1HvSckYPA7DyCVVVu2wsA/aHR0cHM6Ly93d3cuYmllbmljaS5jb20vYW5ub25jZS9tZ2MtYW5jaWVuLVNO=
+SV8wMDAwXzMxODYwOT9mcm9tU2F2ZWRTZWFyY2hJZD1jNzc5YTdiMDBmZTcz=
+N2ZiMDg2MjMyNWZkNGRhY2Q2Y2YyMDg5MjFkMmM4YzhmMzY0NDFjMWI4Y2M0=
+OWFkMzYyJmF0X2NhbmFsPUNSTSZhdF9tZWRpdW09YWxlcnRlcyZhdF9jYW1w=
+YWlnbj1zZWFyY2hfYWxlcnQmYXRfbGluaz1Wb2lyX0Fubm9uY2UmYXRfaWRf=
+Y29tcHRlPTY1MWQ3YmFiYjc2NTljMDBiMWI0OGQzYyZhdF90eXBlX2VtYWls=
+aW5nPWVtYWlsX2F1dG8mc2lnbmVkUmVjaXBpZW50PWV5SmhiR2NpT2lKdWIy=
+NWxJaXdpZEhsd0lqb2lTbGRVSW4wLmV5SlFURUZEUlVoUFRFUkZVaUk2SWta=
+SldGUlZVa1VpZlEuUExBQ0VIT0xERVIwU0lHTkFUVVJFMEZJWFRVUkU" target=
 =3D"_blank" style=3D"text-decoration: none; cursor: pointer; font-family: '=
 Roboto-Condensed', arial; padding-top: 5px; color: #495960; font-size: 18px=
 ; line-height: 22px; font-weight: bold;"><strong>Appartement 3=C2=A0pi=C3=
@@ -489,15 +486,15 @@ ddress" style=3D"mso-table-lspace: 0pt; mso-table-rspace: 0pt; font-family:=
  'Roboto-Condensed', arial; color: #8b9ea7; font-size: 15px; line-height: 2=
 2px; margin-bottom: 5px;"><a href=3D"https://link.bienici.com/lnk/AMcAAKQVv=
 iEAAc28NcAAAQedZGYAARpdxNUAAAAAAAfAswBqjeVfsbNX3x6aTFi8sdSFeyVlFwAHYd4/10/3=
-0Y2IOqif_UNcEjBBDi4Fg/aHR0cHM6Ly93d3cuYmllbmljaS5jb20vYW5ub25jZS9tZ2MtYW5ja=
-WVuLVNOSV8wMDAwXzMxODYwOT9mcm9tU2F2ZWRTZWFyY2hJZD1jNzc5YTdiMDBmZTczN2ZiMDg2=
-MjMyNWZkNGRhY2Q2Y2YyMDg5MjFkMmM4YzhmMzY0NDFjMWI4Y2M0OWFkMzYyJmF0X2NhbmFsPUN=
-STSZhdF9tZWRpdW09YWxlcnRlcyZhdF9jYW1wYWlnbj1zZWFyY2hfYWxlcnQmYXRfbGluaz1Wb2=
-lyX0Fubm9uY2UmYXRfaWRfY29tcHRlPTY1MWQ3YmFiYjc2NTljMDBiMWI0OGQzYyZhdF90eXBlX=
-2VtYWlsaW5nPWVtYWlsX2F1dG8mc2lnbmVkUmVjaXBpZW50PWV5SmhiR2NpT2lKSVV6STFOaUlz=
-SW5SNWNDSTZJa3BYVkNKOS5leUpsYldGcGJDSTZJblJoYTJsbFpHUnBibVV1YldWemMyRnZkV1J=
-wTG05bVptbGphV0ZzUUdkdFlXbHNMbU52YlNJc0ltbGhkQ0k2TVRjNE56WTROREU1TVgwLjFxa3=
-Y3VlZCYVplWVhGRV81eWlqUnFyNGVVSm14TWloRUlIMXFHRnZQaTg" target=3D"_blank" st=
+0Y2IOqif_UNcEjBBDi4Fg/aHR0cHM6Ly93d3cuYmllbmljaS5jb20vYW5ub25jZS9tZ2MtYW5jaWVuLVNO=
+SV8wMDAwXzMxODYwOT9mcm9tU2F2ZWRTZWFyY2hJZD1jNzc5YTdiMDBmZTcz=
+N2ZiMDg2MjMyNWZkNGRhY2Q2Y2YyMDg5MjFkMmM4YzhmMzY0NDFjMWI4Y2M0=
+OWFkMzYyJmF0X2NhbmFsPUNSTSZhdF9tZWRpdW09YWxlcnRlcyZhdF9jYW1w=
+YWlnbj1zZWFyY2hfYWxlcnQmYXRfbGluaz1Wb2lyX0Fubm9uY2UmYXRfaWRf=
+Y29tcHRlPTY1MWQ3YmFiYjc2NTljMDBiMWI0OGQzYyZhdF90eXBlX2VtYWls=
+aW5nPWVtYWlsX2F1dG8mc2lnbmVkUmVjaXBpZW50PWV5SmhiR2NpT2lKdWIy=
+NWxJaXdpZEhsd0lqb2lTbGRVSW4wLmV5SlFURUZEUlVoUFRFUkZVaUk2SWta=
+SldGUlZVa1VpZlEuUExBQ0VIT0xERVIwU0lHTkFUVVJFMEZJWFRVUkU" target=3D"_blank" st=
 yle=3D"text-decoration: none; cursor: pointer; font-family: 'Roboto-Condens=
 ed', arial; color: #8b9ea7; font-size: 15px; line-height: 22px; margin-bott=
 om: 5px;">78520=C2=A0Limay</a></td></tr><tr><td class=3D"realEstateAdPrice"=
@@ -505,30 +502,30 @@ om: 5px;">78520=C2=A0Limay</a></td></tr><tr><td class=3D"realEstateAdPrice"=
 o-Condensed', arial; font-weight: bold; color: #009db0; font-size: 16px; li=
 ne-height: 30px;"><a href=3D"https://link.bienici.com/lnk/AMcAAKQVviEAAc28N=
 cAAAQedZGYAARpdxNUAAAAAAAfAswBqjeVfsbNX3x6aTFi8sdSFeyVlFwAHYd4/11/UQ72bkkmQ=
-N3OxYJug4ks7g/aHR0cHM6Ly93d3cuYmllbmljaS5jb20vYW5ub25jZS9tZ2MtYW5jaWVuLVNOS=
-V8wMDAwXzMxODYwOT9mcm9tU2F2ZWRTZWFyY2hJZD1jNzc5YTdiMDBmZTczN2ZiMDg2MjMyNWZk=
-NGRhY2Q2Y2YyMDg5MjFkMmM4YzhmMzY0NDFjMWI4Y2M0OWFkMzYyJmF0X2NhbmFsPUNSTSZhdF9=
-tZWRpdW09YWxlcnRlcyZhdF9jYW1wYWlnbj1zZWFyY2hfYWxlcnQmYXRfbGluaz1Wb2lyX0Fubm=
-9uY2UmYXRfaWRfY29tcHRlPTY1MWQ3YmFiYjc2NTljMDBiMWI0OGQzYyZhdF90eXBlX2VtYWlsa=
-W5nPWVtYWlsX2F1dG8mc2lnbmVkUmVjaXBpZW50PWV5SmhiR2NpT2lKSVV6STFOaUlzSW5SNWND=
-STZJa3BYVkNKOS5leUpsYldGcGJDSTZJblJoYTJsbFpHUnBibVV1YldWemMyRnZkV1JwTG05bVp=
-tbGphV0ZzUUdkdFlXbHNMbU52YlNJc0ltbGhkQ0k2TVRjNE56WTROREU1TVgwLjFxa3Y3VlZCYV=
-plWVhGRV81eWlqUnFyNGVVSm14TWloRUlIMXFHRnZQaTg" target=3D"_blank" style=3D"t=
+N3OxYJug4ks7g/aHR0cHM6Ly93d3cuYmllbmljaS5jb20vYW5ub25jZS9tZ2MtYW5jaWVuLVNO=
+SV8wMDAwXzMxODYwOT9mcm9tU2F2ZWRTZWFyY2hJZD1jNzc5YTdiMDBmZTcz=
+N2ZiMDg2MjMyNWZkNGRhY2Q2Y2YyMDg5MjFkMmM4YzhmMzY0NDFjMWI4Y2M0=
+OWFkMzYyJmF0X2NhbmFsPUNSTSZhdF9tZWRpdW09YWxlcnRlcyZhdF9jYW1w=
+YWlnbj1zZWFyY2hfYWxlcnQmYXRfbGluaz1Wb2lyX0Fubm9uY2UmYXRfaWRf=
+Y29tcHRlPTY1MWQ3YmFiYjc2NTljMDBiMWI0OGQzYyZhdF90eXBlX2VtYWls=
+aW5nPWVtYWlsX2F1dG8mc2lnbmVkUmVjaXBpZW50PWV5SmhiR2NpT2lKdWIy=
+NWxJaXdpZEhsd0lqb2lTbGRVSW4wLmV5SlFURUZEUlVoUFRFUkZVaUk2SWta=
+SldGUlZVa1VpZlEuUExBQ0VIT0xERVIwU0lHTkFUVVJFMEZJWFRVUkU" target=3D"_blank" style=3D"t=
 ext-decoration: none; color: #009db0; cursor: pointer;"><strong style=3D"fo=
 nt-size: 24px; margin-right: 5px;">985=C2=A0=E2=82=AC</strong><span class=
 =3D"detail" style=3D"font-size: 11px; margin-left: 5px; font-weight: normal=
 ;">par mois charges comprises</span></a></td></tr><tr><td style=3D"mso-tabl=
 e-lspace: 0pt; mso-table-rspace: 0pt;"><a href=3D"https://link.bienici.com/=
 lnk/AMcAAKQVviEAAc28NcAAAQedZGYAARpdxNUAAAAAAAfAswBqjeVfsbNX3x6aTFi8sdSFeyV=
-lFwAHYd4/12/QaQndE1Jhem6w-BPVyjb1g/aHR0cHM6Ly93d3cuYmllbmljaS5jb20vYW5ub25j=
-ZS9tZ2MtYW5jaWVuLVNOSV8wMDAwXzMxODYwOT9mcm9tU2F2ZWRTZWFyY2hJZD1jNzc5YTdiMDB=
-mZTczN2ZiMDg2MjMyNWZkNGRhY2Q2Y2YyMDg5MjFkMmM4YzhmMzY0NDFjMWI4Y2M0OWFkMzYyJm=
-F0X2NhbmFsPUNSTSZhdF9tZWRpdW09YWxlcnRlcyZhdF9jYW1wYWlnbj1zZWFyY2hfYWxlcnQmY=
-XRfbGluaz1Wb2lyX0Fubm9uY2UmYXRfaWRfY29tcHRlPTY1MWQ3YmFiYjc2NTljMDBiMWI0OGQz=
-YyZhdF90eXBlX2VtYWlsaW5nPWVtYWlsX2F1dG8mc2lnbmVkUmVjaXBpZW50PWV5SmhiR2NpT2l=
-KSVV6STFOaUlzSW5SNWNDSTZJa3BYVkNKOS5leUpsYldGcGJDSTZJblJoYTJsbFpHUnBibVV1Yl=
-dWemMyRnZkV1JwTG05bVptbGphV0ZzUUdkdFlXbHNMbU52YlNJc0ltbGhkQ0k2TVRjNE56WTROR=
-EU1TVgwLjFxa3Y3VlZCYVplWVhGRV81eWlqUnFyNGVVSm14TWloRUlIMXFHRnZQaTg" target=
+lFwAHYd4/12/QaQndE1Jhem6w-BPVyjb1g/aHR0cHM6Ly93d3cuYmllbmljaS5jb20vYW5ub25jZS9tZ2MtYW5jaWVuLVNO=
+SV8wMDAwXzMxODYwOT9mcm9tU2F2ZWRTZWFyY2hJZD1jNzc5YTdiMDBmZTcz=
+N2ZiMDg2MjMyNWZkNGRhY2Q2Y2YyMDg5MjFkMmM4YzhmMzY0NDFjMWI4Y2M0=
+OWFkMzYyJmF0X2NhbmFsPUNSTSZhdF9tZWRpdW09YWxlcnRlcyZhdF9jYW1w=
+YWlnbj1zZWFyY2hfYWxlcnQmYXRfbGluaz1Wb2lyX0Fubm9uY2UmYXRfaWRf=
+Y29tcHRlPTY1MWQ3YmFiYjc2NTljMDBiMWI0OGQzYyZhdF90eXBlX2VtYWls=
+aW5nPWVtYWlsX2F1dG8mc2lnbmVkUmVjaXBpZW50PWV5SmhiR2NpT2lKdWIy=
+NWxJaXdpZEhsd0lqb2lTbGRVSW4wLmV5SlFURUZEUlVoUFRFUkZVaUk2SWta=
+SldGUlZVa1VpZlEuUExBQ0VIT0xERVIwU0lHTkFUVVJFMEZJWFRVUkU" target=
 =3D"_blank" style=3D"text-decoration: none; color: #009db0; cursor: pointer=
 ;"></a></td></tr><tr><td style=3D"mso-table-lspace: 0pt; mso-table-rspace: =
 0pt;"><table border=3D"0" cellpadding=3D"0" cellspacing=3D"0" width=3D"100%=
@@ -541,16 +538,15 @@ llspacing=3D"0" class=3D"button secondaryButton" style=3D"mso-table-lspace:=
 align=3D"left"><tr><td style=3D"mso-table-lspace: 0pt; mso-table-rspace: 0p=
 t; text-align: center; background: #009db0;" align=3D"center"><a href=3D"ht=
 tps://link.bienici.com/lnk/AMcAAKQVviEAAc28NcAAAQedZGYAARpdxNUAAAAAAAfAswBq=
-jeVfsbNX3x6aTFi8sdSFeyVlFwAHYd4/13/_vlzwYa5wMLl4ZjI0_-gng/aHR0cHM6Ly93d3cuY=
-mllbmljaS5jb20vYW5ub25jZS9tZ2MtYW5jaWVuLVNOSV8wMDAwXzMxODYwOT9mcm9tU2F2ZWRT=
-ZWFyY2hJZD1jNzc5YTdiMDBmZTczN2ZiMDg2MjMyNWZkNGRhY2Q2Y2YyMDg5MjFkMmM4YzhmMzY=
-0NDFjMWI4Y2M0OWFkMzYyJmF0X2NhbmFsPUNSTSZhdF9tZWRpdW09YWxlcnRlcyZhdF9jYW1wYW=
-lnbj1zZWFyY2hfYWxlcnQmYXRfbGluaz1Wb2lyX0Fubm9uY2UmYXRfaWRfY29tcHRlPTY1MWQ3Y=
-mFiYjc2NTljMDBiMWI0OGQzYyZhdF90eXBlX2VtYWlsaW5nPWVtYWlsX2F1dG8mc2lnbmVkUmVj=
-aXBpZW50PWV5SmhiR2NpT2lKSVV6STFOaUlzSW5SNWNDSTZJa3BYVkNKOS5leUpsYldGcGJDSTZ=
-JblJoYTJsbFpHUnBibVV1YldWemMyRnZkV1JwTG05bVptbGphV0ZzUUdkdFlXbHNMbU52YlNJc0=
-ltbGhkQ0k2TVRjNE56WTROREU1TVgwLjFxa3Y3VlZCYVplWVhGRV81eWlqUnFyNGVVSm14TWloR=
-UlIMXFHRnZQaTg" target=3D"_blank" style=3D"text-decoration: none; cursor: p=
+jeVfsbNX3x6aTFi8sdSFeyVlFwAHYd4/13/_vlzwYa5wMLl4ZjI0_-gng/aHR0cHM6Ly93d3cuYmllbmljaS5jb20vYW5ub25jZS9tZ2MtYW5jaWVuLVNO=
+SV8wMDAwXzMxODYwOT9mcm9tU2F2ZWRTZWFyY2hJZD1jNzc5YTdiMDBmZTcz=
+N2ZiMDg2MjMyNWZkNGRhY2Q2Y2YyMDg5MjFkMmM4YzhmMzY0NDFjMWI4Y2M0=
+OWFkMzYyJmF0X2NhbmFsPUNSTSZhdF9tZWRpdW09YWxlcnRlcyZhdF9jYW1w=
+YWlnbj1zZWFyY2hfYWxlcnQmYXRfbGluaz1Wb2lyX0Fubm9uY2UmYXRfaWRf=
+Y29tcHRlPTY1MWQ3YmFiYjc2NTljMDBiMWI0OGQzYyZhdF90eXBlX2VtYWls=
+aW5nPWVtYWlsX2F1dG8mc2lnbmVkUmVjaXBpZW50PWV5SmhiR2NpT2lKdWIy=
+NWxJaXdpZEhsd0lqb2lTbGRVSW4wLmV5SlFURUZEUlVoUFRFUkZVaUk2SWta=
+SldGUlZVa1VpZlEuUExBQ0VIT0xERVIwU0lHTkFUVVJFMEZJWFRVUkU" target=3D"_blank" style=3D"text-decoration: none; cursor: p=
 ointer; padding-left: 20px; padding-right: 20px; padding-top: 6px; padding-=
 bottom: 6px; border-width: 1px; border-style: solid; display: block; font-f=
 amily: 'Roboto-Condensed', arial; text-transform: uppercase; font-size: 11p=
@@ -563,15 +559,15 @@ pt; mso-table-rspace: 0pt; font-family: 'Roboto-Condensed', arial; font-wei=
 ght: bold; color: #8b9ea7; padding-top: 10px; font-size: 10px; text-transfo=
 rm: uppercase;"><a href=3D"https://link.bienici.com/lnk/AMcAAKQVviEAAc28NcA=
 AAQedZGYAARpdxNUAAAAAAAfAswBqjeVfsbNX3x6aTFi8sdSFeyVlFwAHYd4/14/S9PG7q2x9CX=
-CZCQ3Nc70SA/aHR0cHM6Ly93d3cuYmllbmljaS5jb20vYW5ub25jZS9tZ2MtYW5jaWVuLVNOSV8=
-wMDAwXzMxODYwOT9mcm9tU2F2ZWRTZWFyY2hJZD1jNzc5YTdiMDBmZTczN2ZiMDg2MjMyNWZkNG=
-RhY2Q2Y2YyMDg5MjFkMmM4YzhmMzY0NDFjMWI4Y2M0OWFkMzYyJmF0X2NhbmFsPUNSTSZhdF9tZ=
-WRpdW09YWxlcnRlcyZhdF9jYW1wYWlnbj1zZWFyY2hfYWxlcnQmYXRfbGluaz1Wb2lyX0Fubm9u=
-Y2UmYXRfaWRfY29tcHRlPTY1MWQ3YmFiYjc2NTljMDBiMWI0OGQzYyZhdF90eXBlX2VtYWlsaW5=
-nPWVtYWlsX2F1dG8mc2lnbmVkUmVjaXBpZW50PWV5SmhiR2NpT2lKSVV6STFOaUlzSW5SNWNDST=
-ZJa3BYVkNKOS5leUpsYldGcGJDSTZJblJoYTJsbFpHUnBibVV1YldWemMyRnZkV1JwTG05bVptb=
-GphV0ZzUUdkdFlXbHNMbU52YlNJc0ltbGhkQ0k2TVRjNE56WTROREU1TVgwLjFxa3Y3VlZCYVpl=
-WVhGRV81eWlqUnFyNGVVSm14TWloRUlIMXFHRnZQaTg" target=3D"_blank" style=3D"tex=
+CZCQ3Nc70SA/aHR0cHM6Ly93d3cuYmllbmljaS5jb20vYW5ub25jZS9tZ2MtYW5jaWVuLVNO=
+SV8wMDAwXzMxODYwOT9mcm9tU2F2ZWRTZWFyY2hJZD1jNzc5YTdiMDBmZTcz=
+N2ZiMDg2MjMyNWZkNGRhY2Q2Y2YyMDg5MjFkMmM4YzhmMzY0NDFjMWI4Y2M0=
+OWFkMzYyJmF0X2NhbmFsPUNSTSZhdF9tZWRpdW09YWxlcnRlcyZhdF9jYW1w=
+YWlnbj1zZWFyY2hfYWxlcnQmYXRfbGluaz1Wb2lyX0Fubm9uY2UmYXRfaWRf=
+Y29tcHRlPTY1MWQ3YmFiYjc2NTljMDBiMWI0OGQzYyZhdF90eXBlX2VtYWls=
+aW5nPWVtYWlsX2F1dG8mc2lnbmVkUmVjaXBpZW50PWV5SmhiR2NpT2lKdWIy=
+NWxJaXdpZEhsd0lqb2lTbGRVSW4wLmV5SlFURUZEUlVoUFRFUkZVaUk2SWta=
+SldGUlZVa1VpZlEuUExBQ0VIT0xERVIwU0lHTkFUVVJFMEZJWFRVUkU" target=3D"_blank" style=3D"tex=
 t-decoration: none; cursor: pointer; font-family: 'Roboto-Condensed', arial=
 ; font-weight: bold; color: #8b9ea7; padding-top: 10px; font-size: 10px; te=
 xt-transform: uppercase;">R=C3=89F=C3=89RENCE&nbsp;: SNI_0000_318609</a></t=
@@ -586,15 +582,15 @@ r; border-collapse: separate;" align=3D"center"><tr><td style=3D"mso-table-=
 lspace: 0pt; mso-table-rspace: 0pt; text-align: center; background: #fbba20=
 ;" align=3D"center"><a href=3D"https://link.bienici.com/lnk/AMcAAKQVviEAAc2=
 8NcAAAQedZGYAARpdxNUAAAAAAAfAswBqjeVfsbNX3x6aTFi8sdSFeyVlFwAHYd4/15/J6NYuv6=
-ye4Xjbe2Q-57hIA/aHR0cHM6Ly93d3cuYmllbmljaS5jb20vbW9uLWFsZXJ0ZS9jNzc5YTdiMDB=
-mZTczN2ZiMDg2MjMyNWZkNGRhY2Q2Y2YyMDg5MjFkMmM4YzhmMzY0NDFjMWI4Y2M0OWFkMzYyL2=
-xvdWVyLXJlZ2lvbi1pbGUtZGUtZnJhbmNlP2F0X2NhbmFsPUNSTSZhdF9tZWRpdW09YWxlcnRlc=
-yZhdF9jYW1wYWlnbj1zZWFyY2hfYWxlcnQmYXRfbGluaz1MaWVuX01hUmVjaGVyY2hlJmF0X2lk=
-X2NvbXB0ZT02NTFkN2JhYmI3NjU5YzAwYjFiNDhkM2MmYXRfdHlwZV9lbWFpbGluZz1lbWFpbF9=
-hdXRvJnNpZ25lZFJlY2lwaWVudD1leUpoYkdjaU9pSklVekkxTmlJc0luUjVjQ0k2SWtwWFZDSj=
-kuZXlKbGJXRnBiQ0k2SW5SaGEybGxaR1JwYm1VdWJXVnpjMkZ2ZFdScExtOW1abWxqYVdGc1FHZ=
-HRZV2xzTG1OdmJTSXNJbWxoZENJNk1UYzROelk0TkRFNU1YMC4xcWt2N1ZWQmFaZVlYRkVfNXlp=
-alJxcjRlVUpteE1paEVJSDFxR0Z2UGk4" target=3D"_blank" style=3D"text-decoratio=
+ye4Xjbe2Q-57hIA/aHR0cHM6Ly93d3cuYmllbmljaS5jb20vbW9uLWFsZXJ0ZS9jNzc5YTdiMDBm=
+ZTczN2ZiMDg2MjMyNWZkNGRhY2Q2Y2YyMDg5MjFkMmM4YzhmMzY0NDFjMWI4=
+Y2M0OWFkMzYyL2xvdWVyLXJlZ2lvbi1pbGUtZGUtZnJhbmNlP2F0X2NhbmFs=
+PUNSTSZhdF9tZWRpdW09YWxlcnRlcyZhdF9jYW1wYWlnbj1zZWFyY2hfYWxl=
+cnQmYXRfbGluaz1MaWVuX01hUmVjaGVyY2hlJmF0X2lkX2NvbXB0ZT02NTFk=
+N2JhYmI3NjU5YzAwYjFiNDhkM2MmYXRfdHlwZV9lbWFpbGluZz1lbWFpbF9h=
+dXRvJnNpZ25lZFJlY2lwaWVudD1leUpoYkdjaU9pSnViMjVsSWl3aWRIbHdJ=
+am9pU2xkVUluMC5leUpRVEVGRFJVaFBURVJGVWlJNklrWkpXRlJWVWtVaWZR=
+LlBMQUNFSE9MREVSMFNJR05BVFVSRTBGSVhUVVJF" target=3D"_blank" style=3D"text-decoratio=
 n: none; cursor: pointer; padding-left: 20px; padding-right: 20px; padding-=
 top: 6px; padding-bottom: 6px; border-width: 1px; border-style: solid; disp=
 lay: block; font-family: 'Roboto-Condensed', arial; text-transform: upperca=
@@ -613,13 +609,13 @@ center; border-collapse: separate;" align=3D"center"><tr><td style=3D"mso-t=
 able-lspace: 0pt; mso-table-rspace: 0pt; text-align: center; background: #f=
 bba20;" align=3D"center"><a href=3D"https://link.bienici.com/lnk/AMcAAKQVvi=
 EAAc28NcAAAQedZGYAARpdxNUAAAAAAAfAswBqjeVfsbNX3x6aTFi8sdSFeyVlFwAHYd4/16/YE=
-UqWLvgGFEcOOzUZOsaJw/aHR0cHM6Ly93d3cuYmllbmljaS5jb20vbWVzLWFsZXJ0ZXM_dGltZW=
-RUb2tlbj1leUpoYkdjaU9pSklVekkxTmlJc0luUjVjQ0k2SWtwWFZDSjkuZXlKaFkyTnZkVzUwU=
-1dRaU9pSTJOVEZrTjJKaFltSTNOalU1WXpBd1lqRmlORGhrTTJNaUxDSnBZWFFpT2pFM09EYzJP=
-RFF4T1RFc0ltVjRjQ0k2TVRjNE56YzNNRFU1TVgwLjltcUlnWFpVa0s3UG5BSUp5aHdqX0tkN2x=
-2UXpudmxnS2lMVTI3S19BNG8mYXRfY2FuYWw9Q1JNJmF0X21lZGl1bT1hbGVydGVzJmF0X2NhbX=
-BhaWduPXNlYXJjaF9hbGVydCZhdF9saW5rPUxpZW5fTWVzQWxlcnRlcyZhdF9pZF9jb21wdGU9N=
-jUxZDdiYWJiNzY1OWMwMGIxYjQ4ZDNjJmF0X3R5cGVfZW1haWxpbmc9ZW1haWxfYXV0bw" targ=
+UqWLvgGFEcOOzUZOsaJw/aHR0cHM6Ly93d3cuYmllbmljaS5jb20vbWVzLWFsZXJ0ZXM_dGltZWRUb2tl=
+bj1leUpoYkdjaU9pSnViMjVsSWl3aWRIbHdJam9pU2xkVUluMC5leUpRVEVG=
+RFJVaFBURVJGVWlJNklrWkpXRlJWVWtVaWZRLlBMQUNFSE9MREVSMFNJR05B=
+VFVSRTBGSVhUVVJFJmF0X2NhbmFsPUNSTSZhdF9tZWRpdW09YWxlcnRlcyZh=
+dF9jYW1wYWlnbj1zZWFyY2hfYWxlcnQmYXRfbGluaz1MaWVuX01lc0FsZXJ0=
+ZXMmYXRfaWRfY29tcHRlPTY1MWQ3YmFiYjc2NTljMDBiMWI0OGQzYyZhdF90=
+eXBlX2VtYWlsaW5nPWVtYWlsX2F1dG8" targ=
 et=3D"_blank" style=3D"text-decoration: none; cursor: pointer; padding-left=
 : 20px; padding-right: 20px; padding-top: 6px; padding-bottom: 6px; border-=
 width: 1px; border-style: solid; display: block; font-family: 'Roboto-Conde=
@@ -638,16 +634,15 @@ table border=3D"0" cellpadding=3D"0" cellspacing=3D"0" width=3D"100%" style=
 ;"><tr><td width=3D"40%" class=3D"realEstateAdPhoto" style=3D"mso-table-lsp=
 ace: 0pt; mso-table-rspace: 0pt; vertical-align: middle;" valign=3D"middle"=
 ><a href=3D"https://link.bienici.com/lnk/AMcAAKQVviEAAc28NcAAAQedZGYAARpdxN=
-UAAAAAAAfAswBqjeVfsbNX3x6aTFi8sdSFeyVlFwAHYd4/17/nkMXDrtvBC39GkmqFSe7mg/aHR=
-0cHM6Ly93d3cuYmllbmljaS5jb20vYW5ub25jZS9lcmEtMi02MTQzMjQ5Mj9mcm9tU2F2ZWRTZW=
-FyY2hJZD1jNzc5YTdiMDBmZTczN2ZiMDg2MjMyNWZkNGRhY2Q2Y2YyMDg5MjFkMmM4YzhmMzY0N=
-DFjMWI4Y2M0OWFkMzYyJmF0X2NhbmFsPUNSTSZhdF9tZWRpdW09YWxlcnRlcyZhdF9jYW1wYWln=
-bj1zZWFyY2hfYWxlcnQmYXRfbGluaz1Wb2lyX1N1Z2dlc3Rpb24mYXRfaWRfY29tcHRlPTY1MWQ=
-3YmFiYjc2NTljMDBiMWI0OGQzYyZhdF90eXBlX2VtYWlsaW5nPWVtYWlsX2F1dG8mc2lnbmVkUm=
-VjaXBpZW50PWV5SmhiR2NpT2lKSVV6STFOaUlzSW5SNWNDSTZJa3BYVkNKOS5leUpsYldGcGJDS=
-TZJblJoYTJsbFpHUnBibVV1YldWemMyRnZkV1JwTG05bVptbGphV0ZzUUdkdFlXbHNMbU52YlNJ=
-c0ltbGhkQ0k2TVRjNE56WTROREU1TVgwLjFxa3Y3VlZCYVplWVhGRV81eWlqUnFyNGVVSm14TWl=
-oRUlIMXFHRnZQaTg" target=3D"_blank" style=3D"text-decoration: none; color: =
+UAAAAAAAfAswBqjeVfsbNX3x6aTFi8sdSFeyVlFwAHYd4/17/nkMXDrtvBC39GkmqFSe7mg/aHR0cHM6Ly93d3cuYmllbmljaS5jb20vYW5ub25jZS9lcmEtMi02MTQzMjQ5=
+Mj9mcm9tU2F2ZWRTZWFyY2hJZD1jNzc5YTdiMDBmZTczN2ZiMDg2MjMyNWZk=
+NGRhY2Q2Y2YyMDg5MjFkMmM4YzhmMzY0NDFjMWI4Y2M0OWFkMzYyJmF0X2Nh=
+bmFsPUNSTSZhdF9tZWRpdW09YWxlcnRlcyZhdF9jYW1wYWlnbj1zZWFyY2hf=
+YWxlcnQmYXRfbGluaz1Wb2lyX1N1Z2dlc3Rpb24mYXRfaWRfY29tcHRlPTY1=
+MWQ3YmFiYjc2NTljMDBiMWI0OGQzYyZhdF90eXBlX2VtYWlsaW5nPWVtYWls=
+X2F1dG8mc2lnbmVkUmVjaXBpZW50PWV5SmhiR2NpT2lKdWIyNWxJaXdpZEhs=
+d0lqb2lTbGRVSW4wLmV5SlFURUZEUlVoUFRFUkZVaUk2SWtaSldGUlZVa1Vp=
+ZlEuUExBQ0VIT0xERVIwU0lHTkFUVVJFMEZJWFRVUkU" target=3D"_blank" style=3D"text-decoration: none; color: =
 #009db0; cursor: pointer;"><img src=3D"https://file.bienici.com/photo/era-2=
 -61432492_media.immo-facile.com_office8_era_mennecy_catalog_images_pr_p_6_1=
 _4_3_2_4_9_2_61432492a.jpg_DATEMAJ_25_08_2026-18_26_10?width=3D200&amp;heig=
@@ -661,16 +656,15 @@ le border=3D"0" cellpadding=3D"0" cellspacing=3D"0" width=3D"100%" style=3D=
 le-rspace: 0pt; font-family: 'Roboto-Condensed', arial; padding-top: 5px; c=
 olor: #495960; font-size: 18px; line-height: 22px; font-weight: bold;"><a h=
 ref=3D"https://link.bienici.com/lnk/AMcAAKQVviEAAc28NcAAAQedZGYAARpdxNUAAAA=
-AAAfAswBqjeVfsbNX3x6aTFi8sdSFeyVlFwAHYd4/18/8tanAUApRTITtioaTRbzAA/aHR0cHM6=
-Ly93d3cuYmllbmljaS5jb20vYW5ub25jZS9lcmEtMi02MTQzMjQ5Mj9mcm9tU2F2ZWRTZWFyY2h=
-JZD1jNzc5YTdiMDBmZTczN2ZiMDg2MjMyNWZkNGRhY2Q2Y2YyMDg5MjFkMmM4YzhmMzY0NDFjMW=
-I4Y2M0OWFkMzYyJmF0X2NhbmFsPUNSTSZhdF9tZWRpdW09YWxlcnRlcyZhdF9jYW1wYWlnbj1zZ=
-WFyY2hfYWxlcnQmYXRfbGluaz1Wb2lyX1N1Z2dlc3Rpb24mYXRfaWRfY29tcHRlPTY1MWQ3YmFi=
-Yjc2NTljMDBiMWI0OGQzYyZhdF90eXBlX2VtYWlsaW5nPWVtYWlsX2F1dG8mc2lnbmVkUmVjaXB=
-pZW50PWV5SmhiR2NpT2lKSVV6STFOaUlzSW5SNWNDSTZJa3BYVkNKOS5leUpsYldGcGJDSTZJbl=
-JoYTJsbFpHUnBibVV1YldWemMyRnZkV1JwTG05bVptbGphV0ZzUUdkdFlXbHNMbU52YlNJc0ltb=
-GhkQ0k2TVRjNE56WTROREU1TVgwLjFxa3Y3VlZCYVplWVhGRV81eWlqUnFyNGVVSm14TWloRUlI=
-MXFHRnZQaTg" target=3D"_blank" style=3D"text-decoration: none; cursor: poin=
+AAAfAswBqjeVfsbNX3x6aTFi8sdSFeyVlFwAHYd4/18/8tanAUApRTITtioaTRbzAA/aHR0cHM6Ly93d3cuYmllbmljaS5jb20vYW5ub25jZS9lcmEtMi02MTQzMjQ5=
+Mj9mcm9tU2F2ZWRTZWFyY2hJZD1jNzc5YTdiMDBmZTczN2ZiMDg2MjMyNWZk=
+NGRhY2Q2Y2YyMDg5MjFkMmM4YzhmMzY0NDFjMWI4Y2M0OWFkMzYyJmF0X2Nh=
+bmFsPUNSTSZhdF9tZWRpdW09YWxlcnRlcyZhdF9jYW1wYWlnbj1zZWFyY2hf=
+YWxlcnQmYXRfbGluaz1Wb2lyX1N1Z2dlc3Rpb24mYXRfaWRfY29tcHRlPTY1=
+MWQ3YmFiYjc2NTljMDBiMWI0OGQzYyZhdF90eXBlX2VtYWlsaW5nPWVtYWls=
+X2F1dG8mc2lnbmVkUmVjaXBpZW50PWV5SmhiR2NpT2lKdWIyNWxJaXdpZEhs=
+d0lqb2lTbGRVSW4wLmV5SlFURUZEUlVoUFRFUkZVaUk2SWtaSldGUlZVa1Vp=
+ZlEuUExBQ0VIT0xERVIwU0lHTkFUVVJFMEZJWFRVUkU" target=3D"_blank" style=3D"text-decoration: none; cursor: poin=
 ter; font-family: 'Roboto-Condensed', arial; padding-top: 5px; color: #4959=
 60; font-size: 18px; line-height: 22px; font-weight: bold;"><strong>Maison =
 3=C2=A0pi=C3=A8ces 44=C2=A0m=C2=B2</strong></a></td></tr><tr><td class=3D"r=
@@ -678,15 +672,15 @@ ealEstateAdAddress" style=3D"mso-table-lspace: 0pt; mso-table-rspace: 0pt; =
 font-family: 'Roboto-Condensed', arial; color: #8b9ea7; font-size: 15px; li=
 ne-height: 22px; margin-bottom: 5px;"><a href=3D"https://link.bienici.com/l=
 nk/AMcAAKQVviEAAc28NcAAAQedZGYAARpdxNUAAAAAAAfAswBqjeVfsbNX3x6aTFi8sdSFeyVl=
-FwAHYd4/19/wrqUtI9BvTu3UkuQP_qeNQ/aHR0cHM6Ly93d3cuYmllbmljaS5jb20vYW5ub25jZ=
-S9lcmEtMi02MTQzMjQ5Mj9mcm9tU2F2ZWRTZWFyY2hJZD1jNzc5YTdiMDBmZTczN2ZiMDg2MjMy=
-NWZkNGRhY2Q2Y2YyMDg5MjFkMmM4YzhmMzY0NDFjMWI4Y2M0OWFkMzYyJmF0X2NhbmFsPUNSTSZ=
-hdF9tZWRpdW09YWxlcnRlcyZhdF9jYW1wYWlnbj1zZWFyY2hfYWxlcnQmYXRfbGluaz1Wb2lyX1=
-N1Z2dlc3Rpb24mYXRfaWRfY29tcHRlPTY1MWQ3YmFiYjc2NTljMDBiMWI0OGQzYyZhdF90eXBlX=
-2VtYWlsaW5nPWVtYWlsX2F1dG8mc2lnbmVkUmVjaXBpZW50PWV5SmhiR2NpT2lKSVV6STFOaUlz=
-SW5SNWNDSTZJa3BYVkNKOS5leUpsYldGcGJDSTZJblJoYTJsbFpHUnBibVV1YldWemMyRnZkV1J=
-wTG05bVptbGphV0ZzUUdkdFlXbHNMbU52YlNJc0ltbGhkQ0k2TVRjNE56WTROREU1TVgwLjFxa3=
-Y3VlZCYVplWVhGRV81eWlqUnFyNGVVSm14TWloRUlIMXFHRnZQaTg" target=3D"_blank" st=
+FwAHYd4/19/wrqUtI9BvTu3UkuQP_qeNQ/aHR0cHM6Ly93d3cuYmllbmljaS5jb20vYW5ub25jZS9lcmEtMi02MTQzMjQ5=
+Mj9mcm9tU2F2ZWRTZWFyY2hJZD1jNzc5YTdiMDBmZTczN2ZiMDg2MjMyNWZk=
+NGRhY2Q2Y2YyMDg5MjFkMmM4YzhmMzY0NDFjMWI4Y2M0OWFkMzYyJmF0X2Nh=
+bmFsPUNSTSZhdF9tZWRpdW09YWxlcnRlcyZhdF9jYW1wYWlnbj1zZWFyY2hf=
+YWxlcnQmYXRfbGluaz1Wb2lyX1N1Z2dlc3Rpb24mYXRfaWRfY29tcHRlPTY1=
+MWQ3YmFiYjc2NTljMDBiMWI0OGQzYyZhdF90eXBlX2VtYWlsaW5nPWVtYWls=
+X2F1dG8mc2lnbmVkUmVjaXBpZW50PWV5SmhiR2NpT2lKdWIyNWxJaXdpZEhs=
+d0lqb2lTbGRVSW4wLmV5SlFURUZEUlVoUFRFUkZVaUk2SWtaSldGUlZVa1Vp=
+ZlEuUExBQ0VIT0xERVIwU0lHTkFUVVJFMEZJWFRVUkU" target=3D"_blank" st=
 yle=3D"text-decoration: none; cursor: pointer; font-family: 'Roboto-Condens=
 ed', arial; color: #8b9ea7; font-size: 15px; line-height: 22px; margin-bott=
 om: 5px;">91610=C2=A0Ballancourt-sur-Essonne</a></td></tr><tr><td class=3D"=
@@ -694,30 +688,30 @@ realEstateAdPrice" style=3D"mso-table-lspace: 0pt; mso-table-rspace: 0pt; f=
 ont-family: 'Roboto-Condensed', arial; font-weight: bold; color: #009db0; f=
 ont-size: 16px; line-height: 30px;"><a href=3D"https://link.bienici.com/lnk=
 /AMcAAKQVviEAAc28NcAAAQedZGYAARpdxNUAAAAAAAfAswBqjeVfsbNX3x6aTFi8sdSFeyVlFw=
-AHYd4/20/YmAHitAUyxXIW7b_sTX_-g/aHR0cHM6Ly93d3cuYmllbmljaS5jb20vYW5ub25jZS9=
-lcmEtMi02MTQzMjQ5Mj9mcm9tU2F2ZWRTZWFyY2hJZD1jNzc5YTdiMDBmZTczN2ZiMDg2MjMyNW=
-ZkNGRhY2Q2Y2YyMDg5MjFkMmM4YzhmMzY0NDFjMWI4Y2M0OWFkMzYyJmF0X2NhbmFsPUNSTSZhd=
-F9tZWRpdW09YWxlcnRlcyZhdF9jYW1wYWlnbj1zZWFyY2hfYWxlcnQmYXRfbGluaz1Wb2lyX1N1=
-Z2dlc3Rpb24mYXRfaWRfY29tcHRlPTY1MWQ3YmFiYjc2NTljMDBiMWI0OGQzYyZhdF90eXBlX2V=
-tYWlsaW5nPWVtYWlsX2F1dG8mc2lnbmVkUmVjaXBpZW50PWV5SmhiR2NpT2lKSVV6STFOaUlzSW=
-5SNWNDSTZJa3BYVkNKOS5leUpsYldGcGJDSTZJblJoYTJsbFpHUnBibVV1YldWemMyRnZkV1JwT=
-G05bVptbGphV0ZzUUdkdFlXbHNMbU52YlNJc0ltbGhkQ0k2TVRjNE56WTROREU1TVgwLjFxa3Y3=
-VlZCYVplWVhGRV81eWlqUnFyNGVVSm14TWloRUlIMXFHRnZQaTg" target=3D"_blank" styl=
+AHYd4/20/YmAHitAUyxXIW7b_sTX_-g/aHR0cHM6Ly93d3cuYmllbmljaS5jb20vYW5ub25jZS9lcmEtMi02MTQzMjQ5=
+Mj9mcm9tU2F2ZWRTZWFyY2hJZD1jNzc5YTdiMDBmZTczN2ZiMDg2MjMyNWZk=
+NGRhY2Q2Y2YyMDg5MjFkMmM4YzhmMzY0NDFjMWI4Y2M0OWFkMzYyJmF0X2Nh=
+bmFsPUNSTSZhdF9tZWRpdW09YWxlcnRlcyZhdF9jYW1wYWlnbj1zZWFyY2hf=
+YWxlcnQmYXRfbGluaz1Wb2lyX1N1Z2dlc3Rpb24mYXRfaWRfY29tcHRlPTY1=
+MWQ3YmFiYjc2NTljMDBiMWI0OGQzYyZhdF90eXBlX2VtYWlsaW5nPWVtYWls=
+X2F1dG8mc2lnbmVkUmVjaXBpZW50PWV5SmhiR2NpT2lKdWIyNWxJaXdpZEhs=
+d0lqb2lTbGRVSW4wLmV5SlFURUZEUlVoUFRFUkZVaUk2SWtaSldGUlZVa1Vp=
+ZlEuUExBQ0VIT0xERVIwU0lHTkFUVVJFMEZJWFRVUkU" target=3D"_blank" styl=
 e=3D"text-decoration: none; color: #009db0; cursor: pointer;"><strong style=
 =3D"font-size: 24px; margin-right: 5px;">725=C2=A0=E2=82=AC</strong><span c=
 lass=3D"detail" style=3D"font-size: 11px; margin-left: 5px; font-weight: no=
 rmal;">par mois charges comprises</span></a></td></tr><tr><td style=3D"mso-=
 table-lspace: 0pt; mso-table-rspace: 0pt;"><a href=3D"https://link.bienici.=
 com/lnk/AMcAAKQVviEAAc28NcAAAQedZGYAARpdxNUAAAAAAAfAswBqjeVfsbNX3x6aTFi8sdS=
-FeyVlFwAHYd4/21/We52_uIwYnj5jyK498tHlw/aHR0cHM6Ly93d3cuYmllbmljaS5jb20vYW5u=
-b25jZS9lcmEtMi02MTQzMjQ5Mj9mcm9tU2F2ZWRTZWFyY2hJZD1jNzc5YTdiMDBmZTczN2ZiMDg=
-2MjMyNWZkNGRhY2Q2Y2YyMDg5MjFkMmM4YzhmMzY0NDFjMWI4Y2M0OWFkMzYyJmF0X2NhbmFsPU=
-NSTSZhdF9tZWRpdW09YWxlcnRlcyZhdF9jYW1wYWlnbj1zZWFyY2hfYWxlcnQmYXRfbGluaz1Wb=
-2lyX1N1Z2dlc3Rpb24mYXRfaWRfY29tcHRlPTY1MWQ3YmFiYjc2NTljMDBiMWI0OGQzYyZhdF90=
-eXBlX2VtYWlsaW5nPWVtYWlsX2F1dG8mc2lnbmVkUmVjaXBpZW50PWV5SmhiR2NpT2lKSVV6STF=
-OaUlzSW5SNWNDSTZJa3BYVkNKOS5leUpsYldGcGJDSTZJblJoYTJsbFpHUnBibVV1YldWemMyRn=
-ZkV1JwTG05bVptbGphV0ZzUUdkdFlXbHNMbU52YlNJc0ltbGhkQ0k2TVRjNE56WTROREU1TVgwL=
-jFxa3Y3VlZCYVplWVhGRV81eWlqUnFyNGVVSm14TWloRUlIMXFHRnZQaTg" target=3D"_blan=
+FeyVlFwAHYd4/21/We52_uIwYnj5jyK498tHlw/aHR0cHM6Ly93d3cuYmllbmljaS5jb20vYW5ub25jZS9lcmEtMi02MTQzMjQ5=
+Mj9mcm9tU2F2ZWRTZWFyY2hJZD1jNzc5YTdiMDBmZTczN2ZiMDg2MjMyNWZk=
+NGRhY2Q2Y2YyMDg5MjFkMmM4YzhmMzY0NDFjMWI4Y2M0OWFkMzYyJmF0X2Nh=
+bmFsPUNSTSZhdF9tZWRpdW09YWxlcnRlcyZhdF9jYW1wYWlnbj1zZWFyY2hf=
+YWxlcnQmYXRfbGluaz1Wb2lyX1N1Z2dlc3Rpb24mYXRfaWRfY29tcHRlPTY1=
+MWQ3YmFiYjc2NTljMDBiMWI0OGQzYyZhdF90eXBlX2VtYWlsaW5nPWVtYWls=
+X2F1dG8mc2lnbmVkUmVjaXBpZW50PWV5SmhiR2NpT2lKdWIyNWxJaXdpZEhs=
+d0lqb2lTbGRVSW4wLmV5SlFURUZEUlVoUFRFUkZVaUk2SWtaSldGUlZVa1Vp=
+ZlEuUExBQ0VIT0xERVIwU0lHTkFUVVJFMEZJWFRVUkU" target=3D"_blan=
 k" style=3D"text-decoration: none; color: #009db0; cursor: pointer;"></a></=
 td></tr><tr><td style=3D"mso-table-lspace: 0pt; mso-table-rspace: 0pt;"><ta=
 ble border=3D"0" cellpadding=3D"0" cellspacing=3D"0" width=3D"100%" style=
@@ -730,15 +724,15 @@ so-table-rspace: 0pt; text-align: left; border-collapse: separate;" align=
 =3D"left"><tr><td style=3D"mso-table-lspace: 0pt; mso-table-rspace: 0pt; te=
 xt-align: center; background: #009db0;" align=3D"center"><a href=3D"https:/=
 /link.bienici.com/lnk/AMcAAKQVviEAAc28NcAAAQedZGYAARpdxNUAAAAAAAfAswBqjeVfs=
-bNX3x6aTFi8sdSFeyVlFwAHYd4/22/iE1kMwAviF0cG5BPU_W-Ww/aHR0cHM6Ly93d3cuYmllbm=
-ljaS5jb20vYW5ub25jZS9lcmEtMi02MTQzMjQ5Mj9mcm9tU2F2ZWRTZWFyY2hJZD1jNzc5YTdiM=
-DBmZTczN2ZiMDg2MjMyNWZkNGRhY2Q2Y2YyMDg5MjFkMmM4YzhmMzY0NDFjMWI4Y2M0OWFkMzYy=
-JmF0X2NhbmFsPUNSTSZhdF9tZWRpdW09YWxlcnRlcyZhdF9jYW1wYWlnbj1zZWFyY2hfYWxlcnQ=
-mYXRfbGluaz1Wb2lyX1N1Z2dlc3Rpb24mYXRfaWRfY29tcHRlPTY1MWQ3YmFiYjc2NTljMDBiMW=
-I0OGQzYyZhdF90eXBlX2VtYWlsaW5nPWVtYWlsX2F1dG8mc2lnbmVkUmVjaXBpZW50PWV5SmhiR=
-2NpT2lKSVV6STFOaUlzSW5SNWNDSTZJa3BYVkNKOS5leUpsYldGcGJDSTZJblJoYTJsbFpHUnBi=
-bVV1YldWemMyRnZkV1JwTG05bVptbGphV0ZzUUdkdFlXbHNMbU52YlNJc0ltbGhkQ0k2TVRjNE5=
-6WTROREU1TVgwLjFxa3Y3VlZCYVplWVhGRV81eWlqUnFyNGVVSm14TWloRUlIMXFHRnZQaTg" t=
+bNX3x6aTFi8sdSFeyVlFwAHYd4/22/iE1kMwAviF0cG5BPU_W-Ww/aHR0cHM6Ly93d3cuYmllbmljaS5jb20vYW5ub25jZS9lcmEtMi02MTQzMjQ5=
+Mj9mcm9tU2F2ZWRTZWFyY2hJZD1jNzc5YTdiMDBmZTczN2ZiMDg2MjMyNWZk=
+NGRhY2Q2Y2YyMDg5MjFkMmM4YzhmMzY0NDFjMWI4Y2M0OWFkMzYyJmF0X2Nh=
+bmFsPUNSTSZhdF9tZWRpdW09YWxlcnRlcyZhdF9jYW1wYWlnbj1zZWFyY2hf=
+YWxlcnQmYXRfbGluaz1Wb2lyX1N1Z2dlc3Rpb24mYXRfaWRfY29tcHRlPTY1=
+MWQ3YmFiYjc2NTljMDBiMWI0OGQzYyZhdF90eXBlX2VtYWlsaW5nPWVtYWls=
+X2F1dG8mc2lnbmVkUmVjaXBpZW50PWV5SmhiR2NpT2lKdWIyNWxJaXdpZEhs=
+d0lqb2lTbGRVSW4wLmV5SlFURUZEUlVoUFRFUkZVaUk2SWtaSldGUlZVa1Vp=
+ZlEuUExBQ0VIT0xERVIwU0lHTkFUVVJFMEZJWFRVUkU" t=
 arget=3D"_blank" style=3D"text-decoration: none; cursor: pointer; padding-l=
 eft: 20px; padding-right: 20px; padding-top: 6px; padding-bottom: 6px; bord=
 er-width: 1px; border-style: solid; display: block; font-family: 'Roboto-Co=
@@ -751,16 +745,15 @@ or: #fff;">Voir l=E2=80=99annonce<span class=3D"arrow" style=3D"font-size: =
 ace: 0pt; font-family: 'Roboto-Condensed', arial; font-weight: bold; color:=
  #8b9ea7; padding-top: 10px; font-size: 10px; text-transform: uppercase;"><=
 a href=3D"https://link.bienici.com/lnk/AMcAAKQVviEAAc28NcAAAQedZGYAARpdxNUA=
-AAAAAAfAswBqjeVfsbNX3x6aTFi8sdSFeyVlFwAHYd4/23/iY5uAq7wrmqVqhzho1_k1g/aHR0c=
-HM6Ly93d3cuYmllbmljaS5jb20vYW5ub25jZS9lcmEtMi02MTQzMjQ5Mj9mcm9tU2F2ZWRTZWFy=
-Y2hJZD1jNzc5YTdiMDBmZTczN2ZiMDg2MjMyNWZkNGRhY2Q2Y2YyMDg5MjFkMmM4YzhmMzY0NDF=
-jMWI4Y2M0OWFkMzYyJmF0X2NhbmFsPUNSTSZhdF9tZWRpdW09YWxlcnRlcyZhdF9jYW1wYWlnbj=
-1zZWFyY2hfYWxlcnQmYXRfbGluaz1Wb2lyX1N1Z2dlc3Rpb24mYXRfaWRfY29tcHRlPTY1MWQ3Y=
-mFiYjc2NTljMDBiMWI0OGQzYyZhdF90eXBlX2VtYWlsaW5nPWVtYWlsX2F1dG8mc2lnbmVkUmVj=
-aXBpZW50PWV5SmhiR2NpT2lKSVV6STFOaUlzSW5SNWNDSTZJa3BYVkNKOS5leUpsYldGcGJDSTZ=
-JblJoYTJsbFpHUnBibVV1YldWemMyRnZkV1JwTG05bVptbGphV0ZzUUdkdFlXbHNMbU52YlNJc0=
-ltbGhkQ0k2TVRjNE56WTROREU1TVgwLjFxa3Y3VlZCYVplWVhGRV81eWlqUnFyNGVVSm14TWloR=
-UlIMXFHRnZQaTg" target=3D"_blank" style=3D"text-decoration: none; cursor: p=
+AAAAAAfAswBqjeVfsbNX3x6aTFi8sdSFeyVlFwAHYd4/23/iY5uAq7wrmqVqhzho1_k1g/aHR0cHM6Ly93d3cuYmllbmljaS5jb20vYW5ub25jZS9lcmEtMi02MTQzMjQ5=
+Mj9mcm9tU2F2ZWRTZWFyY2hJZD1jNzc5YTdiMDBmZTczN2ZiMDg2MjMyNWZk=
+NGRhY2Q2Y2YyMDg5MjFkMmM4YzhmMzY0NDFjMWI4Y2M0OWFkMzYyJmF0X2Nh=
+bmFsPUNSTSZhdF9tZWRpdW09YWxlcnRlcyZhdF9jYW1wYWlnbj1zZWFyY2hf=
+YWxlcnQmYXRfbGluaz1Wb2lyX1N1Z2dlc3Rpb24mYXRfaWRfY29tcHRlPTY1=
+MWQ3YmFiYjc2NTljMDBiMWI0OGQzYyZhdF90eXBlX2VtYWlsaW5nPWVtYWls=
+X2F1dG8mc2lnbmVkUmVjaXBpZW50PWV5SmhiR2NpT2lKdWIyNWxJaXdpZEhs=
+d0lqb2lTbGRVSW4wLmV5SlFURUZEUlVoUFRFUkZVaUk2SWtaSldGUlZVa1Vp=
+ZlEuUExBQ0VIT0xERVIwU0lHTkFUVVJFMEZJWFRVUkU" target=3D"_blank" style=3D"text-decoration: none; cursor: p=
 ointer; font-family: 'Roboto-Condensed', arial; font-weight: bold; color: #=
 8b9ea7; padding-top: 10px; font-size: 10px; text-transform: uppercase;">R=
 =C3=89F=C3=89RENCE&nbsp;: 3204</a></td></tr></table></td></tr></table></div=
@@ -770,14 +763,14 @@ ight: 20px; font-family: 'Roboto-Condensed', arial; -webkit-font-smoothing:=
 e; -webkit-text-size-adjust: none;">=C3=80 bient=C3=B4t.<br>L=E2=80=99=C3=
 =A9quipe Bien=E2=80=99ici</p><a href=3D"https://link.bienici.com/lnk/AMcAAK=
 QVviEAAc28NcAAAQedZGYAARpdxNUAAAAAAAfAswBqjeVfsbNX3x6aTFi8sdSFeyVlFwAHYd4/2=
-4/0O5sl018Qy_Bji6TgJoVSg/aHR0cHM6Ly9hZHZlcnRpc2VtZW50LmJpZW5pY2kuY29tL3JlZG=
-lyZWN0L21haWwtcmVudC13NzI4aDkwLTE_cG9zdGFsY29kZXM9RnJhbmNlJmF0X2NhbmFsPUNST=
-SZhdF9tZWRpdW09YWxlcnRlcyZhdF9jYW1wYWlnbj1zZWFyY2hfYWxlcnQmYXRfbGluaz1saWVu=
-X21vdmluZ2EmYXRfaWRfY29tcHRlPTY1MWQ3YmFiYjc2NTljMDBiMWI0OGQzYyZhdF90eXBlX2V=
-tYWlsaW5nPWVtYWlsX2F1dG8mc2lnbmVkUmVjaXBpZW50PWV5SmhiR2NpT2lKSVV6STFOaUlzSW=
-5SNWNDSTZJa3BYVkNKOS5leUpsYldGcGJDSTZJblJoYTJsbFpHUnBibVV1YldWemMyRnZkV1JwT=
-G05bVptbGphV0ZzUUdkdFlXbHNMbU52YlNJc0ltbGhkQ0k2TVRjNE56WTROREU1TVgwLjFxa3Y3=
-VlZCYVplWVhGRV81eWlqUnFyNGVVSm14TWloRUlIMXFHRnZQaTg" target=3D"_blank" clas=
+4/0O5sl018Qy_Bji6TgJoVSg/aHR0cHM6Ly9hZHZlcnRpc2VtZW50LmJpZW5pY2kuY29tL3JlZGlyZWN0L21h=
+aWwtcmVudC13NzI4aDkwLTE_cG9zdGFsY29kZXM9RnJhbmNlJmF0X2NhbmFs=
+PUNSTSZhdF9tZWRpdW09YWxlcnRlcyZhdF9jYW1wYWlnbj1zZWFyY2hfYWxl=
+cnQmYXRfbGluaz1saWVuX21vdmluZ2EmYXRfaWRfY29tcHRlPTY1MWQ3YmFi=
+Yjc2NTljMDBiMWI0OGQzYyZhdF90eXBlX2VtYWlsaW5nPWVtYWlsX2F1dG8m=
+c2lnbmVkUmVjaXBpZW50PWV5SmhiR2NpT2lKdWIyNWxJaXdpZEhsd0lqb2lT=
+bGRVSW4wLmV5SlFURUZEUlVoUFRFUkZVaUk2SWtaSldGUlZVa1VpZlEuUExB=
+Q0VIT0xERVIwU0lHTkFUVVJFMEZJWFRVUkU" target=3D"_blank" clas=
 s=3D"blockBanner" style=3D"text-decoration: none; color: #009db0; cursor: p=
 ointer; margin-top: 10px;"><img width=3D"100%" src=3D"https://advertisement=
 .bienici.com/image/mail-rent-w728h90-1?postalcodes=3DFrance" style=3D"borde=
@@ -789,61 +782,59 @@ d', arial; font-size: 10px; color: #495960; -webkit-font-smoothing: antiali=
 ased;">Vous avez choisi de recevoir les alertes e-mail de Bien=E2=80=99ici.=
 <br>Pour ne plus recevoir d=E2=80=99alerte par e-mail, vous pouvez vous <a =
 href=3D"https://link.bienici.com/lnk/AMcAAKQVviEAAc28NcAAAQedZGYAARpdxNUAAA=
-AAAAfAswBqjeVfsbNX3x6aTFi8sdSFeyVlFwAHYd4/25/ygHKNMWbeYxNeVl_lOMUew/aHR0cHM=
-6Ly93d3cuYmllbmljaS5jb20vZGVzaW5zY3JpcHRpb24tYWxlcnRlLW5vdXZlbGxlLWFubm9uY2=
-UvYzc3OWE3YjAwZmU3MzdmYjA4NjIzMjVmZDRkYWNkNmNmMjA4OTIxZDJjOGM4ZjM2NDQxYzFiO=
-GNjNDlhZDM2Mj9hdF9jYW5hbD1DUk0mYXRfbWVkaXVtPWFsZXJ0ZXMmYXRfY2FtcGFpZ249c2Vh=
-cmNoX2FsZXJ0JmF0X2xpbms9TGllbl9EZXNpbnNjcmlwdGlvbiZhdF9pZF9jb21wdGU9NjUxZDd=
-iYWJiNzY1OWMwMGIxYjQ4ZDNjJmF0X3R5cGVfZW1haWxpbmc9ZW1haWxfYXV0byZzaWduZWRSZW=
-NpcGllbnQ9ZXlKaGJHY2lPaUpJVXpJMU5pSXNJblI1Y0NJNklrcFhWQ0o5LmV5SmxiV0ZwYkNJN=
-kluUmhhMmxsWkdScGJtVXViV1Z6YzJGdmRXUnBMbTltWm1samFXRnNRR2R0WVdsc0xtTnZiU0lz=
-SW1saGRDSTZNVGM0TnpZNE5ERTVNWDAuMXFrdjdWVkJhWmVZWEZFXzV5aWpScXI0ZVVKbXhNaWh=
-FSUgxcUdGdlBpOA" style=3D"cursor: pointer; color: #495960; text-decoration:=
+AAAAfAswBqjeVfsbNX3x6aTFi8sdSFeyVlFwAHYd4/25/ygHKNMWbeYxNeVl_lOMUew/aHR0cHM6Ly93d3cuYmllbmljaS5jb20vZGVzaW5zY3JpcHRpb24tYWxlcnRl=
+LW5vdXZlbGxlLWFubm9uY2UvYzc3OWE3YjAwZmU3MzdmYjA4NjIzMjVmZDRk=
+YWNkNmNmMjA4OTIxZDJjOGM4ZjM2NDQxYzFiOGNjNDlhZDM2Mj9hdF9jYW5h=
+bD1DUk0mYXRfbWVkaXVtPWFsZXJ0ZXMmYXRfY2FtcGFpZ249c2VhcmNoX2Fs=
+ZXJ0JmF0X2xpbms9TGllbl9EZXNpbnNjcmlwdGlvbiZhdF9pZF9jb21wdGU9=
+NjUxZDdiYWJiNzY1OWMwMGIxYjQ4ZDNjJmF0X3R5cGVfZW1haWxpbmc9ZW1h=
+aWxfYXV0byZzaWduZWRSZWNpcGllbnQ9ZXlKaGJHY2lPaUp1YjI1bElpd2lk=
+SGx3SWpvaVNsZFVJbjAuZXlKUVRFRkRSVWhQVEVSRlVpSTZJa1pKV0ZSVlVr=
+VWlmUS5QTEFDRUhPTERFUjBTSUdOQVRVUkUwRklYVFVSRQ" style=3D"cursor: pointer; color: #495960; text-decoration:=
  underline;">d=C3=A9sinscrire</a>.<br>Une question&nbsp;? Contactez-nous&nb=
 sp;:&#032;<a id=3D"mailto" href=3D"mailto:support@bienici.com" style=3D"cur=
 sor: pointer; color: #495960; text-decoration: underline;">support@bienici.=
 com</a><br><br><a class=3D"footer-link" href=3D"https://link.bienici.com/ln=
 k/AMcAAKQVviEAAc28NcAAAQedZGYAARpdxNUAAAAAAAfAswBqjeVfsbNX3x6aTFi8sdSFeyVlF=
-wAHYd4/26/UzIGJkjTIU84euyWgBvMKQ/aHR0cHM6Ly93d3cuYmllbmljaS5jb20vaW5mb3JtYX=
-Rpb25zLWxlZ2FsZXM_YXRfY2FuYWw9Q1JNJmF0X21lZGl1bT1hbGVydGVzJmF0X2NhbXBhaWduP=
-XNlYXJjaF9hbGVydCZhdF9saW5rPUNHVSZhdF9pZF9jb21wdGU9NjUxZDdiYWJiNzY1OWMwMGIx=
-YjQ4ZDNjJmF0X3R5cGVfZW1haWxpbmc9ZW1haWxfYXV0byZzaWduZWRSZWNpcGllbnQ9ZXlKaGJ=
-HY2lPaUpJVXpJMU5pSXNJblI1Y0NJNklrcFhWQ0o5LmV5SmxiV0ZwYkNJNkluUmhhMmxsWkdScG=
-JtVXViV1Z6YzJGdmRXUnBMbTltWm1samFXRnNRR2R0WVdsc0xtTnZiU0lzSW1saGRDSTZNVGM0T=
-npZNE5ERTVNWDAuMXFrdjdWVkJhWmVZWEZFXzV5aWpScXI0ZVVKbXhNaWhFSUgxcUdGdlBpOA" =
+wAHYd4/26/UzIGJkjTIU84euyWgBvMKQ/aHR0cHM6Ly93d3cuYmllbmljaS5jb20vaW5mb3JtYXRpb25zLWxlZ2FsZXM_=
+YXRfY2FuYWw9Q1JNJmF0X21lZGl1bT1hbGVydGVzJmF0X2NhbXBhaWduPXNl=
+YXJjaF9hbGVydCZhdF9saW5rPUNHVSZhdF9pZF9jb21wdGU9NjUxZDdiYWJi=
+NzY1OWMwMGIxYjQ4ZDNjJmF0X3R5cGVfZW1haWxpbmc9ZW1haWxfYXV0byZz=
+aWduZWRSZWNpcGllbnQ9ZXlKaGJHY2lPaUp1YjI1bElpd2lkSGx3SWpvaVNs=
+ZFVJbjAuZXlKUVRFRkRSVWhQVEVSRlVpSTZJa1pKV0ZSVlVrVWlmUS5QTEFD=
+RUhPTERFUjBTSUdOQVRVUkUwRklYVFVSRQ" =
 style=3D"cursor: pointer; display: inline-block; padding: 0 10px; color: #4=
 95960; text-decoration: underline;">Mentions l=C3=A9gales et Conditions G=
 =C3=A9n=C3=A9rales d=E2=80=99Utilisation</a><a class=3D"footer-link" href=
 =3D"https://link.bienici.com/lnk/AMcAAKQVviEAAc28NcAAAQedZGYAARpdxNUAAAAAAA=
-fAswBqjeVfsbNX3x6aTFi8sdSFeyVlFwAHYd4/27/P0XjSH2qDpYjvhUoco78ow/aHR0cHM6Ly9=
-3d3cuYmllbmljaS5jb20vcG9saXRpcXVlLWRlLWNvbmZpZGVudGlhbGl0ZT9hdF9jYW5hbD1DUk=
-0mYXRfbWVkaXVtPWFsZXJ0ZXMmYXRfY2FtcGFpZ249c2VhcmNoX2FsZXJ0JmF0X2xpbms9TGllb=
-l9Qb2xpdGlxdWVfQ29uZmlkZW50aWFsaXRlJmF0X2lkX2NvbXB0ZT02NTFkN2JhYmI3NjU5YzAw=
-YjFiNDhkM2MmYXRfdHlwZV9lbWFpbGluZz1lbWFpbF9hdXRvJnNpZ25lZFJlY2lwaWVudD1leUp=
-oYkdjaU9pSklVekkxTmlJc0luUjVjQ0k2SWtwWFZDSjkuZXlKbGJXRnBiQ0k2SW5SaGEybGxaR1=
-JwYm1VdWJXVnpjMkZ2ZFdScExtOW1abWxqYVdGc1FHZHRZV2xzTG1OdmJTSXNJbWxoZENJNk1UY=
-zROelk0TkRFNU1YMC4xcWt2N1ZWQmFaZVlYRkVfNXlpalJxcjRlVUpteE1paEVJSDFxR0Z2UGk4=
-" style=3D"cursor: pointer; display: inline-block; padding: 0 10px; color: =
+fAswBqjeVfsbNX3x6aTFi8sdSFeyVlFwAHYd4/27/P0XjSH2qDpYjvhUoco78ow/aHR0cHM6Ly93d3cuYmllbmljaS5jb20vcG9saXRpcXVlLWRlLWNvbmZpZGVu=
+dGlhbGl0ZT9hdF9jYW5hbD1DUk0mYXRfbWVkaXVtPWFsZXJ0ZXMmYXRfY2Ft=
+cGFpZ249c2VhcmNoX2FsZXJ0JmF0X2xpbms9TGllbl9Qb2xpdGlxdWVfQ29u=
+ZmlkZW50aWFsaXRlJmF0X2lkX2NvbXB0ZT02NTFkN2JhYmI3NjU5YzAwYjFi=
+NDhkM2MmYXRfdHlwZV9lbWFpbGluZz1lbWFpbF9hdXRvJnNpZ25lZFJlY2lw=
+aWVudD1leUpoYkdjaU9pSnViMjVsSWl3aWRIbHdJam9pU2xkVUluMC5leUpR=
+VEVGRFJVaFBURVJGVWlJNklrWkpXRlJWVWtVaWZRLlBMQUNFSE9MREVSMFNJ=
+R05BVFVSRTBGSVhUVVJF" style=3D"cursor: pointer; display: inline-block; padding: 0 10px; color: =
 #495960; text-decoration: underline;">Politique de confidentialit&eacute;</=
 a></p></div></td></tr></table></td></tr></table></center><br/><a style=3D"f=
 ont-family: Arial, sans-serif;" href=3D"https://link.bienici.com/lnk/AMcAAK=
 QVviEAAc28NcAAAQedZGYAARpdxNUAAAAAAAfAswBqjeVfsbNX3x6aTFi8sdSFeyVlFwAHYd4/0=
-/nUtYNOKZTrp1YvLv7nIn5w/aHR0cHM6Ly93d3cuYmllbmljaS5jb20vP2F0X2NhbmFsPUNSTSZ=
-hdF9tZWRpdW09YWxlcnRlcyZhdF9jYW1wYWlnbj1zZWFyY2hfYWxlcnQmYXRfbGluaz1MaWVuX0=
-hQJmF0X2lkX2NvbXB0ZT02NTFkN2JhYmI3NjU5YzAwYjFiNDhkM2MmYXRfdHlwZV9lbWFpbGluZ=
-z1lbWFpbF9hdXRvJnNpZ25lZFJlY2lwaWVudD1leUpoYkdjaU9pSklVekkxTmlJc0luUjVjQ0k2=
-SWtwWFZDSjkuZXlKbGJXRnBiQ0k2SW5SaGEybGxaR1JwYm1VdWJXVnpjMkZ2ZFdScExtOW1abWx=
-qYVdGc1FHZHRZV2xzTG1OdmJTSXNJbWxoZENJNk1UYzROelk0TkRFNU1YMC4xcWt2N1ZWQmFaZV=
-lYRkVfNXlpalJxcjRlVUpteE1paEVJSDFxR0Z2UGk4?b=3D1">&#8203;</a><a style=3D"te=
+/nUtYNOKZTrp1YvLv7nIn5w/aHR0cHM6Ly93d3cuYmllbmljaS5jb20vP2F0X2NhbmFsPUNSTSZhdF9tZWRp=
+dW09YWxlcnRlcyZhdF9jYW1wYWlnbj1zZWFyY2hfYWxlcnQmYXRfbGluaz1M=
+aWVuX0hQJmF0X2lkX2NvbXB0ZT02NTFkN2JhYmI3NjU5YzAwYjFiNDhkM2Mm=
+YXRfdHlwZV9lbWFpbGluZz1lbWFpbF9hdXRvJnNpZ25lZFJlY2lwaWVudD1l=
+eUpoYkdjaU9pSnViMjVsSWl3aWRIbHdJam9pU2xkVUluMC5leUpRVEVGRFJV=
+aFBURVJGVWlJNklrWkpXRlJWVWtVaWZRLlBMQUNFSE9MREVSMFNJR05BVFVS=
+RTBGSVhUVVJF?b=3D1">&#8203;</a><a style=3D"te=
 xt-decoration: none; display: inline-block;" href=3D"https://link.bienici.c=
 om/lnk/AMcAAKQVviEAAc28NcAAAQedZGYAARpdxNUAAAAAAAfAswBqjeVfsbNX3x6aTFi8sdSF=
-eyVlFwAHYd4/0/nUtYNOKZTrp1YvLv7nIn5w/aHR0cHM6Ly93d3cuYmllbmljaS5jb20vP2F0X2=
-NhbmFsPUNSTSZhdF9tZWRpdW09YWxlcnRlcyZhdF9jYW1wYWlnbj1zZWFyY2hfYWxlcnQmYXRfb=
-Gluaz1MaWVuX0hQJmF0X2lkX2NvbXB0ZT02NTFkN2JhYmI3NjU5YzAwYjFiNDhkM2MmYXRfdHlw=
-ZV9lbWFpbGluZz1lbWFpbF9hdXRvJnNpZ25lZFJlY2lwaWVudD1leUpoYkdjaU9pSklVekkxTml=
-Jc0luUjVjQ0k2SWtwWFZDSjkuZXlKbGJXRnBiQ0k2SW5SaGEybGxaR1JwYm1VdWJXVnpjMkZ2ZF=
-dScExtOW1abWxqYVdGc1FHZHRZV2xzTG1OdmJTSXNJbWxoZENJNk1UYzROelk0TkRFNU1YMC4xc=
-Wt2N1ZWQmFaZVlYRkVfNXlpalJxcjRlVUpteE1paEVJSDFxR0Z2UGk4?b=3D3">
+eyVlFwAHYd4/0/nUtYNOKZTrp1YvLv7nIn5w/aHR0cHM6Ly93d3cuYmllbmljaS5jb20vP2F0X2NhbmFsPUNSTSZhdF9tZWRp=
+dW09YWxlcnRlcyZhdF9jYW1wYWlnbj1zZWFyY2hfYWxlcnQmYXRfbGluaz1M=
+aWVuX0hQJmF0X2lkX2NvbXB0ZT02NTFkN2JhYmI3NjU5YzAwYjFiNDhkM2Mm=
+YXRfdHlwZV9lbWFpbGluZz1lbWFpbF9hdXRvJnNpZ25lZFJlY2lwaWVudD1l=
+eUpoYkdjaU9pSnViMjVsSWl3aWRIbHdJam9pU2xkVUluMC5leUpRVEVGRFJV=
+aFBURVJGVWlJNklrWkpXRlJWVWtVaWZRLlBMQUNFSE9MREVSMFNJR05BVFVS=
+RTBGSVhUVVJF?b=3D3">
 <img src=3D"https://link.bienici.com/oo/AMcAAKQVviEAAc28NcAAAQedZGYAARpdxNU=
 AAAAAAAfAswBqjeVfsbNX3x6aTFi8sdSFeyVlFwAHYd4/be6a1664/e.gif" height=3D"1" w=
 idth=3D"1" alt=3D"" border=3D"0" style=3D"height:1px;width:1px;border:0;"/>
