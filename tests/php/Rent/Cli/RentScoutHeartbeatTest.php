@@ -10,6 +10,7 @@ use Scout\Rent\Cli\RentScout;
 use Scout\Rent\Store\Store;
 use Scout\Core\Notify\ConsoleChannel;
 use Scout\Core\Notify\Notifier;
+use Scout\Core\Notify\NotificationKind;
 use Scout\Tests\Support\DeliveringChannel;
 
 /**
@@ -338,10 +339,15 @@ final class RentScoutHeartbeatTest extends TestCase
     {
         // A startup refusal reaches nobody: the process exits before any channel is used, and under
         // Docker its stderr scrolls past in a log nobody is reading.
+        //
+        // A DELIVERING channel, since round 5: the note is now cleared only once a beat has actually
+        // been delivered, and `console` alone does not count as reaching a recipient. Passing none
+        // here used to pass because the old code cleared unconditionally — which is precisely the
+        // defect (a beat that reached nobody still consumed the note).
         $root = $this->tempRoot();
         file_put_contents($root . '/state/rent-last-refusal.txt', '2026-08-21T22:00:00+02:00 — canal ntfy sans RENT_NTFY_TOPIC');
 
-        $r = $this->watchIn($root);
+        $r = $this->watchIn($root, $this->delivering());
 
         self::assertStringContainsString('refus au démarrage précédent', $r['out']);
         self::assertStringContainsString('ntfy', $r['out']);
@@ -425,6 +431,39 @@ final class RentScoutHeartbeatTest extends TestCase
             'configuration illisible',
             $r['out'],
             'and the refusal is still reported — read before the bootstrap that would block it',
+        );
+    }
+
+    /**
+     * A BEAT THAT DOES NOT DELIVER MUST NOT CONSUME THE NOTE (round-5 panel, 2026-08-31).
+     *
+     * Round 4 moved the read from startup into the beat and claimed that made the note "survive
+     * until a beat actually carries it". It survived until a beat was ATTEMPTED: `beat()`
+     * deliberately does not write the heartbeat marker when delivery fails, so the beat RETRIES —
+     * and the note had already been unlinked, so the retry carried nothing.
+     *
+     * The correlation is the whole point rather than a corner case: the commonest startup refusal
+     * there is IS a channel misconfiguration — this repo's own example note reads `canal ntfy sans
+     * RENT_NTFY_TOPIC` — so the beat that ought to carry the note is precisely the one most likely
+     * to fail.
+     */
+    public function testAnUndeliveredBeatLeavesTheRefusalNoteForTheNextOne(): void
+    {
+        $root = $this->tempRoot();
+        file_put_contents($root . '/state/rent-last-refusal.txt', '2026-08-21T22:00:00+02:00 — canal ntfy sans RENT_NTFY_TOPIC');
+
+        $channel = $this->delivering();
+        $channel->refuses = [NotificationKind::HEARTBEAT];
+
+        $this->watchIn($root, $channel);
+
+        self::assertFileExists(
+            $root . '/state/rent-last-refusal.txt',
+            'nothing was delivered, so the note is still owed and must still be on disk',
+        );
+        self::assertFileDoesNotExist(
+            $root . '/state/rent-heartbeat.txt',
+            'and the beat marker is not written either — the note and the marker rise and fall together',
         );
     }
 

@@ -1274,7 +1274,7 @@ run_sabotage "a delivered digest entry stops counting as an announcement" \
 
 run_sabotage "the beat's notified count goes back to a hard-coded 0 (constant at any traffic level)" \
   src/php/Rent/Cli/RentScout.php \
-  's%\$this->beat(\$notifier, \$store, \$passes, \$notified, \$this->takeLastRefusal(), \$watched, \$failedPasses);%\$this->beat(\$notifier, \$store, \$passes, 0, \$this->takeLastRefusal(), \$watched, \$failedPasses);%'
+  's%\$this->beat(\$notifier, \$store, \$passes, \$notified, \$this->pendingRefusal(), \$watched, \$failedPasses);%\$this->beat(\$notifier, \$store, \$passes, 0, \$this->pendingRefusal(), \$watched, \$failedPasses);%'
 
 run_sabotage "the pass result is discarded again (nothing feeds the beat's count)" \
   src/php/Rent/Cli/RentScout.php \

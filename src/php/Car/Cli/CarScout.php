@@ -263,17 +263,23 @@ final readonly class CarScout
 
         $this->line(sprintf('car-watch · surveillance active · %d source(s) · toutes les %d min ± %d (Q37)%s', count($sources), (int) (Pacer::PASS_INTERVAL_SECONDS / 60), (int) (Pacer::JITTER_SECONDS / 60), $maxPasses === null ? '' : ' · SCOUT_MAX_PASSES=' . $maxPasses));
 
-        // CONSUMED WHERE IT IS REPORTED (round-4 panel, 2026-08-31). This used to read and clear the
-        // note at startup and hold it in `$refusal`; the note then lived only in memory, so a process
-        // that died before the first due beat lost it. `takeLastRefusal()` reads AND clears, so
-        // calling it inside the beat is what makes the note survive on the mounted volume until a
-        // beat actually carries it. Same fix as the rent side, which had the mirror defect.
+        // CONSUMED WHERE IT IS REPORTED, AND ONLY ONCE IT IS DELIVERED. Round 4 stopped the note
+        // being read and cleared at startup into a variable, where a process dying before the first
+        // due beat lost it. Round 5 then found that reading-and-clearing inside the beat still
+        // consumed it on COMPOSITION: the heartbeat marker is deliberately not written when delivery
+        // fails so the beat retries, and the retry then carried nothing. It is read here and cleared
+        // in the delivered branch, on the same all-or-nothing footing as the marker.
         $failedPasses = 0;
         $beat = function () use (&$passes, &$notified, &$failedPasses, $sources, $notifier, $formatter): void {
             $health = array_map(fn (VehicleSource $s) => $s->health($this->now()), $sources);
-            $n = $formatter->heartbeat($passes, $notified, $health, $this->now(), $this->takeLastRefusal(), $failedPasses);
+            $n = $formatter->heartbeat($passes, $notified, $health, $this->now(), $this->pendingRefusal(), $failedPasses);
             if ($notifier->delivered($notifier->send($n))) {
                 @file_put_contents($this->stateFile('car-heartbeat.txt'), $this->now());
+                // Consumed on DELIVERY, not on composition — the marker above is deliberately not
+                // written when delivery fails so the beat retries, and a note already unlinked would
+                // make that retry carry nothing. The commonest startup refusal is a channel
+                // misconfiguration, so this is the correlated case, not a corner one.
+                $this->clearLastRefusal();
             }
         };
         if ($heartbeat->isDue($this->lastHeartbeat(), $this->now())) {
@@ -600,12 +606,10 @@ final readonly class CarScout
         return $this->fail($text);
     }
 
-    private function takeLastRefusal(): ?string
+    /** Cleared only once a beat has DELIVERED — see the beat closure, and the rent twin. */
+    private function clearLastRefusal(): void
     {
-        $note = $this->pendingRefusal();
         @unlink($this->stateFile('car-last-refusal.txt'));
-
-        return $note;
     }
 
     /** The pending note WITHOUT consuming it — `doctor` reports, the heartbeat consumes. */

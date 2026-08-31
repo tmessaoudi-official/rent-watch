@@ -8,6 +8,7 @@ use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 use Scout\Cli\Scout;
 use Scout\Car\Cli\CarScout;
+use Scout\Core\Notify\Notification;
 use Scout\Core\Notify\NotificationKind;
 use Scout\Core\Notify\Notifier;
 use Scout\Tests\Car\CarRecordingChannel;
@@ -326,11 +327,24 @@ final class CarScoutTest extends TestCase
 
             $seed = $this->scout(['--domain=car', 'run', '--once', '--seed', '--source=paruvendu']);
             self::assertSame(0, $seed['code'], $seed['err']);
-            $r = $this->scout(['--domain=car', 'run', '--watch', '--source=paruvendu']);
+            // A DELIVERING channel, since round 5: the note is cleared only once a beat has actually
+            // been DELIVERED, and `console` alone reaches no recipient. Passing none used to pass
+            // because the old code cleared unconditionally — which is the defect itself, a beat that
+            // reached nobody still consuming the note.
+            $channel = new CarRecordingChannel();
+            $this->scout(['--domain=car', 'run', '--watch', '--source=paruvendu'], $channel);
 
-            self::assertStringContainsString('démarrage précédent refusé', $r['out'], 'the beat reports it');
-            self::assertStringContainsString('seen-set', $r['out']);
-            self::assertFileDoesNotExist($note, 'reported, therefore cleared');
+            // Asserted on the CHANNEL, not on stdout: passing a recipient-reaching double replaces
+            // the console one, so the beat is delivered rather than printed — which is the whole
+            // point of the case.
+            $reasons = implode(' | ', array_merge(...array_map(
+                static fn (Notification $n): array => $n->reasons,
+                array_values(array_filter($channel->sent, static fn (Notification $n): bool => $n->kind === NotificationKind::HEARTBEAT)),
+            )));
+
+            self::assertStringContainsString('démarrage précédent refusé', $reasons, 'the beat reports it');
+            self::assertStringContainsString('seen-set', $reasons);
+            self::assertFileDoesNotExist($note, 'reported AND delivered, therefore cleared');
         } finally {
             putenv('SCOUT_MAX_PASSES');
         }

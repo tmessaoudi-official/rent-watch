@@ -762,12 +762,12 @@ final readonly class RentScout
         // a container crash-looping all night on a bad config, fixed eleven hours later, announced
         // the outage to nobody.
         //
-        // `takeLastRefusal()` reads AND clears, so calling it only at a beat is also what makes the
-        // note survive a process that dies before the first beat is due — carrying it in a variable
-        // would not.
+        // Read here and CLEARED only once the beat has delivered ({@see clearLastRefusal()}), so the
+        // note survives both a process that dies before the first beat is due and a beat whose
+        // channel is the very thing the refusal was about.
         if ($heartbeat->isDue($this->lastHeartbeat(), $this->now())) {
             // Genuinely zero here: no pass has run yet in this process.
-            $this->beat($notifier, $store, $passes, $notified, $this->takeLastRefusal(), $watched);
+            $this->beat($notifier, $store, $passes, $notified, $this->pendingRefusal(), $watched);
         }
 
         // Before the first pass, deliberately. A backlog left undelivered when the container was
@@ -812,10 +812,10 @@ final readonly class RentScout
                     // can replace the diagnosis is worse than one that is late.
                     try {
                         if ($heartbeat->isDue($this->lastHeartbeat(), $this->now())) {
-                            // `takeLastRefusal()`, not `null`: the startup beat only fires on a cold
+                            // `pendingRefusal()`, not `null`: the startup beat only fires on a cold
                             // start or past the interval, so on every other restart THIS is the first
                             // beat there is and the note has nowhere else to be reported.
-                            $this->beat($notifier, $store, $passes, $notified, $this->takeLastRefusal(), $watched, $failedPasses);
+                            $this->beat($notifier, $store, $passes, $notified, $this->pendingRefusal(), $watched, $failedPasses);
                         }
                     } catch (\Throwable $beatFailure) {
                         $this->warn('battement de cœur non émis : ' . Redact::text($beatFailure->getMessage()));
@@ -1899,6 +1899,20 @@ final readonly class RentScout
 
         if ($notifier->delivered($failures)) {
             @file_put_contents($this->stateFile('rent-heartbeat.txt'), $now . "\n");
+
+            // THE NOTE IS CONSUMED ON DELIVERY, NOT ON COMPOSITION (round-5 panel, 2026-08-31).
+            // Round 4 moved the read from startup into the beat and claimed that made it "survive
+            // until a beat actually carries it". It survived until a beat was ATTEMPTED: the marker
+            // above is deliberately not written when delivery fails, so the beat RETRIES — but the
+            // note had already been unlinked, so the retry carried nothing and the refusal was lost
+            // for good.
+            //
+            // The correlation is the whole point rather than a corner case: the commonest startup
+            // refusal there is IS a channel misconfiguration (this repo's own example note reads
+            // `canal ntfy sans RENT_NTFY_TOPIC`), so the beat that ought to carry the note is
+            // precisely the beat most likely to fail. Consuming it here puts it on the same
+            // all-or-nothing footing as the marker beside it.
+            $this->clearLastRefusal();
         }
     }
 
@@ -2640,12 +2654,13 @@ final readonly class RentScout
     }
 
     /** The previous startup refusal, removed as it is read so it is reported exactly once. */
-    private function takeLastRefusal(): ?string
+    /**
+     * Cleared only once a beat has DELIVERED — see the call site. Kept separate from
+     * {@see pendingRefusal()} so that reading the note and consuming it are two decisions.
+     */
+    private function clearLastRefusal(): void
     {
-        $note = $this->pendingRefusal();
         @unlink($this->stateFile('rent-last-refusal.txt'));
-
-        return $note;
     }
 
     /** The pending note WITHOUT consuming it — `doctor` reports, the heartbeat consumes. */
