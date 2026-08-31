@@ -159,6 +159,48 @@ final class PapFixtureTest extends TestCase
         self::assertNull($listing->postcode, 'a department is not a postcode and must never be widened into one');
     }
 
+    /**
+     * A CONFIGURED PATTERN THAT MATCHES NOTHING AT ALL IS A TEMPLATE CHANGE, AND IT IS NOW SAID OUT
+     * LOUD (Track 1h, health half).
+     *
+     * The ownership rule always behaved correctly — a configured pattern that misses yields `null`,
+     * never the generic scan — but NOTHING COUNTED THE MISSES. So when PAP moved its rooms out of
+     * the title line on 2026-08-28, every row stored a null surface and null rooms for four days,
+     * 19 of them were notified as MATCH (a null passes `min_surface_m2` by hard rule 9), and
+     * `doctor` said `ok` throughout. It was found by querying the production database, not by any
+     * signal the tool emitted — which is hard rule 2 one layer in: the CARDS still parsed, so
+     * `item_count` never moved.
+     *
+     * 100% of at least three, and both halves matter. The shipped patterns miss NOTHING here. The
+     * old postcode-anchored ones miss on the two new-template captures and not on the old ones —
+     * a PARTIAL miss, which is ordinary and must NOT raise anything, because a portal's own copy
+     * varies and `commune_pattern` legitimately finds nothing on a card that states no commune.
+     */
+    public function testAPatternThatMissesEveryCardIsReportedWhileAPartialMissIsNot(): void
+    {
+        $shipped = $this->source();
+        $shipped->fetch();
+
+        self::assertSame([], $shipped->patternMisses()->total(), 'the shipped patterns read every capture');
+
+        // The patterns as they stood on 2026-08-28, against the same four captures: two new-template
+        // ones miss, two old-template ones do not.
+        $stale = $this->source([
+            'surface_pattern' => '~\(\d{5}\)\h*\n\h*([\d.,]+)\h*m²~u',
+            'rooms_pattern' => '~^[^\n]*?(\d+)\h*pi[eè]ces?[^\n]*\n[^\n]*\(\d{5}\)~mu',
+        ]);
+        $stale->fetch();
+        $counts = $stale->patternMisses()->counts();
+
+        self::assertSame(2, $counts['surface_pattern']['misses'], 'the two new-template captures miss');
+        self::assertSame(4, $counts['surface_pattern']['calls']);
+        self::assertSame(
+            [],
+            $stale->patternMisses()->total(),
+            'a PARTIAL miss raises nothing — a portal\'s copy varies, and crying wolf is how a signal gets ignored',
+        );
+    }
+
     public function testTheCardsOwnFactsBeatTheSearchCriteriaQuotedAboveThem(): void
     {
         $listing = $this->byCommune()['Milly-la-Forêt'];
@@ -276,17 +318,34 @@ final class PapFixtureTest extends TestCase
     {
         $this->dbPath ??= sys_get_temp_dir() . '/rentwatch-pap-' . bin2hex(random_bytes(8)) . '.sqlite3';
 
+        return $this->source()->fetch();
+    }
+
+    /**
+     * The shipped `pap` source, optionally with some `params` replaced — used to run the patterns as
+     * they stood before a fix against the captures that broke them.
+     *
+     * @param array<string, string> $paramOverrides
+     */
+    private function source(array $paramOverrides = []): EmailAlertSource
+    {
+        $this->dbPath ??= sys_get_temp_dir() . '/rentwatch-pap-' . bin2hex(random_bytes(8)) . '.sqlite3';
+
         $definition = ConfigLoader::loadSources(self::ROOT . '/config/rent/sources.json')['pap'];
         $criteria = ConfigLoader::loadCriteria(self::ROOT . '/config/rent/criteria.json');
 
-        $source = new EmailAlertSource(
+        if ($paramOverrides !== []) {
+            $fields = get_object_vars($definition);
+            $fields['params'] = $paramOverrides + $definition->params;
+            $definition = new \Scout\Rent\Config\SourceDefinition(...$fields);
+        }
+
+        return new EmailAlertSource(
             $definition,
             Store::open($this->dbPath),
             new FileMailbox(self::ROOT . '/tests/fixtures/rent/pap'),
             $criteria->communeLabels,
         );
-
-        return $source->fetch();
     }
 
     /** @return array<string, RawListing> keyed by commune, in fetch order */

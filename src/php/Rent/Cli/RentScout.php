@@ -404,6 +404,27 @@ final readonly class RentScout
                 $durationMs,
                 $note,
             ));
+
+            // THE PER-PATTERN MISS COUNTS (Track 1h). Printed only when something actually missed,
+            // so a healthy source stays one line: a table that prints four zero rows per source is
+            // a table nobody reads, and this exists to be noticed. A PARTIAL miss rate does not
+            // reach `health()` — which only speaks at 100% — but it is the early warning that a
+            // portal is drifting, and `doctor` is where an operator goes to look.
+            if ($source instanceof EmailAlertSource) {
+                foreach ($source->patternMisses()->counts() as $key => $c) {
+                    if ($c['misses'] === 0) {
+                        continue;
+                    }
+
+                    $this->line(sprintf(
+                        '                     %-18s %d/%d carte(s) sans résultat%s',
+                        $key,
+                        $c['misses'],
+                        $c['calls'],
+                        $c['misses'] === $c['calls'] ? '  ← AUCUNE : gabarit changé ?' : '',
+                    ));
+                }
+            }
         }
 
         return $problems > 0 ? 1 : 0;

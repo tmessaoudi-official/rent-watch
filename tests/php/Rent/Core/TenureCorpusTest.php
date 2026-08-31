@@ -523,7 +523,12 @@ final class TenureCorpusTest extends TestCase
             // IndexSize (2026-08-29): the one mutable cell a readonly SitemapVehicleSource holds —
             // how many lots its index listed last time, written by index() and read by health.
             // A counter whose update IS its mechanism, never handed to a caller as a result.
-            ['ImapMailbox', 'IndexSize', 'Pacer', 'Reader', 'WatchLoop'],
+            // PatternMissLog (2026-08-31, Track 1h): how often each CONFIGURED positional pattern
+            // found nothing this pass. The same shape as IndexSize — a counter whose update IS its
+            // mechanism, held by a `final readonly` adapter that could not otherwise accumulate
+            // anything, and read only by `health()` and `doctor`. It carries no verdict: nothing
+            // in it can change what a listing was judged to be.
+            ['ImapMailbox', 'IndexSize', 'Pacer', 'PatternMissLog', 'Reader', 'WatchLoop'],
             $exempt,
             'the MutableByDesign set changed. Every entry must be a non-value-object whose mutation '
             . 'IS its mechanism and which is never handed to a caller as a result — argue it here',

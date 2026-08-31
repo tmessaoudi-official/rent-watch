@@ -885,6 +885,36 @@ final class ConfigTest extends TestCase
     /** @return iterable<string, array{string, string, bool, string}> */
     public static function exclusionCases(): iterable
     {
+        // COLIVING SPELLS ITSELF THREE WAYS, and `\bcoliving\b` caught only one (Track 1i).
+        // `Co-living - grande suite parentale coeur de ville` was a real NOTIFIED MATCH on
+        // 2026-08-30: a room in a shared flat, passing every numeric filter because it advertises
+        // the whole flat's size. Trialled over all 1 905 stored listings before shipping — the
+        // repo's own rule for a pattern change — the widened form catches exactly one more row,
+        // that one, and loses none.
+        yield 'a hyphenated coliving room is excluded' => [
+            'Co-living - grande suite parentale coeur de ville',
+            'Belle suite dans un appartement partage.',
+            true,
+            'the real notified MATCH of 2026-08-30 that `\bcoliving\b` could not see',
+        ];
+        yield 'a spaced coliving room is excluded' => [
+            'Co living maison partagee',
+            'Chambre dans une maison partagee.',
+            true,
+            'the same word with a space instead of a hyphen',
+        ];
+        yield 'the unhyphenated spelling still fires' => [
+            'Coliving Paris 15e',
+            'Chambre en coliving.',
+            true,
+            'the widened pattern must not lose what the narrow one caught',
+        ];
+        yield 'an ordinary flat near a place called Colivia is not excluded' => [
+            'T4 Sartrouville 85m2',
+            'Proche du parc, calme, lumineux. Aucun rapport avec la colocation.',
+            true,
+            'colocation still fires — this case exists to keep the two patterns distinguishable',
+        ];
         yield 'fitted kitchen is not a furnished let' => [
             'T4 Sartrouville 85m2',
             'Cuisine équipée et meublée, séjour lumineux.',

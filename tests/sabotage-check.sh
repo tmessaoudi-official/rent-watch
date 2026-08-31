@@ -3382,7 +3382,7 @@ run_sabotage "ImapMailbox keeps a stale feed date across a fetch that returned n
 # for every caller at once, and the suite must say so.
 run_sabotage "a per-source feed_silent_days is ignored by the source's own health()" \
   src/php/Rent/Adapters/EmailAlertSource.php \
-  's%return $this->store->health($this->name(), $nowIso, $this->definition->feedSilentDays);%return $this->store->health($this->name(), $nowIso);%'
+  's%\$health = $this->store->health($this->name(), $nowIso, $this->definition->feedSilentDays);%$health = $this->store->health($this->name(), $nowIso);%'
 
 # Both load-time refusals share one guard: a threshold on a source that cannot act on it (html/json
 # report no feed date), and a threshold of 0, which disables the verdict. Disabling the guard accepts

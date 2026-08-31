@@ -10,6 +10,7 @@ use Scout\Adapters\Mail\MailboxError;
 use Scout\Rent\Config\SourceDefinition;
 use Scout\Rent\Core\RawListing;
 use Scout\Core\SourceHealth;
+use Scout\Core\SourceStatus;
 use Scout\Rent\Core\SourceProfile;
 use Scout\Rent\Core\Tenure;
 use Scout\Core\Text;
@@ -99,6 +100,13 @@ final readonly class EmailAlertSource implements FeedFreshness, Source
         private array $communeLabels = [],
         private int $limit = 50,
         /**
+         * How often each CONFIGURED positional pattern found nothing this pass — Track 1h's health
+         * half. Mutable object behind a readonly property: the property cannot be reassigned, the
+         * counter it points at can be written, which is the only way a `final readonly` adapter can
+         * accumulate anything. See {@see PatternMissLog} for why it is not persisted.
+         */
+        private PatternMissLog $patternMisses = new PatternMissLog(),
+        /**
          * Where a non-fatal remark about this fetch goes, or `null` to say nothing.
          *
          * Exists because {@see cardsIn()} stopped throwing on an identity collision and had nowhere
@@ -145,6 +153,10 @@ final readonly class EmailAlertSource implements FeedFreshness, Source
 
     public function fetch(): array
     {
+        // Per PASS, never cumulative: a miss rate describes the payload in hand, and a count that
+        // spanned two fetches would dilute exactly the 100%-miss signal this exists to raise.
+        $this->patternMisses->reset();
+
         try {
             $messages = $this->mailbox->fetchRecent($this->limit);
         } catch (MailboxError $e) {
@@ -189,7 +201,41 @@ final readonly class EmailAlertSource implements FeedFreshness, Source
         // The source's OWN threshold rides through here — the one funnel `doctor`, the pipeline
         // and the heartbeat all read — so a per-source `feed_silent_days` cannot be honoured by
         // one caller and ignored by another. `null` leaves the store's global threshold in force.
-        return $this->store->health($this->name(), $nowIso, $this->definition->feedSilentDays);
+        $health = $this->store->health($this->name(), $nowIso, $this->definition->feedSilentDays);
+        $blind = $this->patternMisses->total();
+
+        if ($blind === []) {
+            return $health;
+        }
+
+        // A PATTERN THAT MATCHED NOTHING AT ALL IS A TEMPLATE CHANGE, and it is invisible to every
+        // other verdict here: the cards still parsed, so `item_count` did not move, no run failed,
+        // and the feed kept arriving. PAP ran four days like that — 23 rows with a null surface, 19
+        // of them notified as MATCH — while `doctor` said `ok`.
+        //
+        // WARN rather than BROKEN, deliberately: cards ARE flowing and the source is reachable. What
+        // has changed is the portal's layout, which needs a human to look at a capture, not a
+        // reason to stop polling.
+        return new SourceHealth(
+            sourceName: $health->sourceName,
+            status: $health->status === SourceStatus::OK ? SourceStatus::WARN_DROP : $health->status,
+            detail: rtrim($health->detail, ' .') . ' — MAIS aucun résultat pour ' . implode(', ', $blind)
+                . ' sur cette passe : le gabarit du portail a probablement changé, les champs concernés sont null',
+            consecutiveEmptyRuns: $health->consecutiveEmptyRuns,
+            lastSuccessAt: $health->lastSuccessAt,
+            lastFailureAt: $health->lastFailureAt,
+            lastCount: $health->lastCount,
+            rollingMean: $health->rollingMean,
+            runsInWindow: $health->runsInWindow,
+            failedRunsInWindow: $health->failedRunsInWindow,
+            totalRuns: $health->totalRuns,
+        );
+    }
+
+    /** The per-pattern miss counts of the last fetch — `doctor` prints them. */
+    public function patternMisses(): PatternMissLog
+    {
+        return $this->patternMisses;
     }
 
     /** Where the alert must have come from, matched against the source's configured `params.from`. */
@@ -614,10 +660,17 @@ final readonly class EmailAlertSource implements FeedFreshness, Source
         }
 
         if (@preg_match($pattern, $subject, $m) !== 1) {
+            $this->patternMisses->record($key, false);
+
             return null;
         }
 
         $captured = trim($m[1] ?? '');
+        // COUNTED HERE because this is the single funnel every configured pattern passes through —
+        // `title_pattern`, `commune_pattern`, `surface_pattern`, `rooms_pattern` and
+        // `residence_pattern` all land on this line. Counting at each call site instead would be
+        // five places to forget, and the one forgotten is the one that goes silent.
+        $this->patternMisses->record($key, $captured !== '');
 
         return $captured === '' ? null : $captured;
     }
