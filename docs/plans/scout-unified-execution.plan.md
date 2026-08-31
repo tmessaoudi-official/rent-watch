@@ -746,13 +746,32 @@ After Track 0 closes and Track 1 lands:
 - `tests/test-vehicle-guard.sh` — the §1 tripwire (`tenure-guard.sh`) greps housing vocabulary
   only; the car domain's excluded-vehicle classifier has no tripwire. Same must-fire /
   must-stay-silent halves as `tests/test-tenure-guard.sh`.
-- Generic-store split: `VehicleStore` composes the rent `Store` directly. Measured blast radius:
-  38 files reference the rent Store (10 non-test + 28 test); **93 sabotage-ledger expressions**
-  are path-anchored to `src/php/Rent/Store/Store.php`; the live `state/car-watch.sqlite3` already
-  contains the composed rent tables and a `schema_meta` row (rent v12 vs vehicle v1), and `Store`
-  refuses to open a newer schema — getting the migration wrong is a hard startup failure on a live
-  domain. **Short design pass first** (which methods move, the live-file migration path, which
-  ledger expressions change), then build.
+- Generic-store split: `VehicleStore` composes the rent `Store` directly.
+
+  **THE DESIGN PASS IS DONE (2026-09-01), AND IT SHRANK THE ITEM BY AN ORDER OF MAGNITUDE.** This
+  entry used to read: *38 files reference the rent Store; **93 sabotage-ledger expressions** are
+  path-anchored to `src/php/Rent/Store/Store.php`; the live `state/car-watch.sqlite3` already
+  contains the composed rent tables … getting the migration wrong is a hard startup failure on a
+  live domain.* Every number there is real and the conclusion drawn from them was wrong — this
+  repo's own named failure, a true number attached to an invented cause. Measured:
+
+  - **The car domain uses SIX methods of the rent `Store`** — `recordRun`, `health`, `shouldAlert`,
+    `markAlerted`, `clearAlerts`, `journalMode`. That is the run log, source health and the alert
+    cooldown. All generic; not one is housing-specific.
+  - **6 of the 94 anchored ledger expressions touch that surface.** The other 88 test housing
+    behaviour and do not move. `94` was never the blast radius of this change.
+  - **It moves CODE, not DATA.** The rent-owned tables inside the car file are EMPTY — `listings` 0,
+    `price_history` 0, `listing_detail` 0, `commute_cache` 0 — while the data that matters lives in
+    `source_runs` (422) and the vehicle tables. `source_runs`/`source_alerts` are created
+    `IF NOT EXISTS` and their schema does not change, so an extracted run log opens the same tables
+    it already opens.
+
+  **The ONE real design question**, and the only place a mistake is destructive: which schema-version
+  key the extracted run log owns. The car file carries BOTH `schema_meta` (rent v12, written by the
+  composed `Store`) and `vehicle_meta` (v1), and `Store::open()` refuses a schema newer than it
+  knows — so a run log that keeps reading `schema_meta` inherits the rent version for ever, while
+  one that ignores it must not trip the existing refusal. Settle that before writing code, back up
+  first, and never run it against `state/car-watch.sqlite3` without the developer's explicit go.
 - Its own MAXIMAL certification (frozen commit, two consecutive clean rounds), separate from
   Tracks 0 and 1.
 - Verification: vehicle-guard both halves demonstrated; full suite + ledger green post-split with
