@@ -134,10 +134,27 @@ final readonly class VehicleEmailSource implements VehicleSource, FeedFreshness
             $priceLine = substr_count(substr($segment, 0, $last[1]), "\n");
         }
 
-        // TITLE — the last non-empty, non-link line ABOVE the price line; failing a price line,
-        // the first non-empty non-link line of the segment.
+        // TITLE — the SUBJECT when a pattern names it there, otherwise the card's own lines.
+        //
+        // **`title_pattern` WAS DECLARED AND UNREAD** (Track 1c), which is the inert-parameter
+        // defect the rent side already paid for twice. It is read now because leboncoin needs it:
+        // that portal states the vehicle in its SUBJECT — `<dealer> vous propose <MAKE MODEL …> à
+        // <price> € à <Commune> (<postcode>)` — and puts nothing but the dealer's name, its rating
+        // and `vous présente ses bonnes affaires :` above the price line. Without this the title
+        // would be that last sentence, and `gearboxFromTitle()` reads the title, so a card
+        // advertising `BOITE AUTOMATIQUE` would score as if it stated no gearbox at all.
+        //
+        // A CONFIGURED PATTERN THAT MISSES YIELDS `''`, never the positional fallback — the rule
+        // `cardTitle()` on the rent side already carries. Falling back would restore the defect and
+        // give it an alibi: the row would read as a car whose title is a marketing sentence rather
+        // than as an extraction that failed.
         $title = '';
-        if ($priceLine !== null) {
+        $titlePattern = $this->definition->param('title_pattern');
+        $fromSubject = $titlePattern !== null;
+
+        if ($fromSubject) {
+            $title = preg_match($titlePattern, $message->subject(), $t) === 1 ? trim($t[1] ?? '') : '';
+        } elseif ($priceLine !== null) {
             for ($i = min($priceLine, count($lines) - 1) - 1; $i >= 0; $i--) {
                 $l = trim($lines[$i]);
                 if ($l !== '' && !$isUrl($l)) {
@@ -146,7 +163,7 @@ final readonly class VehicleEmailSource implements VehicleSource, FeedFreshness
                 }
             }
         }
-        if ($title === '') {
+        if ($title === '' && !$fromSubject) {
             foreach ($lines as $l) {
                 $l = trim($l);
                 if ($l !== '' && !$isUrl($l)) {
@@ -177,12 +194,27 @@ final readonly class VehicleEmailSource implements VehicleSource, FeedFreshness
             return null;
         }
 
-        // MAKE / MODEL — off the ad path, when the portal lays them out there.
+        // MAKE / MODEL — from wherever the portal states them, and the SOURCE IS NAMED.
+        //
+        // ParuVendu encodes them in the ad path (`/voiture-occasion/<make>/<model>/`); leboncoin's
+        // path is `/vi/<id>.htm` and states the make in the subject instead. `make_model_source`
+        // says which, rather than trying the link and falling back to the title: a fallback would
+        // let a pattern written for one haystack quietly match the other, which is how an
+        // extraction failure acquires an alibi. Unconfigured means `link`, so ParuVendu is
+        // unchanged byte for byte.
+        //
+        // IT MATTERS TO THE SCORE, not just to the display: `brand_avoid` is read off `make`, and
+        // an unextracted make scores 0 on that component (Track 1d). A source that states its make
+        // and does not map it would rank ten points below an identical car from a source that does.
         $make = $model = null;
         $mm = $this->definition->param('make_model_pattern');
-        if ($mm !== null && preg_match($mm, $link, $g) === 1) {
-            $make = self::foldOrNull($g[1] ?? null);
-            $model = self::foldOrNull($g[2] ?? null);
+        if ($mm !== null) {
+            $haystack = $this->definition->param('make_model_source') === 'title' ? $title : $link;
+
+            if (preg_match($mm, $haystack, $g) === 1) {
+                $make = self::foldOrNull($g[1] ?? null);
+                $model = self::foldOrNull($g[2] ?? null);
+            }
         }
 
         return new VehicleListing(

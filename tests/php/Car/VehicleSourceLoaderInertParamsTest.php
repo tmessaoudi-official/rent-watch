@@ -48,7 +48,6 @@ final class VehicleSourceLoaderInertParamsTest extends TestCase
      */
     public static function inertKeys(): iterable
     {
-        yield 'title_pattern' => ['title_pattern'];
         yield 'seller_pattern' => ['seller_pattern'];
         yield 'postcode_pattern' => ['postcode_pattern'];
     }
@@ -81,7 +80,16 @@ final class VehicleSourceLoaderInertParamsTest extends TestCase
         }
     }
 
-    /** A key an adapter DOES read is accepted, so the refusal is not simply "no patterns allowed". */
+    /**
+     * A key an adapter DOES read is accepted, so the refusal is not simply "no patterns allowed".
+     *
+     * `title_pattern` MOVED HERE on 2026-08-31 and that move is the point of the mechanism working.
+     * It was the third key in the list above until `VehicleEmailSource` learned to read it against
+     * the SUBJECT, which leboncoin needs — that portal states the vehicle there and puts only the
+     * dealer's marketing line above the price. The rule the comment in `VehicleSourceLoader` states
+     * — leave `UNREAD_PARAMS` in the same change that makes a key read — was discharged rather than
+     * deferred, and this test moving is the record of it.
+     */
     public function testAParameterAnAdapterDoesReadIsAccepted(): void
     {
         $path = $this->write([
@@ -93,6 +101,7 @@ final class VehicleSourceLoaderInertParamsTest extends TestCase
                     'params' => [
                         'from' => 'alerts@portal.test',
                         'price_pattern' => '~([\d ]+)\s*€~',
+                        'title_pattern' => '~vous propose (.+?) à~u',
                     ],
                 ],
             ],

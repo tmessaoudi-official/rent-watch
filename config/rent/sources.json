@@ -175,6 +175,8 @@
       "default_tenure": "LIBRE",
       "mixed_tenure": false,
       "params": {
+        "_subject_pattern": "THE CAR ALERTS SHARE THIS SENDER AND THIS LINK HOST. leboncoin sends `3 nouveaux biens \u00e0 louer \u00e0 Ile-de-France` for the housing search and `<vendeur> vous propose <VEHICULE> \u00e0 <prix> \u20ac \u00e0 <commune>` for the vehicle one, both from no.reply@leboncoin.fr, both linking to leboncoin.fr/vi/, and a car alert even carries the `Voir l'annonce` separator this source splits on. Nothing separates them but the subject. They do not collide TODAY only because the vehicle alerts sit unlabelled in the INBOX while this source reads the alert folder \u2014 luck, and it expires the moment the Gmail filter that routes them is created, which is an owed developer action. A car would then be parsed as a flat, rejected for having no commune, and counted in this source's health. Anchored on the housing wording rather than negating the vehicle one: a new leboncoin alert type must be looked at, not silently ingested.",
+        "subject_pattern": "~\\b\u00e0 louer\\b~ui",
         "from": "no.reply@leboncoin.fr",
         "link_host": "leboncoin.fr/vi/",
         "card_separator": "Voir l'annonce",

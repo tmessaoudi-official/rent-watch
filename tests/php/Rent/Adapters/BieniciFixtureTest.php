@@ -120,6 +120,57 @@ final class BieniciFixtureTest extends TestCase
         }
     }
 
+    /**
+     * A MISS ON A SEGMENT THAT NEVER BECAME A CARD IS NOT A MISS.
+     *
+     * Found on the pattern-miss signal's FIRST production pass (2026-08-31): `doctor` reported
+     * `commune_pattern 117/364 carte(s) sans résultat` for bienici and `residence_pattern 201/399`
+     * for seloger — alarming numbers on two sources that were extracting a commune for every
+     * listing they returned. The counter was recording every attempt, including the ones made on a
+     * message's header, its footer and its unsubscribe block, all of which `cardListing()` then
+     * dropped for carrying no rent and no location.
+     *
+     * That is not cosmetic. The whole point of Track 1h is that a 100 %-miss pass is the signature
+     * of a template change, and furniture segments dilute the ratio: on this fixture set four
+     * non-cards would sit permanently in the denominator, so a genuine total failure of
+     * `commune_pattern` across all ten real cards would have reported 14/14 only by coincidence of
+     * every segment failing. Worse in the other direction — an operator reading 117/364 has no way
+     * to tell a real 32 % miss from a message shape that simply has furniture in it.
+     *
+     * Asserted as ZERO rather than as a smaller number: every one of the ten listings this fixture
+     * set yields carries a commune, which the sibling assertions in this class already pin
+     * individually.
+     */
+    public function testAMissIsNotCountedOnASegmentThatIsNotACard(): void
+    {
+        $this->dbPath = sys_get_temp_dir() . '/rentwatch-bi-' . bin2hex(random_bytes(8)) . '.sqlite3';
+
+        $definition = ConfigLoader::loadSources(self::ROOT . '/config/rent/sources.json')['bienici'];
+        $criteria = ConfigLoader::loadCriteria(self::ROOT . '/config/rent/criteria.json');
+
+        $source = new EmailAlertSource(
+            $definition,
+            Store::open($this->dbPath),
+            new FileMailbox(self::ROOT . '/tests/fixtures/rent/bienici'),
+            $criteria->communeLabels,
+        );
+
+        $listings = $source->fetch();
+        $counts = $source->patternMisses()->counts();
+
+        self::assertSame(
+            0,
+            $counts['commune_pattern']['misses'] ?? -1,
+            'every card this fixture set yields states its commune; the misses were message furniture',
+        );
+        self::assertSame(
+            count($listings),
+            $counts['commune_pattern']['calls'] ?? -1,
+            'the denominator is cards, not segments — otherwise the ratio cannot be read',
+        );
+        self::assertSame([], $source->patternMisses()->total());
+    }
+
     private function listings(): array
     {
         $this->dbPath = sys_get_temp_dir() . '/rentwatch-bi-' . bin2hex(random_bytes(8)) . '.sqlite3';

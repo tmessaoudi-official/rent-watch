@@ -455,6 +455,27 @@ final readonly class EmailAlertSource implements FeedFreshness, Source
      */
     private function cardListing(EmailMessage $message, string $segment): ?RawListing
     {
+        // STAGE the pattern attempts, because this method is the one that decides whether the
+        // segment was ever a card. A wrapper rather than a `resolve()` beside each `return null`:
+        // the body below has several of them, and the one forgotten is the one that leaks a
+        // furniture segment back into the miss ratio. See PatternMissLog::begin().
+        $this->patternMisses->begin();
+
+        try {
+            $listing = $this->buildCardListing($message, $segment);
+        } catch (\Throwable $e) {
+            $this->patternMisses->resolve(false);
+
+            throw $e;
+        }
+
+        $this->patternMisses->resolve($listing !== null);
+
+        return $listing;
+    }
+
+    private function buildCardListing(EmailMessage $message, string $segment): ?RawListing
+    {
         $rent = self::rentIn($segment);
 
         if ($rent === null) {

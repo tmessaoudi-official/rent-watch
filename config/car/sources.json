@@ -17,6 +17,25 @@
         "make_model_pattern": "~/voiture-occasion/([^/]+)/([^/]+)/~"
       }
     },
+    "leboncoin": {
+      "_comment": "leboncoin's VEHICLE alert. One vehicle per message, no card_separator: the portal sends a separate mail per hit rather than a digest.",
+      "_why": "EVERYTHING THAT MATTERS IS IN THE SUBJECT, which is what made it need code rather than config alone. `<vendeur> vous propose <MARQUE MODELE …> à <prix> € à <Commune> (<CP>)` carries the vehicle; the BODY above the price line carries only the dealer's name, its star rating, its stock count and `vous présente ses bonnes affaires :`. The positional title reader would therefore have titled every car with that marketing sentence — and `gearboxFromTitle()` reads the title, so the VW Polo card advertising `*BOITE AUTOMATIQUE` would have scored as stating no gearbox at all. So `title_pattern` reads the SUBJECT, which is the discharge of Track 1c's owed item: it was declared, compile-checked and read by nobody until 2026-08-31. A configured pattern that MISSES yields an empty title, never the positional fallback — falling back would restore the defect and give it an alibi. | MAKE: make_model_source TITLE, and the alternative was measured rather than assumed: ParuVendu encodes make and model in its ad path (`/voiture-occasion/<marque>/<modele>/`) while leboncoin's is `/vi/<id>.htm` and carries neither. Naming the haystack beats trying the link and falling back to the title — a fallback lets a pattern written for one quietly match the other. It is not cosmetic: `brand_avoid` reads `make`, and an unextracted make scores 0 on the brand component (Track 1d), so a source that states its make and does not map it would rank every car ten points below an identical one from a source that does. | LINK HOST: leboncoin.fr/vi/ CARRIES THE PATH, the PAP lesson. The message holds four more links on the same host — /reply/<id> (contact the seller), /mes-recherches/ (unsubscribe), /lien-FAQ and /dc/cgu/ — and `looksLikeAListing()` rejects none of them by wording. A host-only value would have yielded phantom vehicles carrying the real car's price and facts under their own identity, and an unsubscribe page never goes away, so it would never delist. | SUBJECT: IT SHARES ITS SENDER AND ITS LINK HOST WITH THE RENT SOURCE, and even the `Voir l'annonce` string the rent source splits on. subject_pattern is the only thing separating the two domains' alerts; the rent block carries the mirror of it.",
+      "enabled": true,
+      "family": "portal",
+      "type": "email_alert",
+      "feed_silent_days": 7,
+      "params": {
+        "from": "no.reply@leboncoin.fr",
+        "link_host": "leboncoin.fr/vi/",
+        "subject_pattern": "~\\bvous propose\\b~ui",
+        "title_pattern": "~\\bvous propose\\h+(.+?)\\h+à\\h+[\\d\\h]+\\h*€\\h+à\\h~u",
+        "make_model_pattern": "~^(\\S+)\\h+(\\S+)~u",
+        "make_model_source": "title",
+        "price_pattern": "~^\\h*(\\d[\\d\\h]*)\\h*€\\h*$~mu",
+        "facts_pattern": "~^\\h*[^\\n·]+·\\h*(?<year>\\d{4})\\h*·\\h*(?<km>\\d[\\d\\h]*)\\h*km\\h*·\\h*(?<fuel>[^\\n·]+?)\\h*$~mu"
+      },
+      "_feed_silent_days": "7 — the observed cadence is a burst then several quiet days (five alerts within 38 minutes on 2026-08-27, nothing since). The default 3 would raise a false alarm on a portal behaving normally."
+    },
     "autohero": {
       "_why": "Source #2, the one that proves the HTTP path. Measured 2026-08-27 and 2026-08-29: robots open, /fr/sitemap_search.xml lists ~3 400 lots as /fr/<make>-<model>/id/<uuid>/, and a lot page carries ONE application/ld+json block of @type Vehicle with price, brand, model, body, first registration (YYYY-MM), fuel, transmission, mileage ('136 278 KMT') and sku. A reseller: fixed price, delivered nationally, no location field at all — decision 6 is inert here by measurement.",
       "enabled": true,

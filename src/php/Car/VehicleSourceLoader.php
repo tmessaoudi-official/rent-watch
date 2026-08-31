@@ -25,7 +25,7 @@ final class VehicleSourceLoader
      * Kept as its own list rather than removed from `PATTERN_PARAMS`, so the day an adapter learns
      * to read one the regex check is already there and only this line moves.
      */
-    private const array UNREAD_PARAMS = ['title_pattern', 'seller_pattern', 'postcode_pattern'];
+    private const array UNREAD_PARAMS = ['seller_pattern', 'postcode_pattern'];
 
     /** @return array<string, VehicleSourceDefinition> */
     public static function load(string $path): array
@@ -98,11 +98,15 @@ final class VehicleSourceLoader
 
             // DECLARED, COMPILE-CHECKED, AND READ BY NOBODY — refused rather than accepted (Track 1c).
             //
-            // These three are in `PATTERN_PARAMS`, so a config carrying one loads cleanly, passes
-            // its regex check, and then does absolutely nothing: `grep -rn "'title_pattern'"
+            // These are in `PATTERN_PARAMS`, so a config carrying one loads cleanly, passes its
+            // regex check, and then does absolutely nothing: `grep -rn "'seller_pattern'"
             // src/php/Car/` finds this file and no adapter. That is the inert-parameter defect the
             // rent side already paid for — `title_pattern` sat unread on every non-segmented email
             // source until 2026-08-26, which made `exclude_title_patterns` unreachable there.
+            //
+            // `title_pattern` LEFT this list on 2026-08-31, when `VehicleEmailSource` learned to
+            // read it against the subject for leboncoin — which is the discharge this comment asks
+            // for, performed rather than deferred.
             //
             // Refusing costs nothing today (neither shipped source configures one) and it is the
             // only way the next person to reach for one finds out. When an adapter learns to read
@@ -125,6 +129,23 @@ final class VehicleSourceLoader
                     $map[$key] = $m->requireString($key);
                 }
                 $m->done();
+            }
+
+            // A VALUE, not a pattern, so `PATTERN_PARAMS` cannot check it — and a typo here is
+            // silent in the worst way: `make_model_source: "titre"` would fall to the `link`
+            // branch, match nothing, and leave every listing with a null make, which scores 0 on
+            // the brand component rather than reading as a fault.
+            if (isset($params['make_model_source']) && !in_array($params['make_model_source'], ['link', 'title'], true)) {
+                throw ConfigError::at(
+                    $where . '.params.make_model_source',
+                    'attendu « link » ou « title », reçu « ' . $params['make_model_source'] . ' »',
+                );
+            }
+            if (isset($params['make_model_source']) && !isset($params['make_model_pattern'])) {
+                throw ConfigError::at(
+                    $where . '.params.make_model_source',
+                    'nomme la source d\'un motif qui n\'existe pas — ajoutez make_model_pattern ou retirez cette clé',
+                );
             }
 
             if ($type === 'email_alert') {

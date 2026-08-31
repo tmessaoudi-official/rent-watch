@@ -3726,7 +3726,6 @@ run_sabotage "the fixture-secrets guard reintroduces a per-line width floor on a
 run_sabotage "a car startup refusal is not recorded for the next beat" \
   src/php/Car/Cli/CarScout.php \
   's%@file_put_contents(\$this->stateFile(.car-last-refusal.txt.), \$this->now()%@file_put_contents("/dev/null", $this->now()%'
-printf '\n  %d sabotage(s) detected, %d undetected\n' "$pass" "$fail"
 
 # TRACK 1d — the brand penalty. Its whole value is an ORDERING, and an ordering fails silently:
 # every score stays plausible, the notification still lists a reason, and only the ranking is wrong.
@@ -3745,6 +3744,15 @@ run_sabotage "no brand preference configured silently shrinks the scale to 90 (h
 run_sabotage "a brand that folds to nothing is accepted (a configured preference that matches no make)" \
   src/php/Car/VehicleCriteriaLoader.php \
   "s%            if (\$folded === '') {%            if (false) {%"
+
+# The pattern-miss ratio's denominator. A furniture segment counted as a card dilutes it, and the
+# WARN fires only at 100 %% — so a pattern that has genuinely stopped matching every real card can
+# report short of it and say nothing, which is the silence Track 1h exists to end.
+run_sabotage "a segment that never became a card still counts toward the pattern-miss ratio" \
+  src/php/Rent/Adapters/EmailAlertSource.php \
+  "s%        \$this->patternMisses->resolve(\$listing !== null);%        \$this->patternMisses->resolve(true);%"
+
+printf '\n  %d sabotage(s) detected, %d undetected\n' "$pass" "$fail"
 
 if [[ -n "$_filter" ]]; then
   # Loud, because a filtered run that looked like a full one would be the ledger lying about its own
