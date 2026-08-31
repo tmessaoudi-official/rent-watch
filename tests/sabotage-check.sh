@@ -3647,7 +3647,7 @@ run_sabotage "an absorbed member's durable excluded reading is torn down by toda
 
 run_sabotage "the twin scan reads the twin's raw reading instead of its durable one" \
   src/php/Rent/Cli/Pipeline.php \
-  "s%'classification' => \\\$own, 'previous'%'classification' => \$classification, 'previous'%"
+  "s%'classification' => \\\$own\\]%'classification' => \$classification]%"
 
 # The READ side of the same claim. The existing case mutates this loop to `foreach ([] as $readKey)`,
 # which proves the fact is read at ALL — not that it is read ACROSS the cluster. Reducing it to the

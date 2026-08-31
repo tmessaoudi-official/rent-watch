@@ -193,6 +193,105 @@ final class CarScoutTest extends TestCase
         }
     }
 
+    /**
+     * `doctor` REPORTS A PENDING REFUSAL WITHOUT CONSUMING IT — the rent side's round-4 fix, which
+     * the car side did not get (round-5 panel, 2026-08-31). `car-last-refusal.txt` is written by
+     * `failRun()` on every refused `--once` and was read at exactly one place, inside the beat,
+     * which exists only under `--watch`. On a cron-driven `--once` deployment Q27's second half was
+     * therefore dead: the note was written for ever and read by nothing.
+     */
+    public function testDoctorReportsAPendingRefusalWithoutConsumingIt(): void
+    {
+        $marker = \dirname($this->db) . '/car-last-refusal.txt';
+        file_put_contents($marker, '2026-08-29T22:00:00+02:00 — canal ntfy sans CAR_NTFY_TOPIC');
+
+        $r = $this->scout(['--domain=car', 'doctor', '--source=paruvendu']);
+
+        self::assertStringContainsString('CAR_NTFY_TOPIC', $r['out'], 'doctor names the refusal');
+        self::assertFileExists($marker, 'and leaves it for the beat — a diagnostic must not consume what a channel still owes');
+    }
+
+    /**
+     * AND IT IS REPORTED BEFORE THE BOOTSTRAP THAT THE REFUSAL WOULD BLOCK. Placed after
+     * `criteria()`, the line is reachable only while `doctor`'s own start-up succeeds — never for a
+     * refusal whose cause still blocks it, which is the commonest kind there is.
+     */
+    public function testAPendingRefusalIsReportedEvenWhenTheConfigItselfIsUnusable(): void
+    {
+        // A root with no config/car at all: `criteria()` cannot load and the verb refuses. The note
+        // goes in THAT root's state dir, because `stateFile()` resolves from the database path.
+        $broken = sys_get_temp_dir() . '/scout-car-brokenroot-' . bin2hex(random_bytes(4));
+        mkdir($broken . '/state', 0o775, true);
+        file_put_contents($broken . '/state/car-last-refusal.txt', '2026-08-29T22:00:00+02:00 — configuration illisible');
+
+        try {
+            $out = fopen('php://memory', 'r+');
+            $err = fopen('php://memory', 'r+');
+            self::assertIsResource($out);
+            self::assertIsResource($err);
+            putenv('CAR_SCOUT_DB=' . $broken . '/state/car.sqlite3');
+            $code = (new CarScout($broken, $out, $err))->run(['doctor']);
+            rewind($out);
+
+            self::assertNotSame(0, $code, 'the config is genuinely unusable');
+            self::assertStringContainsString(
+                'configuration illisible',
+                (string) stream_get_contents($out),
+                'and the refusal is still reported — it is read before the bootstrap that would block it',
+            );
+        } finally {
+            @unlink($broken . '/state/car-last-refusal.txt');
+            @rmdir($broken . '/state');
+            @rmdir($broken);
+            putenv('CAR_SCOUT_DB=' . $this->db);
+        }
+    }
+
+    /**
+     * AN IN-MEMORY DATABASE STILL PUTS ITS STATE FILES UNDER `<root>/state` (round-5 panel,
+     * 2026-08-31). `dbPath()` passes `:memory:` through deliberately and `dirname(':memory:')` is
+     * `.`, so without the branch every marker — heartbeat, digest, refusal — lands in whatever the
+     * process cwd happens to be. The branch shipped in round 4 with NO coverage on either CLI:
+     * reverting it left all 2 339 tests green.
+     *
+     * Exercised through behaviour rather than by reaching for the private method: the refusal note
+     * is placed in `<root>/state`, and `doctor` can only report it if `stateFile()` looked there.
+     */
+    public function testStateFilesOfAnInMemoryDatabaseResolveUnderTheRoot(): void
+    {
+        $root = sys_get_temp_dir() . '/scout-car-memroot-' . bin2hex(random_bytes(4));
+        mkdir($root . '/state', 0o775, true);
+        mkdir($root . '/config/car', 0o775, true);
+        copy(self::ROOT . '/config/car/criteria.json', $root . '/config/car/criteria.json');
+        copy(self::ROOT . '/config/car/sources.json', $root . '/config/car/sources.json');
+        file_put_contents($root . '/state/car-last-refusal.txt', '2026-08-29T22:00:00+02:00 — marqueur en mémoire');
+
+        try {
+            putenv('CAR_SCOUT_DB=:memory:');
+            $out = fopen('php://memory', 'r+');
+            $err = fopen('php://memory', 'r+');
+            self::assertIsResource($out);
+            self::assertIsResource($err);
+            (new CarScout($root, $out, $err))->run(['doctor']);
+            rewind($out);
+
+            self::assertStringContainsString(
+                'marqueur en mémoire',
+                (string) stream_get_contents($out),
+                'the marker was looked for under <root>/state, not in the process cwd',
+            );
+        } finally {
+            putenv('CAR_SCOUT_DB=' . $this->db);
+            @unlink($root . '/state/car-last-refusal.txt');
+            @unlink($root . '/config/car/criteria.json');
+            @unlink($root . '/config/car/sources.json');
+            @rmdir($root . '/config/car');
+            @rmdir($root . '/config');
+            @rmdir($root . '/state');
+            @rmdir($root);
+        }
+    }
+
     public function testAnUnusableHeartbeatHoursRefusalNamesTheCarKey(): void
     {
         // Dropping the key argument at the call site left the suite green (round-2 panel): the

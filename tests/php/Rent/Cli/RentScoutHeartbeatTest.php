@@ -404,6 +404,30 @@ final class RentScoutHeartbeatTest extends TestCase
         );
     }
 
+    /**
+     * AND IT IS REPORTED BEFORE THE BOOTSTRAP THAT THE REFUSAL WOULD BLOCK (round-5 panel,
+     * 2026-08-31). The line above used to print after `criteria()`, `store()` and `sources()`, so it
+     * was reachable only while `doctor`'s OWN start-up succeeded — never for a refusal whose cause
+     * still blocks start-up. `CLAUDE.md` names a malformed config as the commonest startup refusal
+     * there is, which is exactly the case it could not report.
+     */
+    public function testAPendingRefusalIsReportedEvenWhenTheConfigItselfIsUnusable(): void
+    {
+        $root = $this->tempRoot();
+        file_put_contents($root . '/state/rent-last-refusal.txt', '2026-08-21T22:00:00+02:00 — configuration illisible');
+        // The config the verb loads FIRST, made unusable. `doctor` must still say what happened.
+        file_put_contents($root . '/config/rent/criteria.json', '{"bogus_key": 1}');
+
+        $r = $this->scoutIn($root, ['doctor']);
+
+        self::assertNotSame(0, $r['code'], 'the config is genuinely unusable');
+        self::assertStringContainsString(
+            'configuration illisible',
+            $r['out'],
+            'and the refusal is still reported — read before the bootstrap that would block it',
+        );
+    }
+
     public function testARunRefusalWritesTheNoteForTheNextStart(): void
     {
         // The producing half. An empty seen-set is Q36's refusal and is the easiest to provoke.

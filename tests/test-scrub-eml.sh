@@ -39,11 +39,28 @@ check() {
 # `check ! grep …` cannot work — `!` is shell syntax, not a command, so `"$@"` runs it as one and
 # every negated assertion errors out with `!: command not found`. That failure LOOKS like the
 # assertion failing, which is the shape of a test that proves nothing.
+# AN ERROR IS NOT A REFUTATION (round-5 panel, 2026-08-31). This used to treat EVERY non-zero exit
+# as the negative it was asserting — including 2 (a usage error) and 127 (command not found). Round 4
+# found an instance: a section-header comment fused onto the end of a `refute` line with no newline
+# handed `test` eight arguments, which exited 2 and reported `ok` whatever the scrubber had done.
+# That was fixed as an instance; the MECHANISM that made it invisible was not, so the next fused
+# line, typo'd flag or renamed helper would do it again — in the one test file whose subject is a
+# privacy guard, where a vacuous `ok` is exactly the failure being guarded against.
+#
+# So: exit 1 is the genuine falsity this asserts, and anything above it is the command itself
+# breaking, which is a FAILURE of the test rather than a pass. `bash -n` and `shellcheck -S warning`
+# are both silent on the shape, so this is the only place it can be caught.
 refute() {
   local label="$1"
+  local status=0
   shift
-  if "$@"; then
+  "$@" || status=$?
+
+  if [ "$status" -eq 0 ]; then
     printf '  \033[31mFAIL\033[0m %s\n' "$label"
+    fail=$((fail + 1))
+  elif [ "$status" -gt 1 ]; then
+    printf '  \033[31mFAIL\033[0m %s (la commande a ÉCHOUÉ avec le code %d — ce n'"'"'est pas une réfutation)\n' "$label" "$status"
     fail=$((fail + 1))
   else
     printf '  \033[32mok\033[0m   %s\n' "$label"

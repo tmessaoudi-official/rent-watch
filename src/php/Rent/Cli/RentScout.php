@@ -224,6 +224,23 @@ final readonly class RentScout
      */
     private function doctor(array $flags = []): int
     {
+        // A PENDING STARTUP REFUSAL IS REPORTED BEFORE ANYTHING ELSE IS LOADED (round-5 panel,
+        // 2026-08-31). It used to print below `criteria()`, `store()` and `sources()` — so it was
+        // reachable only while `doctor`'s OWN bootstrap succeeded, which is never the case for a
+        // refusal whose cause still blocks bootstrap. `CLAUDE.md` says a malformed config is the
+        // commonest startup refusal there is, and that was precisely the one this line could not
+        // report: the config throws at `criteria()` and the note is never reached. Reading it first
+        // costs nothing and is the whole point of Q27's second half.
+        //
+        // Read-only: consuming it here would let a diagnostic swallow the note before the beat that
+        // is supposed to push it.
+        $pending = $this->pendingRefusal();
+
+        if ($pending !== null) {
+            $this->line('  refus   : ' . $pending);
+            $this->line('            (refus au démarrage précédent — sera repris au prochain battement de cœur sous `--watch`)');
+        }
+
         $criteria = $this->criteria();
         $store = $this->store();
         $sources = $this->sources($store, $this->onlySources($flags), $criteria, $flags);
@@ -237,20 +254,6 @@ final readonly class RentScout
             $this->line('  ⚠ le mode journal n\'est pas WAL : deux processus se bloqueront au lieu de partager');
         }
 
-        // A PENDING STARTUP REFUSAL, REPORTED WITHOUT CONSUMING IT (round-4 panel, 2026-08-31). The
-        // note is read at exactly one call site — the heartbeat, which only exists under `--watch` —
-        // and `CLAUDE.md` names cron-driven `--once` as a supported deployment. On that deployment
-        // `failRun()` writes the note on every refused run and nothing ever reads it, so Q27's second
-        // half is dead there: the failure that reaches nobody stays reaching nobody. `doctor` is the
-        // verb an operator runs when something looks wrong, so it is where the note belongs.
-        //
-        // Read-only on purpose: consuming it here would let a diagnostic swallow the note before the
-        // beat that is supposed to push it.
-        $pending = $this->pendingRefusal();
-        if ($pending !== null) {
-            $this->line('  refus   : ' . $pending);
-            $this->line('            (refus au démarrage précédent — sera repris au prochain battement de cœur)');
-        }
 
         // THE ONLY PLACE A NOTIFIED MATCH WITH NO EVIDENCE CAN BE SEEN. `staleVerdicts()` selects
         // undetermined verdicts, so a row that classified LLI and failed to encode is not skipped by

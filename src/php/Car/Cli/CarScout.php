@@ -98,6 +98,23 @@ final readonly class CarScout
     /** @param list<string> $flags */
     private function doctor(array $flags): int
     {
+        // THE SAME FIX AS THE RENT SIDE, WHICH THIS DID NOT GET (round-5 panel, 2026-08-31). Round 4
+        // gave `RentScout` a `pendingRefusal()` and a `doctor` line because the note's only reader
+        // lived under `--watch` while cron `--once` is a supported deployment; `CarScout` was left
+        // out, so `car-last-refusal.txt` was written by `failRun()` on every refused `--once` and
+        // read by nothing at all. That is the same "a fix landing on one of two symmetric surfaces"
+        // shape as the P0 round 4 was itself fixing.
+        //
+        // Before `criteria()`, for the rent side's reason: a malformed config is the commonest
+        // startup refusal, and it is exactly the one a report placed after the bootstrap can never
+        // reach. Read-only, so a diagnostic cannot swallow what a channel still owes.
+        $pending = $this->pendingRefusal();
+
+        if ($pending !== null) {
+            $this->line('  refus    : ' . $pending);
+            $this->line('             (refus au démarrage précédent — sera repris au prochain battement de cœur sous `--watch`)');
+        }
+
         $criteria = $this->criteria();
         $store = $this->store();
         $now = $this->now();
@@ -585,6 +602,15 @@ final readonly class CarScout
 
     private function takeLastRefusal(): ?string
     {
+        $note = $this->pendingRefusal();
+        @unlink($this->stateFile('car-last-refusal.txt'));
+
+        return $note;
+    }
+
+    /** The pending note WITHOUT consuming it — `doctor` reports, the heartbeat consumes. */
+    private function pendingRefusal(): ?string
+    {
         $path = $this->stateFile('car-last-refusal.txt');
 
         if (!is_file($path)) {
@@ -592,7 +618,6 @@ final readonly class CarScout
         }
 
         $raw = file_get_contents($path);
-        @unlink($path);
 
         return \is_string($raw) && trim($raw) !== '' ? trim($raw) : null;
     }

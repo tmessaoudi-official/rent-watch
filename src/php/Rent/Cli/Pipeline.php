@@ -272,7 +272,11 @@ final readonly class Pipeline
                 // its raw one. Reading the raw one let a twin held excluded only by its own durable
                 // reading contribute an ELIGIBLE tenure, which `recordTwin()` then persisted, and
                 // the agency copy was pushed as a match naming the PLS route as the *voie directe*.
-                $observed[spl_object_id($member)] = ['sighting' => $sighting, 'classification' => $own, 'previous' => $previousTenure];
+                // No `previous` key: it existed only to feed the judging-loop `durableOwnReading()`
+                // call that round 5 removed as dead, and an unread field in a documented array shape
+                // reads as something consulted when it is not. `$previousTenure` is still used, at
+                // the write above, which is where the guarantee now lives.
+                $observed[spl_object_id($member)] = ['sighting' => $sighting, 'classification' => $own];
                 $keyOf[spl_object_id($member)] = $sighting->dedupKey;
                 $memberKeys[] = $sighting->dedupKey;
             }
@@ -337,7 +341,20 @@ final readonly class Pipeline
                 $classification,
                 $this->store->groupExcludedTenure($sighting->dedupKey),
             );
-            $judged = $this->durableOwnReading($judged, $observation['previous'] ?? null);
+            // THE DURABLE READING IS NOT RE-APPLIED HERE, and the reason is this repo's own rule
+            // rather than a saving (round-5 panel, 2026-08-31). Round 4 moved it into the recording
+            // loop and left this second call standing, described in the commit as "left in place as
+            // a defence". It was not one: `$classification` above IS the durable `$own`, so if the
+            // previous reading was excluded then `$own` is excluded, `clusterClassification()`
+            // early-returns on an excluded survivor, and `durableOwnReading()` early-returns on an
+            // excluded `$judged` — and if it was NOT excluded there is nothing to preserve. A
+            // reviewer proved it twice: deleting the line, and instrumenting it to THROW if it ever
+            // changed anything, both left all 2 339 tests green.
+            //
+            // `durableOwnReading()`'s own neighbouring comment says what to do with that: "Dead
+            // safety code is worse than none: it reads as a second line of defence and is not one.
+            // Removed rather than kept." The guarantee lives at the write, where a member that is
+            // never judged is also covered.
             $judged = $this->twinClassification($judged, $sighting->dedupKey, $clusterKeys[spl_object_id($listing)] ?? [$sighting->dedupKey], $twinsOf[spl_object_id($listing)] ?? [], $observed, $keyOf);
 
             $verdict = $engine->judge($listing, $judged, $this->ageSeconds($sighting->dedupKey, $nowIso));
@@ -804,8 +821,8 @@ final readonly class Pipeline
      *
      * @param list<string> $memberKeys every row of this cluster, the survivor's included
      * @param list<array{listing: RawListing, family: string}> $twins
-     * @param array<int, array{sighting: mixed, classification: Classification, previous: ?Tenure}> $observed
-     *                                                                                              `classification` is the DURABLE reading, not the raw one — see the recording loop
+     * @param array<int, array{sighting: mixed, classification: Classification}> $observed
+     *                                                                           `classification` is the DURABLE reading, not the raw one — see the recording loop
      * @param array<int, string> $keyOf
      */
     private function twinClassification(Classification $survivor, string $dedupKey, array $memberKeys, array $twins, array $observed, array $keyOf): Classification
