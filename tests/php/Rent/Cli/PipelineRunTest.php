@@ -990,6 +990,71 @@ final class PipelineRunTest extends TestCase
         );
     }
 
+    /**
+     * THE TWIN VETO IS TRANSITIVE (round-6 panel, 2026-08-31, proven by execution).
+     *
+     * `twinClassification()` took each twin's reading from `$observed` — that twin's OWN durable
+     * reading plus (round 5) its own group veto. That is every surface EXCEPT the twin's own twins.
+     * So when a listing's exclusion reached it THROUGH a twin, it still contributed an ELIGIBLE
+     * tenure to its other twins, and `recordTwin()` persisted that eligible fact.
+     *
+     * The shape needs no exotic data: one portal re-advertising a flat mints a second ad id, so two
+     * `bienici` rows are neither duplicates nor twins of each other (same source ⇒ both `Dedup`
+     * relations return null) while both twin with the same direct route. Only one card carries the
+     * `PLS`. The direct route was correctly REJECTED on it — and the second copy was pushed as a
+     * MATCH whose reasons named that rejected route as the *voie directe, candidature au bailleur*.
+     *
+     * Writing `$judged` back into `$observed` inside the judging loop does NOT fix it: sources are
+     * harvested institutional-first, so a clean end is judged before the middle has learned the
+     * other end's PLS. The reading is resolved across every edge before any judging happens.
+     */
+    public function testTheTwinVetoIsTransitiveAcrossAThirdCopy(): void
+    {
+        $store = $this->store();
+        $channel = new RecordingChannel();
+        $pipeline = $this->pipeline($store, new Notifier([$channel]));
+
+        // The direct route, stating nothing about tenure on its own.
+        $direct = $this->directRoute([], 'Bel appartement de 4 pieces de 88 m2, proche gare.');
+
+        // Two copies on ONE private portal: same source, so neither a duplicate nor a twin of the
+        // other — both twin only with the direct route. Only the first says PLS.
+        $carriesPls = new RawListing(
+            sourceName: 'bienici', externalId: 'b1', title: 'Appartement T4',
+            description: 'Logement social PLS, commission d\'attribution.', fields: [],
+            url: 'https://bienici.test/b1', commune: 'Sartrouville', postcode: '78500',
+            rentCc: 1450, surfaceM2: 88.0, rooms: 4,
+        );
+        $silent = new RawListing(
+            sourceName: 'bienici', externalId: 'b2', title: 'Appartement T4',
+            description: 'Beau 4 pieces de 88 m2, proche gare.', fields: [],
+            url: 'https://bienici.test/b2', commune: 'Sartrouville', postcode: '78500',
+            rentCc: 1450, surfaceM2: 88.0, rooms: 4,
+        );
+
+        $pipeline->runOnce([
+            // The direct route is a PURE-LLI portal here, so its OWN base reading is ELIGIBLE — and
+            // that is what makes the silent copy a full MATCH rather than a digest entry when the
+            // veto fails to propagate, i.e. what makes this test able to tell the two apart. With
+            // `mixedTenure: true` the base is UNKNOWN, the copy lands in the digest either way, and
+            // the assertion passes against a landed mutation. A first draft did exactly that.
+            new FakeSource('cdc_habitat', [$direct]),
+            // `mixedTenure: false` here too, so the silent copy takes the source default LLI. A
+            // MATCH on its own — which is what makes this test able to fail. With `true` it
+            // classifies UNKNOWN and goes to the digest anyway, so `MATCH` would be 0 for a reason
+            // that has nothing to do with the twin graph. (A first draft did exactly that and
+            // passed against a landed mutation.) The explicit PLS label on the other copy still
+            // fires: tier-2 label rules never consult `mixed_tenure`.
+            new FakeSource('bienici', [$carriesPls, $silent], family: 'private'),
+        ], '2026-08-07T12:00:00+02:00');
+
+        self::assertCount(
+            0,
+            $this->ofKind($channel, NotificationKind::MATCH),
+            'the silent copy must not be pushed: the route it would name is the one just rejected as PLS',
+        );
+    }
+
     private function twins(): array
     {
         $direct = new RawListing(

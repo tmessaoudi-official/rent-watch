@@ -129,6 +129,21 @@ read-only) and the merged prose as one review deep.
   being preparatory work for future captures and became a defect in the tree. Reversed by nothing —
   the plan's sequencing rationale (1g/1h captures depend on it) is unaffected, it simply landed
   earlier.
+- [2026-08-31] AGREED (developer ruling): **Track 0 CLOSES UNCERTIFIED.** Rounds 4/5/6 produced
+  19/25/21 findings and never approached MAXIMAL's two-consecutive-clean bar; each round costs ~5 h
+  and the other four tracks were untouched. Round 6's findings are closed, then Track 1 starts —
+  round 7 is NOT run. What stands in place of the panel: the 588-case sabotage ledger, the full
+  suite, drift-scan, and live `doctor` runs against the deployed image. Reversed by running a round.
+- [2026-08-31] AGREED (developer ruling): track order for the remaining work is **1 → 2 → 3 → 4**
+  (defect fixes, car sources, the audit, then the vehicle guard + store split).
+- [2026-08-31] AGREED (developer ruling, re-confirmed): git history is LEFT AS IS for both fixture
+  leaks (the name in 2 ParuVendu fixtures, the address in 3 Bien'ici ones). Forward fixes only; the
+  blobs stay reachable by `git show <sha>:<path>` and hard rule 7 now states that cost. Reversed
+  only by the developer's own force-push.
+- [2026-08-31] DEFAULT APPLIED: the twin veto is now TRANSITIVE over a connected component of the
+  twin graph. Stated cost: a chain A–B–C vetoes both ends even where A and C would not have been
+  linked directly. §1's bias is toward not notifying and Q39 already prices pairwise over-linking as
+  permanent; reversed by resolving only over direct edges (one `if` in the propagation sweep).
 - [2026-08-31] FINDING RECORDED, NOT YET FIXED: the generic `ROOMS_PATTERN` matches hex inside
   photo-URL UUIDs (`…90F8-…` → 8 rooms). 14 wrong room counts on seloger, 6 of them notified; both
   directions do harm. New Track 1j — evidence in `var/claude/track1j-rooms-uuid-evidence.md`.
@@ -572,6 +587,55 @@ register rows F14–F21 above are the tracked record).
    defence"; `Pipeline.php`'s own comment says such code is "worse than none". Remove or cover it.
 6. **New code with no coverage**: the `:memory:` branch on both CLIs; and one re-scrubbed ParuVendu
    fixture gained a 152-column QP line, so it is no longer byte-what-the-mailer-emitted.
+
+---
+
+## Round 6 (2026-08-31) — NOT CLEAN, 21 findings; developer ruled "fix these, then move on"
+
+Three lenses against `b8a1687..7765997`. Every number in every round-5 commit message was
+independently re-run and verified TRUE; the findings are about what those numbers do not cover.
+
+**The developer's ruling (2026-08-31): close round 6's findings, then START TRACK 1 rather than
+running round 7.** Rounds 4/5/6 produced 19/25/21 findings and never approached the
+two-consecutive-clean bar; each round costs ~5 h and the other four tracks were untouched.
+**Track 0 is therefore CLOSED UNCERTIFIED, and that is a ruling rather than an omission.** What
+stands in its place: the sabotage ledger (588 cases), the full suite, drift-scan, and live `doctor`
+runs against the deployed image.
+
+### Fixed
+
+- **P0 — the twin veto was not TRANSITIVE.** Each twin contributed its own durable reading plus its
+  own group veto but never its own TWIN-derived verdict, so an exclusion reaching a listing THROUGH
+  a twin never reached that listing's OTHER twins: a second copy of a flat rejected as PLS was
+  pushed as a MATCH naming the rejected route as the *voie directe*. The graph is now resolved to a
+  fixed point across every edge BEFORE any survivor is judged — writing the judged reading back
+  mid-loop is not enough, because sources are harvested institutional-first. **Stated cost:** the
+  veto is now transitive over a connected component, so a chain A–B–C vetoes both ends even where A
+  and C would never have been linked directly. §1's bias is toward not notifying; Q39 already
+  prices pairwise over-linking as permanent.
+- **P0 — the documented capture procedure defeated the address scrub** (needles before the address).
+  See `5726222`.
+- **P1 — a ledger case reddened on an undefined method**, found by all three lenses, and the CLASS
+  behind it: `test-sabotage-applies.sh` now also checks every replacement names a live method. It
+  found a second instance immediately.
+- **P1 — the forced `--once` beat reported a hard-coded 0 notified** on both CLIs, re-introducing a
+  defect the ledger already pins on the watch path; **the car forced beat swallowed its send
+  failures**; and **the car half had no test at all** (deleting the branch left the suite green).
+- **P1 — CDC Habitat was `broken / 0` for a day** on a message that named an untrue cause. Now
+  `ok / 312 annonces`, verified live.
+
+### Recorded, NOT fixed — the developer's ruling caps this milestone
+
+| # | finding | why it is left |
+|---|---|---|
+| R6-1 | PAP `commune_pattern` cannot read an arrondissement (`Paris 16e`), and the block's `_why` still claims all four patterns anchor on the postcode | Safe direction (a null commune cannot match) but SILENT. The `_why` is the record a future editor reads — correcting it is owed |
+| R6-2 | A hard-wrapped PAP criteria line would still hand the search floor to `surface_pattern` | Unverified against any real payload; n=4 captures all put it on one line |
+| R6-3 | The forwarded-as-attachment capture route defeats both secrets layers (`from` not dropped; embedded `message/rfc822` sits after the blank line; `Resent-To` in neither list) | Latent, not an active leak — the current tree is clean four levels deep |
+| R6-4 | The wrapped-token stripper's left anchor is blind in quoted-printable (`?u=3D<blob>`), so it fails CLOSED on the very shape every real capture uses | Refuses rather than leaks, but the refusal is unresolvable — which invites hand-editing |
+| R6-5 | Omitting the optional address makes the scrubber a silent no-op that reports success | The docs say to pass it; the missing WARNING is the finding |
+| R6-6 | The `=3D`-eaten escape is permanently baked into two ParuVendu fixtures (originals not in the repo) | Parse-identical; the tool is fixed so it cannot recur |
+| R6-7 | QP line length regressed 4× in the Bien'ici fixtures (max 121 → 196) | Parse-identical: link counts and body lengths byte-stable |
+| R6-8 | No Decisions Log entry for the round-5 fix commits; four register rows read FIXED and OPEN at once; `Pipeline.php:829` citation drifted; 7 dangling links inside `docs/plans/archive/**` | Bookkeeping. The first is a real breach of this file's own rule |
 
 **Do not read round 5's verdict as a setback.** Round 4 fixed 19 findings and round 5 found that
 several landed on one surface of two — which is the same defect class the milestone has now produced

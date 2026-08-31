@@ -288,6 +288,73 @@ final readonly class Pipeline
             $clusterKeys[spl_object_id($cluster['listing'])] = $memberKeys;
         }
 
+        // THE TWIN GRAPH IS RESOLVED TO A FIXED POINT BEFORE ANY SURVIVOR IS JUDGED (round-6 panel,
+        // 2026-08-31). The veto was not TRANSITIVE: `twinClassification()` took each twin's reading
+        // from `$observed`, which carries that twin's OWN durable reading and (round 5) its own
+        // group veto — but never the twin's own TWIN-derived verdict. So when a listing's exclusion
+        // came from ITS twin, it still contributed an ELIGIBLE tenure to its OTHER twins, and
+        // `recordTwin()` then persisted that eligible fact.
+        //
+        // Proven by execution on the shape that needs no exotic data: one portal re-advertising a
+        // flat mints a second ad id, and both copies twin with the same direct route. Only one card
+        // carries the `PLS`; the direct route was REJECTED on it, and the second copy was pushed as
+        // a MATCH whose reasons named that rejected route as the *voie directe, candidature au
+        // bailleur* — verbatim the failure the twin mechanism was built to stop, closed for two
+        // nodes and open for three.
+        //
+        // Writing `$judged` back into `$observed` inside the judging loop is NOT sufficient, and the
+        // reviewer said so before I tried it: sources are harvested institutional-first, so a clean
+        // institutional end is judged before the private middle has learned the other institutional
+        // end's `PLS`. The reading has to be resolved across every edge FIRST.
+        //
+        // Most-restrictive over each CONNECTED COMPONENT, iterated to a fixed point. Stated cost, and
+        // it is the §1-safe direction rather than a free win: a twin link is positive evidence about
+        // prose, not a key, so a chain A–B–C where A and C would never have been linked directly now
+        // vetoes both. Q39 already prices pairwise over-linking as a permanent rejection; this widens
+        // that, and §1's own instruction is to bias every ambiguous decision toward NOT notifying.
+        $twinRank = static fn (Tenure $t): int => $t->isExcluded() ? 2 : ($t === Tenure::UNKNOWN ? 1 : 0);
+
+        /** @var array<int, array{tenure: Tenure, source: string}> $twinReading survivor id -> resolved */
+        $twinReading = [];
+        foreach ($clustered as $cluster) {
+            $listing = $cluster['listing'];
+            $id = spl_object_id($listing);
+            $observation = $observed[$id] ?? null;
+            if ($observation === null) {
+                continue;
+            }
+            $key = $keyOf[$id] ?? null;
+            $base = $this->clusterClassification(
+                $observation['classification'],
+                $key === null ? null : $this->store->groupExcludedTenure($key),
+            );
+            $twinReading[$id] = ['tenure' => $base->tenure, 'source' => $listing->sourceName];
+        }
+
+        // Bounded by the number of survivors: each sweep either tightens at least one node or ends.
+        for ($sweep = 0, $cap = count($twinReading) + 1; $sweep < $cap; ++$sweep) {
+            $changed = false;
+
+            foreach ($clustered as $cluster) {
+                $id = spl_object_id($cluster['listing']);
+                foreach ($twinsOf[$id] ?? [] as $twin) {
+                    $other = $twinReading[spl_object_id($twin['listing'])] ?? null;
+                    $mine = $twinReading[$id] ?? null;
+                    if ($other === null || $mine === null) {
+                        continue;
+                    }
+                    if ($twinRank($other['tenure']) > $twinRank($mine['tenure'])) {
+                        $twinReading[$id] = $other;
+                        $changed = true;
+                    }
+                }
+            }
+
+            if (!$changed) {
+                break;
+            }
+        }
+
         $matches = 0;
         $digested = 0;
         $rejectedCount = 0;
@@ -355,7 +422,7 @@ final readonly class Pipeline
             // safety code is worse than none: it reads as a second line of defence and is not one.
             // Removed rather than kept." The guarantee lives at the write, where a member that is
             // never judged is also covered.
-            $judged = $this->twinClassification($judged, $sighting->dedupKey, $clusterKeys[spl_object_id($listing)] ?? [$sighting->dedupKey], $twinsOf[spl_object_id($listing)] ?? [], $observed, $keyOf);
+            $judged = $this->twinClassification($judged, $sighting->dedupKey, $clusterKeys[spl_object_id($listing)] ?? [$sighting->dedupKey], $twinsOf[spl_object_id($listing)] ?? [], $twinReading);
 
             $verdict = $engine->judge($listing, $judged, $this->ageSeconds($sighting->dedupKey, $nowIso));
 
@@ -834,11 +901,10 @@ final readonly class Pipeline
      *
      * @param list<string> $memberKeys every row of this cluster, the survivor's included
      * @param list<array{listing: RawListing, family: string}> $twins
-     * @param array<int, array{sighting: mixed, classification: Classification}> $observed
-     *                                                                           `classification` is the DURABLE reading, not the raw one — see the recording loop
-     * @param array<int, string> $keyOf
+     * @param array<int, array{tenure: Tenure, source: string}> $twinReading survivor object id ->
+     *        the reading resolved across the WHOLE twin graph, computed before any judging
      */
-    private function twinClassification(Classification $survivor, string $dedupKey, array $memberKeys, array $twins, array $observed, array $keyOf): Classification
+    private function twinClassification(Classification $survivor, string $dedupKey, array $memberKeys, array $twins, array $twinReading): Classification
     {
         if ($survivor->tenure->isExcluded()) {
             return $survivor;
@@ -847,18 +913,25 @@ final readonly class Pipeline
         $rank = static fn (Tenure $t): int => $t->isExcluded() ? 2 : ($t === Tenure::UNKNOWN ? 1 : 0);
 
         // The most restrictive reading among the twins in hand: excluded > undetermined > eligible.
+        //
+        // Read from `$twinReading`, which the caller resolved to a FIXED POINT across the whole twin
+        // graph before any survivor was judged. It used to recompute each twin's reading here from
+        // `$observed` — that twin's own durable reading plus its own group veto — which is every
+        // surface EXCEPT the twin's own twins. So an exclusion that reached a listing through ITS
+        // twin never reached the listing's OTHER twins, and the second copy of a flat rejected as
+        // PLS was pushed as a match naming the rejected route (round-6 panel, proven by execution).
         /** @var array{tenure: Tenure, source: string}|null $seen */
         $seen = null;
         foreach ($twins as $twin) {
-            $id = spl_object_id($twin['listing']);
-            $classification = $observed[$id]['classification'] ?? null;
-            if ($classification === null) {
+            $resolved = $twinReading[spl_object_id($twin['listing'])] ?? null;
+            if ($resolved === null) {
                 continue;
             }
-            $key = $keyOf[$id] ?? null;
-            $judged = $this->clusterClassification($classification, $key === null ? null : $this->store->groupExcludedTenure($key));
-            if ($seen === null || $rank($judged->tenure) > $rank($seen['tenure'])) {
-                $seen = ['tenure' => $judged->tenure, 'source' => $twin['listing']->sourceName];
+            if ($seen === null || $rank($resolved['tenure']) > $rank($seen['tenure'])) {
+                // The SOURCE named is the twin actually in hand, not whatever distant node the
+                // reading propagated from: the notification tells the operator where to look, and a
+                // route they cannot see from here is not that.
+                $seen = ['tenure' => $resolved['tenure'], 'source' => $twin['listing']->sourceName];
             }
         }
 
