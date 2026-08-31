@@ -865,11 +865,11 @@ runs against the deployed image.
 
 | # | finding | why it is left |
 |---|---|---|
-| R6-1 | PAP `commune_pattern` cannot read an arrondissement (`Paris 16e`), and the block's `_why` still claims all four patterns anchor on the postcode | Safe direction (a null commune cannot match) but SILENT. The `_why` is the record a future editor reads — correcting it is owed |
+| R6-1 | PAP `commune_pattern` cannot read an arrondissement (`Paris 16e`) | **CLOSED 2026-09-01** (`c95ddb8`) — the capture may now contain a digit but not start with one; all four frozen captures identical, reverting reddens 3 tests. The false `_why` (three patterns anchor on the postcode, not four) is corrected |
 | R6-2 | A hard-wrapped PAP criteria line would still hand the search floor to `surface_pattern` | Unverified against any real payload; n=4 captures all put it on one line |
 | R6-3 | The forwarded-as-attachment capture route defeats both secrets layers (`from` not dropped; embedded `message/rfc822` sits after the blank line; `Resent-To` in neither list) | Latent, not an active leak — the current tree is clean four levels deep |
 | R6-4 | The wrapped-token stripper's left anchor is blind in quoted-printable (`?u=3D<blob>`), so it fails CLOSED on the very shape every real capture uses | Refuses rather than leaks, but the refusal is unresolvable — which invites hand-editing |
-| R6-5 | Omitting the optional address makes the scrubber a silent no-op that reports success | The docs say to pass it; the missing WARNING is the finding |
+| R6-5 | Omitting the address makes the scrubber a silent no-op that reports success | **CLOSED 2026-09-01** (`c95ddb8`) — the address is REQUIRED, no opt-out. The load-bearing half was that the RECOVERABILITY check had no needle and passed vacuously. 6 assertions, both directions |
 | R6-6 | The `=3D`-eaten escape is permanently baked into two ParuVendu fixtures (originals not in the repo) | Parse-identical; the tool is fixed so it cannot recur |
 | R6-7 | QP line length regressed 4× in the Bien'ici fixtures (max 121 → 196) | Parse-identical: link counts and body lengths byte-stable |
 | R6-8 | No Decisions Log entry for the round-5 fix commits; four register rows read FIXED and OPEN at once; `Pipeline.php:829` citation drifted; 7 dangling links inside `docs/plans/archive/**` | Bookkeeping. The first is a real breach of this file's own rule |
