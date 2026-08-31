@@ -663,7 +663,13 @@ final readonly class RentScout
             return $this->watch($criteria, $store, $notifier, $sources, $verbose);
         }
 
-        $code = $this->onePass($criteria, $store, $notifier, $sources, $seed, $verbose);
+        // `$pushed` is captured, not discarded: the forced beat below reports it. Passing a literal
+        // `0` there is the defect `tests/sabotage-check.sh` already pins on the WATCH path — "the
+        // beat's notified count goes back to a hard-coded 0 (constant at any traffic level)" — and
+        // the `--once` path re-introduced it nineteen lines from the out-parameter that exists for
+        // exactly this (round-6 panel, two lenses).
+        $pushed = null;
+        $code = $this->onePass($criteria, $store, $notifier, $sources, $seed, $verbose, $pushed);
 
         // A PENDING REFUSAL FORCES A BEAT ON `--once` (round-5 panel, 2026-08-31). Q27's promise is
         // that "the next successful start reports it on the beat and clears it" — and `--once` has
@@ -682,7 +688,7 @@ final readonly class RentScout
                 $watched[$source->name()] = $source;
             }
 
-            $this->beat($notifier, $store, 1, 0, $this->pendingRefusal(), $watched);
+            $this->beat($notifier, $store, 1, $pushed ?? 0, $this->pendingRefusal(), $watched);
         }
 
         return $code;

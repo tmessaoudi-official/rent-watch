@@ -1933,7 +1933,8 @@ run_sabotage "RENT_HEARTBEAT_HOURS=0 silently disables liveness instead of refus
   's%if ($intervalHours < 1) {%if (false) {%'
 
 # Retargeted in round 4: the read was split into `pendingRefusal()` (non-consuming, for `doctor`)
-# and `takeLastRefusal()` (consuming, for the beat), so the unlink moved and named its own path.
+# and `clearLastRefusal()` (consuming, and only once a beat has DELIVERED), so the unlink moved
+# and named its own path.
 run_sabotage "the previous startup refusal is never cleared (reported forever)" \
   src/php/Rent/Cli/RentScout.php \
   "s%@unlink(\\\$this->stateFile('rent-last-refusal.txt'));%%"
@@ -2182,7 +2183,7 @@ run_sabotage "the per-pass hydration budget stops being enforced" \
 
 run_sabotage "a failed detail fetch is swallowed and never recorded" \
   src/php/Rent/Adapters/HtmlSource.php \
-  "s%\$this->store->recordDetailFailure(%\$this->nothing(%"
+  "s%\$this->store->recordDetailFailure(%(static fn (...\$a) => null)(%"
 
 run_sabotage "the detail cache key loses its source, so two landlords share a row" \
   src/php/Rent/Store/Store.php \
@@ -3676,7 +3677,7 @@ run_sabotage "the twin fact is read off the survivor's own row instead of across
 # it. Anchored on the 8-space indent, which is the STARTUP site; the in-loop one is deeper.
 run_sabotage "a startup refusal is consumed before anything can report it" \
   src/php/Rent/Cli/RentScout.php \
-  's%^        if (\$heartbeat->isDue(\$this->lastHeartbeat(), \$this->now())) {%        $_sab = $this->takeLastRefusal();\n        if ($heartbeat->isDue($this->lastHeartbeat(), $this->now())) {%'
+  's%^        if (\$heartbeat->isDue(\$this->lastHeartbeat(), \$this->now())) {%        $_sab = $this->pendingRefusal(); $this->clearLastRefusal();\n        if ($heartbeat->isDue($this->lastHeartbeat(), $this->now())) {%'
 
 # Round 4. The car beat sat after the work INSIDE the pass closure, which `WatchLoop` wraps in its
 # own try — so a throwing pass took the liveness signal with it. Anchored on the 28-space indent,

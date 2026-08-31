@@ -185,4 +185,29 @@ if (( inert > 0 )); then
   exit 1
 fi
 
-printf '  \033[32mok\033[0m   all %d expressions still apply\n\n' "$total"
+# ── AND THAT EVERY REPLACEMENT NAMES A METHOD THAT STILL EXISTS ──────────────────────────────────
+# Round-6 panel, 2026-08-31, found by three lenses independently. A sabotage that CALLS a deleted
+# method produces `Error: Call to undefined method` — which PHPUnit reports as an ERROR, which
+# satisfies `run_sabotage`'s detection rule (`ERRORS!` + `Errors: [1-9]` + a real test count) just as
+# a caught regression does. The case then reports `ok` for ever while covering nothing at all.
+#
+# `takeLastRefusal()` was renamed out of existence and its case went on reporting `ok` for a day.
+# The check above cannot see it: the left-hand PATTERN still matched perfectly. This is the same rot
+# class, on the other side of the `s%…%…%`.
+dead=0
+while read -r method; do
+  [[ -z "$method" ]] && continue
+  if ! grep -rqE "function ${method}\(" "$repo/src/php/"; then
+    printf '  \033[31mDEAD\033[0m    a replacement calls $this->%s(), which no longer exists in src/\n' "$method"
+    dead=$((dead + 1))
+  fi
+done < <(grep -oE '\$this->[a-zA-Z_][a-zA-Z0-9_]*\(' "$ledger" | sed 's/^\$this->//; s/($//' | tr -d '(' | sort -u)
+
+if (( dead > 0 )); then
+  printf '\n  \033[31m%d replacement(s) call a method that no longer exists\033[0m — they redden on an\n' "$dead"
+  printf '  undefined-method ERROR, which the ledger accepts as a detection, so they certify NOTHING.\n'
+  printf '  Retarget each one at the live API. Do not delete it.\n\n'
+  exit 1
+fi
+
+printf '  \033[32mok\033[0m   all %d expressions still apply, and every replacement names a live method\n\n' "$total"

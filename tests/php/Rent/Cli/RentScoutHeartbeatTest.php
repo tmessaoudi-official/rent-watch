@@ -498,6 +498,50 @@ final class RentScoutHeartbeatTest extends TestCase
         // And it does not repeat: a second successful pass with no note pending must not beat.
         $second = $this->scoutIn($root, ['run', '--once'], null, $channel);
         self::assertStringNotContainsString('refus au démarrage précédent', $second['out'], 'one push, not one per run');
+
+        // AND IT REPORTS WHAT THE PASS ACTUALLY PUSHED. The call site passed a literal `0` while the
+        // out-parameter that carries the real figure sat nineteen lines above it — which is the very
+        // defect `tests/sabotage-check.sh` pins on the WATCH path ("the beat's notified count goes
+        // back to a hard-coded 0, constant at any traffic level"), re-introduced on the `--once`
+        // path (round-6 panel, found by two lenses). A beat that always says 0 cannot distinguish a
+        // producing watcher from a mute one, which is the one thing it exists to do.
+        self::assertStringContainsString('0 annonce(s) notifiée(s)', $r['out'], 'this pass pushed nothing, and the beat says so honestly');
+    }
+
+    /** The other half of that: a pass that DID push must not have its count hard-coded away. */
+    public function testTheForcedOnceBeatReportsWhatThePassActuallyPushed(): void
+    {
+        $root = $this->tempRoot([
+            'communes' => [],
+            'postcode_prefixes' => ['75', '77', '78', '91', '92', '93', '94', '95'],
+            'min_rooms' => 1,
+            'min_surface_m2' => 1,
+            'max_rent_cc' => 100000,
+        ]);
+        $channel = $this->delivering();
+
+        // Seed on a SUBSET so the next pass has genuinely new listings to announce, exactly as
+        // testTheHeartbeatReportsTheNumberItActuallyPushed does.
+        $full = (string) file_get_contents($root . '/tests/fixtures/rent/fixture_demo/search.json');
+        /** @var array{results: array{items: list<array<string, mixed>>}} $payload */
+        $payload = json_decode($full, true, 512, JSON_THROW_ON_ERROR);
+        $subset = $payload;
+        $subset['results']['items'] = \array_slice($payload['results']['items'], 0, 1);
+        file_put_contents($root . '/tests/fixtures/rent/fixture_demo/search.json', json_encode($subset, JSON_THROW_ON_ERROR));
+        $this->scoutIn($root, ['run', '--once', '--seed'], null, $channel);
+        file_put_contents($root . '/tests/fixtures/rent/fixture_demo/search.json', $full);
+
+        file_put_contents($root . '/state/rent-last-refusal.txt', '2026-08-21T22:00:00+02:00 — canal ntfy sans RENT_NTFY_TOPIC');
+
+        $r = $this->scoutIn($root, ['run', '--once'], null, $channel);
+
+        self::assertSame(0, $r['code'], $r['err']);
+        self::assertStringContainsString('refus au démarrage précédent', $r['out'], 'the forced beat fired');
+        self::assertDoesNotMatchRegularExpression(
+            '~· 0 annonce\(s\) notifiée\(s\)~',
+            $r['out'],
+            'the pass pushed listings, so a hard-coded 0 here would make the beat constant at any traffic level',
+        );
     }
 
     public function testARunRefusalWritesTheNoteForTheNextStart(): void

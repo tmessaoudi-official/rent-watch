@@ -293,6 +293,46 @@ final class CarScoutTest extends TestCase
         }
     }
 
+    /**
+     * THE CAR HALF OF THE FORCED `--once` BEAT, which shipped with no test at all (round-6 panel).
+     *
+     * `ccc8498` said "on both CLIs … the test asserts both halves" and its diffstat touched only
+     * `RentScoutHeartbeatTest`. A reviewer replaced the whole car branch with `if (false)` and all
+     * 2 385 tests stayed green — the milestone's characteristic defect, with the missing symmetric
+     * surface being the TEST rather than the code.
+     *
+     * Three things asserted, because only together do they distinguish this from spam: the note
+     * reaches a channel on a deployment that never watches, it is cleared once delivered, and the
+     * beat reports what the pass ACTUALLY pushed rather than a hard-coded 0.
+     */
+    public function testASuccessfulOncePassCarriesAPendingRefusalAndClearsIt(): void
+    {
+        $note = \dirname($this->db) . '/car-last-refusal.txt';
+
+        $seed = $this->scout(['--domain=car', 'run', '--once', '--seed', '--source=paruvendu']);
+        self::assertSame(0, $seed['code'], $seed['err']);
+        file_put_contents($note, '2026-08-29T22:00:00+02:00 — canal ntfy sans CAR_NTFY_TOPIC');
+
+        $channel = new CarRecordingChannel();
+        $r = $this->scout(['--domain=car', 'run', '--once', '--source=paruvendu'], $channel);
+
+        self::assertSame(0, $r['code'], $r['err']);
+
+        $beats = array_values(array_filter($channel->sent, static fn (Notification $n): bool => $n->kind === NotificationKind::HEARTBEAT));
+        self::assertCount(1, $beats, 'a pending note forces exactly one beat on a verb that never beats');
+        self::assertStringContainsString('CAR_NTFY_TOPIC', implode(' | ', $beats[0]->reasons), 'and it carries the refusal');
+        self::assertFileDoesNotExist($note, 'delivered, therefore cleared — it cannot become furniture');
+
+        // And it does not repeat once there is nothing pending.
+        $again = new CarRecordingChannel();
+        $this->scout(['--domain=car', 'run', '--once', '--source=paruvendu'], $again);
+        self::assertSame(
+            [],
+            array_filter($again->sent, static fn (Notification $n): bool => $n->kind === NotificationKind::HEARTBEAT),
+            'one push, not one per run',
+        );
+    }
+
     public function testAnUnusableHeartbeatHoursRefusalNamesTheCarKey(): void
     {
         // Dropping the key argument at the call site left the suite green (round-2 panel): the

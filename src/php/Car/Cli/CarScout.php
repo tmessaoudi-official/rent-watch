@@ -239,9 +239,20 @@ final readonly class CarScout
             // it cannot repeat. `--seed` notifies nothing by construction and is excluded.
             if ($code === 0 && !$seed && $this->pendingRefusal() !== null) {
                 $health = array_map(fn (VehicleSource $s) => $s->health($this->now()), $sources);
-                $n = (new VehicleFormatter())->heartbeat(1, 0, $health, $this->now(), $this->pendingRefusal());
+                // The pass's REAL count, not a literal 0 — the rent twin's own ledger case pins that
+                // mistake on the watch path and the `--once` path re-introduced it (round-6 panel).
+                $n = (new VehicleFormatter())->heartbeat(1, $result->notified, $health, $this->now(), $this->pendingRefusal());
+                $failures = $notifier->send($n);
 
-                if ($notifier->delivered($notifier->send($n))) {
+                // Reported, exactly as `RentScout::beat()` does. Without this a forced beat that
+                // fails to deliver is completely silent on the car side, while the rent side prints
+                // a redacted warning — and `Notifier::send()` catches `\Throwable`, so the `catch`
+                // around the watch beat never sees it either (round-6 panel, completeness 7).
+                foreach ($failures as $failure) {
+                    $this->warn(Redact::text($failure->getMessage()));
+                }
+
+                if ($notifier->delivered($failures)) {
                     $this->clearLastRefusal();
                 }
             }
