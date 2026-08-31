@@ -193,8 +193,8 @@ read-only) and the merged prose as one review deep.
 | F7 | La Centrale truncation | Email carries ~3 of 900+ stated cards; `FEED_SILENT` keys on message DATE, so health stays green while 99.7% blind | Track 2 step 4 (documented cost) |
 | F8 | SeLoger `id_from: content` + a misread surface | A bad surface reading changes the dedup key → one flat can notify twice under two identities | Noted in 1g; same root class |
 | F12 | `docker compose up -d` wedges on recreate and leaves a watcher DOWN | **LIVE, twice on 2026-08-31.** `stop_grace_period: 5m` + a renamed old container = the orchestration stalls; once it then failed outright on `Conflict. The container name … is already in use`. rent-scout was down ~13 min and nothing said so | see the redeploy note below |
-| F10 | SeLoger `Baisse de prix` yields an EMPTY title | **LIVE** — `title_pattern` refuses any line containing `€`, and a price-drop card's own text starts with one; `exclude_title_patterns` is inert on the whole template. 2 of 4 empty-title rows were NOTIFIED | Track 3 finding, fix owed against a captured fixture |
-| F11 | A SeLoger card with no `pièces` line has no title anchor at all | **LIVE, and narrower than F10** — the pattern anchors on the `pièces` line, so a card stating no room count (a room rental, a parking, an atypical ad) yields `''`. Two such rows; both were REJECTED, by the description-matching `exclude_patterns` rather than by the title ones | same |
+| F10 | SeLoger `Baisse de prix` yields an EMPTY title | **CLOSED 2026-09-01** (`d60a183`) — the pattern refused any candidate CONTAINING a `€`; it now refuses only one that IS a price. Measured over the store: 552 unchanged, 2 gained a title, 0 changed, 0 lost. Template frozen as fixtures 004/005 | — |
+| F11 | A SeLoger card with no `pièces` line has no title anchor at all | **LIVE, and the remaining half of F10** — the anchor IS the `pièces` line, so a card stating no room count (a room rental, a parking, an atypical ad) yields `''` whatever the `€` rule does. Two such rows; both REJECTED, by the description-matching `exclude_patterns` rather than the title ones — luck rather than a guard. Needs a SECOND anchor, and a captured card of that shape to measure one against | fix owed |
 | F9 | n=1 separators/patterns (leboncoin rent, PAP) | Measured on one capture each; PAP already proved what that costs | standing; each new alert is the regression test |
 | F10 | Generic `ROOMS_PATTERN` reads hex out of photo-URL UUIDs | `(?:T\|F)\s?(\d)\b` is case-insensitive, so `…90F8-…` → 8 rooms. **14 wrong on seloger, 6 notified; 7 on bienici.** Too LOW loses real matches, too HIGH clears `min_rooms` on a number nobody stated | **NEW Track 1j** (2026-08-31) |
 | F11 | Startup refusal reachable only under `--watch` | *FIXED 2026-08-31* — it was also consumed above the `isDue()` test, so a restart inside the beat interval destroyed it unreported; `doctor` now reports it without consuming | round-4 fix commit |
@@ -634,11 +634,18 @@ Two findings that ARE real:
   and a `Baisse de prix` card's own agency text begins `600€ TOUT COMPRIS – électricité…`, so it is
   refused and the title comes back empty. The other two rows have no `pièces` line at all, so the
   anchor is absent.
-  **NOT FIXED HERE, deliberately.** The narrow repair is to reject a line that is ONLY a price
-  rather than any line containing one — but that is a pattern change on the highest-volume source,
-  and this repo's rule is that a real payload is the input. Capture the `Baisse de prix` template
-  (`php tools/dump-eml.php alertes@seloger.com … "$IMAP_MAILBOX"`), freeze it, then change the
-  pattern against it.
+  **F10 IS NOW FIXED** (`d60a183`), and the route is worth repeating. The two `Baisse de prix`
+  messages still in the IMAP window were captured — `php tools/dump-eml.php alertes.seloger.com 40
+  var/claude/captures 'rent-watch/portails'`, note the sender is a DOMAIN not an address — scrubbed
+  and frozen as fixtures 004/005. **Neither reproduces the failing variant**: both extract a title,
+  because the `€`-leading rows had aged out of the window. What stood in for them is better than a
+  synthetic guess — schema v7 stores the card body a verdict was formed from, so the failing layout
+  was read back byte for byte and encoded in `PriceLedTitleTest`. Measured over every stored seloger
+  snapshot: 552 unchanged, 2 gained a title, 0 changed, 0 lost.
+
+  **F11 IS NOT FIXED**, and it is not the same bug: the anchor IS the `pièces` line, so a card
+  stating no room count has no anchor at all regardless of the `€` rule. Fixing it needs a second
+  anchor and a captured card of that shape to measure one against.
 
 5. Deliverable `var/claude/audit-<date>.md` with the falsifiable checklist: per label and per
    source it MUST state (a) message/row count, (b) reconciliation result, (c) unmatched
