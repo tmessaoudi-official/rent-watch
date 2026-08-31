@@ -68,6 +68,13 @@ read-only) and the merged prose as one review deep.
 - Gmail (live): `car-watch` label = 0 messages; leboncoin's 5 car "vous propose" messages sit in
   plain INBOX (no filter routes them); AutoScout24 has sent **no real listing alert ever** (3
   messages: welcome, confirm-address, search-saved receipt — nothing per-listing).
+  > **THE FIRST CLAUSE WENT STALE WITHIN THE DAY, and the way it misled is worth keeping.**
+  > Re-measured 2026-08-31 evening: `car-watch/portails` is POPULATED — La Centrale twice daily,
+  > Agorastore daily, AutoScout24's newsletters — and the first run of `tools/dump-eml.php`
+  > searched INBOX, found neither, and printed `aucun message de <sender>`, which reads exactly
+  > like a portal that has sent nothing. An alert routed to a label is ARCHIVED OUT of the inbox.
+  > A mailbox census is a measurement with a folder in it; quoting one without the folder is the
+  > same shape as quoting a yield without a date.
 
 ---
 
@@ -457,23 +464,66 @@ The exhaustive candidate investigation lives in `docs/plans/archive/scout-rename
    `php tools/scrub-eml.php in.eml out.eml takieddine.messaoudi.official@gmail.com [needles…]` —
    address REQUIRED, plus a first-name/username needle for templates that greet by name
    (leboncoin does).
-1. **leboncoin-car** (`no.reply@leboncoin.fr`, "vous propose" template, one ad per message,
-   PAP-shaped): capture the 5 existing INBOX messages, build the source block using the CAR
-   domain's REAL param set — `subject_pattern`, `price_pattern`, `facts_pattern`,
-   `make_model_pattern` (proven via ParuVendu). **Never** `surface_pattern`/`rooms_pattern`
-   (rent-only, `ConfigError` at load) and **never** `postcode_pattern`/`title_pattern` (unread —
-   F4). `feed_silent_days: 7` (ruling). Gmail filter routing "vous propose" → a label is the
-   DEVELOPER's action; the 5 existing messages can be labelled retroactively via the Gmail tool.
+1. **leboncoin-car — DONE 2026-08-31, commit `77ea035`.** 5 of 5 captures parse; every field read
+   by hand off the subjects before being asserted. Two things the plan got wrong here, both worth
+   keeping. It said **never `title_pattern`** — and this source cannot be built without it: its
+   facts are in the SUBJECT (`<vendeur> vous propose <MARQUE MODELE …> à <prix> € à <Commune>`),
+   while the body above the price line carries only the dealer's name, its rating and `vous
+   présente ses bonnes affaires :`. The positional reader would have titled all five with that
+   marketing sentence, and `gearboxFromTitle()` reads the title, so the two cards stating `DCT-7`
+   and `*BOITE AUTOMATIQUE` would have scored as stating no gearbox. So `title_pattern` was made
+   READ (against the subject) and left `UNREAD_PARAMS` in the same change, which is the discharge
+   1c's comment asks for. And `make_model_pattern` alone was not enough: it matches the LINK, and
+   leboncoin's is `/vi/<id>.htm` carrying neither make nor model — hence `make_model_source: title`,
+   named rather than a link-then-title fallback. That matters to the SCORE: `brand_avoid` reads
+   `make`, and an unextracted make scores 0 on the brand component (1d).
+
+   **A latent cross-domain collision was found and guarded on both sides.** The rent and car
+   leboncoin sources share a SENDER, a LINK HOST, and the `Voir l'annonce` string the rent source
+   splits on. Nothing separates them but the subject, and they do not collide today ONLY because
+   the vehicle alerts sit unlabelled in the INBOX while the rent source reads the alert folder —
+   luck that expires the moment the routing filter is created. Both blocks now carry a
+   `subject_pattern`, anchored on their own wording rather than negating the other's.
 2. **AutoScout24 — BLOCKED ON AN INPUT, not buildable**: no per-listing alert has ever arrived
-   (verified 2026-08-31: welcome + confirm + receipt only, the first two simultaneous). Wait for
+   (verified 2026-08-31 twice, the second time against the populated `car-watch/portails` label:
+   only `autoscout24-news@` magazine issues and `autoscout24-info@` marketing — `Voitures de ville
+   dans toutes les gammes de prix`, `Essai du Kia EV5` — never a per-listing alert). Wait for
    the first real alert; then capture, confirm the sender, build.
-3. **La Centrale** (`info@mail-alerte.lacentrale.fr`): build as `email_alert`, `feed_silent_days: 3`.
-   Document the truncation as a stated cost IN ITS CONFIG COMMENT: the email carries ~3 cards of
-   900+ stated; `FEED_SILENT` keys on message date, so health stays green while 99.7% blind (F7).
-   Polling is REFUSED BY RULING (DataDome, hard rule 5) — email is the only route.
-4. **Agorastore**: email alert is price-only and truncated — bonus at best. The live half is the
-   `api.auctelia.com` polling route: investigate against the auction ruling's closing-time
-   requirement before building anything.
+3. **La Centrale — MEASURED 2026-08-31, and it is NOT the config drop-in this entry assumed.**
+   Three real alerts captured and scrubbed cleanly (`car-watch/portails`, twice daily). What the
+   payload actually shows:
+   - **EVERY link is an opaque tracking redirect** — `clicks.mail-alerte.lacentrale.fr/f/a/<token>~~/…`
+     — carrying no listing id and no listing URL. `VehicleEmailSource` derives its identity from
+     `basename(parse_url($link, PATH))`, so every card in a message would share one id, and cards
+     across messages would each get a fresh one. That is SeLoger's problem exactly, and its answer
+     was `id_from: content` — **which the CAR adapter does not have**. Building this source means
+     porting content-addressing to `VehicleEmailSource` first, with the no-information floor and
+     the within-message duplicate rule that travel with it. It is real engineering, not a config
+     block, and the identity scheme must be chosen BEFORE the first enabled pass because nothing
+     migrates a stored row between schemes.
+   - A card reads `MERCEDES CLASSE C IV COUPE AMG` / `La Centrale 49 600 km` / `61 990 €` — so the
+     facts are there, on separate lines rather than one facts line, and a `facts_pattern` of the
+     ParuVendu shape will not read them.
+   - **F7 confirmed and worse than recorded**: the subjects say `399`, `426`, `1071` new vehicles;
+     the message carries a handful. Two subject shapes come from this sender (`NNN nouveaux
+     véhicules correspondent à votre recherche` and `🚗 Votre prochaine voiture est peut-être
+     ici…`), so a `subject_pattern` must admit both or deliberately pick one.
+   - Polling stays REFUSED BY RULING (DataDome, hard rule 5).
+4. **Agorastore — BLOCKED ON THE SCRUBBER, with the evidence measured.** It alerts daily from
+   `support@agorastore.fr` into `car-watch/portails` and greets by name (`Bonjour M. <Prénom Nom>`),
+   so the name needle is mandatory. `tools/scrub-eml.php` **REFUSES both captures**, correctly: the
+   message carries `WyIyNjk4ZCIsInRha2llZGRpbmUu…`, which base64-decodes to the JSON array
+   `["<list id>","<the subscriber's address>","<subscriber id>"]` — no JWT and no `eyJ` anchor, just
+   an opaque blob with the address inside it. The verifier decodes and sees it; the strippers do
+   not know the shape, so it refuses rather than writing a file the address is one `base64 -d` away
+   from. **A generic "strip any base64 run that decodes to a needle" was written and REVERTED the
+   same day**: it turned five of `tests/test-scrub-eml.sh`'s REFUSAL guarantees green-by-removal —
+   the tool's whole safety model is *refuse what you cannot strip*, and a stripper broad enough to
+   catch this is broad enough to silence the refusal for encodings nobody has seen. The next
+   attempt must add a NARROW, shape-specific stripper and keep all 44 scrubber tests green,
+   including the five that assert an unknown encoding still refuses.
+   The `api.auctelia.com` polling route is unchanged and still needs checking against the auction
+   ruling's closing-time requirement.
 5. Skips, settled: Alcopa (refused both routes 2026-08-29), CapCar (blocked on the developer's own
    one-time browser check), Carizy (dead). Interencheres is MEASURED, pollable, low-priority
    engineering backlog — not blocked on any input.
