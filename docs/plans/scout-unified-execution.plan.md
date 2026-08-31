@@ -88,6 +88,23 @@ read-only) and the merged prose as one review deep.
 - [2026-08-31] DEFAULT APPLIED (not ruled): brand's 10 points are taken from `price` (25→20) and
   `body` (15→10) — the assembling session's allocation, not the developer's. Reversed by taking
   the 10 from different components before building 1d.
+- [2026-08-31] DEFAULT APPLIED, and it DEPARTS from 1d's own body text: an UNEXTRACTED make scores
+  **0 and says so**, not the full share. 1d's line ("a car with no extracted make gets the full
+  share, hard rule 9") is the assembling session's elaboration — the Decisions Log entry above
+  rules only the listed/unlisted split. Two reasons for the departure, both repo-native: hard rule 9
+  forbids reading unknown as BELOW A MINIMUM, which is a *disqualifier*, and nothing here
+  disqualifies (hard rule 8 keeps the mechanisms apart); and `VehicleScorer`'s own docblock already
+  rules that every unknown component "scores 0 and SAYS so… a sparse listing ranks below a
+  documented one" — the five sibling components all take that arm. Awarding the share would rank an
+  EXTRACTION FAILURE as a definitely-not-Peugeot: a fact manufactured from its own absence, wearing
+  an alibi, which is the defect this repo has paid for repeatedly. Both shipped car sources extract
+  a make. Reversed by adding `$score += $w['brand'];` to that one arm in `VehicleScorer`.
+- [2026-08-31] DEFAULT APPLIED: an EMPTY `brand_avoid` awards the share to every make, which is a
+  different question and takes the opposite answer. That is not an unknown fact but a configured
+  absence of preference, and withholding it would silently shrink the achievable maximum to 90 —
+  while `high_priority_score` is an ABSOLUTE threshold, so the `!!` marker would become harder to
+  reach for exactly the deployments that expressed no preference. Same failure shape the rent side
+  measured on 2026-08-26.
 - [2026-08-31] AGREED: PAP fix = patterns + health signal (Track 1h). No backfill of the 21
   null-extraction rows — stated cost, they stay null.
 - [2026-08-31] AGREED: name-in-git-history = leave history; forward fix only (scrubber + re-scrub

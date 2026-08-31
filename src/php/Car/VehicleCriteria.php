@@ -30,6 +30,16 @@ final readonly class VehicleCriteria
         public array $weights,
         public array $excludePatterns,
         public VehicleNotifyPolicy $notify,
+        /**
+         * Makes to score DOWN, folded — the developer's 2026-08-31 ruling.
+         *
+         * A LIST, not a rank, and the name says so. `body_rank` scores its top entry HIGHEST, so
+         * mirroring it here would have made the disfavoured brands beat an unlisted one — the
+         * opposite of the ruling. No ordering among these was ruled either: they are equal.
+         *
+         * @var list<string>
+         */
+        public array $brandAvoid = [],
     ) {}
 
     /** Hard rule 9: an UNKNOWN location never rejects; a stated one outside the set does. */
@@ -45,6 +55,21 @@ final readonly class VehicleCriteria
         }
 
         return false;
+    }
+
+    /**
+     * Is this make one the developer would rather avoid?
+     *
+     * `null` — no make extracted — is NOT avoided (hard rule 9: unknown is not disfavoured), which
+     * is the same direction every other unknown takes here.
+     */
+    public function isAvoidedBrand(?string $make): bool
+    {
+        if ($make === null || trim($make) === '') {
+            return false;
+        }
+
+        return \in_array(\Scout\Core\Text::fold($make), $this->brandAvoid, true);
     }
 
     /** 1-based rank of a body in the preference list, or null when unranked. */

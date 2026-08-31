@@ -70,6 +70,19 @@ final class VehicleCriteriaLoader
             throw ConfigError::at($pointer . '.weights', 'la somme des poids doit faire 100, reçu ' . array_sum($weights));
         }
 
+        // FOLDED AT LOAD, so a config may write `Peugeot` and a payload may say `PEUGEOT`. Folding
+        // here rather than at every comparison keeps one implementation of the rule.
+        $brandAvoid = [];
+        foreach ($r->has('brand_avoid') ? $r->requireStringList('brand_avoid', allowEmptyList: true) : [] as $brand) {
+            $folded = Text::fold($brand);
+
+            if ($folded === '') {
+                throw ConfigError::at($pointer . '.brand_avoid', 'une marque vide n\'est pas une marque');
+            }
+
+            $brandAvoid[] = $folded;
+        }
+
         $patterns = $r->requireStringList('exclude_patterns', allowEmptyList: true);
         foreach ($patterns as $pattern) {
             if (@preg_match('~' . $pattern . '~u', '') === false) {
@@ -88,7 +101,7 @@ final class VehicleCriteriaLoader
         $n->done();
         $r->done();
 
-        return new VehicleCriteria($maxPrice, $prefixes, $bodyRank, $peakAge, $peakKm, $weights, $patterns, $notify);
+        return new VehicleCriteria($maxPrice, $prefixes, $bodyRank, $peakAge, $peakKm, $weights, $patterns, $notify, $brandAvoid);
     }
 
     /** @return array<string,mixed> */

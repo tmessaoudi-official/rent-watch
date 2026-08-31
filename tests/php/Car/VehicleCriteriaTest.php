@@ -47,7 +47,7 @@ final class VehicleCriteriaTest extends TestCase
     {
         $this->expectException(ConfigError::class);
         $this->expectExceptionMessageMatches('~100~');
-        VehicleCriteriaLoader::fromArray(self::minimal(['weights' => ['price' => 50, 'age' => 20, 'mileage' => 20, 'gearbox' => 10, 'fuel' => 10, 'body' => 15]]));
+        VehicleCriteriaLoader::fromArray(self::minimal(['weights' => ['price' => 50, 'age' => 20, 'mileage' => 20, 'gearbox' => 10, 'fuel' => 10, 'body' => 10, 'brand' => 10]]));
     }
 
     public function testALocalOverrideMergesFieldByField(): void
@@ -94,7 +94,8 @@ final class VehicleCriteriaTest extends TestCase
             'body_rank' => ['suv', 'break', 'berline'],
             'peak_age_years' => 5,
             'peak_mileage_km' => 80000,
-            'weights' => ['price' => 25, 'age' => 20, 'mileage' => 20, 'gearbox' => 10, 'fuel' => 10, 'body' => 15],
+            'weights' => ['price' => 20, 'age' => 20, 'mileage' => 20, 'gearbox' => 10, 'fuel' => 10, 'body' => 10, 'brand' => 10],
+            'brand_avoid' => ['peugeot', 'renault', 'opel'],
             'exclude_patterns' => [],
             'notify' => ['channels' => ['console'], 'high_priority_score' => 70, 'price_drop_min_eur' => 300, 'price_drop_min_pct' => 3.0],
         ];

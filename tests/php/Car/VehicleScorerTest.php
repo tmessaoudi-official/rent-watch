@@ -18,7 +18,10 @@ final class VehicleScorerTest extends TestCase
 {
     public function testTheIdealCarScoresFullMarks(): void
     {
-        $v = $this->judge($this->car(priceEur: 1, year: 2025, month: 8, mileageKm: 1000, gearbox: 'automatique', fuel: 'essence', body: 'suv'));
+        // `make` is now part of a perfect score: the brand share is EARNED by being off the avoid
+        // list, so a car whose make never extracted cannot reach 100. That is the point of the
+        // component, not an oversight — see the unknown-make arm in VehicleScorer.
+        $v = $this->judge($this->car(priceEur: 1, year: 2025, month: 8, mileageKm: 1000, gearbox: 'automatique', fuel: 'essence', body: 'suv', make: 'Toyota'));
 
         self::assertSame(VehicleOutcome::MATCH, $v->outcome);
         self::assertSame(100, $v->score);
@@ -66,8 +69,8 @@ final class VehicleScorerTest extends TestCase
         $v = $this->judge($this->car(priceEur: 15000));
 
         self::assertSame(VehicleOutcome::MATCH, $v->outcome);
-        self::assertSame(13, $v->score, '25 × 0.5 for the price and nothing else — unknown is never rewarded');
-        foreach (['année inconnue — hors score', 'kilométrage inconnu — hors score', 'boîte inconnue — hors score', 'énergie inconnue — hors score', 'carrosserie inconnue — hors score'] as $line) {
+        self::assertSame(10, $v->score, '20 × 0.5 for the price and nothing else — unknown is never rewarded');
+        foreach (['année inconnue — hors score', 'kilométrage inconnu — hors score', 'boîte inconnue — hors score', 'énergie inconnue — hors score', 'carrosserie inconnue — hors score', 'marque inconnue — hors score'] as $line) {
             self::assertContains($line, $v->reasons);
         }
     }
@@ -86,9 +89,9 @@ final class VehicleScorerTest extends TestCase
 
     public function testBodyRankScoresByPosition(): void
     {
-        self::assertSame(15, $this->judge($this->car(body: 'SUV'))->score);
-        self::assertSame(10, $this->judge($this->car(body: 'Break'))->score);
-        self::assertSame(5, $this->judge($this->car(body: 'Berline'))->score);
+        self::assertSame(10, $this->judge($this->car(body: 'SUV'))->score);
+        self::assertSame(7, $this->judge($this->car(body: 'Break'))->score, '10 × 2/3, rounded');
+        self::assertSame(3, $this->judge($this->car(body: 'Berline'))->score, '10 × 1/3, rounded');
         self::assertSame(0, $this->judge($this->car(body: 'Coupé'))->score);
     }
 
@@ -113,11 +116,11 @@ final class VehicleScorerTest extends TestCase
     private function car(
         ?int $priceEur = null, ?int $year = null, ?int $month = null, ?int $mileageKm = null,
         ?string $gearbox = null, ?string $fuel = null, ?string $body = null, ?string $postcode = null,
-        string $title = 'Renault Austral',
+        string $title = 'Renault Austral', ?string $make = null,
     ): VehicleListing {
         return new VehicleListing(
             sourceName: 'test', externalId: 'x', title: $title, priceEur: $priceEur, year: $year, month: $month,
-            mileageKm: $mileageKm, gearbox: $gearbox, fuel: $fuel, body: $body, postcode: $postcode,
+            mileageKm: $mileageKm, gearbox: $gearbox, fuel: $fuel, body: $body, postcode: $postcode, make: $make,
         );
     }
 }

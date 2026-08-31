@@ -19,7 +19,7 @@ namespace Scout\Car;
  */
 final class VehicleScorer
 {
-    public const array COMPONENTS = ['price', 'age', 'mileage', 'gearbox', 'fuel', 'body'];
+    public const array COMPONENTS = ['price', 'age', 'mileage', 'gearbox', 'fuel', 'body', 'brand'];
 
     public function judge(VehicleListing $car, VehicleClassification $class, VehicleCriteria $criteria, int $year, int $month): VehicleVerdict
     {
@@ -103,6 +103,45 @@ final class VehicleScorer
             $share = ($n - $rank + 1) / $n;
             $score += $w['body'] * $share;
             $reasons[] = sprintf('%s — carrosserie classée %d/%d', $car->body, $rank, $n);
+        }
+
+        // BRAND — AN INVERTED RANK, and the inversion is the ruling rather than a detail. Mirroring
+        // `body_rank` above would have scored the disfavoured makes HIGHEST, because that mechanism
+        // gives its top entry the full share; the developer asked for the opposite (2026-08-31).
+        //
+        // So the share is earned by NOT being on the list: an unlisted make takes all of it, a
+        // listed one takes none, and no ordering among the listed ones was ruled — they are equal.
+        // A make that could not be extracted takes the full share too (hard rule 9: unknown is not
+        // disfavoured), which is the direction every other unknown takes here.
+        //
+        // The weight comes OUT of the existing 100 rather than pushing past it, so the total still
+        // means what `high_priority_score` was calibrated against.
+        if ($criteria->brandAvoid === []) {
+            // Nothing configured means no make is disfavoured, so EVERY make earns the share. It
+            // reads as a wash for ordering either way, but withholding it would quietly drop the
+            // achievable maximum to 90 for such a deployment — and `high_priority_score` is an
+            // ABSOLUTE threshold, so a scale that silently shrinks makes it unreachable. Same
+            // reasoning as the unknown-make arm below.
+            $score += $w['brand']; // unique on purpose: the ledger addresses this arm by this line
+            $reasons[] = 'marque — aucune préférence configurée';
+        } elseif ($car->make === null) {
+            // UNKNOWN SCORES 0 AND SAYS SO — the same arm every other component here takes, and a
+            // DELIBERATE deviation from the plan's line ("a car with no extracted make gets the
+            // full share"). Hard rule 9 forbids treating unknown as BELOW A MINIMUM — a
+            // disqualifier — and nothing here disqualifies; hard rule 8 keeps the two mechanisms
+            // apart. Awarding the share instead would rank an EXTRACTION FAILURE as a definitely-
+            // not-Peugeot, which is this repo's recurring defect: a fact manufactured from its own
+            // absence, wearing an alibi. Both shipped car sources do extract a make.
+            // Reversed by adding `$score += $w['brand'];` to this arm.
+            $reasons[] = 'marque inconnue — hors score';
+        } elseif ($criteria->isAvoidedBrand($car->make)) {
+            // TRIMMED for display, because the comparison is: `isAvoidedBrand()` folds, and folding
+            // trims. A `make_model_pattern` capture carrying a trailing space would otherwise be
+            // penalised correctly and announced with the whitespace still in it.
+            $reasons[] = trim($car->make) . ' — marque à éviter';
+        } else {
+            $score += $w['brand'];
+            $reasons[] = trim($car->make) . ' — hors des marques à éviter';
         }
 
         if ($car->sellerType !== null) {

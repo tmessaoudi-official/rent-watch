@@ -3728,6 +3728,24 @@ run_sabotage "a car startup refusal is not recorded for the next beat" \
   's%@file_put_contents(\$this->stateFile(.car-last-refusal.txt.), \$this->now()%@file_put_contents("/dev/null", $this->now()%'
 printf '\n  %d sabotage(s) detected, %d undetected\n' "$pass" "$fail"
 
+# TRACK 1d — the brand penalty. Its whole value is an ORDERING, and an ordering fails silently:
+# every score stays plausible, the notification still lists a reason, and only the ranking is wrong.
+run_sabotage "an avoided make earns the brand share anyway (the penalty inverted back into a reward)" \
+  src/php/Car/VehicleScorer.php \
+  "s%        } elseif (\$criteria->isAvoidedBrand(\$car->make)) {%        } elseif (\$criteria->isAvoidedBrand(\$car->make)) {\n            \$score += \$w['brand'];%"
+
+run_sabotage "an unextracted make is rewarded the full brand share (a fact manufactured from its absence)" \
+  src/php/Car/VehicleScorer.php \
+  "s%            \$reasons\[\] = 'marque inconnue — hors score';%            \$score += \$w['brand']; \$reasons[] = 'marque inconnue — hors score';%"
+
+run_sabotage "no brand preference configured silently shrinks the scale to 90 (high_priority_score unreachable)" \
+  src/php/Car/VehicleScorer.php \
+  "s%            \$score += \$w\['brand'\]; // unique on purpose: the ledger addresses this arm by this line%%"
+
+run_sabotage "a brand that folds to nothing is accepted (a configured preference that matches no make)" \
+  src/php/Car/VehicleCriteriaLoader.php \
+  "s%            if (\$folded === '') {%            if (false) {%"
+
 if [[ -n "$_filter" ]]; then
   # Loud, because a filtered run that looked like a full one would be the ledger lying about its own
   # coverage — the same class of defect as the baseline gate that reddened itself for six days.
