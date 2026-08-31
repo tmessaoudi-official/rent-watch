@@ -21,8 +21,14 @@ declare(strict_types=1);
  * leaks this repo has already had would happen again. Run `tools/scrub-eml.php` on the result.
  *
  * Usage:
- *   php tools/dump-eml.php <from-address> [max] [out-dir]
+ *   php tools/dump-eml.php <from-address> [max] [out-dir] [folder]
  *   php tools/dump-eml.php no.reply@leboncoin.fr 5
+ *   php tools/dump-eml.php support@agorastore.fr 2 var/claude/captures 'car-watch/portails'
+ *
+ * The FOLDER matters and defaults to INBOX: an alert routed to a Gmail label has been archived out
+ * of the inbox, so a search there finds nothing and says `aucun message` — which reads exactly like
+ * a portal that has sent nothing. `IMAP_MAILBOX` / `CAR_IMAP_MAILBOX` in `.env` name the folders
+ * the sources themselves read.
  */
 
 require __DIR__ . '/../vendor/autoload.php';
@@ -32,9 +38,10 @@ use Scout\Config\DotEnv;
 $from = $argv[1] ?? '';
 $max = (int) ($argv[2] ?? 10);
 $outDir = $argv[3] ?? __DIR__ . '/../var/claude/captures';
+$folder = $argv[4] ?? 'INBOX';
 
 if ($from === '') {
-    fwrite(STDERR, "usage: php tools/dump-eml.php <from-address> [max] [out-dir]\n");
+    fwrite(STDERR, "usage: php tools/dump-eml.php <from-address> [max] [out-dir] [folder]\n");
     exit(2);
 }
 
@@ -90,7 +97,7 @@ $cmd = static function (string $line) use ($sock, &$tag): array {
 
 fgets($sock, 65536); // greeting
 $cmd('LOGIN "' . addcslashes($user, '"\\') . '" "' . addcslashes($pass, '"\\') . '"');
-$cmd('EXAMINE "INBOX"');
+$cmd('EXAMINE "' . addcslashes($folder, '"\\') . '"');
 
 $search = $cmd('SEARCH FROM "' . addcslashes($from, '"\\') . '"');
 $ids = [];
@@ -101,12 +108,14 @@ foreach ($search as $line) {
 }
 
 if ($ids === []) {
-    fwrite(STDERR, "aucun message de $from\n");
+    // NAMES THE FOLDER, because "no message" and "wrong folder" are the same output otherwise —
+    // and an alert routed to a label is archived out of INBOX, which is the common case here.
+    fwrite(STDERR, "aucun message de $from dans le dossier \"$folder\"\n");
     exit(1);
 }
 
 $ids = array_slice($ids, -$max);
-echo count($ids), " message(s) de $from\n";
+echo count($ids), " message(s) de $from dans \"$folder\"\n";
 
 foreach ($ids as $id) {
     // BODY.PEEK[] — the whole message, WITHOUT setting \Seen.
