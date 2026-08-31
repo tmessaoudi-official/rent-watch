@@ -3727,6 +3727,13 @@ run_sabotage "a car startup refusal is not recorded for the next beat" \
   src/php/Car/Cli/CarScout.php \
   's%@file_put_contents(\$this->stateFile(.car-last-refusal.txt.), \$this->now()%@file_put_contents("/dev/null", $this->now()%'
 
+# F10 — the title pattern's price guard. Refusing a candidate that merely CONTAINS a € makes
+# exclude_title_patterns inert across SeLoger's whole `Baisse de prix` template; refusing NOTHING
+# makes the rent line itself the title, which is the worse half. Both directions must redden.
+run_sabotage "the title pattern refuses any candidate carrying a euro sign again (a whole template goes untitled)" \
+  config/rent/sources.json \
+  's%(?!\[\\\\h\\\\d.,\]\*€\[\\\\h/a-zA-Zéè\]\*\$)(\[^\\\\n\]{2,80}?)%([^\\\\n€]{2,80}?)%'
+
 # TRACK 1d — the brand penalty. Its whole value is an ORDERING, and an ordering fails silently:
 # every score stays plausible, the notification still lists a reason, and only the ranking is wrong.
 run_sabotage "an avoided make earns the brand share anyway (the penalty inverted back into a reward)" \

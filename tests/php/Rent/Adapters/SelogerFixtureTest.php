@@ -70,16 +70,24 @@ final class SelogerFixtureTest extends TestCase
     }
 
     /**
-     * Three messages, six cards, six listings — and NOT one listing per link.
+     * Five messages, eight cards, eight listings — and NOT one listing per link.
      *
      * The first two fixtures carry 16 and 19 links respectively, every one of them a
      * `click.by.seloger.com` redirect. Under link-identity that is 35 listings sharing a single id
      * and a single flat's facts. This assertion is the one that would go red if `card_separator`
      * were dropped from the config.
+     *
+     * 6 → 8 on 2026-08-31, when the `Baisse de prix` template was frozen for the first time (004,
+     * 005). It is a SECOND template from the same sender and it had never been captured, which is
+     * how F10 went a month unnoticed: a price-drop alert leads its card with the agency's own text
+     * starting `600€ TOUT COMPRIS…`, and `title_pattern` refuses any candidate containing `€`.
+     * Neither of these two captures reproduces that — both extract a title — so they pin the
+     * template's ordinary shape, and the `€`-leading variant is covered by
+     * {@see PriceLedTitleTest}, built on the layout measured out of the store.
      */
     public function testEachMessageYieldsOneListingPerCardAndNotPerLink(): void
     {
-        self::assertCount(6, $this->listings(), 'three alerts, six flats');
+        self::assertCount(8, $this->listings(), 'five alerts, eight flats');
     }
 
     /**
@@ -179,7 +187,7 @@ final class SelogerFixtureTest extends TestCase
     {
         $ids = array_map(static fn ($l) => $l->externalId, $this->listings());
 
-        self::assertCount(6, array_unique($ids));
+        self::assertCount(8, array_unique($ids));
         foreach ($ids as $id) {
             self::assertMatchesRegularExpression('~^[0-9a-f]{40}$~', $id, 'content-addressed, not a URL');
         }

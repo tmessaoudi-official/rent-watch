@@ -132,9 +132,10 @@
         "link_host": "click.by.seloger.com",
         "card_separator": "Voir l'annonce",
         "id_from": "content",
-        "title_pattern": "~^\\h*(?!https?://)([^\\n€]{2,80}?)\\h*\\n(?:\\h*\\n|\\h*https?://[^\\n]*\\n)+\\h*\\d+\\h*pi[eè]ces?\\b~mu",
+        "title_pattern": "~^\\h*(?!https?://)(?![\\h\\d.,]*€[\\h/a-zA-Zéè]*$)([^\\n]{2,80}?)\\h*\\n(?:\\h*\\n|\\h*https?://[^\\n]*\\n)+\\h*\\d+\\h*pi[eè]ces?\\b~mu",
         "residence_pattern": "~^\\h*([^\\n,]{2,60}),\\h*$~m",
-        "commune_pattern": "~^\\h*([^\\W\\d_][^\\n(]{1,59}?)\\h*\\n\\h*\\(\\d{5}\\)~mu"
+        "commune_pattern": "~^\\h*([^\\W\\d_][^\\n(]{1,59}?)\\h*\\n\\h*\\(\\d{5}\\)~mu",
+        "_title_pattern": "F10 (2026-08-31): the captured class was `[^\\n€]`, forbidding a € ANYWHERE in the title — a guard against reading the rent line as a title, and it cost the entire `Baisse de prix` template, whose card leads with the agency's own `600€ TOUT COMPRIS – électricité…`. exclude_title_patterns was therefore inert across that whole template for a month, and 2 of the 4 empty-title rows were NOTIFIED. The layout was measured out of schema v7's stored evidence rather than guessed: the blank line and the click.by.seloger.com redirect between title and anchor are already allowed, so the € class was the only thing refusing. The repair refuses a candidate that is ONLY a price (`600 €/mois`, `1 450 €`, `915 € CC`) instead of one that merely contains one. Widening without that counterweight would move the defect rather than fix it — the pattern would start reading the rent line as the flat's title, a plausible-looking string in the very field the exclusions run over. Both halves are pinned by tests/php/Rent/Adapters/PriceLedTitleTest.php."
       },
       "map": {
         "ref": "url",
@@ -175,8 +176,8 @@
       "default_tenure": "LIBRE",
       "mixed_tenure": false,
       "params": {
-        "_subject_pattern": "THE CAR ALERTS SHARE THIS SENDER AND THIS LINK HOST. leboncoin sends `3 nouveaux biens \u00e0 louer \u00e0 Ile-de-France` for the housing search and `<vendeur> vous propose <VEHICULE> \u00e0 <prix> \u20ac \u00e0 <commune>` for the vehicle one, both from no.reply@leboncoin.fr, both linking to leboncoin.fr/vi/, and a car alert even carries the `Voir l'annonce` separator this source splits on. Nothing separates them but the subject. They do not collide TODAY only because the vehicle alerts sit unlabelled in the INBOX while this source reads the alert folder \u2014 luck, and it expires the moment the Gmail filter that routes them is created, which is an owed developer action. A car would then be parsed as a flat, rejected for having no commune, and counted in this source's health. Anchored on the housing wording rather than negating the vehicle one: a new leboncoin alert type must be looked at, not silently ingested.",
-        "subject_pattern": "~\\b\u00e0 louer\\b~ui",
+        "_subject_pattern": "THE CAR ALERTS SHARE THIS SENDER AND THIS LINK HOST. leboncoin sends `3 nouveaux biens à louer à Ile-de-France` for the housing search and `<vendeur> vous propose <VEHICULE> à <prix> € à <commune>` for the vehicle one, both from no.reply@leboncoin.fr, both linking to leboncoin.fr/vi/, and a car alert even carries the `Voir l'annonce` separator this source splits on. Nothing separates them but the subject. They do not collide TODAY only because the vehicle alerts sit unlabelled in the INBOX while this source reads the alert folder — luck, and it expires the moment the Gmail filter that routes them is created, which is an owed developer action. A car would then be parsed as a flat, rejected for having no commune, and counted in this source's health. Anchored on the housing wording rather than negating the vehicle one: a new leboncoin alert type must be looked at, not silently ingested.",
+        "subject_pattern": "~\\bà louer\\b~ui",
         "from": "no.reply@leboncoin.fr",
         "link_host": "leboncoin.fr/vi/",
         "card_separator": "Voir l'annonce",
