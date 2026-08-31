@@ -2552,7 +2552,7 @@ final readonly class RentScout
         // with its own prefix, From default and ntfy topic, and two copies of this logic is how
         // one drifts. The unknown-name refusal — hard rule 2's "computed and never sent" — lives
         // there now, still as a separate one-line guard a sabotage can remove.
-        return ChannelFactory::build($name, $this->out, $this->rootDir, '[rent-watch]', 'rent-watch@localhost', (string) (getenv('RENT_NTFY_TOPIC') ?: ''), 'RENT_NTFY_TOPIC');
+        return ChannelFactory::build($name, $this->out, $this->rootDir, '[rent-watch]', 'rent-watch@localhost', (string) (getenv('RENT_NTFY_TOPIC') ?: ''), 'RENT_NTFY_TOPIC', '🏠 RENT ·', 'house');
     }
 
     /**

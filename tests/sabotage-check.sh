@@ -1461,7 +1461,7 @@ run_sabotage "an IMAP argument stops refusing an embedded CR/LF" \
 
 run_sabotage "the ntfy Title stops being header-safed (injection from a listing title)" \
   src/php/Core/Notify/NtfyChannel.php \
-  's%.Title: . . self::headerSafe(\$n->title)%"Title: " . $n->title%'
+  's%.Title: . . self::headerSafe(\$title)%"Title: " . $title%'
 
 run_sabotage "the email sender check loses its D anchor (a trailing newline passes)" \
   src/php/Core/Notify/EmailChannel.php \

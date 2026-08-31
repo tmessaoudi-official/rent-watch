@@ -35,6 +35,12 @@ final class ChannelFactory
         string $subjectPrefix,
         string $fromDefault,
         string $ntfyTopic, string $ntfyTopicKey = '',
+        /**
+         * The domain badge for ntfy — e.g. `🏠 RENT`, and its tag `house`. Supplied by the caller
+         * beside the subject prefix it mirrors, so the factory still knows nothing about domains.
+         * Empty means no badge, which is what a single-domain deployment wants.
+         */
+        string $ntfyBadge = '', string $ntfyBadgeTag = '',
     ): Channel {
         // The topic arrives as a VALUE, read by the caller from its own domain's key
         // (`RENT_NTFY_TOPIC` / `CAR_NTFY_TOPIC`), so each read is a literal `getenv()` the drift
@@ -45,6 +51,8 @@ final class ChannelFactory
                 $ntfyTopic,
                 (string) (getenv('NTFY_SERVER') ?: 'https://ntfy.sh'),
                 topicKey: $ntfyTopicKey,
+                badge: $ntfyBadge,
+                badgeTag: $ntfyBadgeTag,
             ),
             'email' => new EmailChannel(
                 (string) (getenv('SMTP_TO') ?: ''),

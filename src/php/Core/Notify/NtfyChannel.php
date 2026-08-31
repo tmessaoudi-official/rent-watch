@@ -26,7 +26,34 @@ final readonly class NtfyChannel implements Channel
         private string $server = 'https://ntfy.sh',
         private int $timeoutSeconds = 10,
         private string $topicKey = 'NTFY_TOPIC',
+        /**
+         * A DOMAIN BADGE, first in the title and also an ntfy tag (developer request, 2026-08-31).
+         *
+         * Both domains push to this channel and their titles both begin with a source name, so on a
+         * phone `seloger · 44/100 — …` and `paruvendu · 78/100 — …` are told apart only by reading
+         * them. FIRST is the load-bearing part: a notification title is truncated at the END, so the
+         * front is the one position that always survives.
+         *
+         * Emoji AND word, deliberately. The emoji is what the eye actually lands on in the shade;
+         * the word survives anywhere emoji render as tofu or get stripped, which is most log and
+         * email gateways. Seven characters buys both.
+         *
+         * The same badge is pushed as an ntfy TAG as well as text, because a tag is what ntfy can
+         * filter on — so the distinction is available in the list view today and as a filter later
+         * without another code change.
+         *
+         * Empty means no badge, which is what every existing test and any single-domain deployment
+         * gets: the title is then byte-for-byte what it always was.
+         */
+        private string $badge = '',
+        private string $badgeTag = '',
     ) {}
+
+    /** The title as it reaches the phone: the domain badge first, then whatever the domain built. */
+    private function badged(string $title): string
+    {
+        return $this->badge === '' ? $title : $this->badge . ' ' . $title;
+    }
 
     public function name(): string
     {
@@ -73,15 +100,18 @@ final readonly class NtfyChannel implements Channel
             throw new ChannelError($this->name(), $problem, null, [$this->topic]);
         }
 
-        $body = $n->title . "\n" . implode("\n", $n->reasons);
+        $title = $this->badged($n->title);
+        $body = $title . "\n" . implode("\n", $n->reasons);
         if ($n->url !== null) {
             $body .= "\n" . $n->url;
         }
 
         $headers = [
-            'Title: ' . self::headerSafe($n->title),
+            'Title: ' . self::headerSafe($title),
             'Priority: ' . $n->priority->ntfyLevel(),
-            'Tags: ' . strtolower($n->kind->value),
+            // The domain tag FIRST, so ntfy renders its icon before the kind's — and both are
+            // filterable. `headerSafe` for the same reason the title is: these reach a header.
+            'Tags: ' . self::headerSafe(($this->badgeTag === '' ? '' : $this->badgeTag . ',') . strtolower($n->kind->value)),
             'Content-Type: text/plain; charset=utf-8',
         ];
         if ($n->url !== null) {

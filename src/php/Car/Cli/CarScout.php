@@ -428,7 +428,7 @@ final readonly class CarScout
         }
         $channels = [];
         foreach ($criteria->notify->channels as $name) {
-            $channels[] = ChannelFactory::build($name, $this->out, $this->rootDir, '[car-watch]', 'car-watch@localhost', (string) (getenv('CAR_NTFY_TOPIC') ?: ''), 'CAR_NTFY_TOPIC');
+            $channels[] = ChannelFactory::build($name, $this->out, $this->rootDir, '[car-watch]', 'car-watch@localhost', (string) (getenv('CAR_NTFY_TOPIC') ?: ''), 'CAR_NTFY_TOPIC', '🚗 CAR ·', 'car');
         }
 
         return new Notifier($channels);

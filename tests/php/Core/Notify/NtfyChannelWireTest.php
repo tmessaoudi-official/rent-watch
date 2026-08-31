@@ -70,6 +70,59 @@ final class NtfyChannelWireTest extends TestCase
         self::assertStringContainsString('https://example.test/annonce/1', $wire, 'the body carries the link');
     }
 
+    /**
+     * THE DOMAIN BADGE LEADS THE TITLE AND IS ALSO A TAG (developer request, 2026-08-31).
+     *
+     * Both domains push to ntfy and both titles begin with a source name, so on a phone
+     * `seloger · 44/100 — …` and `paruvendu · 78/100 — …` are told apart only by reading them.
+     * FIRST is the load-bearing part: a notification title is truncated at the END, so the front is
+     * the one position that always survives.
+     *
+     * Asserted on the WIRE rather than on a getter, because the title a phone shows is the header
+     * this channel writes — and the tag is what ntfy can filter on, so it is checked too.
+     */
+    public function testTheDomainBadgeLeadsTheTitleAndIsAlsoATag(): void
+    {
+        $transcriptPath = sys_get_temp_dir() . '/rentwatch-ntfy-badge-' . bin2hex(random_bytes(6)) . '.txt';
+
+        $proc = proc_open(
+            [PHP_BINARY, __DIR__ . '/../../Adapters/scripted-http-server.php', $transcriptPath],
+            [1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
+            $pipes,
+        );
+        self::assertIsResource($proc, 'the scripted HTTP server must start');
+
+        try {
+            $name = fgets($pipes[1], 256);
+            self::assertIsString($name);
+            $port = (int) substr(strrchr(trim($name), ':') ?: ':0', 1);
+
+            (new NtfyChannel('t', 'http://127.0.0.1:' . $port, 5, badge: '\u{1F3E0} RENT \u{B7}', badgeTag: 'house'))
+                ->send(new Notification(
+                    NotificationKind::MATCH,
+                    Priority::HIGH,
+                    'seloger \u{B7} 44/100 — Sartrouville',
+                    ['score 44'],
+                    null,
+                ));
+        } finally {
+            foreach ($pipes as $pipe) {
+                @fclose($pipe);
+            }
+            proc_close($proc);
+        }
+
+        $wire = (string) @file_get_contents($transcriptPath);
+        @unlink($transcriptPath);
+
+        self::assertStringContainsString(
+            'Title: \u{1F3E0} RENT \u{B7} seloger \u{B7} 44/100 — Sartrouville',
+            $wire,
+            'the badge leads the title, before the source name a phone would otherwise show first',
+        );
+        self::assertStringContainsString('Tags: house,match', $wire, 'and it is a filterable tag, domain first');
+    }
+
     public function testACrlfBearingUrlCannotSmuggleAHeaderOntoTheNtfyRequest(): void
     {
         // The url is landlord-controlled (listing payload → ListingMapper → Notification) and goes
