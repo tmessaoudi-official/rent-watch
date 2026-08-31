@@ -45,6 +45,81 @@ final class BieniciFixtureTest extends TestCase
     }
 
     /** @return list<RawListing> */
+    /**
+     * A CARD WITH NO PHOTO MUST STILL START A NEW CARD (2026-08-31, found in production by the
+     * developer reading a notification).
+     *
+     * Every Bien'ici card begins with its photo line, so the separator was the literal `\nPhoto\n`.
+     * A listing with NO photo begins `Pas de photo [...]` instead — so the split missed it, that
+     * card merged into the one above, and ONE listing came out of the pair: the PREVIOUS card's
+     * commune, rent and surface under THIS card's link.
+     *
+     * Measured on this exact message: three cards announced, **two** listings stored, and the push
+     * read `Montigny-le-Bretonneux 78180 · T3 67 m² · 1192 € CC` for a flat that is
+     * `93220 Gagny · 49 m² · 855 € CC`. Nothing about it reads as a fault — every field is
+     * individually plausible and the link works — which is why it survived until a human compared
+     * the notification with the page it pointed at.
+     *
+     * Asserted PAIRWISE, not as a count: three listings with the facts shuffled between them would
+     * satisfy a count assertion perfectly.
+     */
+    public function testACardWithNoPhotoIsItsOwnListingAndKeepsItsOwnFacts(): void
+    {
+        $byId = [];
+
+        foreach ($this->listingsFrom('2026-08-31-004-carte-sans-photo.eml') as $listing) {
+            $byId[basename((string) $listing->externalId)] = $listing;
+        }
+
+        self::assertCount(3, $byId, 'three cards announced, three listings — the photo-less one no longer merges');
+
+        // The card that has no photo, and the one it used to be absorbed into.
+        $gagny = $byId['ag752345-547582520'] ?? null;
+        $montigny = $byId['netty-sofia-appt-51074'] ?? null;
+
+        self::assertNotNull($gagny, 'the photo-less card exists as its own listing');
+        self::assertNotNull($montigny, 'and so does the card above it, which used to swallow it');
+
+        self::assertSame('Gagny', $gagny->commune, 'the notification named Montigny for this flat');
+        self::assertSame('93220', $gagny->postcode);
+        self::assertSame(49.0, $gagny->surfaceM2, 'and 67 m² — the other card\'s surface');
+        self::assertSame(855, $gagny->rentCc, 'and 1 192 € — the other card\'s rent');
+
+        self::assertSame('Montigny-le-Bretonneux', $montigny->commune);
+        self::assertSame(67.0, $montigny->surfaceM2);
+        self::assertSame(1192, $montigny->rentCc);
+    }
+
+    /** Every listing parsed from ONE named fixture, so a per-message assertion is possible. */
+    private function listingsFrom(string $file): array
+    {
+        $dir = sys_get_temp_dir() . '/bienici-one-' . bin2hex(random_bytes(6));
+        mkdir($dir);
+        copy(self::ROOT . '/tests/fixtures/rent/bienici/' . $file, $dir . '/' . $file);
+
+        try {
+            $definition = ConfigLoader::loadSources(self::ROOT . '/config/rent/sources.json')['bienici'];
+            $criteria = ConfigLoader::loadCriteria(self::ROOT . '/config/rent/criteria.json');
+            $db = sys_get_temp_dir() . '/bienici-one-' . bin2hex(random_bytes(6)) . '.sqlite3';
+
+            try {
+                return (new EmailAlertSource(
+                    $definition,
+                    Store::open($db),
+                    new FileMailbox($dir),
+                    $criteria->communeLabels,
+                ))->fetch();
+            } finally {
+                foreach (glob($db . '*') ?: [] as $f) {
+                    @unlink($f);
+                }
+            }
+        } finally {
+            @unlink($dir . '/' . $file);
+            @rmdir($dir);
+        }
+    }
+
     private function listings(): array
     {
         $this->dbPath = sys_get_temp_dir() . '/rentwatch-bi-' . bin2hex(random_bytes(8)) . '.sqlite3';
@@ -77,13 +152,18 @@ final class BieniciFixtureTest extends TestCase
     /**
      * Every card in every message, and nothing else.
      *
-     * Seven: five from the five-listing alert, and two from the one-listing alert — its own match
-     * plus the suggestion card below it. The subscription confirmation contributes none and must
-     * not throw while doing so: a message with no separator at all is not a broken template.
+     * Ten: five from the five-listing alert, two from the one-listing alert — its own match plus the
+     * suggestion card below it — and three from the 2026-08-31 capture whose middle card has no
+     * photo. The subscription confirmation contributes none and must not throw while doing so: a
+     * message with no separator at all is not a broken template.
+     *
+     * That last three used to be TWO, which is the whole point of the fourth fixture: the photo-less
+     * card merged into the one above it and the pair yielded a single listing carrying the wrong
+     * flat's commune, rent and surface.
      */
     public function testEveryCardBecomesAListingAndNothingElseDoes(): void
     {
-        self::assertCount(7, $this->listings());
+        self::assertCount(10, $this->listings());
     }
 
     /**

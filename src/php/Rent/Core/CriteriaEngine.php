@@ -49,6 +49,25 @@ final readonly class CriteriaEngine
      * @param int|null $firstSeenAgeSeconds how long ago this listing was first seen, or `null` if
      *                                      it is new to the store right now
      */
+    /**
+     * € CC per m², or `null` when the question cannot be asked of this listing.
+     *
+     * Reads `effectiveRentCc()` — the same figure `max_rent_cc` uses — so it is INERT on the ~157
+     * HC-only rows (Logirep, leboncoin, PAP), which is correct rather than a gap: a ratio built on
+     * a rent that excludes charges is not comparable with one that includes them.
+     */
+    private function pricePerM2(RawListing $listing): ?float
+    {
+        $rent = $listing->effectiveRentCc();
+        $surface = $listing->surfaceM2;
+
+        if ($rent === null || $surface === null || $surface <= 0.0 || ($listing->rooms ?? 0) <= 0) {
+            return null;
+        }
+
+        return (float) $rent / $surface;
+    }
+
     public function judge(RawListing $listing, Classification $classification, ?int $firstSeenAgeSeconds = null): Verdict
     {
         if ($classification->outcome === Outcome::REJECT) {
@@ -75,6 +94,41 @@ final readonly class CriteriaEngine
             }
 
             return Verdict::digest($reasons);
+        }
+
+        // PRICE-PER-m² PLAUSIBILITY — Track 1f, and it is a SECOND route into the same landing zone
+        // rather than a second tenure decision. Said out loud because this class's own contract is
+        // that the tenure classifier owns REJECT and DIGEST: it still owns them *for tenure*. This
+        // asks a different question — is the listing describing the dwelling it prices? — and the
+        // digest is simply the only place a doubt can be put.
+        //
+        // WHAT IT CATCHES, measured over the 1 392 stored listings that survive every other
+        // exclusion: a room in a shared flat advertised with the WHOLE flat's surface, and a surface
+        // that was read off the wrong thing entirely (`Appartement dans maison avec plus de 400m2
+        // jardin` priced the GARDEN). Both pass every numeric filter, because each number is
+        // individually plausible and only their RATIO is not.
+        //
+        // NEVER A REJECTION: the discriminating sentence usually lives on the detail page, which
+        // this source structurally never reads (following SeLoger's per-recipient redirect is a
+        // hard-rule-5 refusal), so the tool is guessing from a ratio. A guess belongs in the bin the
+        // developer reads, not in the one that is silent.
+        //
+        // The GUARD IS `> 0`, NOT `!== null`: 15 stored Logirep rows carry `surface = 0, rooms = 0`
+        // for parkings, and `rent / 0.0` is a `DivisionByZeroError` that would take down the pass.
+        $ppm = $this->pricePerM2($listing);
+
+        if ($ppm !== null && $this->criteria->minPricePerM2 !== null && $ppm < $this->criteria->minPricePerM2) {
+            return Verdict::digest([
+                sprintf(
+                    'loyer implausible pour la surface annoncée : %.2f €/m² CC (%d € pour %s m²), '
+                    . 'sous le plancher de %.2f €/m² — typiquement une chambre en colocation '
+                    . 'annoncée avec la surface de tout le logement, ou une surface lue sur autre chose',
+                    $ppm,
+                    (int) $listing->effectiveRentCc(),
+                    rtrim(rtrim(number_format((float) $listing->surfaceM2, 1, ',', ' '), '0'), ','),
+                    $this->criteria->minPricePerM2,
+                ),
+            ]);
         }
 
         return $this->score($listing, $classification, $firstSeenAgeSeconds);

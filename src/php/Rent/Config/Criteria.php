@@ -53,6 +53,15 @@ final readonly class Criteria
         public bool $commuteEnabled,
         public ?string $commuteStation,
         public ?int $commuteMaxMinutes,
+        /**
+         * Below this many € CC per m², a listing is DOUBTFUL rather than cheap — Track 1f.
+         *
+         * `null` disables it, which is what every fixture and any deployment that has not derived a
+         * threshold gets. See {@see \Scout\Rent\Core\CriteriaEngine::judge()} for why this routes
+         * to the digest rather than rejecting, and `config/rent/criteria.json` for how the shipped
+         * figure was derived.
+         */
+        public ?float $minPricePerM2 = null,
     ) {}
 
     /**

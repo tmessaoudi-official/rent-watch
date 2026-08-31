@@ -125,6 +125,9 @@ final class ConfigLoader
         $minRooms = $r->optInt('min_rooms', null, 1, 20);
         $minSurface = $r->optFloat('min_surface_m2', null, 1.0, 1000.0);
         $maxRent = $r->optInt('max_rent_cc', null, 1, 100000);
+        // Bounded low: below 1 €/m² nothing in Île-de-France is a dwelling, and above 20 the
+        // threshold would start eating the ordinary market rather than the implausible tail.
+        $minPricePerM2 = $r->optFloat('min_price_per_m2', null, 1.0, 20.0);
 
         // These are property-type and listing-kind patterns (colocation, meublé, résidence senior),
         // NOT tenure. Tenure exclusion lives in `Tenure::isExcluded()` and is deliberately absent
@@ -250,6 +253,7 @@ final class ConfigLoader
             commuteEnabled: $commuteEnabled,
             commuteStation: $commuteStation,
             commuteMaxMinutes: $commuteMinutes,
+            minPricePerM2: $minPricePerM2,
         );
     }
 
@@ -529,7 +533,21 @@ final class ConfigLoader
         // removes a NUMERIC filter's input. An unknown surface is never a disqualification
         // (hard rule 9), so the listing goes on matching with one fewer filter and one fewer score
         // component — visible nowhere.
-        foreach (['title_pattern', 'residence_pattern', 'commune_pattern', 'surface_pattern', 'rooms_pattern'] as $patternKey) {
+        // BOTH SEPARATORS IS A GUESS ABOUT WHICH ONE THE ADAPTER HONOURS, and the ignored one fails
+        // silently — the same rule `HtmlSource` applies to its three pagination mechanisms.
+        if (($params['card_separator'] ?? '') !== '' && ($params['card_separator_pattern'] ?? '') !== '') {
+            throw ConfigError::at(
+                $where . '.params.card_separator_pattern',
+                'card_separator et card_separator_pattern sont deux mécanismes pour la même chose : '
+                    . 'n\'en configurez qu\'un, sinon celui qui est ignoré échoue en silence',
+            );
+        }
+
+        // `card_separator_pattern` joins the compile-check with the sharpest edge of all: a broken
+        // one throws at fetch (see the adapter), but an unbroken one that matches NOTHING merges
+        // every card in the message into a single listing carrying the first card's facts under the
+        // last card's link. That is the 2026-08-31 Bien'ici defect, and it is invisible.
+        foreach (['title_pattern', 'residence_pattern', 'commune_pattern', 'surface_pattern', 'rooms_pattern', 'card_separator_pattern'] as $patternKey) {
             $pattern = $params[$patternKey] ?? null;
 
             if ($pattern === null || $pattern === '') {

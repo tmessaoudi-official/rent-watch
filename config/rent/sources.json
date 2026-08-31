@@ -154,7 +154,8 @@
       "params": {
         "from": "no_reply@bienici.com",
         "link_host": "bienici.com/annonce/",
-        "card_separator": "\nPhoto\n",
+        "_card_separator_pattern": "Each card STARTS with its photo line, and a listing with NO photo starts `Pas de photo [...]` instead of `Photo` — so the old literal `\\nPhoto\\n` missed it, that card merged into the one above, and ONE listing came out carrying the PREVIOUS card's commune, rent and surface under THIS card's link. Measured on the real message of 2026-08-31 19:07: three cards announced, two stored, and the push said `Montigny-le-Bretonneux 78180 · T3 67 m² · 1192 € CC` for a flat that is `93220 Gagny · 49 m² · 855 € CC`. Frozen at tests/fixtures/rent/bienici/2026-08-31-004-carte-sans-photo.eml. NOT the terminal CTA: that puts the alert's own criteria line in segment 0 and starts every later segment with the preceding card's REFERENCE.",
+        "card_separator_pattern": "~\\n(?:Photo|Pas de photo)[^\\n]*\\n~",
         "title_pattern": "~^\\h*([^\\n\\d]{3,40}\\d+\\h*pi[eè]ces?[^\\n]{0,40})\\h*$~mu",
         "commune_pattern": "~^\\h*\\d{5}\\h+([^\\n]{2,60}?)\\h*$~mu"
       },

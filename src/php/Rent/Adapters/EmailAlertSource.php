@@ -277,6 +277,24 @@ final readonly class EmailAlertSource implements FeedFreshness, Source
      */
     private function listingsIn(EmailMessage $message): array
     {
+        // A REGEX SEPARATOR, for a portal whose card header is not one fixed string.
+        //
+        // Bien'ici's cards start with the photo line, and a listing with NO photo starts
+        // `Pas de photo [...]` instead of `Photo` — so the literal missed it, that card merged into
+        // the one above, and ONE listing came out carrying the PREVIOUS card's commune, rent and
+        // surface under THIS card's link. Measured on the real message of 2026-08-31 19:07: three
+        // cards announced, two listings stored, and the notification said `Montigny-le-Bretonneux
+        // 78180 · T3 67 m² · 1192 € CC` for a flat that is `93220 Gagny · 49 m² · 855 € CC`.
+        //
+        // Nothing about that reads as a fault: every field is individually plausible and the link
+        // works. It is the segmentation failure class the SeLoger and PAP anchors already exist for,
+        // arriving through the separator itself rather than through a reader.
+        $pattern = $this->stringParam('card_separator_pattern');
+
+        if ($pattern !== null) {
+            return $this->cardsIn($message, $pattern, regex: true);
+        }
+
         $separator = $this->stringParam('card_separator');
 
         if ($separator !== null) {
@@ -341,9 +359,21 @@ final readonly class EmailAlertSource implements FeedFreshness, Source
      *
      * @return list<RawListing>
      */
-    private function cardsIn(EmailMessage $message, string $separator): array
+    private function cardsIn(EmailMessage $message, string $separator, bool $regex = false): array
     {
-        $segments = explode($separator, $message->body);
+        if ($regex) {
+            $segments = preg_split($separator, $message->body);
+
+            if ($segments === false) {
+                // A pattern that cannot run is a CONFIG fault, not an event: every message would
+                // fail it identically, and returning the whole body as one segment would silently
+                // merge every card in the message. Same taxonomy as elsewhere here — a state
+                // throws, an event is recorded.
+                throw new SourceError($this->name(), 'card_separator_pattern illisible : ' . $separator);
+            }
+        } else {
+            $segments = explode($separator, $message->body);
+        }
         $out = [];
         $seenIds = [];
 

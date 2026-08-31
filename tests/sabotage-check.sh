@@ -2896,9 +2896,9 @@ run_sabotage "the coliving-room title pattern is dropped from the criteria" \
 # of every message reports 45 m2. Under min_surface_m2 that is a silent rejection of a real match.
 # Measured over four live messages: 3 of 13 surfaces and 1 of 13 room counts wrong, every one of
 # them under-reported, which is the direction nothing ever notices.
-run_sabotage "the Bien'ici card separator becomes the call to action" \
+run_sabotage "the Bien'ici card separator stops matching (every card merges into one listing)" \
   config/rent/sources.json \
-  's%"card_separator": "\\nPhoto\\n"%"card_separator": "Voir l\xe2\x80\x99annonce"%'
+  's%(?:Photo|Pas de photo)%(?:ZZZ_NEVER_MATCHES)%'
 
 # The identity falls back to the card's own link ONLY on the segmented path. Remove the fallback and
 # every Bien'ici card is refused an identity, the zero-cards guard fires, and the source reports a
@@ -3649,6 +3649,27 @@ run_sabotage "an absorbed member's durable excluded reading is torn down by toda
 run_sabotage "the twin scan reads the twin's raw reading instead of its durable one" \
   src/php/Rent/Cli/Pipeline.php \
   "s%'classification' => \\\$own\\]%'classification' => \$classification]%"
+
+# 2026-08-31, found in production by the developer reading a notification. Bien'ici cards start with
+# their photo line, and a card with NO photo starts `Pas de photo [...]` — so a literal `\nPhoto\n`
+# merged it into the card above and ONE listing came out carrying the previous card's commune, rent
+# and surface under this card's link. Going back to a literal split is the regression.
+run_sabotage "a regex card separator falls back to a literal split (a photo-less card merges upward)" \
+  src/php/Rent/Adapters/EmailAlertSource.php \
+  's%\$segments = preg_split(\$separator, \$message->body);%$segments = explode("\\nPhoto\\n", $message->body);%'
+
+# Track 1f. A rent implausible for its claimed surface — a room advertised with the whole flat's
+# size, or a surface read off a garden — passes every numeric filter, because each number is
+# individually plausible and only their RATIO is not. Disabling the check is the regression.
+run_sabotage "an implausible price per m² stops routing to the digest" \
+  src/php/Rent/Core/CriteriaEngine.php \
+  's%if (\$ppm !== null \&\& \$this->criteria->minPricePerM2 !== null \&\& \$ppm < \$this->criteria->minPricePerM2) {%if (false) {%'
+
+# Track 1f, the other half: the guard is `> 0`, not `!== null`. Fifteen stored Logirep rows carry
+# surface 0 and rooms 0 for parkings, so a null-check alone divides by zero and takes down the pass.
+run_sabotage "the price-per-m² guard accepts a zero surface and divides by zero" \
+  src/php/Rent/Core/CriteriaEngine.php \
+  's%\$surface === null || \$surface <= 0.0%$surface === null%'
 
 # Round 6. The twin veto was not TRANSITIVE: each twin contributed its own durable reading plus its
 # own group veto, but never its own TWIN-derived verdict — so an exclusion that reached a listing
