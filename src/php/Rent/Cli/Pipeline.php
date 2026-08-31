@@ -748,6 +748,19 @@ final readonly class Pipeline
      * the moment a source has a bad day, which is the hole this durable read was added to close. If
      * it ever bites, the repair is to unpick the group in the store, not to weaken the rule.
      *
+     * **THAT REPAIR NO LONGER WORKS, and this sentence promised it for two rounds** (round-5 panel,
+     * 2026-08-31). The judging loop writes the JUDGED classification — which carries this veto's
+     * excluded tenure — back onto the survivor's own `listings.tenure`, and round 4 then made the
+     * row's own reading DURABLE. So a group veto is laundered into the row's own permanent reading:
+     * a reviewer cleared `group_key` and deleted the excluded stranger outright, and the flat was
+     * still rejected on the next pass, with a reason claiming the `PLS` was "relevé lors d'une
+     * lecture précédente de cette annonce" when it was read on a sibling. The cross-track twin
+     * carries the identical laundering; Q39 records it there. Nothing re-opens such a row —
+     * `staleVerdicts()` skips an excluded tenure, `pendingDigest()` skips a non-DIGEST outcome and
+     * `replay` writes no verdicts — so the only repair today is a deliberate edit to that column.
+     * Do not describe either veto as reversible until a command exists, or until the stored reading
+     * distinguishes "this row said PLS" from "something linked to this row said PLS".
+     *
      * **ONE MECHANISM, not two.** This began as a scan over the members clustered in THIS pass,
      * and the durable read was added beside it in round 6. The sabotage ledger then showed the
      * in-pass scan was DEAD: `assignGroup()` runs in the recording loop, before any judging, so

@@ -15,7 +15,7 @@ declare(strict_types=1);
  *
  * | Field                              | Carries |
  * |------------------------------------|---------|
- * | `Delivered-To`, `To`, `Received`   | the subscriber's address |
+ * | `Delivered-To`, `To`, `Cc`, `Received` | the subscriber's address — AND, on `To`/`Cc`, a DISPLAY NAME, which no address check can reach |
  * | `Return-Path`, `Reply-To`          | a per-subscriber bounce/reply token |
  * | `Feedback-ID`, `X-SFMC-*`          | the ESP's subscriber and job ids |
  * | `List-Unsubscribe*`                | a one-click token that unsubscribes without asking |

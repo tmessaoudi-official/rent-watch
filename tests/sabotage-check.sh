@@ -3649,6 +3649,13 @@ run_sabotage "the twin scan reads the twin's raw reading instead of its durable 
   src/php/Rent/Cli/Pipeline.php \
   "s%'classification' => \\\$own\\]%'classification' => \$classification]%"
 
+# Round 5. The THIRD §1 surface in the twin scan: each twin's own GROUP veto. It is the only thing
+# reaching an excluded tenure held on an absorbed sibling OF THE TWIN's cluster, and nothing covered
+# it — mutating it to `null` left the whole suite green while a PLS flat's agency copy was pushed.
+run_sabotage "the twin scan ignores the twin's own group veto (an absorbed PLS sibling stops vetoing)" \
+  src/php/Rent/Cli/Pipeline.php \
+  's%\$this->clusterClassification(\$classification, \$key === null ? null : \$this->store->groupExcludedTenure(\$key))%$this->clusterClassification($classification, null)%'
+
 # Round 5. All three §1 vetoes decode a stored `Tenure`, and `tryFrom()` returns null for a value it
 # cannot parse exactly as for a genuinely NULL column — so one case-flip or enum rename released the
 # row's own durable reading, the group veto and the twin veto together, silently and in the direction

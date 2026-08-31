@@ -1701,6 +1701,15 @@ final readonly class Store
         // verdict". A second write or an optional parameter re-opens the divergence: a verdict from
         // pass N sitting beside evidence from pass N-1 would let `reclassify` compare against
         // something the classifier never saw, which is the §1 hole this column exists to close.
+        //
+        // ONE DELIBERATE EXCEPTION, recorded rather than left to be discovered (round-5 panel,
+        // 2026-08-31). Since round 4 the pipeline stores a DURABLE excluded tenure — yesterday's
+        // reading — beside TODAY's snapshot, for every member. The invariant above is therefore not
+        // literally true of such a row. It is safe in the only direction that matters: an excluded
+        // row is never offered to `reclassify` (`staleVerdicts()` selects `tenure IS NULL OR
+        // tenure IN ('UNKNOWN')`), so nothing ever compares that verdict against that evidence. The
+        // snapshot is still the evidence THIS pass saw, which is what `scout dump` and any human
+        // audit want.
         $statement = $this->pdo->prepare(
             'UPDATE listings SET tenure = :tenure, confidence_bp = :bp, signals_json = :signals,
                     evidence_json = :evidence

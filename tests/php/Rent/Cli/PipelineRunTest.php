@@ -952,6 +952,44 @@ final class PipelineRunTest extends TestCase
         self::assertCount(0, $this->ofKind($channel, NotificationKind::MATCH), 'and the flat is still not pushed, because the fact is read across the cluster');
     }
 
+    /**
+     * THE TWIN'S OWN GROUP VETO IS READ TOO — a third §1 surface with no coverage at all until
+     * round 5 found it. `twinClassification()` applies `clusterClassification()` to each twin's
+     * reading, and that is the only thing that reaches an excluded tenure held on an ABSORBED
+     * SIBLING OF THE TWIN'S cluster. A reviewer mutated it to `null` and all 2 339 tests stayed
+     * green while the agency copy of a PLS flat was pushed.
+     *
+     * The shape: the direct track has TWO members, a pure-LLI portal harvested first (so it
+     * survives and its own reading is LLI) and a mixed one saying `PLS` (absorbed, so its verdict
+     * lives only in the group). The agency copy on the other track sees the SURVIVOR, whose own
+     * reading is eligible — only the survivor's group carries the PLS.
+     */
+    public function testATwinsOwnGroupVetoReachesTheOtherTrack(): void
+    {
+        $store = $this->store();
+        $channel = new RecordingChannel();
+        $pipeline = $this->pipeline($store, new Notifier([$channel]));
+        [, $agency] = $this->twins();
+        $pureLli = new RawListing(
+            sourceName: 'inli', externalId: 'i1', title: 'Appartement T4',
+            description: '4 pieces de 88 m2, logement intermediaire.', fields: ['financement' => 'LLI'],
+            url: 'https://inli.test/i1', commune: 'Sartrouville', postcode: '78500',
+            rentCc: 1450, surfaceM2: 88.0, rooms: 4,
+        );
+
+        $pipeline->runOnce([
+            new FakeSource('inli', [$pureLli]),
+            new FakeSource('cdc_habitat', [$this->directRoute(['financement' => 'PLS'], 'Logement social PLS, commission d\'attribution.')], mixedTenure: true),
+            new FakeSource('seloger', [$agency], family: 'private'),
+        ], '2026-08-07T12:00:00+02:00');
+
+        self::assertCount(
+            0,
+            $this->ofKind($channel, NotificationKind::MATCH),
+            'the agency copy must not be pushed: the direct route it names carries a PLS on an absorbed member',
+        );
+    }
+
     private function twins(): array
     {
         $direct = new RawListing(

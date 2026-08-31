@@ -66,10 +66,29 @@ A raw alert contains your email address, often several times and often encoded. 
 before it can be committed as a fixture.
 
 ```bash
-php tools/scrub-eml.php <in.eml> <out.eml> <your-subscriber-address>
+php tools/scrub-eml.php <in.eml> <out.eml> <your-subscriber-address> [needle …]
 ```
 
 The address argument is optional but pass it explicitly — it is what the tool searches for.
+
+**PASS YOUR NAME AS A NEEDLE TOO, and this is the step whose absence has already cost a leak**
+(round-5 panel, 2026-08-31). An alert identifies you two ways: the address, which the tool finds on
+its own, and your NAME — in the `To:` display name and in the body's *"ce message est destiné à …"*
+line. A display name is not the local part of an address, so `str_replace` can never reach it, and
+until 2026-08-31 the tool did not drop `To:` either. Two ParuVendu fixtures shipped a real full name
+in plaintext while the tool printed `scrubbed … 0 named identifier(s) replaced` and exited 0.
+
+The `To:`/`Cc:` headers are dropped structurally now, so the header half no longer depends on you
+remembering. **The body half still does** — a portal that greets you by name, or states who the
+message is for, is only caught by a needle:
+
+```bash
+php tools/scrub-eml.php in.eml out.eml me@example.com Prénom NOM monpseudo
+```
+
+Needles are matched case-insensitively and each one that fires is counted in the summary line, so
+`0 named identifier(s) replaced` on a portal you know greets you by name means the needle was wrong,
+not that the message was clean.
 
 **If the tool REFUSES to write, that is it working, not failing.** It decodes every long base64url
 run, the quoted-printable form and every base64-encoded body *before* it looks (a base64 body it
