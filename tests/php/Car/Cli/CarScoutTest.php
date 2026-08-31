@@ -179,6 +179,13 @@ final class CarScoutTest extends TestCase
                 substr_count($r['out'], '[HEARTBEAT]'),
                 'the startup beat AND the in-loop one — a pass that throws must not take the liveness signal with it',
             );
+
+            // AND IT MUST SAY SO (round-5 panel, 2026-08-31). Emitting the beat was only half the
+            // fix: without the failed-pass count it rendered `0 exécution(s)` beside `toutes les
+            // sources sont OK` while every pass was dying — an affirmative all-clear, which is
+            // strictly WORSE than the silence it replaced, because silence past the interval is
+            // itself the documented signal.
+            self::assertStringContainsString('1 passe(s) EN ÉCHEC', $r['out'], 'the beat names the failure instead of reporting an all-clear');
         } finally {
             @chmod($this->db, 0o644);
             @rmdir($marker);

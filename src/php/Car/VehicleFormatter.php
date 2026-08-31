@@ -61,10 +61,22 @@ final readonly class VehicleFormatter
     }
 
     /** @param list<SourceHealth> $health */
-    public function heartbeat(int $runs, int $matches, array $health, string $sinceIso, ?string $refusal = null): Notification
+    public function heartbeat(int $runs, int $matches, array $health, string $sinceIso, ?string $refusal = null, int $failedPasses = 0): Notification
     {
         $n = $this->shared->heartbeat($runs, $matches, $health, $sinceIso);
         $reasons = $n->reasons;
+
+        // FAILED PASSES, and this is not decoration (round-5 panel, 2026-08-31). Round 4 moved the
+        // car beat into a `finally` so a throwing pass still beats — and left this out, so the beat
+        // then rendered `0 exécution(s)` beside `toutes les sources sont OK` while every pass was
+        // dying. Before that fix a throwing pass emitted NOTHING, and silence past the interval is
+        // itself the signal; afterwards it affirmatively said all was well. That is strictly worse,
+        // and it is verbatim the state the rent beat's own comment describes as its 2026-08-24
+        // defect. FIRST in the list, because the reason a beat is worth reading is the bad news.
+        if ($failedPasses > 0) {
+            array_unshift($reasons, $failedPasses . ' passe(s) EN ÉCHEC — voir les journaux');
+        }
+
         if ($refusal !== null) {
             // Q27: what the previous start refused, now that this one reached the channel.
             $reasons[] = 'démarrage précédent refusé : ' . $refusal;

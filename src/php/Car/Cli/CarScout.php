@@ -251,9 +251,10 @@ final readonly class CarScout
         // that died before the first due beat lost it. `takeLastRefusal()` reads AND clears, so
         // calling it inside the beat is what makes the note survive on the mounted volume until a
         // beat actually carries it. Same fix as the rent side, which had the mirror defect.
-        $beat = function () use (&$passes, &$notified, $sources, $notifier, $formatter): void {
+        $failedPasses = 0;
+        $beat = function () use (&$passes, &$notified, &$failedPasses, $sources, $notifier, $formatter): void {
             $health = array_map(fn (VehicleSource $s) => $s->health($this->now()), $sources);
-            $n = $formatter->heartbeat($passes, $notified, $health, $this->now(), $this->takeLastRefusal());
+            $n = $formatter->heartbeat($passes, $notified, $health, $this->now(), $this->takeLastRefusal(), $failedPasses);
             if ($notifier->delivered($notifier->send($n))) {
                 @file_put_contents($this->stateFile('car-heartbeat.txt'), $this->now());
             }
@@ -263,7 +264,7 @@ final readonly class CarScout
         }
 
         $loop = new WatchLoop(
-            pass: function () use ($pipeline, $sources, &$passes, &$notified, $verbose, $heartbeat, $beat): void {
+            pass: function () use ($pipeline, $sources, &$passes, &$notified, &$failedPasses, $verbose, $heartbeat, $beat): void {
                 // `finally`, and it is the whole point rather than a style choice — the rent side's
                 // own comment, which this loop claimed to mirror and did not (round-4 panel,
                 // 2026-08-31). The beat sat after the work INSIDE the closure, and `WatchLoop` wraps
@@ -272,12 +273,19 @@ final readonly class CarScout
                 // per-source catch — skipped the beat. A car watcher losing every pass then emitted
                 // nothing to any channel, which is exactly the state the beat exists to distinguish
                 // from a quiet market.
+                $threw = true;
+
                 try {
                     $result = $pipeline->runOnce($sources, $this->now());
                     ++$passes;
                     $notified += $result->notified;
                     $this->report($result, false, $verbose);
+                    $threw = false;
                 } finally {
+                    if ($threw) {
+                        ++$failedPasses;
+                    }
+
                     // The beat's own failure must not mask the pass's: a liveness signal that can
                     // replace the diagnosis is worse than one that is late.
                     try {
