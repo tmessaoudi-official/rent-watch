@@ -232,6 +232,33 @@ scrub "$work/b64s.eml" "$work/b64s.out.eml" >"$work/b64s.log" 2>&1 || b64s_statu
 check "a base64 body folded at 36 columns is REFUSED as well" test "$b64s_status" -ne 0
 refute "and nothing is written for it" test -f "$work/b64s.out.eml"
 
+# ROUND 4: a per-line WIDTH floor is the same defect with a smaller number. Round 3 lowered it from
+# 40 to 20 for the 36-column case above; at 19 the pattern matched nothing, the decode never ran,
+# and the tool WROTE the file and reported it clean with the address one `base64 -d` away. The floor
+# is gone — total decoded length was always the real constraint. Folded narrower than any real mailer
+# would, on purpose: the guarantee is "any width", not "the widths seen so far".
+message_b64_narrow() {
+  body="Appartement 3 pieces 65 m2
+https://www.portal.test/annonce/abc-123?signedRecipient=${jwt}
+1 170 EUR par mois charges comprises — envoye a ${address}"
+  cat <<EOF
+From: Portal <no_reply@portal.test>
+To: <${address}>
+Subject: 1 nouvelle annonce
+Content-Type: text/plain; charset=utf-8
+Content-Transfer-Encoding: base64
+
+$(printf '%s' "$body" | base64 -w 0 | fold -w 19)
+EOF
+}
+
+message_b64_narrow >"$work/b64n.eml"
+b64n_status=0
+scrub "$work/b64n.eml" "$work/b64n.out.eml" >"$work/b64n.log" 2>&1 || b64n_status=$?
+
+check "a base64 body folded at 19 columns is REFUSED too (no per-line width floor)" test "$b64n_status" -ne 0
+refute "and nothing is written for the narrow fold" test -f "$work/b64n.out.eml"
+
 # And UTF-16 (round-3 panel): every ASCII byte followed by a NUL, so a byte search never matches.
 message_b64_utf16() {
   body="https://www.portal.test/annonce/abc-123?signedRecipient=${jwt} — envoye a ${address}"
@@ -251,7 +278,9 @@ b64u_status=0
 scrub "$work/b64u.eml" "$work/b64u.out.eml" >"$work/b64u.log" 2>&1 || b64u_status=$?
 
 check "a UTF-16 base64 body from which the address is recoverable is REFUSED" test "$b64u_status" -ne 0
-refute "and nothing is written for it either" test -f "$work/b64u.out.eml"# ── MUST STRIP THROUGH QUOTED-PRINTABLE ───────────────────────────────────────────────────────────
+refute "and nothing is written for it either" test -f "$work/b64u.out.eml"
+
+# ── MUST STRIP THROUGH QUOTED-PRINTABLE ───────────────────────────────────────────────────────────
 # The case the first version of this file did not have, and the one that mattered. Most alert mail
 # is QP-encoded: `=` becomes `=3D`, and every line folds at 76 columns with a trailing `=`. So a
 # real capture reads `signedRecipient=3DeyJhbGciOi…` with soft breaks through the middle of the
@@ -360,6 +389,37 @@ refute "and the opaque analytics hex is gone (checked DECODED)" \
   grep -qiF '1d09633ac8dfb2e54bc9ffa92ba58ef3e7dffb26' "$work/ids.decoded"
 check "and the LISTING id survives, because it is the payload not the subscriber" \
   grep -qF '3256902167' "$work/ids.decoded"
+
+# ROUND 4: the `To:` DISPLAY NAME. The tool appends its own `To: <alertes@example.invalid>`, so it
+# always meant to own the header — but it did not DROP the original, and `str_replace($local, …)`
+# cannot reach a display name because a display name is not the local part. Two committed ParuVendu
+# fixtures shipped the subscriber's real full name in plaintext while the tool reported
+# `scrubbed … 0 named identifier(s) replaced` and exited 0. No needle is passed here on purpose:
+# the guarantee is that dropping the header does not DEPEND on the operator guessing a needle.
+message_with_display_name() {
+  cat <<EOF
+From: Portal <no_reply@portal.test>
+To: Jeanne DUBOIS-MARTIN <${address}>
+Cc: Jeanne DUBOIS-MARTIN <${address}>
+Subject: 1 nouvelle annonce
+Content-Type: text/plain; charset=utf-8
+
+Appartement 3 pieces 65 m2
+https://www.portal.test/annonce/abc-123
+EOF
+}
+
+message_with_display_name >"$work/disp.eml"
+disp_status=0
+scrub "$work/disp.eml" "$work/disp.out.eml" >"$work/disp.log" 2>&1 || disp_status=$?
+
+check "a capture whose To: carries a display name is scrubbed rather than refused" test "$disp_status" -eq 0
+refute "and the display name is gone from the output" grep -qiF 'DUBOIS-MARTIN' "$work/disp.out.eml"
+refute "and so is the one in Cc:" grep -qiF 'Jeanne' "$work/disp.out.eml"
+check "and exactly one To: header remains — the tool's own" \
+  test "$(grep -ci '^To:' "$work/disp.out.eml")" -eq 1
+check "and the listing survives, because it is the payload" \
+  grep -qF 'annonce/abc-123' "$work/disp.out.eml"
 
 # An extra needle that survives as an ENCODING must REFUSE, exactly as an unstrippable address does.
 # `dXNlcj1zdXJ2aXZvciZzcmM9YWxlcnQ` is base64url for `user=survivor&src=alert`, so a literal replace

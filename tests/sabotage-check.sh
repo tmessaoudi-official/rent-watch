@@ -1274,7 +1274,7 @@ run_sabotage "a delivered digest entry stops counting as an announcement" \
 
 run_sabotage "the beat's notified count goes back to a hard-coded 0 (constant at any traffic level)" \
   src/php/Rent/Cli/RentScout.php \
-  's%\$this->beat(\$notifier, \$store, \$passes, \$notified, null, \$watched, \$failedPasses);%\$this->beat(\$notifier, \$store, \$passes, 0, null, \$watched, \$failedPasses);%'
+  's%\$this->beat(\$notifier, \$store, \$passes, \$notified, \$this->takeLastRefusal(), \$watched, \$failedPasses);%\$this->beat(\$notifier, \$store, \$passes, 0, \$this->takeLastRefusal(), \$watched, \$failedPasses);%'
 
 run_sabotage "the pass result is discarded again (nothing feeds the beat's count)" \
   src/php/Rent/Cli/RentScout.php \
@@ -1932,9 +1932,11 @@ run_sabotage "RENT_HEARTBEAT_HOURS=0 silently disables liveness instead of refus
   src/php/Core/Heartbeat.php \
   's%if ($intervalHours < 1) {%if (false) {%'
 
+# Retargeted in round 4: the read was split into `pendingRefusal()` (non-consuming, for `doctor`)
+# and `takeLastRefusal()` (consuming, for the beat), so the unlink moved and named its own path.
 run_sabotage "the previous startup refusal is never cleared (reported forever)" \
   src/php/Rent/Cli/RentScout.php \
-  's%@unlink($path);%%'
+  "s%@unlink(\\\$this->stateFile('rent-last-refusal.txt'));%%"
 
 run_sabotage "a startup refusal is written to disk unredacted (a credential leak)" \
   src/php/Rent/Cli/RentScout.php \
@@ -3636,9 +3638,43 @@ run_sabotage "the row records its own reading, not the judged verdict (the drain
   src/php/Rent/Cli/Pipeline.php \
   's%if (\$judged !== \$classification) {%if (false) {%'
 
-run_sabotage "the fixture-secrets guard drops the short last line of a base64 body again" \
+# Round 4, 2026-08-31. The durable own reading was restored for the SURVIVOR only, so an absorbed
+# member's stored tenure was torn down and never rebuilt — and `groupExcludedTenure()` reads that
+# same column. Putting the raw reading back in either place is the exact regression.
+run_sabotage "an absorbed member's durable excluded reading is torn down by today's raw one" \
+  src/php/Rent/Cli/Pipeline.php \
+  's%\$own = \$this->durableOwnReading(\$classification, \$previousTenure);%$own = $classification;%'
+
+run_sabotage "the twin scan reads the twin's raw reading instead of its durable one" \
+  src/php/Rent/Cli/Pipeline.php \
+  "s%'classification' => \\\$own, 'previous'%'classification' => \$classification, 'previous'%"
+
+# The READ side of the same claim. The existing case mutates this loop to `foreach ([] as $readKey)`,
+# which proves the fact is read at ALL — not that it is read ACROSS the cluster. Reducing it to the
+# survivor's own key left the whole suite green until round 4.
+run_sabotage "the twin fact is read off the survivor's own row instead of across the cluster" \
+  src/php/Rent/Cli/Pipeline.php \
+  's%foreach (\$memberKeys as \$readKey) {%foreach ([$dedupKey] as $readKey) {%'
+
+# Round 4. The refusal note was read AND DELETED above the `isDue()` test, so a restart inside the
+# heartbeat interval — the ordinary state of a fix-and-redeploy — destroyed it with no beat to carry
+# it. Anchored on the 8-space indent, which is the STARTUP site; the in-loop one is deeper.
+run_sabotage "a startup refusal is consumed before anything can report it" \
+  src/php/Rent/Cli/RentScout.php \
+  's%^        if (\$heartbeat->isDue(\$this->lastHeartbeat(), \$this->now())) {%        $_sab = $this->takeLastRefusal();\n        if ($heartbeat->isDue($this->lastHeartbeat(), $this->now())) {%'
+
+# Round 4. The car beat sat after the work INSIDE the pass closure, which `WatchLoop` wraps in its
+# own try — so a throwing pass took the liveness signal with it. Anchored on the 28-space indent,
+# which is the IN-LOOP call; the startup one is at 12.
+run_sabotage "a car pass that throws takes the heartbeat down with it" \
+  src/php/Car/Cli/CarScout.php \
+  's%^                            \$beat();%                            /* silenced */;%'
+
+# Retargeted in round 4: the per-line WIDTH floor is gone (a 19-column fold slipped past it), so the
+# guarantee is now "no floor at all". Reintroducing one is the regression.
+run_sabotage "the fixture-secrets guard reintroduces a per-line width floor on a base64 body" \
   tests/php/Repo/FixtureSecretsTest.php \
-  's%{20,}={0,2}%{40,}={0,2}%'
+  's%9+\\/]+={0,2}%9+\\/]{40,}={0,2}%'
 
 run_sabotage "a car startup refusal is not recorded for the next beat" \
   src/php/Car/Cli/CarScout.php \

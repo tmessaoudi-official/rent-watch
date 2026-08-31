@@ -237,6 +237,21 @@ final readonly class RentScout
             $this->line('  ⚠ le mode journal n\'est pas WAL : deux processus se bloqueront au lieu de partager');
         }
 
+        // A PENDING STARTUP REFUSAL, REPORTED WITHOUT CONSUMING IT (round-4 panel, 2026-08-31). The
+        // note is read at exactly one call site — the heartbeat, which only exists under `--watch` —
+        // and `CLAUDE.md` names cron-driven `--once` as a supported deployment. On that deployment
+        // `failRun()` writes the note on every refused run and nothing ever reads it, so Q27's second
+        // half is dead there: the failure that reaches nobody stays reaching nobody. `doctor` is the
+        // verb an operator runs when something looks wrong, so it is where the note belongs.
+        //
+        // Read-only on purpose: consuming it here would let a diagnostic swallow the note before the
+        // beat that is supposed to push it.
+        $pending = $this->pendingRefusal();
+        if ($pending !== null) {
+            $this->line('  refus   : ' . $pending);
+            $this->line('            (refus au démarrage précédent — sera repris au prochain battement de cœur)');
+        }
+
         // THE ONLY PLACE A NOTIFIED MATCH WITH NO EVIDENCE CAN BE SEEN. `staleVerdicts()` selects
         // undetermined verdicts, so a row that classified LLI and failed to encode is not skipped by
         // `reclassify` — it is invisible to it; `pendingDigest()` walks digest outcomes only. Before
@@ -735,14 +750,21 @@ final readonly class RentScout
             $watched[$source->name()] = $source;
         }
 
-        // Read and CLEARED once, here. Q27: "the next successful start can report what happened
-        // while it was down." Clearing it at startup rather than after sending means a refusal is
-        // reported once, not on every beat for the life of the process.
-        $refusal = $this->takeLastRefusal();
-
+        // CONSUMED WHERE IT IS REPORTED, never before (round-4 panel, 2026-08-31). This used to read
+        // and delete the note unconditionally, ABOVE the `isDue()` test, while the in-loop beat below
+        // passed a literal `null` — so on any restart inside `RENT_HEARTBEAT_HOURS`, which is the
+        // ordinary state of a fix-and-redeploy, the startup beat did not fire, the note was destroyed
+        // and no beat ever carried it. Q27's "the next successful start reports it on the beat and
+        // clears it" was half true, and the half that was missing is the one that reaches a human:
+        // a container crash-looping all night on a bad config, fixed eleven hours later, announced
+        // the outage to nobody.
+        //
+        // `takeLastRefusal()` reads AND clears, so calling it only at a beat is also what makes the
+        // note survive a process that dies before the first beat is due — carrying it in a variable
+        // would not.
         if ($heartbeat->isDue($this->lastHeartbeat(), $this->now())) {
             // Genuinely zero here: no pass has run yet in this process.
-            $this->beat($notifier, $store, $passes, $notified, $refusal, $watched);
+            $this->beat($notifier, $store, $passes, $notified, $this->takeLastRefusal(), $watched);
         }
 
         // Before the first pass, deliberately. A backlog left undelivered when the container was
@@ -787,7 +809,10 @@ final readonly class RentScout
                     // can replace the diagnosis is worse than one that is late.
                     try {
                         if ($heartbeat->isDue($this->lastHeartbeat(), $this->now())) {
-                            $this->beat($notifier, $store, $passes, $notified, null, $watched, $failedPasses);
+                            // `takeLastRefusal()`, not `null`: the startup beat only fires on a cold
+                            // start or past the interval, so on every other restart THIS is the first
+                            // beat there is and the note has nowhere else to be reported.
+                            $this->beat($notifier, $store, $passes, $notified, $this->takeLastRefusal(), $watched, $failedPasses);
                         }
                     } catch (\Throwable $beatFailure) {
                         $this->warn('battement de cœur non émis : ' . Redact::text($beatFailure->getMessage()));
@@ -2614,6 +2639,15 @@ final readonly class RentScout
     /** The previous startup refusal, removed as it is read so it is reported exactly once. */
     private function takeLastRefusal(): ?string
     {
+        $note = $this->pendingRefusal();
+        @unlink($this->stateFile('rent-last-refusal.txt'));
+
+        return $note;
+    }
+
+    /** The pending note WITHOUT consuming it — `doctor` reports, the heartbeat consumes. */
+    private function pendingRefusal(): ?string
+    {
         $path = $this->stateFile('rent-last-refusal.txt');
 
         if (!is_file($path)) {
@@ -2621,7 +2655,6 @@ final readonly class RentScout
         }
 
         $raw = file_get_contents($path);
-        @unlink($path);
 
         return \is_string($raw) && trim($raw) !== '' ? trim($raw) : null;
     }

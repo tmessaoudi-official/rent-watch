@@ -1765,6 +1765,22 @@ var/claude/                 Reports, review outputs — gitignored scratch (hand
   on another had been pushed twice), and a row's OWN excluded reading is durable too (a hydration
   fingerprint mismatch served the card alone, and a PLS row was re-judged LIBRE and pushed). The
   row records the JUDGED verdict, so `scout digest` announces the doubt's cause.
+  **Round 4 (2026-08-31) found that last half landed on ONE of its two surfaces, and the sentence
+  above was true only while the protected row kept surviving its cluster.** `durableOwnReading()`
+  repaired the survivor's JUDGEMENT; the recording loop still overwrote EVERY member's stored
+  tenure with today's raw reading, and only the survivor's was rebuilt. Survivorship follows the
+  harvest order and `Core\Pacer` shuffles it every pass, so a row holding yesterday's `PLS` lost it
+  the moment a sibling was polled first — before `groupExcludedTenure()`, which reads that same live
+  column, was ever consulted — and the flat was pushed. **The same read also fed the twin scan**,
+  which took the other track's tenure from the pass's RAW classification, so a twin held excluded
+  only by its own durable reading contributed an ELIGIBLE one, `recordTwin()` persisted it, and the
+  agency copy was pushed naming the PLS route as the *voie directe* with its URL. Two lenses found
+  it independently. The durable reading is now applied **in the recording loop, per member, before
+  anything is written** — the same refuse-to-downgrade rule `recordTwin()` already used, so there is
+  no window in which the excluded reading is off disk, and it holds for a member that is never
+  judged at all. **It is PERMANENT**: nothing re-opens it (`staleVerdicts()` skips an excluded
+  tenure, `pendingDigest()` skips a non-DIGEST outcome, `replay` writes no verdicts), and the
+  docblock's old *"until an explicit command"* named a route that does not exist.
 - **`prototype/scout.py` has no tenure classifier at all.** It will happily surface PLAI and PLUS
   listings. It is reference material for the field-mapping and adapter shape only — treat its filtering
   logic as incomplete, not as a baseline to preserve.

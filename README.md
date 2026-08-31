@@ -21,7 +21,8 @@ Single language, single user, single machine. CLI plus push notifications — **
 > false since 2026-08-26, when leboncoin and PAP went live (sources #7 and #8), `src/php/Rent/Enrich/`
 > landed with the IDFM/PRIM commute component, and the `plafonds` figures were fetched and armed.
 > The store is at **schema v12** (v9 commute cache, v10 destination fingerprint, v11 feed
-> freshness). The per-source detail lives in `CLAUDE.md`; this page is the summary and it drifted.
+> freshness, v12 the cross-track twin fact). The per-source detail lives in `CLAUDE.md`; this page
+> is the summary and it drifted.
 
 > That paragraph replaced one saying *"the pure core and the store are built, nothing else is —
 > there is no adapter, no notification channel and no CLI yet"*, which had been false for weeks.
@@ -98,7 +99,7 @@ Everything a domain owns follows ONE scheme, so the next domain is one registry 
 | fixtures | `tests/fixtures/rent/<source>/` | `tests/fixtures/car/<source>/` | under the domain that reads them |
 | env keys | `RENT_SCOUT_DB`, `RENT_IMAP_MAILBOX`, `RENT_NTFY_TOPIC`, `RENT_HEARTBEAT_HOURS`, `RENT_FEED_SILENT_DAYS` | `CAR_*` | `<SLUG>_*`; the IMAP/SMTP account, `NTFY_SERVER`, `IMAP_SINCE_DAYS`, `IMAP_MAX_MESSAGES`, `TZ` are shared |
 | database | `state/rent-watch.sqlite3` | `state/car-watch.sqlite3` | `state/<slug>-watch.sqlite3` |
-| markers | `state/rent-heartbeat.txt`, `rent-digest.txt`, `rent-last-refusal.txt` | `state/car-heartbeat.txt` | `state/<slug>-*.txt` |
+| markers | `state/rent-heartbeat.txt`, `rent-digest.txt`, `rent-last-refusal.txt` | `state/car-heartbeat.txt`, `car-last-refusal.txt` | `state/<slug>-*.txt` |
 | mailbox label | `rent-watch/portails` | `car-watch/portails` | `<slug>-watch/portails` |
 | push label | `rent-watch` | `car-watch` | `<slug>-watch` leads every subject and title |
 | ntfy topic | `rw-<32 hex>` | `cw-<32 hex>` | `<initial>w-<32 hex>`, `openssl rand -hex 16` — the topic IS the secret |

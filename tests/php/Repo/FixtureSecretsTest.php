@@ -202,10 +202,13 @@ final class FixtureSecretsTest extends TestCase
      */
     private static function base64Blocks(string $text): array
     {
-        // Lines of 20+ base64 characters, then an optional SHORTER last line — the tail of a
-        // 76-column body, which a floor on every line dropped (round-3 panel); a body folded at 36
-        // is all short lines, hence the low floor. A block is a body only from 40 characters up.
-        if (preg_match_all('/(?:^[A-Za-z0-9+\/]{20,}={0,2}\r?\n?)+(?:^[A-Za-z0-9+\/]{4,19}={0,2}\r?\n?)?/m', $text, $m) === 0) {
+        // A run of lines that are PURELY base64 alphabet, at ANY width — gated only on the total
+        // decoded length below, which is the constraint that was always doing the real work. A
+        // per-line WIDTH floor is not: round 3 lowered it 40 -> 20 for a 36-column fold, and round 4
+        // showed a 19-column fold slipped past BOTH this guard and the scrubber. This is the twin of
+        // the same fix in `tools/scrub-eml.php`; the two must not diverge, because this test is the
+        // second line of defence for exactly the case the tool gets wrong.
+        if (preg_match_all('/(?:^[A-Za-z0-9+\/]+={0,2}\r?\n?)+/m', $text, $m) === 0) {
             return [];
         }
         $blocks = [];

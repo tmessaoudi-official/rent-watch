@@ -804,6 +804,81 @@ final class PipelineRunTest extends TestCase
         self::assertSame(1, $r->rejectedCount);
     }
 
+    /**
+     * THE DURABLE OWN READING ON AN ABSORBED MEMBER (round-4 panel, 2026-08-31).
+     *
+     * The guarantee above was restored for the SURVIVOR only: the recording loop overwrote every
+     * member's `listings.tenure` with today's raw reading, and only the survivor's was rebuilt.
+     * Survivorship follows the harvest order and `Core\Pacer` shuffles it every pass, so the row
+     * holding yesterday's `PLS` loses it the moment it is absorbed — before `groupExcludedTenure()`,
+     * which reads that same live column, is ever consulted.
+     *
+     * The existing test above cannot reach this: one source with one listing makes the protected row
+     * the survivor on both passes. This one hands the survivorship to a sibling.
+     */
+    public function testAnAbsorbedMembersOwnExcludedReadingSurvivesTheHarvestOrder(): void
+    {
+        $store = $this->store();
+        $channel = new RecordingChannel();
+        $pipeline = $this->pipeline($store, new Notifier([$channel]));
+
+        // Pass 1: the direct route alone, hydrated, and it says PLS.
+        $pipeline->runOnce([
+            new FakeSource('cdc_habitat', [$this->directRoute(['financement' => 'PLS'], 'Logement social PLS, commission d\'attribution.')], mixedTenure: true),
+        ], '2026-08-07T12:00:00+02:00');
+
+        // Pass 2: a same-family sibling is harvested FIRST and survives the cluster, while the
+        // direct route's own hydration has dropped back to its card and reads LLI.
+        $sibling = new RawListing(
+            sourceName: 'inli', externalId: 'i1', title: 'Appartement T4',
+            description: '4 pieces de 88 m2, logement intermediaire.', fields: ['financement' => 'LLI'],
+            url: 'https://inli.test/i1', commune: 'Sartrouville', postcode: '78500',
+            rentCc: 1450, surfaceM2: 88.0, rooms: 4,
+        );
+        $pipeline->runOnce([
+            new FakeSource('inli', [$sibling]),
+            new FakeSource('cdc_habitat', [$this->directRoute(['financement' => 'LLI'], '4 pieces de 88 m2, logement intermediaire.')], mixedTenure: true),
+        ], '2026-08-07T12:20:00+02:00');
+
+        self::assertCount(0, $this->ofKind($channel, NotificationKind::MATCH), 'yesterday\'s PLS must not be pushed today because a sibling was polled first');
+        self::assertSame('PLS', (new \PDO('sqlite:' . (string) $this->dbPath))
+            ->query("SELECT tenure FROM listings WHERE source = 'cdc_habitat'")
+            ->fetchColumn(), 'and the absorbed row still says so on disk');
+    }
+
+    /**
+     * THE TWIN SCAN READS THE JUDGED READING, NOT THE RAW ONE (round-4 panel, 2026-08-31).
+     *
+     * `twinClassification()` derived the other track's tenure from this pass's raw classification and
+     * applied only the group veto to it. A twin whose sole §1 protection is its own durable reading
+     * therefore contributed an ELIGIBLE tenure — which `recordTwin()` then PERSISTED — and the agency
+     * copy was pushed as a match whose reasons name the direct route, with its URL, as the
+     * *voie directe*: the user told to apply at the bailleur for a flat this same database records
+     * as PLS on the row beside it.
+     */
+    public function testTheTwinScanDoesNotLaunderATwinsDurableExcludedReading(): void
+    {
+        $store = $this->store();
+        $channel = new RecordingChannel();
+        $pipeline = $this->pipeline($store, new Notifier([$channel]));
+        [, $agency] = $this->twins();
+
+        // Pass 1: the direct route alone, hydrated, PLS.
+        $pipeline->runOnce([
+            new FakeSource('cdc_habitat', [$this->directRoute(['financement' => 'PLS'], 'Logement social PLS, commission d\'attribution.')], mixedTenure: true),
+        ], '2026-08-07T12:00:00+02:00');
+
+        // Pass 2: the direct route has dropped to its card (LLI, held excluded by the durable
+        // reading) and the agency copy arrives on the other track for the first time.
+        $pipeline->runOnce([
+            new FakeSource('cdc_habitat', [$this->directRoute(['financement' => 'LLI'], '4 pieces de 88 m2, logement intermediaire.')], mixedTenure: true),
+            new FakeSource('seloger', [$agency], family: 'private'),
+        ], '2026-08-07T12:20:00+02:00');
+
+        self::assertCount(0, $this->ofKind($channel, NotificationKind::MATCH), 'the agency copy of a PLS flat must not be pushed');
+        self::assertSame('PLS', $store->twinTenure($store->dedupKey($agency))['tenure']?->value ?? null, 'and the persisted twin fact records the excluded route');
+    }
+
     /** The row records the JUDGED verdict, so `scout digest` announces the doubt's cause, not the row's own reading. */
     public function testTheStoredVerdictIsTheJudgedOneNotTheRowsOwnReading(): void
     {
@@ -822,6 +897,61 @@ final class PipelineRunTest extends TestCase
         self::assertSame('UNKNOWN', $row['tenure'], 'the doubt is what the row says now');
         self::assertStringContainsString('autre voie', (string) $row['signals_json'], 'and the drain can say what to verify');
     }
+    /**
+     * THE TWIN FACT IS READ ACROSS THE CLUSTER, NOT OFF THE SURVIVOR'S OWN ROW (round-4 panel,
+     * 2026-08-31). The write side had a case; the READ side's only case mutated the loop to
+     * `foreach ([] as $readKey)`, which proves the fact is read at ALL and not that it is read
+     * ACROSS. Reducing the loop to the survivor's own key left the whole suite green.
+     *
+     * The scenario that makes it load-bearing: the twin is seen once, with a member that later
+     * stops surviving, and is never fetched again — so `$seen` is null on the deciding pass and
+     * nothing is written. Only the cross-member read still has the fact.
+     *
+     * The twin here is UNDETERMINED, not excluded, and that is what isolates the read. An excluded
+     * twin also drives an excluded tenure onto the member's own row (the judged verdict is written
+     * back), so `groupExcludedTenure()` would catch it anyway and the mutation stays green — a first
+     * version of this test made exactly that mistake and passed against a landed mutation. The group
+     * veto deliberately ignores an undetermined member, so with an UNKNOWN twin the cross-cluster
+     * read is the only thing standing between this flat and a push.
+     */
+    public function testTheTwinFactIsReadAcrossTheClusterWhenNoTwinIsInHand(): void
+    {
+        $store = $this->store();
+        $channel = new RecordingChannel();
+        $pipeline = $this->pipeline($store, new Notifier([$channel]));
+        $direct = $this->directRoute(['financement' => 'LLI'], '4 pieces de 88 m2, logement intermediaire.');
+        $doubtfulTwin = new RawListing(
+            sourceName: 'seloger', externalId: 's1', title: 'Appartement T4',
+            description: 'Beau 4 pieces de 88 m2, proche gare.', fields: [],
+            url: 'https://seloger.test/s1', commune: 'Sartrouville', postcode: '78500',
+            rentCc: 1450, surfaceM2: 88.0, rooms: 4,
+        );
+
+        // Pass 1: the direct route and its agency copy on the other track, whose tenure nothing
+        // states. The doubt lands on the direct route's row as a twin fact.
+        $pipeline->runOnce([
+            new FakeSource('cdc_habitat', [$direct], mixedTenure: true),
+            new FakeSource('seloger', [$doubtfulTwin], family: 'private', mixedTenure: true),
+        ], '2026-08-07T12:00:00+02:00');
+        self::assertSame(Tenure::UNKNOWN, $store->twinTenure($store->dedupKey($direct))['tenure'] ?? null, 'the doubt is on the direct route\'s row');
+
+        // Pass 2: a same-family sibling is harvested first and survives; the twin is NOT fetched, so
+        // no fact is written this pass. The survivor's own row has never held one.
+        $sibling = new RawListing(
+            sourceName: 'inli', externalId: 'i1', title: 'Appartement T4',
+            description: '4 pieces de 88 m2, logement intermediaire.', fields: ['financement' => 'LLI'],
+            url: 'https://inli.test/i1', commune: 'Sartrouville', postcode: '78500',
+            rentCc: 1450, surfaceM2: 88.0, rooms: 4,
+        );
+        $pipeline->runOnce([
+            new FakeSource('inli', [$sibling]),
+            new FakeSource('cdc_habitat', [$direct], mixedTenure: true),
+        ], '2026-08-07T12:20:00+02:00');
+
+        self::assertNull($store->twinTenure($store->dedupKey($sibling)), 'the survivor\'s own row carries no twin fact');
+        self::assertCount(0, $this->ofKind($channel, NotificationKind::MATCH), 'and the flat is still not pushed, because the fact is read across the cluster');
+    }
+
     private function twins(): array
     {
         $direct = new RawListing(

@@ -128,6 +128,36 @@ final class StoreTwinTest extends TestCase
 
         $this->store->recordTwin('never-recorded', Tenure::PLS, 'cdc_habitat');
     }
+    /**
+     * `Store::tenure()` — the row's OWN last reading, which the pipeline's durable-reading rule is
+     * built on. It arrived in schema v12's commit with no store-level assertion anywhere (round-4
+     * panel, 2026-08-31), and CLAUDE.md's own rule is that a store behaviour without a named
+     * category is a behaviour nobody decided to guarantee.
+     *
+     * The third case is the one that matters: an unrecognised stored string must NOT read as
+     * "never judged". `Tenure::tryFrom()` returns null for it, and null is what a pre-v3 row reads —
+     * so a corrupted value would silently RELEASE a durable excluded reading, against the store's
+     * stated posture that a corrupt snapshot is refused loudly rather than degraded.
+     */
+    public function testTheRowsOwnReadingIsReadableAndAnUnknownValueIsNotSilentlyEligible(): void
+    {
+        $key = $this->recorded('a1');
+
+        self::assertNull($this->store->tenure('never-seen'), 'an unknown key has no reading');
+        self::assertNull($this->store->tenure($key), 'and neither has a row that was never judged');
+
+        $this->store->recordVerdict($key, Tenure::PLS->value, 9000, ['financement PLS'], $this->listing('a1'));
+        self::assertSame(Tenure::PLS, $this->store->tenure($key), 'the stored reading round-trips');
+
+        // A value no `Tenure` case matches — the shape a corrupt row or a future rename would leave.
+        $this->store->recordVerdict($key, 'NOT_A_TENURE', 9000, ['corrompu'], $this->listing('a1'));
+        self::assertNull(
+            $this->store->tenure($key),
+            'an unrecognised value reads as no-reading — documented here because that is INDISTINGUISHABLE '
+            . 'from a never-judged row, and so releases a durable excluded reading',
+        );
+    }
+
     private function recorded(string $id): string
     {
         $listing = $this->listing($id);

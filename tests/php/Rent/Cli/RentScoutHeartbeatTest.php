@@ -351,6 +351,59 @@ final class RentScoutHeartbeatTest extends TestCase
         );
     }
 
+    /**
+     * A REFUSAL SURVIVES A RESTART INSIDE THE HEARTBEAT INTERVAL (round-4 panel, 2026-08-31).
+     *
+     * The test above uses a COLD start — no marker — so the startup beat is always due and the note
+     * is always reported. The ordinary state of a fix-and-redeploy is the opposite: a marker written
+     * hours ago, well inside `RENT_HEARTBEAT_HOURS`. The note was read and DELETED above the
+     * `isDue()` test while the in-loop beat passed a literal `null`, so in that state it was
+     * destroyed and no beat ever carried it — a container crash-looping all night on a bad config,
+     * fixed the next morning, announced the outage to nobody.
+     *
+     * The note must therefore still be on disk when no beat has carried it.
+     */
+    public function testARefusalIsNotDestroyedByAStartThatSendsNoHeartbeat(): void
+    {
+        $root = $this->tempRoot();
+        // One hour before `self::NOW`, against the 24 h default: no beat is due in this process at
+        // all. Anchored to the CLI's FIXED clock, not to real time — a marker written from
+        // `new \DateTimeImmutable('-1 hour')` is in the FUTURE relative to `self::NOW`, and a future
+        // marker is documented as DUE (the bias is always one beat too many). A first version of this
+        // test did exactly that and read as a code defect.
+        file_put_contents($root . '/state/rent-heartbeat.txt', (new \DateTimeImmutable(self::NOW))->modify('-1 hour')->format('Y-m-d\TH:i:sP'));
+        file_put_contents($root . '/state/rent-last-refusal.txt', '2026-08-21T22:00:00+02:00 — canal ntfy sans RENT_NTFY_TOPIC');
+
+        $r = $this->watchIn($root);
+
+        self::assertStringNotContainsString('refus au démarrage précédent', $r['out'], 'no beat was due, so nothing reported it');
+        self::assertFileExists(
+            $root . '/state/rent-last-refusal.txt',
+            'and it is still on disk, waiting for the beat that will carry it — not silently consumed',
+        );
+    }
+
+    /**
+     * `doctor` REPORTS A PENDING REFUSAL WITHOUT CONSUMING IT (round-4 panel, 2026-08-31). The note
+     * had exactly one reader — the heartbeat, which exists only under `--watch` — while `CLAUDE.md`
+     * names cron-driven `--once` as a supported deployment. There, `failRun()` wrote the note on
+     * every refused run and nothing ever read it. Read-only, so a diagnostic cannot swallow the note
+     * before the beat that is supposed to push it.
+     */
+    public function testDoctorReportsAPendingRefusalWithoutConsumingIt(): void
+    {
+        $root = $this->tempRoot();
+        file_put_contents($root . '/state/rent-last-refusal.txt', '2026-08-21T22:00:00+02:00 — canal ntfy sans RENT_NTFY_TOPIC');
+
+        $r = $this->scoutIn($root, ['doctor']);
+
+        self::assertStringContainsString('ntfy', $r['out'], 'doctor names the refusal');
+        self::assertFileExists(
+            $root . '/state/rent-last-refusal.txt',
+            'and leaves it for the heartbeat — a diagnostic must not consume what a channel still owes',
+        );
+    }
+
     public function testARunRefusalWritesTheNoteForTheNextStart(): void
     {
         // The producing half. An empty seen-set is Q36's refusal and is the easiest to provoke.

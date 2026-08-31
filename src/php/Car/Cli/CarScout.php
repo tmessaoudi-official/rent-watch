@@ -246,13 +246,14 @@ final readonly class CarScout
 
         $this->line(sprintf('car-watch · surveillance active · %d source(s) · toutes les %d min ± %d (Q37)%s', count($sources), (int) (Pacer::PASS_INTERVAL_SECONDS / 60), (int) (Pacer::JITTER_SECONDS / 60), $maxPasses === null ? '' : ' · SCOUT_MAX_PASSES=' . $maxPasses));
 
-        // Cleared at startup rather than after sending, so a refusal is reported once even if
-        // the beat that carries it does not deliver (same choice as the rent side).
-        $refusal = $this->takeLastRefusal();
-        $beat = function () use (&$passes, &$notified, $sources, $notifier, $formatter, &$refusal): void {
+        // CONSUMED WHERE IT IS REPORTED (round-4 panel, 2026-08-31). This used to read and clear the
+        // note at startup and hold it in `$refusal`; the note then lived only in memory, so a process
+        // that died before the first due beat lost it. `takeLastRefusal()` reads AND clears, so
+        // calling it inside the beat is what makes the note survive on the mounted volume until a
+        // beat actually carries it. Same fix as the rent side, which had the mirror defect.
+        $beat = function () use (&$passes, &$notified, $sources, $notifier, $formatter): void {
             $health = array_map(fn (VehicleSource $s) => $s->health($this->now()), $sources);
-            $n = $formatter->heartbeat($passes, $notified, $health, $this->now(), $refusal);
-            $refusal = null;
+            $n = $formatter->heartbeat($passes, $notified, $health, $this->now(), $this->takeLastRefusal());
             if ($notifier->delivered($notifier->send($n))) {
                 @file_put_contents($this->stateFile('car-heartbeat.txt'), $this->now());
             }
@@ -263,12 +264,29 @@ final readonly class CarScout
 
         $loop = new WatchLoop(
             pass: function () use ($pipeline, $sources, &$passes, &$notified, $verbose, $heartbeat, $beat): void {
-                $result = $pipeline->runOnce($sources, $this->now());
-                ++$passes;
-                $notified += $result->notified;
-                $this->report($result, false, $verbose);
-                if ($heartbeat->isDue($this->lastHeartbeat(), $this->now())) {
-                    $beat();
+                // `finally`, and it is the whole point rather than a style choice — the rent side's
+                // own comment, which this loop claimed to mirror and did not (round-4 panel,
+                // 2026-08-31). The beat sat after the work INSIDE the closure, and `WatchLoop` wraps
+                // that closure in its own `try`, so any throw from `runOnce()` or `report()` — a
+                // PDOException on a full or locked volume, anything past `VehiclePipeline`'s own
+                // per-source catch — skipped the beat. A car watcher losing every pass then emitted
+                // nothing to any channel, which is exactly the state the beat exists to distinguish
+                // from a quiet market.
+                try {
+                    $result = $pipeline->runOnce($sources, $this->now());
+                    ++$passes;
+                    $notified += $result->notified;
+                    $this->report($result, false, $verbose);
+                } finally {
+                    // The beat's own failure must not mask the pass's: a liveness signal that can
+                    // replace the diagnosis is worse than one that is late.
+                    try {
+                        if ($heartbeat->isDue($this->lastHeartbeat(), $this->now())) {
+                            $beat();
+                        }
+                    } catch (\Throwable $beatFailure) {
+                        $this->warn('battement de cœur non émis : ' . Redact::text($beatFailure->getMessage()));
+                    }
                 }
             },
             pacer: $pacer,
@@ -495,7 +513,13 @@ final readonly class CarScout
 
     private function stateFile(string $name): string
     {
-        return \dirname($this->dbPath()) . '/' . $name;
+        // `dbPath()` passes `:memory:` through deliberately, and `dirname(':memory:')` is `.` — so
+        // without this the heartbeat, digest and refusal markers land in whatever the process cwd
+        // happens to be. Same shape as the rent side (round-4 panel, 2026-08-31).
+        $db = $this->dbPath();
+        $dir = $db === ':memory:' ? $this->rootDir . '/state' : \dirname($db);
+
+        return $dir . '/' . $name;
     }
 
     private function now(): string
@@ -563,4 +587,5 @@ final readonly class CarScout
         @unlink($path);
 
         return \is_string($raw) && trim($raw) !== '' ? trim($raw) : null;
-    }}
+    }
+}

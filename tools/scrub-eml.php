@@ -69,10 +69,21 @@ function recoverableForms(string $message): array
     // text it is — including the base64url runs INSIDE it, which is where a JWT payload lives.
     $texts = [$message, $unfolded];
     foreach ([$message, $unfolded] as $text) {
-        // Lines of 20+ base64 characters plus an optional SHORTER last line: the tail of a
-        // 76-column body was dropped by a floor on every line, and the footer carrying the address
-        // is the last thing in every alert (round-3 panel). A 36-column fold is all short lines.
-        if (preg_match_all('~(?:^[A-Za-z0-9+/]{20,}={0,2}\r?\n?)+(?:^[A-Za-z0-9+/]{4,19}={0,2}\r?\n?)?~m', $text, $blocks) > 0) {
+        // A run of lines that are PURELY base64 alphabet, at ANY width, gated only on the total
+        // decoded length below.
+        //
+        // Round 3 lowered a per-line floor from 40 to 20 to catch a 36-column fold; round 4 showed
+        // that is the same defect with a smaller number — at a 19-column fold the pattern matched
+        // nothing, the decode never ran, and the tool wrote the file and reported it clean with the
+        // address recoverable by one `base64 -d`. A per-line WIDTH was never the real constraint;
+        // total length is, and `strlen($stripped) < 40` one line below already enforces it. This
+        // file's own rule: "a check that only understands the encodings already seen is the same
+        // defect with a later date."
+        //
+        // Prose cannot be swept up by accident: a line with a space in it does not match at all, so
+        // only single-token lines join a run, and a run still has to decode strictly AND contain the
+        // address to refuse anything. Over-refusing a fixture is the safe direction anyway.
+        if (preg_match_all('~(?:^[A-Za-z0-9+/]+={0,2}\r?\n?)+~m', $text, $blocks) > 0) {
             foreach ($blocks[0] as $block) {
                 $stripped = (string) preg_replace('~\s+~', '', $block);
                 if (strlen($stripped) < 40) {
@@ -148,7 +159,15 @@ if ($raw === false) {
 }
 
 // Headers dropped whole, including their folded continuation lines.
+// `to` and `cc` JOINED THIS LIST on 2026-08-31 (round-4 panel). The tool APPENDS its own
+// `To: <alertes@example.invalid>`, so it always meant to own that header — but it never removed the
+// original, and a `To:` carries a DISPLAY NAME as well as an address. `str_replace($local, …)`
+// cannot see a display name (it is not the local part) and the `$needles` that would are optional,
+// so two committed fixtures shipped the subscriber's real full name in plaintext while the tool
+// reported `scrubbed … 0 named identifier(s) replaced` and exited 0. The name is public as the
+// commit author; the LINKAGE of that name to a subscription and its criteria is not.
 $drop = [
+    'to', 'cc',
     'delivered-to', 'received', 'x-received', 'return-path', 'received-spf',
     'authentication-results', 'arc-seal', 'arc-message-signature',
     'arc-authentication-results', 'dkim-signature', 'reply-to', 'feedback-id',

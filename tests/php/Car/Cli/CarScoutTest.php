@@ -137,6 +137,55 @@ final class CarScoutTest extends TestCase
             putenv('SCOUT_MAX_PASSES');
         }
     }
+    /**
+     * A THROWING PASS MUST STILL BEAT (round-4 panel, 2026-08-31).
+     *
+     * The beat sat after the work INSIDE the pass closure, and `WatchLoop` wraps that closure in its
+     * own `try` — so any throw from `runOnce()` or `report()` skipped it. A car watcher losing every
+     * pass then emitted nothing to any channel, which is exactly the state the beat exists to
+     * distinguish from a quiet market. The rent side carries the same `finally` and its comment
+     * records a panel finding the identical defect there on 2026-08-24; the car twin claimed to
+     * mirror it and did not.
+     *
+     * A read-only database is the lever: it throws INSIDE the pass, past `VehiclePipeline`'s own
+     * per-source catch, which is precisely the class of failure that was silencing the watcher.
+     *
+     * TWO beats are asserted, not one, and that is the whole design of this test. A cold start beats
+     * BEFORE the loop, so "a beat appeared" is satisfied by the startup beat alone and stays green
+     * with the `finally` deleted — a first version asserted exactly that and passed against a landed
+     * mutation. The marker is therefore made UNWRITABLE (a directory where the file goes): `beat()`
+     * writes it with `@file_put_contents` so a full volume cannot crash a liveness signal, and
+     * `lastHeartbeat()` reads `is_file()`, so every check is due and the in-loop beat becomes
+     * reachable. Two is then the CORRECT count, per the documented one-beat-too-many bias.
+     */
+    public function testAPassThatThrowsStillEmitsTheHeartbeat(): void
+    {
+        putenv('SCOUT_MAX_PASSES=1');
+        $marker = \dirname($this->db) . '/car-heartbeat.txt';
+        try {
+            $seed = $this->scout(['--domain=car', 'run', '--once', '--seed', '--source=paruvendu']);
+            self::assertSame(0, $seed['code'], $seed['err']);
+
+            @unlink($marker);
+            self::assertTrue(mkdir($marker), 'the marker must be genuinely unwritable, or the in-loop beat is unreachable');
+            self::assertTrue(chmod($this->db, 0o444), 'the store must actually become read-only, or this test proves nothing');
+
+            $r = $this->scout(['--domain=car', 'run', '--watch', '--source=paruvendu']);
+            chmod($this->db, 0o644);
+
+            self::assertStringContainsString('passe échouée', $r['err'], 'the pass genuinely threw');
+            self::assertSame(
+                2,
+                substr_count($r['out'], '[HEARTBEAT]'),
+                'the startup beat AND the in-loop one — a pass that throws must not take the liveness signal with it',
+            );
+        } finally {
+            @chmod($this->db, 0o644);
+            @rmdir($marker);
+            putenv('SCOUT_MAX_PASSES');
+        }
+    }
+
     public function testAnUnusableHeartbeatHoursRefusalNamesTheCarKey(): void
     {
         // Dropping the key argument at the call site left the suite green (round-2 panel): the

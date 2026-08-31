@@ -1220,6 +1220,37 @@ the cluster rule but a complement to it: today a rejected cluster is silent, so 
 an over-merge from an absent listing. Surfacing the disagreement is what would make the accepted
 over-rejection cost VISIBLE rather than merely documented.
 
+## Part 2g — Raised by schema v12, the cross-track twin fact (2026-08-31)
+
+### Ⓐ Q39 — the cross-track veto is permanent, and it links a FUZZIER pair than Q38's
+
+Q38 records the same-track rule — an EXCLUDED cluster member decides the whole cluster — with its
+two-sided argument and its priced permanence. Schema v12 extended the same veto ACROSS the two
+tracks: what the agency copy's landlord route last said now decides the agency copy, and vice versa.
+That was ruled and built (developer ruling 2026-08-29, hardened by the round-3 and round-4 panels),
+but it never got an entry here, which a review found on 2026-08-31 — so the weaker link carried the
+stronger permanence with only a plan Decisions Log and a `CLAUDE.md` gotcha behind it.
+
+**Why it deserves its own entry rather than an extension of Q38.** A same-track cluster is two rows
+that `Dedup` judged to be one flat using a shared family's own identifiers. A cross-track twin links
+two DIFFERENT portals' descriptions with no shared identifier at all — `Dedup::twinReason()` uses
+positive evidence, but it is positive evidence about prose, not a key. It is strictly the fuzzier
+link, and it carries the same consequence: an excluded reading sticks for the row's life.
+
+**The accepted cost, stated plainly.** An over-linked pair permanently rejects a genuine LLI flat,
+silently, which is the failure direction §1 itself warns about — exactly Q38's trade, on weaker
+evidence. It is accepted for Q38's reason: the alternative is pushing a flat the same database
+records as PLS on the row beside it, and a wasted application is the cost the whole project exists
+to avoid.
+
+**Reversed by one line**, as everything here is: drop the twin branch from
+`Pipeline::twinClassification()` and the flat is judged on its own track alone.
+
+**Unbuilt complement, same as Q38's third route**: surface the cross-track disagreement in the
+notification's `reasons[]` rather than only rejecting on it, so an over-link is visible instead of
+merely documented. Today a vetoed row is silent and the user cannot tell an over-link from an absent
+listing.
+
 ## Decisions Log
 
 - [2026-08-06] AGREED: work on `master` only; no `claude/*` branch (developer instruction).

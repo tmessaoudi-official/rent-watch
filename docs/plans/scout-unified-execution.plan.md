@@ -113,6 +113,30 @@ read-only) and the merged prose as one review deep.
 - [2026-08-30] AGREED (predecessor, carried): Track 0 exit (close after round 4 vs run round 5 for
   the second clean) is decided WITH the developer after seeing round 4's verdict — via
   `AskUserQuestion`, never silently.
+- [2026-08-31] ROUND 4 RAN AND IS **NOT CLEAN**: 19 findings across three lenses (2 × P0, both
+  found INDEPENDENTLY by two lenses; 6 × P1; the rest P2/P3). All fixed in the round-4 fix commit.
+  MAXIMAL's two-consecutive-clean counter is therefore **0**, and the close-vs-round-5 question
+  above does not arise yet — the milestone re-freezes at the fix commit and round 5 runs against it.
+  Full record: `var/claude/track0-round4.md`.
+- [2026-08-31] DEFAULT APPLIED: the durable own reading is **PERMANENT**, and the docblock now says
+  so instead of promising "until an explicit command". No command re-opens an excluded row
+  (`staleVerdicts()` skips excluded, `pendingDigest()` skips non-DIGEST, `replay` writes no
+  verdicts). Reversed by building such a command, which is a design question nobody has been asked;
+  Q38's precedent is to state permanence outright rather than promise a route.
+- [2026-08-31] DEFAULT APPLIED: Track 2 step 0's scrubber fix was pulled FORWARD into the Track 0
+  fix commit, ahead of its planned place at the head of Track 1. Reason: the resilience lens found
+  the leak as a live P1 (two committed fixtures carrying the subscriber's real name), so it stopped
+  being preparatory work for future captures and became a defect in the tree. Reversed by nothing —
+  the plan's sequencing rationale (1g/1h captures depend on it) is unaffected, it simply landed
+  earlier.
+- [2026-08-31] FINDING RECORDED, NOT YET FIXED: the generic `ROOMS_PATTERN` matches hex inside
+  photo-URL UUIDs (`…90F8-…` → 8 rooms). 14 wrong room counts on seloger, 6 of them notified; both
+  directions do harm. New Track 1j — evidence in `var/claude/track1j-rooms-uuid-evidence.md`.
+- [2026-08-31] FINDING RECORDED, NOT YET FIXED: PAP has THREE location shapes, not one, and all four
+  of its positional params anchor on `\(\d{5}\)` — so on the department-only and Paris-arrondissement
+  variants all four fail together. This is also the true cause of F6's "4 pap empty-title rows": one
+  root cause, not two. Evidence and the measured replacement patterns:
+  `var/claude/track1h-pap-evidence.md`.
 
 ---
 
@@ -120,7 +144,8 @@ read-only) and the merged prose as one review deep.
 
 | # | Surface | State | Where handled |
 |---|---|---|---|
-| F1 | PAP positional anchors (`surface_pattern`/`rooms_pattern`) | **BROKEN since ~08-28** — template changed, 100% miss, nulls notified as MATCH | Track 1h |
+| F1 | PAP positional anchors (all FOUR params) | **BROKEN since ~08-28**, and worse than recorded: 100% null on 08-29/30/31, **23 null rows, 19 notified MATCH**. Two independent axes — the body layout changed, AND all four params anchor on `\(\d{5}\)`, which 3 of PAP's location shapes do not carry | Track 1h — patterns measured, 39/39 vs 16/39 today |
+| F1b | PAP department-only / arrondissement variants | `Cergy (95)`, `Paris 16e` carry no 5-digit postcode, so title+commune+surface+rooms all fail together; 4 rows, all `REJECT` with an empty title. **This IS F6's "4 pap" rows — one root cause, not two** | Track 1h (new) |
 | F2 | Bien'ici single-card "Une annonce" reader | **BROKEN** — reads the search-criteria line ("45 m² min") as the flat's surface; 5 real matches silently REJECTed, 2 more on 08-31 | Track 1g |
 | F3 | Extraction failures are invisible | A configured pattern that misses yields null "visibly" — but nothing counts misses, so F1 ran 4 days unnoticed | Track 1h (health half) |
 | F4 | `postcode_pattern` + `title_pattern` on the CAR side | Declared in `VehicleSourceLoader::PATTERN_PARAMS`, read by ZERO adapters — configuring them loads fine and does nothing | Track 1c (documented, fix owed) |
@@ -129,6 +154,10 @@ read-only) and the merged prose as one review deep.
 | F7 | La Centrale truncation | Email carries ~3 of 900+ stated cards; `FEED_SILENT` keys on message DATE, so health stays green while 99.7% blind | Track 2 step 4 (documented cost) |
 | F8 | SeLoger `id_from: content` + a misread surface | A bad surface reading changes the dedup key → one flat can notify twice under two identities | Noted in 1g; same root class |
 | F9 | n=1 separators/patterns (leboncoin rent, PAP) | Measured on one capture each; PAP already proved what that costs | standing; each new alert is the regression test |
+| F10 | Generic `ROOMS_PATTERN` reads hex out of photo-URL UUIDs | `(?:T\|F)\s?(\d)\b` is case-insensitive, so `…90F8-…` → 8 rooms. **14 wrong on seloger, 6 notified; 7 on bienici.** Too LOW loses real matches, too HIGH clears `min_rooms` on a number nobody stated | **NEW Track 1j** (2026-08-31) |
+| F11 | Startup refusal reachable only under `--watch` | *FIXED 2026-08-31* — it was also consumed above the `isDue()` test, so a restart inside the beat interval destroyed it unreported; `doctor` now reports it without consuming | round-4 fix commit |
+| F12 | Car heartbeat inside the pass closure | *FIXED 2026-08-31* — a throwing pass silenced the watcher entirely, the one state the beat exists to make visible | round-4 fix commit |
+| F13 | Scrubber `To:`/`Cc:` display name, and any base64 fold ≤19 columns | *FIXED 2026-08-31* — two committed fixtures had shipped the subscriber's real name; a 19-column fold was written and reported `scrubbed` with the address one `base64 -d` away | round-4 fix commit |
 
 ---
 

@@ -224,11 +224,25 @@ final readonly class Pipeline
                 // What this row said LAST time, read before today's reading overwrites it: an
                 // excluded tenure is durable (see durableOwnReading()).
                 $previousTenure = $this->store->tenure($sighting->dedupKey);
+                // THE DURABLE READING IS APPLIED HERE, PER MEMBER, BEFORE ANYTHING IS WRITTEN
+                // (round-4 panel, 2026-08-31). It used to be applied to the SURVIVOR only, after
+                // judging — so this write tore down every member's stored tenure and only the
+                // survivor's was rebuilt. Survivorship follows the harvest order and `Core\Pacer`
+                // shuffles it every pass, so a row holding yesterday's `PLS` lost it the moment a
+                // sibling was polled first, and `groupExcludedTenure()` — which reads this very
+                // column — then found nothing excluded and the flat was pushed.
+                //
+                // Writing the durable reading here rather than restoring it later is what makes the
+                // guarantee hold for a member that is never judged at all, and it is the same
+                // refuse-to-downgrade rule `Store::recordTwin()` already applies to the twin fact.
+                // It also survives a pass that dies between the two loops: there is no window in
+                // which the excluded reading is off disk.
+                $own = $this->durableOwnReading($classification, $previousTenure);
                 $captured = $this->store->recordVerdict(
                     $sighting->dedupKey,
-                    $classification->tenure->value,
-                    $classification->confidenceBp,
-                    $classification->reasons(),
+                    $own->tenure->value,
+                    $own->confidenceBp,
+                    $own->reasons(),
                     // Schema v7: the member EXACTLY as the classifier just consumed it — after
                     // mapping and after any detail merge, which is why `$member` is passed rather
                     // than anything re-derived. `scout reclassify` re-runs on this and must never
@@ -253,7 +267,12 @@ final readonly class Pipeline
                     ++$unencodable;
                 }
 
-                $observed[spl_object_id($member)] = ['sighting' => $sighting, 'classification' => $classification, 'previous' => $previousTenure];
+                // `$own`, not `$classification` — so `twinClassification()`, which reads this array
+                // to learn what the OTHER track says, sees the twin's durable reading rather than
+                // its raw one. Reading the raw one let a twin held excluded only by its own durable
+                // reading contribute an ELIGIBLE tenure, which `recordTwin()` then persisted, and
+                // the agency copy was pushed as a match naming the PLS route as the *voie directe*.
+                $observed[spl_object_id($member)] = ['sighting' => $sighting, 'classification' => $own, 'previous' => $previousTenure];
                 $keyOf[spl_object_id($member)] = $sighting->dedupKey;
                 $memberKeys[] = $sighting->dedupKey;
             }
@@ -726,8 +745,21 @@ final readonly class Pipeline
      * by source default, and PUSHED; the overwrite then took the row outside `staleVerdicts()` and
      * `pendingDigest()`, beyond either repair command. `reclassify` enforces *evidence ⊇ original,
      * never ⊂*; the pipeline now does too, by the same rule the twin fact obeys: once excluded,
-     * excluded, until an explicit command says otherwise. Stated cost: a genuine re-labelling by
-     * the portal is not honoured automatically — the safe direction (§1).
+     * excluded.
+     *
+     * **IT IS PERMANENT, and this docblock used to say "until an explicit command says otherwise"
+     * (round-4 panel, 2026-08-31). There is no such command.** `staleVerdicts()` selects
+     * `tenure IS NULL OR tenure IN ('UNKNOWN')`, so `reclassify` never offers an excluded row;
+     * `pendingDigest()` selects `outcome = 'DIGEST'`, so `digest` never drains one; `replay` writes
+     * no verdicts. A promise of a repair route that does not exist is worse than the plain fact,
+     * because it invites someone to look for the route instead of deciding whether to build one.
+     * Q38 states its own permanence outright and is the precedent.
+     *
+     * Stated cost, unchanged and now accurate: a genuine re-labelling by the portal is not honoured
+     * at all — only a deliberate edit to the row will undo it. The safe direction (§1).
+     *
+     * Applied in the RECORDING loop, per member, so the reading is durable for a row that is never
+     * judged — see the call site for why the survivor-only version was a §1 hole.
      */
     private function durableOwnReading(Classification $judged, ?Tenure $previous): Classification
     {
@@ -772,7 +804,8 @@ final readonly class Pipeline
      *
      * @param list<string> $memberKeys every row of this cluster, the survivor's included
      * @param list<array{listing: RawListing, family: string}> $twins
-     * @param array<int, array{sighting: mixed, classification: Classification}> $observed
+     * @param array<int, array{sighting: mixed, classification: Classification, previous: ?Tenure}> $observed
+     *                                                                                              `classification` is the DURABLE reading, not the raw one — see the recording loop
      * @param array<int, string> $keyOf
      */
     private function twinClassification(Classification $survivor, string $dedupKey, array $memberKeys, array $twins, array $observed, array $keyOf): Classification
