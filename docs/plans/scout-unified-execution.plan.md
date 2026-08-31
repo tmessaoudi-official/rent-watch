@@ -163,6 +163,9 @@ read-only) and the merged prose as one review deep.
 | F16 | Cron `--once` never clears the refusal note; `doctor` prints a promise that deployment cannot keep | `takeLastRefusal()` is called only in `watch()`, so `doctor` reports a fixed outage for ever while saying it will be carried on the next beat | **OPEN — round 5, O4** |
 | F17 | Car `doctor` has no `pendingRefusal` | The gap round 4 closed for rent is fully open on car (`grep -c pendingRefusal`: rent 3, car 0) | **OPEN — round 5, O5** |
 | F18 | A plain `grep` silently skips the Latin-1 PAP fixtures | `grep -c .` prints nothing and exits 0; `grep -ac .` prints 145. Any grep-based "N fixtures scanned, 0 hits" sweep is unsound on this tree — use a byte-level scanner | **OPEN — round 5, O6 (method)** |
+| **F19** | **A §1 guard inside `twinClassification()` is covered by neither the suite nor the ledger** | `Pipeline.php:829`'s `clusterClassification(..., groupExcludedTenure($key))` is the only thing reaching an excluded tenure on an ABSORBED SIBLING OF THE TWIN's cluster. Mutating it to `null` leaves all 2 339 tests green AND pushes the agency copy of a PLS flat (proven by execution). Round 4 added ledger cases for the twin fact's write-across and read-across; this third surface has none — the same "one of two surfaces" shape as the P0 it was fixing | **OPEN — round 5 correctness, needs a test THEN a ledger case** |
+| **F20** | **Neither documented repair route for an over-merge/over-link actually works, and no command can re-open a durably-excluded row** | The judged verdict (carrying the group's or twin's excluded tenure) is written into the row's OWN `tenure`, which round 4 then made durable — so a veto is laundered into the row's own reading. `staleVerdicts()`/`pendingDigest()`/`replay` all skip it. Q39 corrected; the rejection reason also MISATTRIBUTES the PLS to "a previous reading of THIS listing" when it was read on the other track | **OPEN — round 5 correctness** |
+| F21 | An unrecognised `tenure` string silently releases a durable excluded reading | `Store::tenure()` uses `Tenure::tryFrom()`, so a corrupt value — or any future rename of a `Tenure` case — reads as `null`, indistinguishable from never-judged, and `durableOwnReading()` preserves nothing. Fail-closed (throw, or treat as excluded) is not taken. Now documented at the assertion instead of contradicted by it | **OPEN — round 5 correctness** |
 
 ---
 
@@ -530,3 +533,47 @@ After Track 0 closes and Track 1 lands:
 - Track 3: the audit report satisfies the four-part checklist per label/source; reviewed with the
   developer before anything from it is built.
 - Track 4: its own verification block above.
+
+---
+
+## Round 5 (2026-08-31) — NOT CLEAN, 25 findings across three lenses
+
+All three lenses reported against `a3c09c4`. **Every number in the round-4 commit message was
+independently re-run and verified true** (2 339 tests, scrubber 40/40, all `test-*.sh`, 585/585
+expressions, drift 0/0/0, the 8-case ledger, 13 fixtures 0 hits). The findings are about what those
+numbers do not cover.
+
+Fixed and pushed during round 5: the recursive-decode P0 (`8f0c526`), the false-healthy car beat
+(`b4de3dd`, found by two lenses), plus two corrections of errors introduced in round 4 — Q39's false
+"reversed by one line" claim, and a `StoreTwinTest` docblock that asserted the opposite of its own
+assertion.
+
+**Still open, by theme.** Full detail in `var/claude/track0-round5.md` (gitignored scratch — the
+register rows F14–F21 above are the tracked record).
+
+1. **A fix landing on ONE of two symmetric surfaces — the round-4 P0's own shape, three more times.**
+   `car doctor` never got `pendingRefusal()` (F17); the twin scan's third §1 surface has no ledger
+   case (F19); the PII fix covers the working tree while the pushed history still carries it.
+2. **Repair routes that do not exist** (F20). Both documented ones fail, and the same-track group
+   veto has no OPEN-QUESTIONS entry the way the cross-track one now does.
+3. **Fail-OPEN on an unrecognised tenure** (F21), and it is worse than F21 records: the same
+   `Tenure::tryFrom()` releases the row's own durable reading, the schema-v4 group veto AND the
+   schema-v12 twin veto — three §1 mechanisms, silently, on one case-flip or enum rename.
+4. **Guards whose mechanism is untouched.** `refute()` in `tests/test-scrub-eml.sh` reports `ok` for
+   ANY non-zero exit, including 2 and 127 — the round-4 fused-comment bug was fixed as an instance,
+   not as a class, in the one file whose subject is a privacy guard. `FixtureSecretsTest` still has
+   no name-or-address pattern, and `docs/ALERT-CAPTURE.md` never tells the operator to pass a name
+   needle — so the next capture from a portal that greets by name reproduces the leak with both
+   guards green.
+5. **Dead safety code, by this repo's own definition.** `durableOwnReading()` at the judging step is
+   now provably unreachable-as-a-change (deleting it, and instrumenting it to throw if it ever
+   alters anything, both leave 2 339 tests green). The round-4 commit called it "left in place as a
+   defence"; `Pipeline.php`'s own comment says such code is "worse than none". Remove or cover it.
+6. **New code with no coverage**: the `:memory:` branch on both CLIs; and one re-scrubbed ParuVendu
+   fixture gained a 152-column QP line, so it is no longer byte-what-the-mailer-emitted.
+
+**Do not read round 5's verdict as a setback.** Round 4 fixed 19 findings and round 5 found that
+several landed on one surface of two — which is the same defect class the milestone has now produced
+at every round. That pattern, not any single finding, is the thing to fix: **before closing a
+finding, enumerate every symmetric surface it has (rent/car, read/write, survivor/absorbed,
+tool/guard) and say which ones the fix covers.**

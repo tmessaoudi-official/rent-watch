@@ -134,10 +134,18 @@ final class StoreTwinTest extends TestCase
      * panel, 2026-08-31), and CLAUDE.md's own rule is that a store behaviour without a named
      * category is a behaviour nobody decided to guarantee.
      *
-     * The third case is the one that matters: an unrecognised stored string must NOT read as
-     * "never judged". `Tenure::tryFrom()` returns null for it, and null is what a pre-v3 row reads —
-     * so a corrupted value would silently RELEASE a durable excluded reading, against the store's
-     * stated posture that a corrupt snapshot is refused loudly rather than degraded.
+     * The third case PINS A KNOWN WEAKNESS RATHER THAN A GUARANTEE, and says so — a round-5 reviewer
+     * read the first draft of this docblock, which asserted the opposite of the assertion below, and
+     * was right to call it out. What is true: `Store::tenure()` uses `Tenure::tryFrom()`, so an
+     * unrecognised stored string reads as `null`, which is INDISTINGUISHABLE from a pre-v3
+     * never-judged row — and `durableOwnReading()` treats `null` as "nothing to preserve". So a
+     * corrupted value, or any future rename of a `Tenure` case, silently RELEASES every durable
+     * excluded reading in the store with no signal at all.
+     *
+     * That is against the store's stated posture (a corrupt snapshot is refused loudly rather than
+     * degraded) and the fail-closed direction — throw, or treat an unreadable value as excluded — is
+     * NOT taken. The assertion below therefore documents the current behaviour so a change to it is
+     * deliberate; it is not a claim that the behaviour is right. Recorded as owed.
      */
     public function testTheRowsOwnReadingIsReadableAndAnUnknownValueIsNotSilentlyEligible(): void
     {

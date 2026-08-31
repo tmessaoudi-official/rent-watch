@@ -1243,8 +1243,35 @@ evidence. It is accepted for Q38's reason: the alternative is pushing a flat the
 records as PLS on the row beside it, and a wasted application is the cost the whole project exists
 to avoid.
 
-**Reversed by one line**, as everything here is: drop the twin branch from
-`Pipeline::twinClassification()` and the flat is judged on its own track alone.
+**IT IS NOT REVERSIBLE, and this entry claimed it was for about an hour after it was written**
+(round-5 panel, 2026-08-31). The first draft said *"reversed by one line: drop the twin branch from
+`Pipeline::twinClassification()`"*. A reviewer executed that, together with the repair
+`Store.php` documents (*"unpick the row"*) — `twin_tenure`, `twin_source` and `group_key` all
+cleared, the direct route deleted outright — and the flat was STILL rejected on the next pass:
+
+```
+after pass 2: [{"source":"seloger","tenure":"PLS","twin_tenure":null,"outcome":"REJECT",
+  "signals_json":"[\"régime exclu (PLS) … conservé (§1)\"]"}]
+```
+
+The mechanism: `Pipeline` writes the JUDGED classification — which carries the twin's or the
+group's excluded tenure — into the row's OWN `listings.tenure`, and the round-4 durable-reading fix
+then re-derives that from `Store::tenure()` on every member at record time. **A cross-track veto is
+laundered into the row's own durable reading**, which has no repair route at all: `staleVerdicts()`
+skips an excluded tenure, `pendingDigest()` skips a non-DIGEST outcome, `replay` writes no verdicts.
+The same is true of Q38's group veto, whose documented repair (*"unpick the group in the store"*)
+was proven not to work either.
+
+Two consequences, both stated rather than left to be found. **The accepted cost above was priced on
+the assumption it is reversible, and it is not** — an over-linked pair rejects a genuine LLI flat
+permanently, and only a deliberate edit to the row's `tenure` column undoes it. And the rejection
+reason says the PLS was *"relevé lors d'une lecture précédente de cette annonce"* when it was read
+on the OTHER TRACK or on a sibling — the exact misattribution an operator diagnosing a silent
+over-rejection would follow to the wrong listing.
+
+**Owed:** either a repair command that can re-open a durably-excluded row, or a distinction in the
+stored reading between "this row said PLS" and "something linked to this row said PLS". Until one
+exists, do not describe either veto as one-line reversible.
 
 **Unbuilt complement, same as Q38's third route**: surface the cross-track disagreement in the
 notification's `reasons[]` rather than only rejecting on it, so an over-link is visible instead of
