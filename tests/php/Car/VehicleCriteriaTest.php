@@ -21,7 +21,15 @@ final class VehicleCriteriaTest extends TestCase
         $c = VehicleCriteriaLoader::load(self::ROOT . '/config/car/criteria.json');
 
         self::assertSame(30000, $c->maxPriceEur, 'decision 5');
-        self::assertSame(['75', '77', '78', '91', '92', '93', '94', '95'], $c->postcodePrefixes, 'decision 6');
+        // EMPTY = national since Track 1c (2026-08-31), and that is the honest state rather than a
+        // widening. The eight Île-de-France departements were copied from the rent side and were
+        // INERT: no car source maps a postcode, so `matchesLocation()` answered true for every
+        // vehicle regardless. Leaving them would have activated the filter silently and
+        // asymmetrically the day a source first mapped one. `config/car/criteria.json` carries the
+        // reasoning and the one line that reverses it.
+        self::assertSame([], $c->postcodePrefixes, 'decision 6, revised by Track 1c');
+        self::assertTrue($c->matchesLocation('69000'), 'and an empty list genuinely matches everything');
+        self::assertTrue($c->matchesLocation(null), 'including an unstated location');
         self::assertSame(['suv', 'break', 'berline'], $c->bodyRank, 'decision 11');
         self::assertSame(5, $c->peakAgeYears);
         self::assertSame(80000, $c->peakMileageKm);
