@@ -1303,6 +1303,16 @@ this way" is never authority, and extending it in place contradicts the brief.
    RFR figure for eligibility checks. Keep `.env.example` in sync. Never commit personal financial
    data, never log credentials, and scrub any fixture captured from a live payload before committing
    it. `.env` is permission-denied here on purpose — audit `.env.example`.
+
+   > **SCRUBBING A FIXTURE FIXES THE WORKING TREE, NOT THE REMOTE, and that cost is stated here
+   > rather than implied** (round-5 panel, 2026-08-31). Two ParuVendu fixtures shipped the
+   > subscriber's real name and three Bien'ici ones carry the address behind a double base64 layer;
+   > both were caught after they had been committed AND PUSHED, so the blobs are reachable on
+   > GitHub by `git show <old-sha>:<path>` regardless of what HEAD says. Force-push and history
+   > rewriting are unauthorised here (§ "Git autonomy"), so the developer decides whether to purge;
+   > a forward fix is the most a session can land. The asset is not the name — that is public as
+   > the commit author on every commit — it is the LINKAGE of a person to a subscription and its
+   > criteria. Treat "the tree is clean" and "the exposure is over" as different claims.
 8. **Hard disqualifiers and score are two different mechanisms.** Do not conflate them. Disqualifiers
    reject silently and are logged only. Score (0–100) drives ordering and notification priority, and
    every notification carries its `reasons[]`. A disqualifier applied before enrichment rejects on a
@@ -1566,7 +1576,12 @@ Required coverage, per spec §11 — non-negotiable once `src/` exists:
   half-written); **twin** (schema v12: what the OTHER track last said about this flat — recorded on
   EVERY member of the cluster, read as the most restrictive across it, an excluded reading durable
   for the row's life and never backfilled; the one cross-track datum beside identities and groups
-  that stay per track); **secrets** (`Redact` masks before anything is persisted or shown, and does not eat
+  that stay per track); **own reading** (schema v3's `tenure` read back — what THIS row last said,
+  which is a different fact from what the other track said and so does not belong under `twin`: it
+  round-trips, an unknown key and a never-judged row both read `null`, and a stored value that does
+  not decode is REFUSED rather than read as "nothing said", because `Tenure::tryFrom()` returning
+  null for a corrupt value released the durable reading, the group veto and the twin veto together);
+  **secrets** (`Redact` masks before anything is persisted or shown, and does not eat
   the diagnostic). A new store behaviour without a category is a behaviour nobody decided to
   guarantee.
 
