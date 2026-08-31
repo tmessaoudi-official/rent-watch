@@ -105,16 +105,53 @@ function recoverableForms(string $message): array
         }
     }
 
-    foreach ($texts as $text) {
-        preg_match_all('~[A-Za-z0-9_\-]{16,}~', $text, $runs);
+    // A WORKLIST, NOT ONE PASS (round-5 panel, 2026-08-31). This used to iterate `$texts` once and
+    // append every decode to `$forms` ALONE — so a run whose decode contains ANOTHER run was never
+    // decoded twice, and Bien'ici wraps its links in an outer base64 layer, which means the literal
+    // `eyJ` never appears in the raw, unfolded or base64-block form. Three committed, pushed
+    // fixtures carried the subscriber's address one `base64 -d | base64 -d` away while this tool and
+    // `FixtureSecretsTest` both reported clean. Round 4's own re-scan of "raw/QP/unfolded forms" was
+    // exactly one decode short of a shape already in the tree.
+    //
+    // Bounded at three rounds: deep enough for outer-b64 -> JWT -> payload, shallow enough that a
+    // pathological file cannot make this run for ever. Over-refusing a fixture is the safe direction
+    // anyway — measured, all committed fixtures that should write still write.
+    $queue = $texts;
+    for ($depth = 0; $depth < 3 && $queue !== []; ++$depth) {
+        $next = [];
 
-        foreach ($runs[0] as $run) {
-            $padded = $run . str_repeat('=', (4 - strlen($run) % 4) % 4);
-            $decoded = base64_decode(strtr($padded, '-_', '+/'), true);
+        foreach ($queue as $text) {
+            preg_match_all('~[A-Za-z0-9_\-]{16,}~', $text, $runs);
 
-            if ($decoded !== false && $decoded !== '') {
-                $forms[] = $decoded;
+            foreach ($runs[0] as $run) {
+                $padded = $run . str_repeat('=', (4 - strlen($run) % 4) % 4);
+                $decoded = base64_decode(strtr($padded, '-_', '+/'), true);
+
+                if ($decoded !== false && $decoded !== '') {
+                    $forms[] = $decoded;
+                    $next[] = $decoded;
+                }
             }
+        }
+
+        $queue = $next;
+    }
+
+    // AN ENTITY-ENCODED AND A PERCENT-ENCODED ADDRESS ARE BOTH RECOVERABLE (round-5 panel).
+    // `CLAUDE.md` already records that a portal's `text/plain` alternative is generated from its HTML
+    // and does not decode entities on the way, so `&#116;&#97;…` is a shape this class of mail really
+    // emits; and one `%2E` in place of a dot defeats both the literal address check and the local-part
+    // fallback. Neither is reachable by `str_replace($address)`, so only a decoding check can see it.
+    // Applied to every form gathered above, including the decoded ones.
+    foreach ($forms as $form) {
+        $entity = html_entity_decode($form, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+        if ($entity !== $form) {
+            $forms[] = $entity;
+        }
+
+        $percent = rawurldecode($form);
+        if ($percent !== $form) {
+            $forms[] = $percent;
         }
     }
 
