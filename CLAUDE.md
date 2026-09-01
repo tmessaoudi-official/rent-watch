@@ -1237,10 +1237,10 @@ impossible by design rather than by omission (`docs/PHORJ-REQUIREMENTS.md`).
 | Layer | Path | Responsibility |
 |---|---|---|
 | Entry point | `src/php/Cli/` | `Scout` — the `--domain=<slug>` dispatcher, which NEVER defaults — plus `Domains` (the registry: a new domain is one entry), `WatchLoop`, `ChannelFactory`. `bin/scout --domain=rent …` / `--domain=car …` |
-| Core (generic) | `src/php/Core/` | What no domain owns: `Text`, `Redact` (masks secrets in adapter error text), `Pacer`, `Heartbeat`, `health` (`SourceHealth` + `SourceStatus`), `Offline`, and the Notify channels/transports |
+| Core (generic) | `src/php/Core/` | What no domain owns: `Text`, `Redact` (masks secrets in adapter error text), `Pacer`, `Heartbeat`, `health` (`SourceHealth` + `SourceStatus`), **`RunStore`** (the run log, health verdicts, feed silence and alert cooldowns — see below), `Offline`, and the Notify channels/transports |
 | Rent domain | `src/php/Rent/{Core,Config,Adapters,Store,Enrich,Notify,Cli}/` · later `src/phorj/core/` | Everything housing-bound: `models`, `tenure` (the classifier), `criteria` (score + hard disqualifiers), `dedup`, the SQLite store, the field maps and source contract, transit enrichment, the rent formatter and `Cli/RentScout` |
 | Car domain | `src/php/Car/` | The vehicle twin — `Vehicle*` listing, classifier, criteria, scorer, store, sources, pipeline, formatter — and `Cli/CarScout` |
-| Store | `src/php/Rent/Store/` | SQLite seen-set, price history, run log and the schema-v4 cross-portal `group_key`. **PHP-only** — it touches a database, so phorj will not transpile it. |
+| Store | `src/php/Rent/Store/` | SQLite seen-set, price history and the schema-v4 cross-portal `group_key`. The run log and health are DELEGATED to `Core/RunStore`, which it composes on its own PDO handle. **PHP-only** — it touches a database, so phorj will not transpile it. |
 | Notify | `src/php/Core/Notify/` | One module per channel. Every notification carries `score` + human-readable `reasons[]`. |
 | Adapters | `src/php/Adapters/` (generic: `Http/*`, `Mail/*`, `SourceError`, `FeedFreshness`) · `src/php/Rent/Adapters/` (the `Source` interface, `http_json`, `html`, `email_alert` (IMAP), `browser` (Playwright, opt-in), `sites/` for per-site overrides) | Site-specific code lives ONLY here |
 | Enrich | `src/php/Rent/Enrich/` | `transit` (IDFM / PRIM door-to-door commute), `geo` (commune → INSEE code, coords) |
@@ -1619,14 +1619,16 @@ docs/OPEN-QUESTIONS.md      All 25 questions, each closed 2026-08-07 with the de
 docs/plans/                 <topic>.plan.md, each with its own ## Decisions Log
 config/<domain>/            criteria.json + sources.json per domain (committed) — JSON, ruled 2026-08-07 (Q22)
 src/php/Cli/                Scout — the --domain dispatcher (never defaults) — Domains (the registry), WatchLoop, ChannelFactory
-src/php/Core/               the GENERIC core: Text, Redact, Pacer, Heartbeat, source health, the Notify channels
+src/php/Core/               the GENERIC core: Text, Redact, Pacer, Heartbeat, source health, RunStore
+                            (run log + health, owned by no domain), the Notify channels
 src/php/Rent/               the rent domain — Core (models, tenure classifier, criteria, dedup), Config, Adapters,
                             Store, Enrich, Notify (Formatter), Cli/RentScout
 src/php/Car/                the car domain — the Vehicle* classes and Cli/CarScout
 src/php/Core/Pacer.php      the Q37 cadence; clock, sleeper and RNG all injected so it is testable
 src/php/Cli/WatchLoop.php   the `--watch` loop; survives a failing pass, stops after the one in flight
 src/php/Rent/Adapters/PacedSource.php   decorator applying Pacer, so Pipeline never learns time exists
-src/php/Rent/Store/              SQLite seen-set, price history, run log, cross-portal group (v4)
+src/php/Rent/Store/              SQLite seen-set, price history, cross-portal group (v4); run log
+                            delegated to Core/RunStore
 src/phorj/                  phorj port of the same pure core                  [waits on phorj]
 tests/php/                  PHPUnit suites — generic under Core/Adapters/Config/Cli, then Rent/… and Car/…
 tests/fixtures/rent/tenure/      corpus.json — the language-neutral classifier corpus
@@ -1832,6 +1834,24 @@ var/claude/                 Reports, review outputs — gitignored scratch (hand
   judged at all. **It is PERMANENT**: nothing re-opens it (`staleVerdicts()` skips an excluded
   tenure, `pendingDigest()` skips a non-DIGEST outcome, `replay` writes no verdicts), and the
   docblock's old *"until an explicit command"* named a route that does not exist.
+- **EXTRACTING A CLASS ORPHANS SABOTAGE EXPRESSIONS THAT NEVER NAMED IT, and the obvious
+  measurement says otherwise.** The 2026-09-01 `Core/RunStore` split moved 625 lines out of the rent
+  `Store`. Asking which ledger expressions mention one of the six moving METHOD NAMES answered
+  **1**; the expressions target code *inside* those bodies, which names no method, and
+  `tests/test-sabotage-applies.sh` found **39 of 607 gone INERT** — reporting coverage they did not
+  have. `grep -c "Rent/Store/Store.php" tests/sabotage-check.sh` answers 94 and is the number to
+  ignore; only running the gate answers the question. Retarget the file path, never the expression:
+  the code moved verbatim, so each must match in the new file AND not in the old, checked one at a
+  time. Four other things this split is worth remembering for, each a silent failure:
+  **(a)** a generic store must NOT adopt `schema_meta` — the live rent file records `12` there, and
+  a v1 store reading it would refuse to open the database that produces the matches, so the run log
+  owns its own `run_meta`; **(b)** `VehicleStore::migrate()` RETURNS EARLY at the current version, so
+  a cleanup for existing files placed in the migration transaction never runs on the one file it
+  exists for — it goes above the return; **(c)** copying a table's ORIGINAL `CREATE` rather than its
+  CURRENT shape passes `php -l` and reflection and throws on the first write (`source_runs` had
+  gained `feed_newest_at` by `ALTER` at v11) — only running it finds that; **(d)** `backup-state.sh`
+  counts the rent `listings` table, so every car backup had reported *"0 annonces"* while holding
+  3 544 vehicles. A backup that reports itself empty is one nobody checks.
 - **`prototype/scout.py` has no tenure classifier at all.** It will happily surface PLAI and PLUS
   listings. It is reference material for the field-mapping and adapter shape only — treat its filtering
   logic as incomplete, not as a baseline to preserve.

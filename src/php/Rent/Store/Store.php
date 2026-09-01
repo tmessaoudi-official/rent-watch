@@ -7,6 +7,7 @@ namespace Scout\Rent\Store;
 use Scout\Rent\Core\ListingSnapshot;
 use Scout\Rent\Core\RawListing;
 use Scout\Core\Redact;
+use Scout\Core\RunStore;
 use Scout\Core\SourceHealth;
 use Scout\Core\SourceStatus;
 use Scout\Rent\Core\Tenure;
@@ -71,26 +72,10 @@ final readonly class Store
      */
     public const int DIGEST_BATCH = 50;
 
-    /** Spec §8: the mean is rolling over seven days, not over a fixed number of runs. */
-    public const int ROLLING_WINDOW_DAYS = 7;
 
-    /** Spec §8: three consecutive empty runs against a non-zero baseline means broken. */
-    public const int EMPTY_RUNS_BEFORE_BROKEN = 3;
 
-    /** Spec §8: a drop of more than 70% below the rolling mean warrants a warning. */
-    public const float DROP_WARNING_RATIO = 0.3;
 
-    /**
-     * Share of failed runs in the window above which a source is flagged flaky.
-     *
-     * Chosen, not derived — spec §8 does not name a number, and there is no run history to fit one
-     * to. Recorded as an open question so it can be tuned against real data rather than defended
-     * as if it had been measured.
-     */
-    public const float FLAKY_FAILURE_RATIO = 0.3;
 
-    /** A window needs at least this many runs before a failure RATE means anything. */
-    public const int MIN_RUNS_FOR_FLAKY = 3;
 
     /**
      * How long a second writer waits before giving up, in milliseconds.
@@ -104,32 +89,16 @@ final readonly class Store
      */
     public const int BUSY_TIMEOUT_MS = 5000;
 
-    /**
-     * A source must have been trying for at least this long before "never produced" means anything.
-     *
-     * Without it, three successful empty polls at a 15-minute interval told a source onboarded
-     * forty-five minutes ago that its field map was probably wrong. In'li LLI stock in one commune
-     * is legitimately empty for days.
-     *
-     * RAISED FROM ONE DAY TO SEVEN on 2026-08-07, after a review demonstrated the one-day value
-     * false-accusing a source doing nothing wrong: a new source answering HTTP 200 with zero items,
-     * polled every 15 minutes, flipped to `NEVER_PRODUCED` at the 24-hour mark and stayed there. The
-     * question that adopted one day (`docs/OPEN-QUESTIONS.md` Q23) had already written down that
-     * *"In'li LLI stock in one commune is legitimately empty for days, so the honest floor could be
-     * a week"* — and then kept the day anyway. Seven days now matches {@see ROLLING_WINDOW_DAYS},
-     * which is the same judgement about how long this market takes to say anything.
-     *
-     * The trade is stated rather than hidden: a genuinely broken field map on a new source now goes
-     * unremarked for a week. That is acceptable only because it is not the ONLY detector — a source
-     * that used to produce items and stops is caught in three runs by {@see EMPTY_RUNS_BEFORE_BROKEN},
-     * which is the far commoner shape. This one covers the source that never worked at all, where a
-     * week of patience costs nothing and a false accusation costs the alert's credibility.
-     */
-    public const int MIN_SPAN_FOR_NEVER_PRODUCED = 604800;
 
     private function __construct(
         private \PDO $pdo,
-        private string $journalModeInUse,
+        /**
+         * The run log and source health, which belong to no domain.
+         *
+         * COMPOSED rather than inherited, and it shares this store's PDO handle rather than opening
+         * the file again — under WAL a second connection is how a process contends with itself.
+         */
+        private RunStore $runs,
         /**
          * How many days of portal silence make a still-producing source {@see SourceStatus::FEED_SILENT}.
          *
@@ -141,11 +110,6 @@ final readonly class Store
         private ?int $feedSilentDays = null,
     ) {}
 
-    /**
-     * The journal mode SQLite actually gave us — `wal` on a normal filesystem, `memory` for
-     * `:memory:`, `delete` where WAL was refused. Anything but `wal` on a file database means two
-     * processes will contend rather than share, so `scout doctor` prints it.
-     */
     /**
      * The cached door-to-door commute for a COMMUNE, or `null` when nothing is cached.
      *
@@ -206,9 +170,10 @@ final readonly class Store
         ]);
     }
 
+    /** The journal mode SQLite actually gave us. Delegated — see {@see health()}. */
     public function journalMode(): string
     {
-        return $this->journalModeInUse;
+        return $this->runs->journalMode();
     }
 
     /**
@@ -257,7 +222,7 @@ final readonly class Store
         // the migration below fail with "cannot commit transaction - SQL statements in progress".
         $mode?->closeCursor();
 
-        $store = new self($pdo, $journalMode, $feedSilentDays);
+        $store = new self($pdo, RunStore::fromPdo($pdo, $journalMode, $feedSilentDays), $feedSilentDays);
         $store->migrate();
 
         return $store;
@@ -411,37 +376,6 @@ final readonly class Store
 
             CREATE INDEX IF NOT EXISTS price_history_key ON price_history (dedup_key, at_epoch, id);
 
-            CREATE TABLE IF NOT EXISTS source_runs (
-                id         INTEGER PRIMARY KEY AUTOINCREMENT,
-                source     TEXT NOT NULL,
-                item_count INTEGER NOT NULL,
-                ok         INTEGER NOT NULL,
-                error      TEXT,
-                at         TEXT NOT NULL,
-                at_epoch   INTEGER NOT NULL,
-                -- Schema v3 (Q25). Spec §8 specifies `scout doctor` reports status, TIMING and item
-                -- counts; three of the four were implemented and the fourth was aspirational.
-                duration_ms INTEGER
-            );
-
-            CREATE INDEX IF NOT EXISTS source_runs_source ON source_runs (source, at_epoch, id);
-
-            -- Schema v3, ruled 2026-08-07 (Q29). WITHOUT THIS TABLE THE ALERT COOLDOWN HAS NOWHERE
-            -- DURABLE TO LIVE, and that is not a storage nicety: in process memory a crash-looping
-            -- container re-alerts on every restart, and a manual `scout doctor` shares no state with
-            -- the running `--watch`. It cannot be derived from `source_runs` either — that table
-            -- records RUNS, not ALERTS, and cannot tell "was broken" from "was told about".
-            --
-            -- Keyed on (source, status), not on source alone: an escalation from WARN_DROP to BROKEN
-            -- must not be swallowed by the earlier, quieter alert.
-            CREATE TABLE IF NOT EXISTS source_alerts (
-                source   TEXT NOT NULL,
-                status   TEXT NOT NULL,
-                at       TEXT NOT NULL,
-                at_epoch INTEGER NOT NULL,
-                PRIMARY KEY (source, status)
-            );
-
             -- Schema v5. What a listing's own detail page said, so it is read ONCE.
             --
             -- Keyed on (source, external_id) and NOT on dedup_key: cache what was OBSERVED, never
@@ -506,6 +440,10 @@ final readonly class Store
             );
             SQL
         );
+
+        // The generic tables, from their single definition. Every statement is IF NOT EXISTS,
+        // so on the live rent database this is a no-op; it is the ONE place the DDL is written.
+        RunStore::ddl($this->pdo);
 
         $recorded = $this->schemaVersionOrNull();
 
@@ -1346,28 +1284,7 @@ final readonly class Store
 
     // ── Source health (spec §8, `CLAUDE.md` hard rule 2) ───────────────────────────────────────────
 
-    /**
-     * Log the outcome of one fetch.
-     *
-     * A failed fetch is recorded AS a failure, with its error. `CLAUDE.md` hard rule 3 exists
-     * because the alternative — catching the exception and recording zero items — turns a loud
-     * breakage into a quiet one, and quiet is indistinguishable from a calm rental market.
-     *
-     * **Every run is logged, whatever its timestamp says.** An earlier version refused a run stamped
-     * before one already recorded, on the theory that a run has no legitimate out-of-order case. It
-     * made things worse: nothing checks a timestamp against a clock (by design — health can only be
-     * tested if time is an argument), so the FIRST forward-skewed run was still accepted, and the
-     * refusal then discarded the real runs that followed. Three outright failures went unrecorded
-     * and `health()` reported `OK` with `lastFailureAt` null — the freeze survived, and the evidence
-     * of it did not. A log that drops entries is not a log.
-     *
-     * What actually defends against a poisoned timestamp is downstream, in {@see health()}: recency
-     * is read from the log's own insertion order, and the rolling MEAN is bounded at both ends so a
-     * run dated 2036 cannot inflate it forever. The COUNTS are bounded differently — see
-     * {@see windowCounts()}, which has to answer a different question.
-     *
-     * @throws \InvalidArgumentException on an unreadable timestamp
-     */
+    /** Log one poll of one source. Delegated — see {@see health()}. */
     public function recordRun(
         string $sourceName,
         int $itemCount,
@@ -1377,39 +1294,7 @@ final readonly class Store
         ?int $durationMs = null,
         ?string $feedNewestAt = null,
     ): void {
-        $epoch = self::epoch($atIso);
-
-        if ($feedNewestAt !== null) {
-            // Validated at WRITE time, beside the caller that produced it. Deferring it to
-            // `health()` would turn an unreadable date into a permanent absence of verdict, which
-            // is the silent direction: the source would look watched and be unwatched.
-            self::epoch($feedNewestAt);
-        }
-
-        $statement = $this->pdo->prepare(
-            'INSERT INTO source_runs (source, item_count, ok, error, at, at_epoch, duration_ms, feed_newest_at)
-             VALUES (:source, :count, :ok, :error, :at, :epoch, :duration, :feed)',
-        );
-        $statement->execute([
-            'source' => $sourceName,
-            'count' => $itemCount,
-            'ok' => $ok ? 1 : 0,
-            // Schema v3 (Q25). Nullable, because only the CLI can measure a fetch and a caller that
-            // does not measure must record `null` rather than a fabricated 0 — a zero-millisecond
-            // fetch would read as a suspiciously fast source rather than as an unmeasured one.
-            'duration' => $durationMs,
-            // An adapter exception naturally carries the request URL or the mailbox it failed on,
-            // and this value reaches both the database and the user-facing detail below.
-            'error' => Redact::text($error),
-            'at' => $atIso,
-            'epoch' => $epoch,
-            // Schema v11. The newest MESSAGE date this run saw, or null when the source does not
-            // report one -- every html/json source, and every FileMailbox run, because a directory
-            // of frozen fixtures is not a feed. Validated here rather than at read time so an
-            // unparseable value is refused loudly at the moment it is written, next to the caller
-            // that produced it, instead of quietly yielding no verdict for ever.
-            'feed' => $feedNewestAt,
-        ]);
+        $this->runs->recordRun($sourceName, $itemCount, $ok, $error, $atIso, $durationMs, $feedNewestAt);
     }
 
     /**
@@ -1422,74 +1307,22 @@ final readonly class Store
      */
     // ── Alert cooldown (schema v3, Q29) ───────────────────────────────────────────────────────────
 
-    /**
-     * Should this source/status alert be sent, given the cooldown?
-     *
-     * KEYED ON `(source, status)`, never on source alone. An escalation from `WARN_DROP` to `BROKEN`
-     * is a different fact from the warning that preceded it, and keying on the source would let the
-     * quieter alert swallow the louder one for a whole day.
-     *
-     * Persisted rather than held in memory, and that is the point of the table: a crash-looping
-     * container re-alerts on every restart, and a manual `scout doctor` shares no state with a
-     * running `--watch`. It also cannot be derived from `source_runs`, which records RUNS and cannot
-     * distinguish "was broken" from "was told about".
-     */
+    /** Whether an alert is outside its cooldown. Delegated — see {@see health()}. */
     public function shouldAlert(string $sourceName, string $status, string $nowIso, int $cooldownHours): bool
     {
-        $now = self::epoch($nowIso);
-
-        $statement = $this->pdo->prepare(
-            'SELECT at_epoch FROM source_alerts WHERE source = :source AND status = :status',
-        );
-        $statement->execute(['source' => $sourceName, 'status' => $status]);
-        $row = $statement->fetch();
-
-        if ($row === false) {
-            return true;
-        }
-
-        $last = (int) $row['at_epoch'];
-
-        // A future-stamped row means a clock moved backwards, or a hand-edited database. Alerting
-        // is the safe direction: the alternative is a source that is silently un-alertable until the
-        // clock catches up, which could be indefinitely.
-        if ($last > $now) {
-            return true;
-        }
-
-        return ($now - $last) >= $cooldownHours * 3600;
+        return $this->runs->shouldAlert($sourceName, $status, $nowIso, $cooldownHours);
     }
 
-    /** Record that an alert for this `(source, status)` has just been sent. */
+    /** Record that an alert was sent. Delegated — see {@see health()}. */
     public function markAlerted(string $sourceName, string $status, string $atIso): void
     {
-        $statement = $this->pdo->prepare(
-            'INSERT INTO source_alerts (source, status, at, at_epoch)
-             VALUES (:source, :status, :at, :epoch)
-             ON CONFLICT (source, status) DO UPDATE SET at = :at, at_epoch = :epoch',
-        );
-        $statement->execute([
-            'source' => $sourceName,
-            'status' => $status,
-            'at' => $atIso,
-            'epoch' => self::epoch($atIso),
-        ]);
+        $this->runs->markAlerted($sourceName, $status, $atIso);
     }
 
-    /**
-     * A source is `OK` again: forget every alert we sent about it.
-     *
-     * Returns whether anything was cleared, which is exactly the condition for sending the ONE
-     * recovery notice. Without it a developer who fixes a field map sees nothing and has no
-     * confirmation the fix took — and the next, different breakage that day would also be silent,
-     * because the cooldown from the old alert would still be running.
-     */
+    /** Clear every standing alert for a source. Delegated — see {@see health()}. */
     public function clearAlerts(string $sourceName): bool
     {
-        $statement = $this->pdo->prepare('DELETE FROM source_alerts WHERE source = :source');
-        $statement->execute(['source' => $sourceName]);
-
-        return $statement->rowCount() > 0;
+        return $this->runs->clearAlerts($sourceName);
     }
 
     // ── Detail hydration (schema v5) ──────────────────────────────────────────────────────────────
@@ -2019,256 +1852,16 @@ final readonly class Store
         return $rows;
     }
 
+    /**
+     * Source health — DELEGATED to the generic run log.
+     *
+     * The verdicts live in {@see \Scout\Core\RunStore} because they are a property of a RUN, not of
+     * a housing listing: the car domain reached this exact method through this exact class, which is
+     * what a store composing another domain's store looks like from the inside.
+     */
     public function health(string $sourceName, ?string $nowIso = null, ?int $feedSilentDays = null): SourceHealth
     {
-        $feedSilentDays ??= $this->feedSilentDays;
-
-        if ($feedSilentDays !== null && $feedSilentDays < 1) {
-            // Refused rather than clamped, and refused LOUDLY, because a threshold of zero or below
-            // disables the only signal that distinguishes a dead alert from a quiet market. Same
-            // asymmetry as `RENT_HEARTBEAT_HOURS`: an omitted threshold is benign (no verdict), an
-            // explicit unusable one is a configuration error wearing the shape of a setting.
-            throw new \InvalidArgumentException(
-                'feedSilentDays doit valoir au moins 1 jour — 0 désactiverait la détection de flux muet',
-            );
-        }
-
-        $statement = $this->pdo->prepare(
-            // Insertion order. See below for why it is not the final word.
-            'SELECT id, item_count, ok, error, at, at_epoch, feed_newest_at FROM source_runs
-              WHERE source = :source ORDER BY id ASC',
-        );
-        $statement->execute(['source' => $sourceName]);
-
-        /** @var list<array{item_count:int|string, ok:int|string, error:?string, at:string, at_epoch:int|string, feed_newest_at:?string}> $runs */
-        $runs = $statement->fetchAll();
-
-        if ($runs === []) {
-            // Never run is not the same as healthy. A source configured months ago that has never
-            // once fired is a configuration bug, and it is invisible because it never fails.
-            return new SourceHealth(
-                sourceName: $sourceName,
-                status: SourceStatus::NEVER_RUN,
-                detail: 'aucun run enregistré pour cette source',
-            );
-        }
-
-        // WHICH RUN IS "THE LAST ONE" — settled, after three rounds of getting it wrong.
-        //
-        // INSERTION ORDER, always. Not the timestamp, and not the timestamp filtered by a clock.
-        // The three candidates fail for different LENGTHS of time, and that is the whole argument:
-        //
-        //   timestamp, no clock — one future-stamped row sorts last FOREVER and hides every later
-        //     run. Twenty consecutive failures reported OK, permanently.
-        //   timestamp + clock — a clock only disqualifies rows stamped after `now`. A row skewed by
-        //     an hour is fully credible once that hour has passed, and then it hides every real run
-        //     logged after it for the duration of the skew. It is also worse than useless when the
-        //     CLOCK is the thing that is wrong: an hour-slow clock discarded three real failures and
-        //     reported OK, with `totalRuns` counting only the survivors — a silent discard.
-        //   insertion order — a run committed late but stamped earlier wins, so one success logged
-        //     after three failures reads OK. Two writers make that reachable. A SINGLE such row
-        //     self-corrects on the next run; a writer that stamps stale SYSTEMATICALLY keeps the
-        //     last-run rule quiet indefinitely, and what catches that is WARN_FLAKY — which is why
-        //     `windowCounts()` counts failures whatever their clock says. Both are alerting.
-        //
-        // Bounded-by-one-run beats bounded-by-the-skew beats unbounded. So the log's own order wins,
-        // and `$nowIso` is used for exactly one thing below: STALE, which genuinely cannot be
-        // derived without a clock. It never filters, reorders or discards a run.
-
-        $last = $runs[array_key_last($runs)];
-        $lastCount = (int) $last['item_count'];
-        $lastOk = (int) $last['ok'] === 1;
-
-        $lastSuccessAt = null;
-        $lastFailureAt = null;
-        $everProduced = false;
-        $successfulRuns = 0;
-
-        foreach ($runs as $run) {
-            if ((int) $run['ok'] === 1) {
-                $lastSuccessAt = (string) $run['at'];
-                ++$successfulRuns;
-                $everProduced = $everProduced || (int) $run['item_count'] > 0;
-            } else {
-                $lastFailureAt = (string) $run['at'];
-            }
-        }
-
-        $epochs = array_map(static fn (array $run): int => (int) $run['at_epoch'], $runs);
-
-        // Every MESSAGE date any run reported. A row that reported nothing contributes nothing:
-        // unknown is not old (hard rule 9), and that covers every html/json source, every
-        // `FileMailbox` run and every row written before schema v11.
-        //
-        // Kept as a LIST rather than reduced to a maximum here, because the maximum is only
-        // meaningful once a clock exists to judge credibility against. The value is whatever a
-        // portal stamped on its own mail, so one skewed clock — or one message dated 2030 — would
-        // otherwise win the maximum and mask a genuinely ageing feed behind it, permanently.
-        // CLAMPING that date to now is worse than useless: it makes the bogus date read as
-        // perfectly fresh, which is the masking this exists to prevent. Future rows are FILTERED,
-        // exactly as `STALE` already filters forward-skewed run timestamps below.
-        $feedDates = [];
-
-        foreach ($runs as $run) {
-            $reported = $run['feed_newest_at'] ?? null;
-
-            if ($reported !== null && $reported !== '') {
-                $feedDates[] = $reported;
-            }
-        }
-
-        $emptyStreak = self::trailingEmptyRuns($runs);
-        $rollingMean = self::rollingMeanBefore($runs, \count($runs) - 1);
-        [$runsInWindow, $failedInWindow] = self::windowCounts($runs, $nowIso === null ? null : self::epoch($nowIso));
-
-        $health = static fn (SourceStatus $status, string $detail): SourceHealth => new SourceHealth(
-            sourceName: $sourceName,
-            status: $status,
-            detail: $detail,
-            consecutiveEmptyRuns: $emptyStreak,
-            lastSuccessAt: $lastSuccessAt,
-            lastFailureAt: $lastFailureAt,
-            lastCount: $lastCount,
-            rollingMean: $rollingMean,
-            runsInWindow: $runsInWindow,
-            failedRunsInWindow: $failedInWindow,
-            totalRuns: \count($runs),
-        );
-
-        if (!$lastOk) {
-            return $health(SourceStatus::BROKEN, sprintf(
-                'dernier run en échec (%s) : %s',
-                (string) $last['at'],
-                $last['error'] ?? 'erreur non renseignée',
-            ));
-        }
-
-        if ($emptyStreak >= self::EMPTY_RUNS_BEFORE_BROKEN) {
-            $streakStart = \count($runs) - $emptyStreak;
-            $baseline = self::rollingMeanBefore($runs, $streakStart);
-
-            if ($baseline === null) {
-                // The rolling window before the streak is EMPTY — the machine was off, or the
-                // source was disabled, for longer than the window. That is "I do not know what
-                // normal looks like", NOT "normal is zero", and letting the two share a branch made
-                // a source that broke after any gap longer than the window report OK forever: ten
-                // consecutive empty runs against a documented 25-listing history, status OK. So
-                // fall back to the last successful run of ANY age.
-                $baseline = self::lastProductiveCount($runs, $streakStart);
-            }
-
-            if ($baseline > 0.0) {
-                // The last message date is carried into the detail, not just into FEED_SILENT.
-                // This is the half that survives the threshold being wrong: when an email source's
-                // count finally collapses because its window expired, the empty streak dates from
-                // the expiry and the SILENCE dates from days earlier. Naming only the streak is how
-                // the leboncoin case would have been reported on the wrong day and blamed on the
-                // wrong cause.
-                return $health(SourceStatus::BROKEN, sprintf(
-                    '%d runs consécutifs à vide alors que la référence précédente était de %.1f annonces%s',
-                    $emptyStreak,
-                    $baseline,
-                    self::newestCredibleFeedDate($feedDates, $nowIso) === null
-                        ? ''
-                        : sprintf(' — dernier message du portail : %s', self::newestCredibleFeedDate($feedDates, $nowIso)),
-                ));
-            }
-        }
-
-        if ($nowIso !== null) {
-            // The ONLY use of the clock, and the only verdict that needs one. Silence is measured
-            // from the newest run that is not stamped in the future, because a future-stamped row
-            // would otherwise make this negative and report a stopped schedule as healthy. Nothing
-            // is discarded from `$runs` — the other verdicts still see the whole log.
-            $now = self::epoch($nowIso);
-            $credible = array_filter($epochs, static fn (int $at): bool => $at <= $now);
-
-            if ($credible === []) {
-                return $health(SourceStatus::STALE, 'tous les runs sont horodatés dans le futur — vérifiez l\'horloge de la machine');
-            }
-
-            $silentFor = $now - max($credible);
-
-            if ($silentFor > self::ROLLING_WINDOW_DAYS * 86400) {
-                return $health(SourceStatus::STALE, sprintf(
-                    'aucun run depuis %d jours — la planification a-t-elle cessé ?',
-                    intdiv($silentFor, 86400),
-                ));
-            }
-        }
-
-        // max − min over the WHOLE log, not last − first. The rows are in insertion order and
-        // `recordRun()` accepts any timestamp, so `last − first` goes NEGATIVE when the first row is
-        // forward-skewed — and a negative span can never satisfy the floor below, disabling the
-        // wrong-field-map detector permanently. One poisoned row hiding an unbounded number of later
-        // ones is the exact shape the rest of this class was rewritten to remove.
-        $span = max($epochs) - min($epochs);
-
-        if (!$everProduced && $successfulRuns >= self::EMPTY_RUNS_BEFORE_BROKEN
-            && $span >= self::MIN_SPAN_FOR_NEVER_PRODUCED) {
-            // Succeeded repeatedly, never returned a single item. The empty-run rule correctly
-            // declines to fire (the baseline really is zero) and nothing ever fails, so this hid
-            // behind OK. It is the shape a wrong field map takes: HTTP 200, zero parsed items.
-            return $health(SourceStatus::NEVER_PRODUCED, sprintf(
-                '%d runs réussis sur %d jours, aucune annonce produite — mapping de champs à vérifier',
-                $successfulRuns,
-                max(1, intdiv($span, 86400)),
-            ));
-        }
-
-        if ($runsInWindow >= self::MIN_RUNS_FOR_FLAKY && $failedInWindow / $runsInWindow > self::FLAKY_FAILURE_RATIO) {
-            return $health(SourceStatus::WARN_FLAKY, sprintf(
-                '%d échecs sur %d runs en %d jours',
-                $failedInWindow,
-                $runsInWindow,
-                self::ROLLING_WINDOW_DAYS,
-            ));
-        }
-
-        if ($nowIso !== null && $feedDates !== [] && $feedSilentDays !== null && $lastCount > 0) {
-            // Ahead of WARN_DROP deliberately. A source that is BOTH quieter than its mean and
-            // reading an ageing message is described far better by "the portal stopped sending"
-            // than by "fewer than average": the first names a cause, the second names a symptom.
-            //
-            // Gated on `$lastCount > 0` because at zero the existing verdicts already own the
-            // answer -- the empty-streak rule above knows the baseline and fires BROKEN, which now
-            // carries the message date in its own detail.
-            $now = self::epoch($nowIso);
-            $feedNewest = self::newestCredibleFeedDate($feedDates, $nowIso);
-
-            if ($feedNewest === null) {
-                // Dates WERE reported and not one of them is believable. Saying nothing here would
-                // let a portal with a permanently fast clock disable this verdict for ever, which
-                // is the suppressed direction `Core/Heartbeat` rules against. Mirrors the STALE
-                // branch below, which says the same thing about run timestamps.
-                return $health(SourceStatus::FEED_SILENT, sprintf(
-                    'toutes les dates de message sont dans le futur (la plus récente : %s) — vérifiez l\'horloge du portail',
-                    self::newestFeedDate($feedDates) ?? '?',
-                ));
-            }
-
-            $silentFor = max(0, $now - self::epoch($feedNewest));
-
-            if ($silentFor >= $feedSilentDays * 86400) {
-                return $health(SourceStatus::FEED_SILENT, sprintf(
-                    'le portail n\'a rien envoyé depuis %d jour(s) (dernier message : %s) — %d annonce(s) relues du même courrier',
-                    intdiv($silentFor, 86400),
-                    $feedNewest,
-                    $lastCount,
-                ));
-            }
-        }
-
-        if ($rollingMean !== null && $rollingMean > 0.0 && $lastCount < $rollingMean * self::DROP_WARNING_RATIO) {
-            return $health(SourceStatus::WARN_DROP, sprintf(
-                '%d annonces contre une moyenne de %.1f sur %d jours',
-                $lastCount,
-                $rollingMean,
-                self::ROLLING_WINDOW_DAYS,
-            ));
-        }
-
-        return $health(SourceStatus::OK, sprintf('%d annonces au dernier run', $lastCount));
+        return $this->runs->health($sourceName, $nowIso, $feedSilentDays);
     }
 
     // ── Internals ─────────────────────────────────────────────────────────────────────────────────
@@ -2314,142 +1907,9 @@ final readonly class Store
         return $row === false ? null : (int) $row['rent_cc'];
     }
 
-    /**
-     * How many of the most recent runs succeeded and returned nothing.
-     *
-     * A FAILED run terminates the streak rather than extending it. An empty run and a failed run are
-     * different diagnoses — the source answered and had nothing, versus the source did not answer —
-     * and the failure has its own, louder rule above.
-     *
-     * @param list<array{item_count:int|string, ok:int|string, ...}> $runs
-     */
-    private static function trailingEmptyRuns(array $runs): int
-    {
-        $streak = 0;
 
-        foreach (array_reverse($runs) as $run) {
-            if ((int) $run['ok'] !== 1 || (int) $run['item_count'] !== 0) {
-                break;
-            }
 
-            ++$streak;
-        }
 
-        return $streak;
-    }
-
-    /**
-     * Mean item count over the successful runs in the `ROLLING_WINDOW_DAYS` window ending at (and
-     * excluding) `$index`. Null when there is nothing in the window to average — which is a
-     * different fact from a mean of zero, and callers must treat it as such.
-     *
-     * @param list<array{item_count:int|string, ok:int|string, at_epoch:int|string, ...}> $runs
-     */
-    private static function rollingMeanBefore(array $runs, int $index): ?float
-    {
-        if ($index <= 0 || $index >= \count($runs)) {
-            return null;
-        }
-
-        $reference = (int) $runs[$index]['at_epoch'];
-        $cutoff = $reference - self::ROLLING_WINDOW_DAYS * 86400;
-        $counts = [];
-
-        // SKIP rather than stop, and bound the window at BOTH ends. The rows are in insertion order,
-        // not timestamp order, so a single out-of-range timestamp would otherwise end the scan early
-        // (`break`) or sit inside the window forever (no upper bound) — a run dated 2036 inflating
-        // the mean of every later verdict.
-        for ($i = $index - 1; $i >= 0; --$i) {
-            $at = (int) $runs[$i]['at_epoch'];
-
-            if ($at < $cutoff || $at > $reference) {
-                continue;
-            }
-
-            if ((int) $runs[$i]['ok'] === 1) {
-                $counts[] = (int) $runs[$i]['item_count'];
-            }
-        }
-
-        return $counts === [] ? null : array_sum($counts) / \count($counts);
-    }
-
-    /**
-     * Item count of the most recent run before `$index` that actually PRODUCED something, of any
-     * age. Zero when the source has never produced anything — used only as the fallback baseline
-     * when the rolling window is empty.
-     *
-     * "Most recent SUCCESSFUL run" was the first attempt and it was one step too shallow: a single
-     * successful-but-empty run sitting between the productive history and the streak set the
-     * baseline to zero, so a source with a 25-listing history went silent for three runs and
-     * reported `OK`. A quiet run is not evidence that nothing is normal here; a productive one is
-     * evidence that something was.
-     *
-     * @param list<array{item_count:int|string, ok:int|string, ...}> $runs
-     */
-    private static function lastProductiveCount(array $runs, int $index): float
-    {
-        for ($i = min($index, \count($runs)) - 1; $i >= 0; --$i) {
-            if ((int) $runs[$i]['ok'] === 1 && (int) $runs[$i]['item_count'] > 0) {
-                return (float) (int) $runs[$i]['item_count'];
-            }
-        }
-
-        return 0.0;
-    }
-
-    /**
-     * Total and failed runs within the rolling window ending at the most recent run, inclusive.
-     *
-     * @param  list<array{ok:int|string, at_epoch:int|string, ...}> $runs
-     * @return array{int, int}
-     */
-    private static function windowCounts(array $runs, ?int $now): array
-    {
-        // Anchored on the LAST-INSERTED row, deliberately, and NOT on `max(at_epoch)`.
-        //
-        // Both choices lose the MEAN when a row is forward-skewed, and they lose it for different
-        // lengths of time. Anchoring on the last row loses it until the next real run; anchoring on
-        // the maximum loses it FOREVER, because the skewed row stays the maximum and every real row
-        // sits outside its window. A bounded degradation beats a permanent one, so this reads the
-        // log's own order for the same reason `health()` does.
-        // THE UPPER EDGE OF THE WINDOW IS "NOW", AND ONLY A CLOCK KNOWS IT.
-        //
-        // Three attempts, each failing differently, so all three are recorded:
-        //   bounded by the last-INSERTED row's stamp — a writer stamping from a lagging `Date:`
-        //     header hid eleven consecutive real failures, because every newer-stamped row fell
-        //     outside the window and `failedRunsInWindow` read 0 of 11.
-        //   unbounded above — a future-stamped row never leaves the window. Twenty successes
-        //     stamped a year ahead diluted a genuinely flaky source back to OK; ten failures
-        //     stamped a year ahead alerted permanently through ninety healthy days, with a detail
-        //     line reading "10 échecs sur 18 runs en 7 jours" when the last seven days held none.
-        //   bounded by `$now` — correct in both, because a row stamped after the current time has
-        //     not happened yet. That is the whole reason `health()` takes a clock.
-        //
-        // Without a clock we fall back to the last-inserted stamp: the first failure above, bounded
-        // and self-correcting, rather than the second, unbounded in both directions. `CLAUDE.md`
-        // requires `scout doctor` to pass one.
-        $edge = $now ?? (int) $runs[array_key_last($runs)]['at_epoch'];
-        $cutoff = $edge - self::ROLLING_WINDOW_DAYS * 86400;
-        $total = 0;
-        $failed = 0;
-
-        for ($i = \count($runs) - 1; $i >= 0; --$i) {
-            $at = (int) $runs[$i]['at_epoch'];
-
-            if ($at < $cutoff || $at > $edge) {
-                continue;
-            }
-
-            ++$total;
-
-            if ((int) $runs[$i]['ok'] !== 1) {
-                ++$failed;
-            }
-        }
-
-        return [$total, $failed];
-    }
 
     /**
      * Roll back without letting the rollback's own failure replace the real error.
@@ -2498,104 +1958,19 @@ final readonly class Store
      *
      * @throws \InvalidArgumentException on anything that is not a full ISO-8601 instant
      */
-    /**
-     * How far a message may be stamped AHEAD of now and still be believed.
-     *
-     * Not slack for a broken clock — slack for THIS process. `Pipeline::runOnce()` captures one
-     * `$nowIso` at the start of a pass, and under Q37 pacing (5 s between hosts, 60 s per host,
-     * order shuffled) a source polled minutes later can legitimately see a message stamped after
-     * that instant. With no grace, a healthy source's very first pass reports
-     * `toutes les dates de message sont dans le futur — vérifiez l'horloge du portail`, on a source
-     * that just delivered, on a fresh database — which is precisely when someone is watching
-     * (`scout run --seed`). An hour is far beyond any pass and far below any threshold, so it
-     * cannot mask real silence: the smallest threshold is one day.
-     */
-    private const int FEED_CLOCK_GRACE_SECONDS = 3600;
+
+
 
     /**
-     * The newest reported feed date, compared as INSTANTS.
+     * Strict ISO-8601 to unix seconds. FORWARDS to the generic run log's implementation.
      *
-     * `max()` over these strings is a LEXICAL comparison and the store accepts any RFC 3339 offset —
-     * its own CLI test writes `+02:00`. Measured on the real store: `2026-08-28T23:00:00-12:00`
-     * (the newer instant) loses to `2026-08-29T00:00:00+14:00` (25 h older), so a feed one hour old
-     * was reported as one day silent, naming the wrong message. The error is one-directional — the
-     * lexical max is never a later instant than the true max — so it can only ever OVER-state
-     * silence, which is the safe direction and why this was P2 rather than P0.
-     *
-     * @param list<string> $dates
+     * Kept as a private forwarder rather than rewritten at all 26 rent call sites: one
+     * implementation, no churn, and `VehicleStore`'s own third copy is deleted by this same change —
+     * so the split removes a duplication instead of adding one.
      */
-    private static function newestFeedDate(array $dates): ?string
-    {
-        $best = null;
-
-        foreach ($dates as $date) {
-            if ($best === null || self::epoch($date) > self::epoch($best)) {
-                $best = $date;
-            }
-        }
-
-        return $best;
-    }
-
-    /**
-     * The newest reported feed date that is not implausibly in the future, or `null`.
-     *
-     * Future dates are FILTERED rather than clamped: the value is a maximum over what portals stamp
-     * on their own mail, so one message dated 2030 would win that maximum and report the feed fresh
-     * for ever, and clamping it to now makes it read fresher still. Both the `FEED_SILENT` verdict
-     * and the `BROKEN` detail read through here, because a detail line that names a date the verdict
-     * refused to believe is a diagnostic that contradicts its own conclusion.
-     *
-     * @param list<string> $dates
-     */
-    private static function newestCredibleFeedDate(array $dates, ?string $nowIso): ?string
-    {
-        if ($nowIso === null) {
-            return self::newestFeedDate($dates);
-        }
-
-        $cutoff = self::epoch($nowIso) + self::FEED_CLOCK_GRACE_SECONDS;
-
-        return self::newestFeedDate(array_values(array_filter(
-            $dates,
-            static fn (string $at): bool => self::epoch($at) <= $cutoff,
-        )));
-    }
-
     private static function epoch(string $iso): int
     {
-        $normalised = str_ends_with($iso, 'Z') ? substr($iso, 0, -1) . '+00:00' : $iso;
-
-        // RFC 3339 §4.3 permits `-00:00`; PHP renders the same instant as `+00:00`, so the
-        // round-trip below would reject it on spelling alone.
-        if (str_ends_with($normalised, '-00:00')) {
-            $normalised = substr($normalised, 0, -6) . '+00:00';
-        }
-
-        // RFC 3339 `time-secfrac` is `"." 1*DIGIT` — ANY number of digits — and Go's RFC3339Nano
-        // trims trailing zeros, so a Go-backed JSON feed emits `.1Z` for `.100`. Padding to the six
-        // digits PHP round-trips accepts every width instead of the two that happened to be tried.
-        $normalised = preg_replace_callback(
-            '~\.(\d+)(?=[+\-]\d{2}:\d{2}$)~',
-            // Pad up to six and TRUNCATE beyond it. `{1,6}` accepted widths 1–6 and refused 7–9 —
-            // precisely .NET's `o` format (7) and Go's RFC3339Nano at full precision (9), the
-            // producer the comment above names. Sub-microsecond precision is not information this
-            // store can use, so discarding it is correct rather than lossy.
-            static fn (array $m): string => '.' . substr(str_pad($m[1], 6, '0'), 0, 6),
-            $normalised,
-        ) ?? $normalised;
-
-        foreach ([\DateTimeInterface::ATOM, 'Y-m-d\TH:i:s.uP'] as $format) {
-            $parsed = \DateTimeImmutable::createFromFormat($format, $normalised);
-
-            // The round-trip is what makes this strict rather than merely parseable:
-            // `createFromFormat` silently normalises `2026-02-30T09:00:00+00:00` to 2 March.
-            if ($parsed !== false && $parsed->format($format) === $normalised) {
-                return $parsed->getTimestamp();
-            }
-        }
-
-        throw new \InvalidArgumentException(sprintf('horodatage ISO-8601 illisible : %s', $iso));
+        return RunStore::epoch($iso);
     }
 
     /**

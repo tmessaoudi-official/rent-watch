@@ -390,19 +390,42 @@ final class CarScoutTest extends TestCase
         }
     }
 
+    /**
+     * A rollback image opening a store a newer image migrated: the schema check throws, and that
+     * must land as a refusal (exit 2, one line, the note written), never a stack trace.
+     *
+     * BOTH gates are exercised, which this test did not do before 2026-09-01. It bumped the RENT
+     * store's `schema_meta` — a table that existed in the car database only because `VehicleStore`
+     * composed the housing store wholesale, and which a car database no longer has at all. So the
+     * one gate it drove was the incidental one, and neither of the two real ones was covered:
+     * `vehicle_meta` (this domain's own tables) and `run_meta` (the generic run log). A rollback can
+     * land on either, and each has its own message naming which store refused.
+     */
     public function testANewerStoreIsARecordedRefusalNotATrace(): void
     {
-        // A rollback image opening a store a newer image migrated: the schema check throws, and
-        // that must land as a refusal (exit 2, one line, the note written), never a stack trace.
         $seed = $this->scout(['--domain=car', 'run', '--once', '--seed', '--source=paruvendu']);
         self::assertSame(0, $seed['code'], $seed['err']);
-        (new \PDO('sqlite:' . $this->db))->exec("UPDATE schema_meta SET value = '99' WHERE key = 'schema_version'");
 
-        $r = $this->scout(['--domain=car', 'run', '--once', '--source=paruvendu']);
+        $note = \dirname($this->db) . '/car-last-refusal.txt';
 
-        self::assertSame(2, $r['code']);
-        self::assertStringContainsString('version 99', $r['err']);
-        self::assertFileExists(\dirname($this->db) . '/car-last-refusal.txt');
+        foreach ([
+            'vehicle_meta' => 'base véhicules au schéma 99',
+            'run_meta' => 'journal des exécutions au schéma 99',
+        ] as $table => $expected) {
+            $pdo = new \PDO('sqlite:' . $this->db);
+            $pdo->exec("UPDATE {$table} SET value = '99' WHERE key = 'schema_version'");
+
+            $r = $this->scout(['--domain=car', 'run', '--once', '--source=paruvendu']);
+
+            self::assertSame(2, $r['code'], "a newer {$table} must refuse: " . $r['err']);
+            self::assertStringContainsString($expected, $r['err']);
+            self::assertStringNotContainsString('Stack trace', $r['err'], 'a refusal, never a trace');
+            self::assertFileExists($note);
+
+            // Restore, so the next gate is tested on its own rather than behind this one.
+            $pdo->exec("UPDATE {$table} SET value = '1' WHERE key = 'schema_version'");
+            @unlink($note);
+        }
     }
     /** @return array{code: int, out: string, err: string} */
     private function scout(array $argv, ?CarRecordingChannel $channel = null, string $now = '2026-08-29T20:00:00+02:00'): array

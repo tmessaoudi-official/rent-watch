@@ -4,13 +4,18 @@ declare(strict_types=1);
 
 namespace Scout\Car;
 
-use Scout\Rent\Store\Store;
+use Scout\Core\RunStore;
 
 /**
  * The car domain's seen-set, price history and evidence — on its OWN database file, beside a
- * composed housing {@see Store} that provides the run log, source health, feed silence and alert
- * cooldowns byte-identical (those tables are domain-agnostic; the housing listing tables it also
- * creates there simply stay empty).
+ * composed {@see RunStore} that provides the run log, source health, feed silence and alert
+ * cooldowns.
+ *
+ * UNTIL 2026-09-01 THIS COMPOSED THE RENT HOUSING STORE to reach six methods, and the live file
+ * showed what that cost: `state/car-watch.sqlite3` carried `listings`, `price_history`,
+ * `listing_detail` and `commute_cache` — four rent tables, all empty — and recorded the RENT schema
+ * version in `schema_meta`, in a database with no housing in it. {@see migrate()} drops those four,
+ * under a row-count guard.
  *
  * Two connections to one file, one per class: the composed store owns its tables and its
  * migrations, this class owns `vehicle_*`. Both run WAL with a busy timeout, so two writers wait
@@ -29,12 +34,12 @@ final readonly class VehicleStore
 
     private function __construct(
         private readonly \PDO $pdo,
-        private readonly Store $runs,
+        private readonly RunStore $runs,
     ) {}
 
     public static function open(string $path, ?int $feedSilentDays = null): self
     {
-        $runs = Store::open($path, $feedSilentDays);
+        $runs = RunStore::open($path, $feedSilentDays);
 
         $pdo = new \PDO('sqlite:' . $path, options: [
             \PDO::ATTR_ERRMODE => \PDO::ERRMODE_EXCEPTION,
@@ -51,8 +56,8 @@ final readonly class VehicleStore
         return $store;
     }
 
-    /** The run log, health, feed silence and alert cooldowns — the composed housing store, unchanged. */
-    public function runs(): Store
+    /** The run log, health, feed silence and alert cooldowns — the generic store. */
+    public function runs(): RunStore
     {
         return $this->runs;
     }
@@ -229,6 +234,12 @@ final readonly class VehicleStore
     private function migrate(): void
     {
         $this->pdo->exec('CREATE TABLE IF NOT EXISTS vehicle_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)');
+
+        // ABOVE the version check on purpose, because that check RETURNS EARLY at the current
+        // version and the live car database is already there — a cleanup placed in the migration
+        // transaction below would never run on the one file it exists for.
+        $this->dropOrphanedHousingTables();
+
         $q = $this->pdo->query("SELECT value FROM vehicle_meta WHERE key = 'schema_version'");
         $current = (int) ($q->fetchColumn() ?: 0);
         if ($current > self::SCHEMA_VERSION) {
@@ -272,21 +283,62 @@ final readonly class VehicleStore
         }
     }
 
-    /** Strict by round-trip, like the rent store: a misparse would move a sighting in time. */
+    /**
+     * Drop the four RENT tables an older build created in this file, and only if they are EMPTY.
+     *
+     * Until 2026-09-01 this class composed the rent housing store, whose migration created
+     * `listings`, `price_history`, `listing_detail` and `commute_cache` here. Measured on the live
+     * `state/car-watch.sqlite3`: all four present, all four with zero rows. Now that the composed
+     * store is {@see RunStore}, a FRESH car database never gets them — so leaving them on the
+     * existing one makes that machine differ from every new deployment, which is how a bug
+     * reproduces in one place and not another.
+     *
+     * A NON-EMPTY one REFUSES, loudly. Housing rows in the car database would mean something this
+     * design does not understand, and dropping data to make a refactor tidy is not a trade available
+     * here. Fail-closed, as everywhere else in this repo.
+     *
+     * `schema_meta` is deliberately LEFT ALONE. It is inert — nothing in the car domain reads it
+     * once the housing store is gone — and leaving it means that reverting this change finds the
+     * version the composed store expects, rather than a versionless file it would re-migrate from
+     * scratch across twelve upgrade steps against tables that already exist.
+     */
+    private function dropOrphanedHousingTables(): void
+    {
+        foreach (['listings', 'price_history', 'listing_detail', 'commute_cache'] as $table) {
+            $exists = $this->pdo
+                ->query("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = '" . $table . "'")
+                ?->fetchColumn();
+
+            if ($exists === false || $exists === null) {
+                continue;
+            }
+
+            $rows = (int) ($this->pdo->query('SELECT COUNT(*) FROM ' . $table)?->fetchColumn() ?: 0);
+
+            if ($rows > 0) {
+                throw new \RuntimeException(sprintf(
+                    'la table de logement « %s » contient %d ligne(s) dans la base véhicules — '
+                        . 'inattendu, rien n\'est supprimé : inspectez le fichier avant de continuer',
+                    $table,
+                    $rows,
+                ));
+            }
+
+            $this->pdo->exec('DROP TABLE ' . $table);
+        }
+    }
+
+    /**
+     * Strict ISO-8601 to unix seconds — FORWARDS to the single implementation.
+     *
+     * This was a verbatim THIRD copy of the rent store's parser (the rent store had one, this class
+     * had one). Extracting {@see RunStore} is what made one home for it obvious: the split removes a
+     * duplication rather than adding one. Strictness matters here — `new \DateTimeImmutable` is a
+     * RELATIVE-expression parser that misparses far more often than it throws, and every misparse
+     * moves the instant forward, which would move a sighting in time.
+     */
     public static function epoch(string $iso): int
     {
-        foreach (['Y-m-d\TH:i:sP', 'Y-m-d\TH:i:s.uP', 'Y-m-d\TH:i:s\Z', 'Y-m-d\TH:i:s.u\Z'] as $mask) {
-            $d = \DateTimeImmutable::createFromFormat($mask, $iso, new \DateTimeZone('UTC'));
-            if ($d !== false && ($d->format($mask) === $iso || str_ends_with($mask, '\Z') && $d->format($mask) === $iso)) {
-                return $d->getTimestamp();
-            }
-        }
-        // `+00:00` written as `Z` round-trips under a different mask than it parses under.
-        $d = \DateTimeImmutable::createFromFormat('Y-m-d\TH:i:sP', str_replace('Z', '+00:00', $iso));
-        if ($d !== false && $d->format('Y-m-d\TH:i:sP') === str_replace('Z', '+00:00', $iso)) {
-            return $d->getTimestamp();
-        }
-
-        throw new \InvalidArgumentException('instant illisible : ' . $iso);
+        return RunStore::epoch($iso);
     }
 }

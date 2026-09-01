@@ -583,7 +583,7 @@ run_sabotage "URL path folded with the host (two distinct listings over-merge)" 
   's%return $rebuilt;%return strtolower($rebuilt);%'
 
 run_sabotage "unparseable timestamp silently becomes the epoch" \
-  src/php/Rent/Store/Store.php \
+  src/php/Core/RunStore.php \
   's@throw new .InvalidArgumentException(sprintf(.horodatage ISO-8601 illisible : %s., $iso));@return 0;@'
 
 run_sabotage "a database from a NEWER schema is operated on anyway" \
@@ -591,27 +591,27 @@ run_sabotage "a database from a NEWER schema is operated on anyway" \
   's%if ($recorded > self::SCHEMA_VERSION) {%if (false) {%'
 
 run_sabotage "a source that never ran is reported healthy" \
-  src/php/Rent/Store/Store.php \
+  src/php/Core/RunStore.php \
   's%status: SourceStatus::NEVER_RUN,%status: SourceStatus::OK,%'
 
 run_sabotage "a failed last run no longer reports BROKEN" \
-  src/php/Rent/Store/Store.php \
+  src/php/Core/RunStore.php \
   's%if (!$lastOk) {%if (false) {%'
 
 run_sabotage "a failed run extends the empty streak (failure read as 'nothing found')" \
-  src/php/Rent/Store/Store.php \
+  src/php/Core/RunStore.php \
   "s%(int) \$run\['ok'\] !== 1 || %%"
 
 run_sabotage "empty-run threshold raised out of reach (a dead source stays OK)" \
-  src/php/Rent/Store/Store.php \
+  src/php/Core/RunStore.php \
   's%self::EMPTY_RUNS_BEFORE_BROKEN%99%'
 
 run_sabotage "zero-baseline check removed (a genuinely quiet source is cried wolf on)" \
-  src/php/Rent/Store/Store.php \
+  src/php/Core/RunStore.php \
   's%if ($baseline > 0.0) {%if (true) {%'
 
 run_sabotage "drop-below-mean warning threshold neutralised" \
-  src/php/Rent/Store/Store.php \
+  src/php/Core/RunStore.php \
   's%$rollingMean \* self::DROP_WARNING_RATIO%0.0%'
 
 # ── The store, round two ──────────────────────────────────────────────────────────────────────────
@@ -623,15 +623,15 @@ run_sabotage "drop-below-mean warning threshold neutralised" \
 # sentence: the tests looked thorough and were not, and only sabotage said so.
 
 run_sabotage "unknown baseline treated as a zero baseline (broken-after-a-gap reads OK)" \
-  src/php/Rent/Store/Store.php \
+  src/php/Core/RunStore.php \
   's%$baseline = self::lastProductiveCount($runs, $streakStart);%$baseline = 0.0;%'
 
 run_sabotage "trailing Z no longer normalised (parsed in the host timezone)" \
-  src/php/Rent/Store/Store.php \
+  src/php/Core/RunStore.php \
   's%$normalised = str_ends_with($iso, .Z.) ? substr($iso, 0, -1) . .+00:00. : $iso;%$normalised = $iso;%'
 
 run_sabotage "timestamp round-trip check dropped (2026-02-30 rolls forward to 2 March)" \
-  src/php/Rent/Store/Store.php \
+  src/php/Core/RunStore.php \
   's%&& $parsed->format($format) === $normalised%%'
 
 run_sabotage "Unicode trim reverts to ASCII trim (an nbsp id collapses the whole run)" \
@@ -672,19 +672,19 @@ run_sabotage "price history ordered by insertion id rather than by time" \
 # ordering and its opposite are now real, tested guarantees:
 
 run_sabotage "run recency read from the timestamp again (one skewed clock hides every later run)" \
-  src/php/Rent/Store/Store.php \
+  src/php/Core/RunStore.php \
   's%WHERE source = :source ORDER BY id ASC%WHERE source = :source ORDER BY at_epoch ASC, id ASC%'
 
 run_sabotage "never-productive source hides behind OK again" \
-  src/php/Rent/Store/Store.php \
+  src/php/Core/RunStore.php \
   's%if (!$everProduced && $successfulRuns >= self::EMPTY_RUNS_BEFORE_BROKEN%if (false%'
 
 run_sabotage "a source failing half its fetches reads as healthy" \
-  src/php/Rent/Store/Store.php \
+  src/php/Core/RunStore.php \
   's%if ($runsInWindow >= self::MIN_RUNS_FOR_FLAKY%if (false%'
 
 run_sabotage "adapter error text persisted and shown unredacted" \
-  src/php/Rent/Store/Store.php \
+  src/php/Core/RunStore.php \
   's%Redact::text($error)%$error%'
 
 run_sabotage "only BROKEN alerts (NEVER_RUN and NEVER_PRODUCED go quiet)" \
@@ -727,15 +727,15 @@ run_sabotage "seen_epoch backfilled to zero (every stored listing reads as older
   's%$epoch = self::epoch((string) $row\[.last_seen_at.\]);%$epoch = 0;%'
 
 run_sabotage "baseline falls back to the last SUCCESSFUL run again (one quiet day zeroes it)" \
-  src/php/Rent/Store/Store.php \
+  src/php/Core/RunStore.php \
   "s%&& (int) \$runs\[\$i\]\['item_count'\] > 0%%"
 
 run_sabotage "the rolling window loses its upper bound (a 2036 run inflates every later mean)" \
-  src/php/Rent/Store/Store.php \
+  src/php/Core/RunStore.php \
   's%if ($at < $cutoff || $at > $reference) {%if ($at < $cutoff) {%'
 
 run_sabotage "the window scan stops at the first out-of-range row instead of skipping it" \
-  src/php/Rent/Store/Store.php \
+  src/php/Core/RunStore.php \
   's%                continue;%                break;%'
 
 run_sabotage "a superseded sighting counts as a price drop again" \
@@ -759,15 +759,15 @@ run_sabotage "the rollback is unguarded again (disk-full reports 'no active tran
   's%} catch (\\Throwable) {%} catch (\\LogicException) {%'
 
 run_sabotage "STALE never fires (a source whose schedule stopped reads OK forever)" \
-  src/php/Rent/Store/Store.php \
+  src/php/Core/RunStore.php \
   's%if ($silentFor > self::ROLLING_WINDOW_DAYS \* 86400) {%if (false) {%'
 
 run_sabotage "NEVER_PRODUCED loses its time floor (a source is accused 45 minutes after onboarding)" \
-  src/php/Rent/Store/Store.php \
+  src/php/Core/RunStore.php \
   's%&& $span >= self::MIN_SPAN_FOR_NEVER_PRODUCED%%'
 
 run_sabotage "millisecond timestamps refused again (what every JSON API emits)" \
-  src/php/Rent/Store/Store.php \
+  src/php/Core/RunStore.php \
   's%str_pad($m\[1\], 6, .0.)%$m[1]%'
 
 run_sabotage "IMAP LOGIN / POP3 PASS credentials pass through unmasked" \
@@ -811,11 +811,11 @@ run_sabotage "the changes-only guard reads the delta baseline again (duplicate r
   's%$rentCc !== $chronoBefore%$rentCc !== $previousRentCc%'
 
 run_sabotage "recency ignores the clock (a late-committed run erases BROKEN)" \
-  src/php/Rent/Store/Store.php \
+  src/php/Core/RunStore.php \
   's%if ($nowIso !== null) {%if (false) {%'
 
 run_sabotage "a future-stamped run is trusted even when a clock is available" \
-  src/php/Rent/Store/Store.php \
+  src/php/Core/RunStore.php \
   's%$at <= $now%true%'
 
 run_sabotage "an unstamped legacy database is stamped current instead of upgraded" \
@@ -839,7 +839,7 @@ run_sabotage "the busy timeout is dropped (a second writer fails instantly)" \
   "s%PRAGMA busy_timeout = %PRAGMA cache_size = %"
 
 run_sabotage "fractional seconds narrow again (a Go feed's .1Z is refused)" \
-  src/php/Rent/Store/Store.php \
+  src/php/Core/RunStore.php \
   's%str_pad($m\[1\], 6, .0.)%$m[1]%'
 
 run_sabotage "secret names stop matching inside an env-var (IMAP_PASSWORD leaks)" \
@@ -878,7 +878,7 @@ run_sabotage "the LOGIN stoplist is bypassed (French prose is eaten)" \
 # and a Redact affix that turned every secret name into a substring match. Each now has a sabotage.
 
 run_sabotage "STALE measured from the last-inserted row instead of the newest credible one" \
-  src/php/Rent/Store/Store.php \
+  src/php/Core/RunStore.php \
   "s%\$silentFor = \$now - max(\$credible);%\$silentFor = \$now - (int) \$last['at_epoch'];%"
 
 run_sabotage "the secret-name affix matches mid-word again (project vocabulary is eaten)" \
@@ -917,11 +917,11 @@ run_sabotage "journalMode() reports what was asked for, not what was given" \
   "s%\$journalMode = (string) \$mode->fetchColumn();%\$journalMode = 'wal';%"
 
 run_sabotage "the span reverts to last-minus-first (a skewed first run disables the detector)" \
-  src/php/Rent/Store/Store.php \
+  src/php/Core/RunStore.php \
   "s%\$span = max(\$epochs) - min(\$epochs);%\$span = (int) \$last['at_epoch'] - (int) \$runs[0]['at_epoch'];%"
 
 run_sabotage "fractional seconds are capped at six digits again (Go nanoseconds refused)" \
-  src/php/Rent/Store/Store.php \
+  src/php/Core/RunStore.php \
   's%(.d+)(?=%(\\d{1,6})(?=%'
 
 # ── The store, round six ──────────────────────────────────────────────────────────────────────────
@@ -947,7 +947,7 @@ run_sabotage "the ntfy topic drops back to the ambiguous list (a JSON body leaks
   "s%^        'topic',\$%%"
 
 run_sabotage "the counting window has no upper edge at all" \
-  src/php/Rent/Store/Store.php \
+  src/php/Core/RunStore.php \
   's%$edge = $now ?? (int) $runs\[array_key_last($runs)\]\[.at_epoch.\];%$edge = PHP_INT_MAX;%'
 
 # ── The store, round seven ────────────────────────────────────────────────────────────────────────
@@ -1006,11 +1006,11 @@ run_sabotage "the byte-fallback trim loses \\x85 and \\xAD" \
   's%.x85.xA0.xAD%\\xA0%'
 
 run_sabotage "the counting window loses its upper edge (a future-stamped row alerts forever)" \
-  src/php/Rent/Store/Store.php \
+  src/php/Core/RunStore.php \
   's%if ($at < $cutoff || $at > $edge) {%if ($at < $cutoff) {%'
 
 run_sabotage "the counting window ignores the clock (a stale writer hides failures)" \
-  src/php/Rent/Store/Store.php \
+  src/php/Core/RunStore.php \
   "s%\$edge = \$now ?? (int)%\$edge = (int)%"
 
 # ── The config, adapter and criteria layers, added 2026-08-07 ─────────────────────
@@ -1337,11 +1337,11 @@ run_sabotage "health alerting narrows back to BROKEN alone (Q29)" \
   's%!\$health->status->isAlerting()%\$health->status->value !== "broken"%'
 
 run_sabotage "the alert cooldown is ignored (a broken source pushes every run)" \
-  src/php/Rent/Store/Store.php \
+  src/php/Core/RunStore.php \
   's%return (\$now - \$last) >= \$cooldownHours \* 3600;%return true;%'
 
 run_sabotage "the cooldown keys on the source alone, so an escalation is swallowed" \
-  src/php/Rent/Store/Store.php \
+  src/php/Core/RunStore.php \
   "s%WHERE source = :source AND status = :status'%WHERE source = :source'%"
 
 run_sabotage "a source that recovers sends no recovery notice" \
@@ -3256,21 +3256,21 @@ run_sabotage "the ntfy wire hardcodes a level instead of sending the notificatio
 # said healthy. These five cases pin the parts of the fix whose failure is, as usual here, silent.
 
 run_sabotage "a silent feed stops being reported at all (the leboncoin case returns)" \
-  src/php/Rent/Store/Store.php \
+  src/php/Core/RunStore.php \
   's%if ($silentFor >= $feedSilentDays \* 86400) {%if (false) {%'
 
 # UNKNOWN MUST NOT BECOME OLD. Reading a null feed date as ancient turns the entire pre-v11 run log,
 # every html/json source and the documented MAILBOX_DIR fixture workflow into a permanent alert --
 # hard rule 9 at the health layer, and the noisy direction, which is how an alert becomes furniture.
 run_sabotage "an unknown feed date is read as an ancient one" \
-  src/php/Rent/Store/Store.php \
+  src/php/Core/RunStore.php \
   's%\$feedDates\[\] = \$reported;%\$feedDates[] = \$reported ?? "1970-01-01T00:00:00Z";%; s%if (\$reported !== null \&\& \$reported !== ..) {%if (true) {%'
 
 # A FUTURE DATE MUST NOT MASK AN AGEING FEED. The verdict reduces reported dates to their maximum,
 # so one portal with a fast clock wins that maximum and reports the feed fresh for ever. Removing the
 # credibility filter is the mutation; the suite must notice.
 run_sabotage "a future-dated message is trusted, masking a silent feed for ever" \
-  src/php/Rent/Store/Store.php \
+  src/php/Core/RunStore.php \
   's%static fn (string \$at): bool => self::epoch(\$at) <= \$cutoff,%static fn (string $at): bool => true,%'
 
 # THE THRESHOLD/WINDOW RELATION MUST STILL BE REPORTED. This was a hard refusal until 2026-08-29,
@@ -3291,7 +3291,7 @@ run_sabotage "doctor stops warning that the threshold is at or above the IMAP wi
 # passes the threshold EXPLICITLY -- so dropping the merge left feed_silent unreachable in
 # production under default config while the whole suite stayed green.
 run_sabotage "the configured threshold never reaches health() (feed_silent dead by default)" \
-  src/php/Rent/Store/Store.php \
+  src/php/Core/RunStore.php \
   's%\$feedSilentDays ??= \$this->feedSilentDays;%%'
 
 run_sabotage "PacedSource stops forwarding feed freshness (dead under --watch, green in tests)" \
@@ -3347,19 +3347,19 @@ run_sabotage "the shared feed-date reader stops asking the source (both writers 
 # THE ZERO-COUNT GATE. Widening it lets FEED_SILENT preempt the empty-streak BROKEN verdict that
 # owns the zero case.
 run_sabotage "the zero-count gate is widened, letting a silent feed preempt broken" \
-  src/php/Rent/Store/Store.php \
+  src/php/Core/RunStore.php \
   's%\&\& \$feedSilentDays !== null \&\& \$lastCount > 0)%\&\& $feedSilentDays !== null \&\& $lastCount >= 0)%'
 
 # WRITE-TIME VALIDATION. Deferring it turns an unreadable date into a permanent ABSENCE of verdict:
 # the source looks watched and is unwatched.
 run_sabotage "recordRun drops write-time validation of the feed date" \
-  src/php/Rent/Store/Store.php \
+  src/php/Core/RunStore.php \
   's%            self::epoch(\$feedNewestAt);%            ;%'
 
 # INSTANTS, NOT STRINGS. The store accepts any RFC 3339 offset, so a lexical max picks the wrong
 # element across mixed offsets and over-states silence.
 run_sabotage "the newest feed date is chosen lexically instead of by instant" \
-  src/php/Rent/Store/Store.php \
+  src/php/Core/RunStore.php \
   's%if (\$best === null || self::epoch(\$date) > self::epoch(\$best)) {%if ($best === null || $date > $best) {%'
 
 # THE PER-FETCH RESET. Without it a pass that fetched NOTHING reports the previous pass's date as
@@ -3838,6 +3838,20 @@ run_sabotage "the advertiser is never attached on the SEGMENTED path (seloger, b
 run_sabotage "the advertiser is never attached on the NON-SEGMENTED path (one listing per link)" \
   src/php/Rent/Adapters/EmailAlertSource.php \
   's%^                advertiser: \$this->advertiserOf(\$message),$%                advertiser: null,%'
+
+# The 2026-09-01 store split. The car database carried four EMPTY rent tables and the rent schema
+# version, because `VehicleStore` composed the housing store wholesale to reach six generic methods.
+# Skipping the cleanup leaves the live machine differing from every fresh deployment — which is how a
+# bug reproduces in one place and not another.
+run_sabotage "the car database keeps the housing tables an older build left in it" \
+  src/php/Car/VehicleStore.php \
+  "s%        \$this->dropOrphanedHousingTables();%%"
+
+# The guard that makes the drop safe to ship. Housing rows in a car database mean something this
+# design does not understand; dropping data to make a refactor tidy is not a trade available here.
+run_sabotage "a NON-EMPTY housing table is dropped instead of refusing" \
+  src/php/Car/VehicleStore.php \
+  "s%            if (\$rows > 0) {%            if (false) {%"
 
 printf '\n  %d sabotage(s) detected, %d undetected\n' "$pass" "$fail"
 
