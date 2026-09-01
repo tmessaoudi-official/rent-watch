@@ -133,6 +133,32 @@ read-only) and the merged prose as one review deep.
   while `high_priority_score` is an ABSOLUTE threshold, so the `!!` marker would become harder to
   reach for exactly the deployments that expressed no preference. Same failure shape the rent side
   measured on 2026-08-26.
+- [2026-09-01 12:20] AGREED (Track 5b, F-C): Cityloger's surface selector accepts `m²` as well as
+  `m2`. Not a hydration gap (61 cached details for 60 listings) and not a missing mapping — the
+  regex required the ASCII unit and the source writes both. 56 of 61 rows carried no surface, so
+  `min_surface_m2` could not act on 93 % of the source. The failing fixture was already committed;
+  only the passing spelling was asserted.
+- [2026-09-01 12:20] AGREED (Track 5b, F-D): rent `leboncoin` takes `feed_silent_days: 7`, matching
+  the car side's ruling for the same portal. It does NOT silence today's verdict (the last message
+  is 2026-08-26, already past 7 days) — it stops an ordinary bursty gap being called silence.
+- [2026-09-01 12:20] AGREED (Track 5b, F-A): a `params` key no adapter reads is REFUSED — on
+  `email_alert` sources ONLY. On `html`/`json` sources `params` IS the HTTP query string
+  (`HtmlSource` does `withQuery([...params, ...extra])`), so In'li's `price_max`/`area_min`/
+  `room_min` and Logirep's `ss_trnsctntp` cannot be enumerated and a blanket refusal would lock both
+  polling sources out at startup. AND the cleanup was inverted: rent leboncoin's unread
+  `subject_pattern` was not dead config but a documented guard that was never ARMED — rent and car
+  leboncoin share sender, link host and card separator, and its own comment named the expiry as the
+  day the Gmail filter is created. It is read now rather than deleted.
+- [2026-09-01 12:20] AGREED (Track 5b, F-B): In'li's postcode comes from the detail page `<title>`,
+  which states it beside the commune. Chosen over a commune→postcode table (needs an authoritative
+  dataset, and French commune names repeat across departements while In'li lets outside IdF). It
+  costs NO extra request — all 212 affected rows were already hydrated. Three earlier explanations
+  were each refuted by the next query and are recorded in the commit so they are not retried.
+- [2026-09-01 15:10] AGREED: the fuel weight goes 10→20 (−5 price, −5 mileage) and
+  `high_priority_score` 70→73 with it. Diesel remains a PREFERENCE, never a disqualifier — the
+  2026-08-30 ruling stands and diesels still appear. Measured over 269 snapshots: gap 16→25, best
+  diesel 77→70. The marker had to move because it is ABSOLUTE; 78 was estimated from the
+  petrol-only subset and was wrong.
 - [2026-08-31] AGREED: PAP fix = patterns + health signal (Track 1h). No backfill of the 21
   null-extraction rows — stated cost, they stay null.
 - [2026-08-31] AGREED: name-in-git-history = leave history; forward fix only (scrubber + re-scrub
