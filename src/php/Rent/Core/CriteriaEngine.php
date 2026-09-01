@@ -354,6 +354,24 @@ final readonly class CriteriaEngine
             // a zero would read as a bad listing rather than an unconfigured one.
             : 100;
 
+        // A CHECK THAT COULD NOT BE MADE IS REPORTED AS ONE, never passed over in silence — the
+        // same discipline as the `HORS CHARGES … plafond non vérifiable` line above, and the same
+        // discipline as hard rule 9 refusing to read an unknown as a zero, one layer up.
+        //
+        // On a source declaring `prose_absent` the two exclusion lists are structurally inert:
+        // `exclude_patterns` scans title and description and `exclude_title_patterns` scans the
+        // title, and there is no listing text in either. PAP is the case — a colocation advertised
+        // with the whole flat's room count and surface clears every numeric filter, and nothing in
+        // the payload can catch it. Neither route out exists: the detail page is behind a bot
+        // challenge (hard rule 5) and rent-per-room has no gap to threshold on.
+        //
+        // It adjusts no score and rejects nothing (hard rule 8) — it tells the reader which pushes
+        // they have to open. Placed here rather than in `disqualify()` deliberately: this is not a
+        // judgement, it is the boundary of one.
+        if ($listing->proseAbsent) {
+            $reasons[] = 'annonce sans texte — colocation/meublé non vérifiables';
+        }
+
         array_unshift($reasons, ...$classification->reasons());
 
         $highPriority = $normalised >= $this->criteria->notify->highPriorityScore

@@ -126,6 +126,24 @@ final readonly class RawListing
          * same verdict whichever route it arrives by.
          */
         public ?string $advertiser = null,
+        /**
+         * Does the SOURCE that produced this listing publish no listing prose at all?
+         *
+         * Declared per source ({@see \Scout\Rent\Config\SourceDefinition::$proseAbsent}) and carried
+         * here rather than passed to `judge()`, for the reason {@see $commuteMinutes} documents:
+         * `scout reclassify` re-judges from the schema-v7 snapshot, and a value handed in alongside
+         * would be absent on every re-judge — so a stored listing would quietly lose its caveat the
+         * second time it was looked at, which is worse than never having had one.
+         *
+         * It is EVIDENCE ABOUT THE EVIDENCE, and it changes no verdict. `CriteriaEngine` reads it to
+         * say that the exclusion lists could not fire, exactly as it already says a rent ceiling
+         * could not be applied to an hors-charges figure. Never a disqualifier and never a score
+         * component (hard rule 8).
+         *
+         * `false` on a pre-v7 row and on every source that publishes text, which says nothing rather
+         * than asserting the check WAS made — the safe direction (hard rule 9).
+         */
+        public bool $proseAbsent = false,
     ) {}
 
     /**
@@ -196,6 +214,12 @@ final readonly class RawListing
             // ARM this field on a card that never named an advertiser, which is a §1-relevant
             // change of verdict sourced from page chrome.
             advertiser: $this->advertiser,
+            // A property of the SOURCE, so both sides always agree and either would do — written as
+            // the card's to say which one is meant, like `advertiser` and `observedAt` above. What
+            // matters is that it is written at all: this method's own warning, two fields up, is
+            // that a constructor parameter it forgets is silently dropped, and a caveat that
+            // vanishes the moment a listing is hydrated is exactly the shape that goes unnoticed.
+            proseAbsent: $this->proseAbsent,
         );
     }
 

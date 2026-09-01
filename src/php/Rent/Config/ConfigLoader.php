@@ -412,6 +412,7 @@ final class ConfigLoader
         $totalSelector = $r->optString('total_selector', null);
         $maxPages = $r->optInt('max_pages', 20, 1, 500) ?? 20;
         $legalRisk = $r->optBool('legal_risk', false);
+        $proseAbsent = $r->optBool('prose_absent', false);
         $fixture = $r->optString('fixture', null);
         $rateLimitMs = $r->optInt('rate_limit_ms', 2000, 0, 600000) ?? 2000;
 
@@ -483,6 +484,24 @@ final class ConfigLoader
 
         $mapReader = $r->optObject('map');
         $map = $mapReader === null ? new FieldMap(ref: ['id']) : FieldMap::fromReader($mapReader);
+
+        // A DECLARATION CONTRADICTED BY THE CONFIGURATION BESIDE IT is worse than no declaration:
+        // it reads as considered, and it makes every push on the source carry a caveat that is
+        // false. `prose_absent` says the payload holds no listing text for the exclusion lists to
+        // scan — so a `description` selector, which exists precisely to extract that text, settles
+        // the question the other way. An email source maps no description (it is parsed out of the
+        // body, not selected), so this binds where somebody could actually set both.
+        //
+        // OUTSIDE the `enabled` branch, deliberately, for the reason the `card_separator` +
+        // `mixed_tenure` refusal is: `--source=<name>` force-runs a disabled source, so a drafted
+        // block reaches a real notification without ever having been enabled.
+        if ($proseAbsent && $map->description !== []) {
+            throw ConfigError::at(
+                $where . '.prose_absent',
+                'this source maps a `description`, so it does publish listing text — prose_absent '
+                    . 'would make every notification claim a check was impossible when it was made',
+            );
+        }
 
         $detailMapReader = $r->optObject('detail_map');
         $detailMap = $detailMapReader === null ? null : FieldMap::detailFromReader($detailMapReader);
@@ -818,6 +837,7 @@ final class ConfigLoader
             fixture: $fixture,
             rateLimitMs: $rateLimitMs,
             feedSilentDays: $feedSilentDays,
+            proseAbsent: $proseAbsent,
         );
     }
 

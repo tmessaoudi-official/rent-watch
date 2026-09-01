@@ -400,6 +400,7 @@ final readonly class EmailAlertSource implements FeedFreshness, Source
                 // advertiser unambiguously — reading it only on the segmented path would be the
                 // `title_pattern` mistake documented four lines above, made again on a new param.
                 advertiser: $this->advertiserOf($message),
+            proseAbsent: $this->definition->proseAbsent,
             );
         }
 
@@ -632,6 +633,7 @@ final readonly class EmailAlertSource implements FeedFreshness, Source
             surfaceM2: $surface,
             rooms: $rooms,
             advertiser: $this->advertiserOf($message),
+            proseAbsent: $this->definition->proseAbsent,
         );
     }
 

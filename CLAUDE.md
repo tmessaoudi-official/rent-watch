@@ -755,6 +755,45 @@ applies and the figure lands in `rentHc`.
 > different commune, and adds the case the first lacked — a rent written `1.150 EUR / mois`, where
 > the dot is a **thousands separator** and *"the rightmost separator is the decimal point"* would
 > read it as 1 €. Both are frozen. Append a third; never renumber.
+
+> **ITS COLOCATIONS CANNOT BE FILTERED, SO THE PUSH SAYS SO — `prose_absent`, 2026-09-01.** The
+> developer reported colocations arriving from PAP. They do, and the reason is that all three
+> defences are structurally inert here: the alert carries **no listing prose at all** (`description`
+> is the literal `PAP.fr  De Particulier à Particulier ____` on all 57 stored rows, `title` is
+> `Location appartement` or `Location maison` on every one), so `exclude_patterns` and
+> `exclude_title_patterns` have nothing to scan — while a room in a shared flat is advertised with
+> the WHOLE flat's room count and surface, clearing every numeric filter.
+>
+> **Both routes out are closed, and both were MEASURED rather than reasoned.** Detail hydration is
+> refused by hard rule 5: `www.pap.fr` answers a **Cloudflare challenge** (`Just a moment…`,
+> `challenges.cloudflare.com`) on three probes spaced 45 s apart, including the URL that had
+> returned a clean 301 four minutes earlier — reputation-based, not transient, and from the
+> deployment's own IP. That is the **A15 Val d'Oise Habitat precedent** on a second source: a
+> ruling, not a capability limit. **Do not revisit it with a headless browser or a wait-and-retry.**
+> And rent-per-room, the last numeric candidate, has no gap: across the four private-market sources
+> the low tail runs 63, 71, 78, 84, 85, 90, 90, 91, 92, 92, 93, 94, 97×3, 98×3, 100×4 upward, and
+> the colocation that motivated this sits at **130**, inside the densest part of it. Same negative
+> as Track 1f's price-per-m², reached independently on a different statistic — which says the
+> problem is the EVIDENCE, not the choice of ratio.
+>
+> So the source declares `"prose_absent": true` and `CriteriaEngine` appends
+> *"annonce sans texte — colocation/meublé non vérifiables"*, beside the
+> `HORS CHARGES … plafond non vérifiable` line it already emits. **It rejects nothing and scores
+> nothing** (hard rule 8) — it names the boundary of the judgement, which is hard rule 9's
+> discipline one layer up. The declaration is REFUSED at load on a source that maps a
+> `description`, outside the `enabled` branch because `--source=` force-runs disabled sources: a
+> caveat contradicted by the config beside it is worse than none, since it reads as considered.
+> **The counterweight is load-bearing** — a line on every push everywhere is furniture, so the
+> sabotage ledger pins both halves. Full measurements: `docs/plans/pap-detail-hydration.plan.md`.
+>
+> Two robots lessons came with it, both general. **`robots.txt` must be READ, never recalled**: the
+> plan that authorised this work paraphrased a file it had seen and inverted its first rule
+> (`Disallow: /*?*` refuses every query-bearing URL, and all 57 stored PAP URLs carry one). And **a
+> source's own URL can be the disclosure** — PAP puts the subscriber's address in plaintext in the
+> link it emails, so hydrating it verbatim would have sent that address to pap.fr on every fetch.
+> Two findings from the same pass remain OPEN: `Redact` masks `email=x@y.com` but not
+> `email=x%40y.com`, and a followed redirect is never re-checked against robots.
+
 ### Transit enrichment — the last empty layer, and the curve that had to be measured (2026-08-26)
 
 `src/php/Rent/Enrich/` was the only spec layer with no code at all. It exists because **nothing in the

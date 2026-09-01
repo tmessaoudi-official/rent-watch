@@ -1874,6 +1874,40 @@ run_sabotage "the detail extractor emits the whole PAGE as the description" \
   src/php/Rent/Adapters/DetailHydrator.php \
   "/private function detailFields/,\$ s%        return \$out;%        \$out['description'] = Selector::normalise(\$root->textContent); return \$out;%"
 
+# --- the prose-absent caveat (PAP colocation ruling, 2026-09-01) -------------------------------
+#
+# A source that publishes no listing text cannot have `exclude_patterns` or `exclude_title_patterns`
+# run against it, and on PAP that is every push. Nothing available can stop the colocations arriving
+# — the detail page is behind a bot challenge (hard rule 5) and rent-per-room has no gap to
+# threshold on — so the notification SAYS the check could not be made. Delete the line and every PAP
+# push silently claims a clean bill of health it never had.
+run_sabotage "the prose-absent caveat stops being reported, so a push claims a check it never made" \
+  src/php/Rent/Core/CriteriaEngine.php \
+  's%if ($listing->proseAbsent) {%if (false) {%'
+
+# THE COUNTERWEIGHT, and it matters as much as the guarantee: a caveat on every push everywhere is
+# furniture, and furniture stops being read. The line means something only where it is true.
+run_sabotage "the caveat fires on every source, not only the ones that publish no text" \
+  src/php/Rent/Core/CriteriaEngine.php \
+  's%if ($listing->proseAbsent) {%if (true) {%'
+
+# The declaration must not survive a detail merge being forgotten, nor the snapshot round trip —
+# `mergedWith()` rebuilds field by field and `reclassify` re-judges from the snapshot alone, so
+# either omission drops the caveat silently on exactly the rows that need it.
+run_sabotage "a detail merge drops the prose-absent declaration" \
+  src/php/Rent/Core/RawListing.php \
+  's%proseAbsent: $this->proseAbsent,%proseAbsent: false,%'
+
+run_sabotage "the prose-absent declaration is not persisted, so reclassify loses the caveat" \
+  src/php/Rent/Core/ListingSnapshot.php \
+  "s%'proseAbsent' => \$listing->proseAbsent,%%"
+
+# A DECLARATION CONTRADICTED BY THE CONFIG BESIDE IT is worse than none: it reads as considered, and
+# every push on the source would carry a caveat that is false.
+run_sabotage "a source may declare prose_absent while mapping a description" \
+  src/php/Rent/Config/ConfigLoader.php \
+  's%if ($proseAbsent && $map->description !== \[\]) {%if (false) {%'
+
 run_sabotage "an absent detail value overwrites what the card knew (rule 9)" \
   src/php/Rent/Core/RawListing.php \
   's%static fn (mixed $mine, mixed $theirs): mixed => $theirs ?? $mine%static fn (mixed $mine, mixed $theirs): mixed => $theirs%'

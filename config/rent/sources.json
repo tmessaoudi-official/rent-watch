@@ -215,6 +215,8 @@
         "surface_pattern": "~^\\h*(?:\\d+\\h*pi[eè]ces?\\h*[-–]\\h*)?([\\d.,]+)\\h*m²\\h*$~mu",
         "rooms_pattern": "~(?|^\\h*(\\d+)\\h*pi[eè]ces?\\h*[-–]\\h*[\\d.,]+\\h*m²\\h*$|^[^\\n]*?(\\d+)\\h*pi[eè]ces?\\h*$)~mu"
       },
+      "_prose_absent": "PAP's alert carries NO listing prose: header, the subscriber's own search criteria, four structured facts, a link, a legal footer. `description` is the literal string `PAP.fr  De Particulier a Particulier ____` on all 57 stored rows and `title` is `Location appartement` or `Location maison` on every one, so `exclude_patterns` and `exclude_title_patterns` are both structurally inert here \u2014 a colocation advertised with the whole flat's rooms and surface clears every numeric filter. Both routes out are closed and MEASURED (2026-09-01): the detail page answers a Cloudflare challenge, which hard rule 5 refuses to work around, and rent-per-room has no gap to threshold on. So the notification SAYS the check could not be made. See docs/plans/pap-detail-hydration.plan.md.",
+      "prose_absent": true,
       "map": {
         "ref": "url",
         "charges_included": false

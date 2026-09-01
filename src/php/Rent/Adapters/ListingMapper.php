@@ -61,6 +61,7 @@ final readonly class ListingMapper
             bedrooms: Payload::int($item, $map->bedrooms),
             floor: Payload::floor($item, $map->floor),
             hasElevator: Payload::bool($item, $map->elevator),
+            proseAbsent: $this->source->proseAbsent,
         );
     }
 

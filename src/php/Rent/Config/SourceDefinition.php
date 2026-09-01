@@ -176,6 +176,33 @@ final readonly class SourceDefinition
          * carry it — nothing else reports a feed date (refused at load otherwise).
          */
         public ?int $feedSilentDays = null,
+        /**
+         * Does this source's payload carry NO listing prose at all?
+         *
+         * A declaration about what the payload MEANS, in the same class as {@see $mixedTenure} and
+         * `map.charges_included` — never a filter and never a score component. When it is true, the
+         * two exclusion lists cannot fire: `exclude_patterns` scans title and description,
+         * `exclude_title_patterns` scans the title, and on such a source both are boilerplate.
+         *
+         * PAP is the case it was written for. Its alert is header + the subscriber's own search
+         * criteria + four structured facts + a link + a legal footer; `description` is the literal
+         * string `PAP.fr  De Particulier à Particulier ____` on every one of 57 stored rows, and
+         * `title` is `Location appartement` or `Location maison` on every one. So a colocation
+         * advertised with the whole flat's room count and surface passes every numeric filter and
+         * there is no text in which to catch it — measured, and the two ways out are both closed:
+         * the detail page is behind a bot challenge (hard rule 5) and rent-per-room has no gap to
+         * threshold on. See `docs/plans/pap-detail-hydration.plan.md`.
+         *
+         * What it buys is honesty rather than filtering: {@see \Scout\Rent\Core\CriteriaEngine}
+         * says so in the notification's own reasons, beside the unverifiable-ceiling line it
+         * already emits for an HC-only rent. A check that could not be made is reported as one
+         * rather than passing silently — which is the same discipline, one layer up, as hard rule 9
+         * refusing to read an unknown as a zero.
+         *
+         * Refused at load on a source that maps a description: a declaration contradicted by the
+         * configuration beside it is worse than no declaration, because it reads as considered.
+         */
+        public bool $proseAbsent = false,
     ) {}
 
     /**

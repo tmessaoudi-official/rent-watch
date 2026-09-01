@@ -64,6 +64,11 @@ final class ListingSnapshot
             // (LandlordRegistry) — a re-judge without it would silently restore the portal's own
             // lax default and re-open the §1 hole on exactly the rows already stored.
             'advertiser' => $listing->advertiser,
+            // Whether the SOURCE publishes any listing prose at all. Persisted for the same reason
+            // `advertiser` is: `reclassify` re-judges from this snapshot alone, and a caveat that
+            // silently vanished on a re-judge would leave the row claiming a check was made when it
+            // never could be.
+            'proseAbsent' => $listing->proseAbsent,
         ], JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     }
 
@@ -127,6 +132,11 @@ final class ListingSnapshot
             // fabricated instant — a re-judged row re-recorded at NOW would be the drop loop again.
             observedAt: self::nullableStr($data['observedAt'] ?? null),
             advertiser: self::nullableStr($data['advertiser'] ?? null),
+            // Absent on every snapshot written before this field existed, and `false` is the right
+            // reading of that absence: it says nothing rather than asserting the exclusion lists
+            // WERE able to run. Same treatment as `detailRead` for the same reason — a re-judged
+            // pre-v7 row must not gain a caveat it never earned, nor lose one it did.
+            proseAbsent: (bool) ($data['proseAbsent'] ?? false),
         );
     }
 
