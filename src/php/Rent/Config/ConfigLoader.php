@@ -547,7 +547,11 @@ final class ConfigLoader
         // one throws at fetch (see the adapter), but an unbroken one that matches NOTHING merges
         // every card in the message into a single listing carrying the first card's facts under the
         // last card's link. That is the 2026-08-31 Bien'ici defect, and it is invisible.
-        foreach (['title_pattern', 'residence_pattern', 'commune_pattern', 'surface_pattern', 'rooms_pattern', 'card_separator_pattern'] as $patternKey) {
+        // `advertiser_pattern` joins them with a §1 edge rather than an extraction one: a broken one
+        // yields `null`, the listing keeps the source's own profile, and a landlord-advertised card
+        // on a `mixed_tenure: false` portal is notified as LIBRE again. That is the exact hole
+        // LandlordRegistry closes, silently re-opened by a typo.
+        foreach (['title_pattern', 'residence_pattern', 'commune_pattern', 'surface_pattern', 'rooms_pattern', 'card_separator_pattern', 'advertiser_pattern'] as $patternKey) {
             $pattern = $params[$patternKey] ?? null;
 
             if ($pattern === null || $pattern === '') {

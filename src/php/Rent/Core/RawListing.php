@@ -102,6 +102,30 @@ final readonly class RawListing
          * at a higher rent, produced 429 alternating history rows and 128 phantom emails).
          */
         public ?string $observedAt = null,
+        /**
+         * WHO is advertising this flat — the agency or landlord named by the portal itself — or
+         * `null` when the source publishes no advertiser surface.
+         *
+         * Extracted STRUCTURALLY by a per-source `advertiser_pattern`, never by scanning prose for
+         * landlord names: SeLoger states it in the subject (`<ADVERTISER> vous adresse ses
+         * dernières exclusivités`), and a body scan is the `au plus près` / `Ce·lli·er` /
+         * `?c=plai_plus` failure class, which has cost this repo six fixes counting the one
+         * committed in the audit that produced this field.
+         *
+         * It lives HERE, on the listing, and not as a `classify()` argument. `scout reclassify`
+         * re-judges from the schema-v7 snapshot alone, and the snapshot IS this object — a value
+         * passed alongside would be absent on every re-judge, so a stored listing would silently
+         * lose its advertiser the second time it was looked at. That is exactly the mistake
+         * `commuteMinutes` above records, and `floor`/`hasElevator` arrive by the same route.
+         *
+         * `null` is UNKNOWN, never "an anonymous private advertiser" (hard rule 9): an unrecognised
+         * advertiser and an unstated one both leave the source profile exactly as it was.
+         *
+         * Read by {@see LandlordRegistry}, which turns a recognised institutional name into the
+         * source profile that landlord's own listings are judged under — so the same flat gets the
+         * same verdict whichever route it arrives by.
+         */
+        public ?string $advertiser = null,
     ) {}
 
     /**
@@ -166,6 +190,12 @@ final readonly class RawListing
             // The CARD's observation time: a detail page fetched now says nothing about when the
             // listing was observed, and a detail merge must not re-date an old card to the pass.
             observedAt: $this->observedAt,
+            // THE CARD'S ADVERTISER, never the detail page's. The detail page belongs to the portal
+            // and its furniture names whoever the portal wants — the same reason a `detail_map`
+            // must address the LISTING and not the page. `$any` would also let a detail fetch
+            // ARM this field on a card that never named an advertiser, which is a §1-relevant
+            // change of verdict sourced from page chrome.
+            advertiser: $this->advertiser,
         );
     }
 

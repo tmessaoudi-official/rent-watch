@@ -36,6 +36,7 @@ use Scout\Core\Notify\Notifier;
 use Scout\Core\Notify\Priority;
 use Scout\Core\Pacer;
 use Scout\Rent\Core\RawListing;
+use Scout\Rent\Core\SourceProfile;
 use Scout\Rent\Core\Tenure;
 use Scout\Core\Redact;
 use Scout\Core\SourceStatus;
@@ -606,7 +607,7 @@ final readonly class RentScout
             $this->line(sprintf('  %-16s %s', $field, $this->show($value)));
         }
 
-        $classification = (new TenureClassifier())->classify($first, $source->profile());
+        $classification = $this->classifier()->classify($first, $source->profile());
         $this->line('');
         $this->line('  tenure           ' . $classification->tenure->value
             . ' (' . $classification->confidenceBp . '/100, ' . $classification->outcome->value . ')');
@@ -950,6 +951,7 @@ final readonly class RentScout
             $criteria,
             $store,
             $notifier,
+            classifier: $this->classifier(),
             commute: $this->commutePlanner($criteria, $store),
         ))->runOnce($sources, $this->now(), $seed);
 
@@ -1359,7 +1361,12 @@ final readonly class RentScout
             $profiles[$definition->name] = $definition->profile();
         }
 
-        $classifier = new TenureClassifier();
+        // The advertiser substitution needs the same profile map this loop already built, so a
+        // re-judged row is judged under exactly the profile a live pass would have used. A row
+        // captured before `advertiser` existed carries `null` and is unaffected — no backfill, by
+        // ruling, and a backfilled advertiser would be indistinguishable from a read one.
+        $classifier = new TenureClassifier(profileFor: static fn (string $key): ?SourceProfile
+            => $profiles[$key] ?? null);
         $engine = new CriteriaEngine($criteria);
 
         // THE NOTIFIER IS BUILT BEFORE ANY ROW IS TOUCHED, and that ordering is the fix to a defect
@@ -1725,6 +1732,27 @@ final readonly class RentScout
      * hour a pass happened to run. Next Monday 08:30 is representative of the journey the user
      * actually cares about. Stated cost: it is a one-time sample of that timetable.
      */
+    /**
+     * The classifier, wired so a recognised ADVERTISER inherits that landlord's own profile.
+     *
+     * Without the resolver the classifier still substitutes — to {@see LandlordRegistry}'s
+     * fail-closed unknown-landlord profile — so forgetting this cannot re-open the §1 hole; what it
+     * restores is the landlord's own `default_tenure` hint, which is the difference between "In'li,
+     * probably LLI, unverified" and "an institutional bailleur, nothing known". Both digest a bare
+     * card, so the shipped default is safe and this is the accurate one.
+     *
+     * Reads `sources.json` afresh rather than taking a cached map: every other verb in this class
+     * does the same, and a resolver holding a stale definition would judge a listing under a
+     * `mixed_tenure` the operator has since revised.
+     */
+    private function classifier(): TenureClassifier
+    {
+        $definitions = ConfigLoader::loadSources($this->rootDir . '/config/rent/sources.json');
+
+        return new TenureClassifier(profileFor: static fn (string $key): ?SourceProfile
+            => isset($definitions[$key]) ? $definitions[$key]->profile() : null);
+    }
+
     private function commutePlanner(Criteria $criteria, Store $store): ?CommutePlanner
     {
         if (!$criteria->commuteEnabled) {

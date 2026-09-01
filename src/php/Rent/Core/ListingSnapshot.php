@@ -59,6 +59,11 @@ final class ListingSnapshot
             'detailRead' => $listing->detailRead,
             'commuteMinutes' => $listing->commuteMinutes,
             'observedAt' => $listing->observedAt,
+            // WHO advertised it. Persisted because `reclassify` re-judges from this snapshot alone,
+            // and the advertiser is what decides which SourceProfile the verdict is formed under
+            // (LandlordRegistry) — a re-judge without it would silently restore the portal's own
+            // lax default and re-open the §1 hole on exactly the rows already stored.
+            'advertiser' => $listing->advertiser,
         ], JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     }
 
@@ -121,6 +126,7 @@ final class ListingSnapshot
             // Absent on every pre-2026-08-29 snapshot: null, "observed at the pass time", never a
             // fabricated instant — a re-judged row re-recorded at NOW would be the drop loop again.
             observedAt: self::nullableStr($data['observedAt'] ?? null),
+            advertiser: self::nullableStr($data['advertiser'] ?? null),
         );
     }
 

@@ -81,7 +81,48 @@ final class TenureClassifierTest extends TestCase
             $constructor->getParameters(),
         );
 
-        self::assertSame(['bands'], $names);
+        // `profileFor` joined `bands` on 2026-09-01 (Track 5a, the advertiser substitution), and
+        // this test FIRED on it — correctly, because it is a second injectable collaborator that
+        // reaches the tenure decision. Adding the name to this list is NOT the fix on its own; the
+        // assertion below is. A resolver returning the loosest profile the schema permits must not
+        // loosen anything, because `LandlordRegistry::stricterOf()` merges field by field and can
+        // only tighten. Without that property, a resolver — a config typo, a future caller — would
+        // turn a fail-closed source into a matching one, which §1 calls a P0 "even if nothing
+        // currently sets it".
+        self::assertSame(['bands', 'profileFor'], $names);
+
+        $hostileResolver = static fn (string $key): SourceProfile => new SourceProfile(
+            name: $key,
+            family: 'private',
+            defaultTenure: Tenure::LIBRE,
+            mixedTenure: false,
+        );
+
+        // CDC Habitat is in the registry, so the substitution genuinely runs here; the source it
+        // starts from is the strict one, and the hostile resolver offers the lax one.
+        $strict = new SourceProfile(name: 'portal', family: 'private', defaultTenure: null, mixedTenure: true);
+        $listing = new RawListing(
+            sourceName: 'portal',
+            externalId: '1',
+            title: 'Appartement 3 pieces',
+            description: 'Appartement 3 pieces 65 m2, cuisine equipee.',
+            advertiser: 'CDC HABITAT',
+        );
+
+        $lax = (new TenureClassifier(profileFor: $hostileResolver))->classify($listing, $strict);
+        $control = (new TenureClassifier())->classify($listing, $strict);
+
+        self::assertSame(
+            $control->outcome,
+            $lax->outcome,
+            'a resolver offering mixedTenure:false + LIBRE must not loosen the verdict — '
+                . 'LandlordRegistry::stricterOf() merges toward the stricter profile, always',
+        );
+        self::assertNotSame(
+            Outcome::MATCH,
+            $lax->outcome,
+            'a card with no tenure statement, advertised by a mixed-tenure bailleur, must not match',
+        );
 
         // A band table claiming an intermediate tenure is now REFUSED OUTRIGHT — strictly stronger
         // than the previous guarantee, which merely survived one. Tier 4 answers SOCIAL or nothing:

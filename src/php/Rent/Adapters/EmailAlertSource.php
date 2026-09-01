@@ -357,6 +357,11 @@ final readonly class EmailAlertSource implements FeedFreshness, Source
                 surfaceM2: $this->surfaceIn($body),
                 rooms: $this->roomsIn($body),
                 observedAt: $message->sentAt(),
+                // Read on BOTH paths deliberately. A source with no `card_separator` is one listing
+                // per message (PAP), which is precisely the shape whose subject can name the
+                // advertiser unambiguously — reading it only on the segmented path would be the
+                // `title_pattern` mistake documented four lines above, made again on a new param.
+                advertiser: $this->advertiserOf($message),
             );
         }
 
@@ -588,7 +593,27 @@ final readonly class EmailAlertSource implements FeedFreshness, Source
             observedAt: $message->sentAt(),
             surfaceM2: $surface,
             rooms: $rooms,
+            advertiser: $this->advertiserOf($message),
         );
+    }
+
+    /**
+     * WHO is advertising, read from the SUBJECT — not from the segment, and not from the body.
+     *
+     * The subject, because that is where SeLoger puts it: `<ADVERTISER> vous adresse ses dernières
+     * exclusivités`, ~201 such messages, one listing each. `matchParam()` is otherwise handed a
+     * segment, so passing the subject is the whole difference — and it keeps the pattern inside the
+     * single funnel that {@see PatternMissLog} counts, so the day the portal renames that template
+     * the miss surfaces in `health()` instead of silently reverting this rule (F1/F3: PAP's anchors
+     * broke for four days and nothing counted them).
+     *
+     * NOT the body. A landlord name found in prose is `au plus près` all over again — and a
+     * containment scan over an evidence blob matched `i3f` inside a base64url JWT signature on a
+     * Century 21 listing, which is how this rule's own measurement was briefly wrong by one row.
+     */
+    private function advertiserOf(EmailMessage $message): ?string
+    {
+        return $this->matchParam('advertiser_pattern', $message->subject());
     }
 
     /**

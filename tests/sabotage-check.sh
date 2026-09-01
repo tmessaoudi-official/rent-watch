@@ -3773,6 +3773,72 @@ run_sabotage "a segment that never became a card still counts toward the pattern
   src/php/Rent/Adapters/EmailAlertSource.php \
   "s%        \$this->patternMisses->resolve(\$listing !== null);%        \$this->patternMisses->resolve(true);%"
 
+# ── Track 5a: WHO advertises decides which profile judges the flat (2026-09-01) ────────────────
+#
+# 23 SeLoger rows advertised by an institutional landlord were judged LIBRE at 50bp and 21 were
+# pushed as a MATCH, while the same flat on that landlord's own site digests. Every case below is a
+# way of quietly restoring that, and each is silent in production: nothing throws, nothing is
+# logged, and a listing simply arrives that should not have.
+
+# The substitution itself. Removing it is the whole defect back, and it is one line.
+run_sabotage "the advertiser never substitutes the profile (a landlord's flat keeps the portal's lax default)" \
+  src/php/Rent/Core/TenureClassifier.php \
+  "s%        \$source = LandlordRegistry::effectiveProfile(\$source, \$listing->advertiser, \$this->profileFor);%        \$source = \$source;%"
+
+# The tightening guarantee. Without it a resolver returning the loosest profile the schema permits
+# LOOSENS a strict source — §1 calls such a reachable path a P0 even when nothing sets it.
+run_sabotage "the substitution takes the landlord's profile wholesale, so it can LOOSEN a strict source" \
+  src/php/Rent/Core/LandlordRegistry.php \
+  "s%        return self::stricterOf(\$source, \$profileFor(\$key) ?? self::unknownLandlordProfile((string) \$advertiser));%        return \$profileFor(\$key) ?? self::unknownLandlordProfile((string) \$advertiser);%"
+
+# The fail-closed posture for a landlord with no source block. RIVP is predominantly social and has
+# no block; guessing LIBRE for an unmeasured bailleur is the §1-dangerous direction.
+#
+# BOTH fields are flipped, and that is the whole point of this case. Measured 2026-09-01 over the four
+# combinations, on a bare card with no tenure statement:
+#
+#   defaultTenure=null  mixedTenure=true  -> UNKNOWN/DIGEST      defaultTenure=LIBRE mixedTenure=true  -> UNKNOWN/DIGEST
+#   defaultTenure=null  mixedTenure=false -> UNKNOWN/DIGEST      defaultTenure=LIBRE mixedTenure=false -> LIBRE/MATCH
+#
+# The two fields are belt-and-braces: exactly ONE cell reaches a notification, so flipping either
+# alone degrades defence in depth without breaching §1 and the suite correctly stays green. A first
+# version of this case flipped `mixedTenure` only, reported UNDETECTED, and read as a missing test —
+# it was a sabotage that did not sabotage. Never bend a test around a mutation that is not a
+# regression; make the mutation reach the unsafe cell.
+run_sabotage "an unmeasured landlord is assumed private-market (the one cell that reaches MATCH)" \
+  src/php/Rent/Core/LandlordRegistry.php \
+  's%^            defaultTenure: null,$%            defaultTenure: Tenure::LIBRE,%; s%^            mixedTenure: true,$%            mixedTenure: false,%'
+
+# CONTAINMENT, not equality. SeLoger writes `IN'LI PARIS EST`; an equality test recognises none of
+# the regional spellings, so the whole registry silently stops matching real subject lines.
+run_sabotage "advertiser matching becomes exact-equality (every regional spelling stops being recognised)" \
+  src/php/Rent/Core/LandlordRegistry.php \
+  "s%            if (!str_contains(\$folded, \$name)) {%            if (\$folded !== \$name) {%"
+
+# The snapshot. Without it `reclassify` re-judges on less evidence than the original verdict saw —
+# the §1 breach schema v7 exists to prevent, applied to the field that decides the profile.
+run_sabotage "the advertiser is dropped from the v7 snapshot (reclassify restores the lax default)" \
+  src/php/Rent/Core/ListingSnapshot.php \
+  "s%            'advertiser' => \$listing->advertiser,%%"
+
+# The adapter half. A pattern read but never attached is a configured mechanism doing nothing —
+# the inert-param defect class this repo has now found on title_pattern twice.
+#
+# TWO cases, one per attachment site, and both `^`-ANCHORED. `EmailAlertSource` attaches the
+# advertiser in `listingsIn()` (non-segmented, 16 spaces) and in `buildCardListing()` (segmented,
+# 12 spaces). A single unanchored `s%            advertiser: …%` matches BOTH — sed matches an
+# unanchored substring, so the 12-space pattern also matches inside the 16-space line — which is
+# what the first version of this case did. It was fully applied, both paths were nulled, and the
+# suite stayed green because NEITHER path was tested; a first reading of that mistook it for a
+# half-applied expression. Anchored per site, a regression now names the path it broke.
+run_sabotage "the advertiser is never attached on the SEGMENTED path (seloger, bienici)" \
+  src/php/Rent/Adapters/EmailAlertSource.php \
+  's%^            advertiser: \$this->advertiserOf(\$message),$%            advertiser: null,%'
+
+run_sabotage "the advertiser is never attached on the NON-SEGMENTED path (one listing per link)" \
+  src/php/Rent/Adapters/EmailAlertSource.php \
+  's%^                advertiser: \$this->advertiserOf(\$message),$%                advertiser: null,%'
+
 printf '\n  %d sabotage(s) detected, %d undetected\n' "$pass" "$fail"
 
 if [[ -n "$_filter" ]]; then

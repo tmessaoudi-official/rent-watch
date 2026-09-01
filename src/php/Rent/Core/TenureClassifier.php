@@ -250,13 +250,50 @@ final readonly class TenureClassifier
      * `new PlafondBands()` still disarms the tier, which is what the surface-matrix and differential
      * suites use to isolate the other tiers.
      */
-    public function __construct(?PlafondBands $bands = null)
+    /**
+     * Resolves a `config/rent/sources.json` key to its profile, for {@see LandlordRegistry}.
+     *
+     * `\Closure`, not `callable`: this class is `readonly`, which forbids an untyped property, and
+     * `callable` is not a legal property type in PHP. `Closure::fromCallable()` normalises whatever
+     * the caller passes.
+     *
+     * @var \Closure(string): ?SourceProfile
+     */
+    private \Closure $profileFor;
+
+    /**
+     * The default resolver answers `null` for every key, and that is the SAFE direction rather than
+     * an omission. A caller that does not wire config in — every corpus and fixture test — still
+     * gets the substitution, just to the fail-closed unknown-landlord profile instead of to the
+     * landlord's own. Both digest a card with no explicit label; the real profile only restores that
+     * landlord's `default_tenure` hint. So forgetting to inject cannot re-open the hole, which is
+     * the property that matters when the constructor is called from twenty places.
+     *
+     * @param (callable(string): ?SourceProfile)|null $profileFor
+     */
+    public function __construct(?PlafondBands $bands = null, ?callable $profileFor = null)
     {
         $this->bands = $bands ?? PlafondBands::ileDeFrance2026();
+        $this->profileFor = $profileFor === null
+            ? static fn (string $key): ?SourceProfile => null
+            : \Closure::fromCallable($profileFor);
     }
 
     public function classify(RawListing $listing, SourceProfile $source): Classification
     {
+        // WHO IS ADVERTISING decides which profile this listing is judged under, before any tier
+        // runs. Measured 2026-09-01: 23 SeLoger rows advertised by an institutional landlord were
+        // judged `LIBRE` at the source default and 21 were pushed as a MATCH, while the same flat
+        // on that landlord's own site digests under `mixed_tenure: true`. The verdict depended on
+        // the ROUTE, not on the flat.
+        //
+        // It is a SUBSTITUTION, not a signal, and the distinction is load-bearing. This class
+        // reasons about tenure — labels, procedural tells, ceilings — and the one adjacent decision
+        // in its history removed `sans commission` from tier 3 precisely because a name-adjacent
+        // phrase says nothing about tenure. So the advertiser emits no signal, adds no confidence
+        // and cannot out-rank a label: every tier below runs unchanged, against a stricter profile.
+        $source = LandlordRegistry::effectiveProfile($source, $listing->advertiser, $this->profileFor);
+
         try {
             $signals = [
                 1 => $this->structuredFieldSignals($listing),

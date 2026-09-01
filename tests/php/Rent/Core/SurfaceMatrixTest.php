@@ -485,7 +485,19 @@ final class SurfaceMatrixTest extends TestCase
             // (2026-08-29); no listing text ever reaches it, and the classifier never reads it —
             // it is when the listing was seen, not what it says. Excluded by name like the source
             // name, so the check keeps its teeth for the next string that IS text.
-            if (in_array($parameter->getName(), ['sourceName', 'observedAt'], true)) {
+            // `advertiser` (2026-09-01) is an IDENTITY, not listing text — the same category as
+            // `sourceName` above, and excluded for the same reason plus a stronger one. It never
+            // reaches `RawListing::text()`, so no tier can read it; the only thing that consults it
+            // is `LandlordRegistry`, which matches whole folded landlord names, none of which is a
+            // tenure token. Feeding it to the classifier would be a NEW false-signal route on a
+            // field full of ordinary French: an agency named `PLUS Immobilier` or `Résidence
+            // Conventionné` would emit an excluded label about the flat its neighbour is selling.
+            // That is `Ce·lli·er` and `Plain-pied` a seventh time, and over-rejection is the silent
+            // direction (hard rule 8).
+            //
+            // The exemption is NOT a free pass: `testExcludedVocabularyInTheAdvertiserDecidesNothing`
+            // below proves it positively, both ways.
+            if (in_array($parameter->getName(), ['sourceName', 'observedAt', 'advertiser'], true)) {
                 continue;
             }
 
@@ -495,5 +507,66 @@ final class SurfaceMatrixTest extends TestCase
         }
 
         self::assertSame([], $missing, 'RawListing properties with no matrix surface: ' . implode(', ', $missing));
+    }
+
+    /**
+     * The same vocabulary as {@see excludedVocabulary()}, in the shape a data provider needs.
+     *
+     * A thin wrapper rather than a second reflection walk, deliberately: two independent readings
+     * of `LABELS`/`AMBIGUOUS_LABELS`/`PROCEDURAL` is two places for one to fall behind, and this
+     * file's whole thesis is that a hand-maintained list covers the cells someone thought of.
+     *
+     * @return iterable<string, array{0: string}>
+     */
+    public static function excludedVocabularyCells(): iterable
+    {
+        foreach (self::excludedVocabulary() as $token) {
+            yield $token => [$token];
+        }
+    }
+
+    /**
+     * THE COUNTERWEIGHT to `advertiser`'s exemption from the surface list.
+     *
+     * An exemption asserted in a comment is a claim; this is the proof. Every token in the
+     * classifier's own excluded-or-undetermined vocabulary is placed in `advertiser` — and ONLY
+     * there, on a listing whose text is deliberately clean — and the verdict must be identical to
+     * the one the same listing gets with no advertiser at all.
+     *
+     * Both directions matter and the test asserts both by construction:
+     *
+     * - It must not REJECT or DIGEST, because an agency called `PLUS Immobilier` or `Résidence
+     *   Conventionné` is an ordinary French business name, and over-rejection is silent (hard
+     *   rule 8) — the listing simply never arrives.
+     * - It must not MATCH anything it would not have matched anyway, which is why the assertion is
+     *   equality with the no-advertiser control rather than `assertSame(MATCH, …)`. Pinning the
+     *   outcome literally would keep passing if the advertiser started deciding everything.
+     */
+    #[DataProvider('excludedVocabularyCells')]
+    public function testExcludedVocabularyInTheAdvertiserDecidesNothing(string $token): void
+    {
+        $clean = 'Appartement 3 pieces 65 m2 a Sartrouville, cuisine equipee, balcon.';
+
+        $control = (new TenureClassifier())->classify(
+            new RawListing(sourceName: 'probe', externalId: '1', title: 'Appartement', description: $clean),
+            new SourceProfile(name: 'probe', family: 'private', defaultTenure: Tenure::LIBRE, mixedTenure: false),
+        );
+
+        $withAdvertiser = (new TenureClassifier())->classify(
+            new RawListing(
+                sourceName: 'probe',
+                externalId: '1',
+                title: 'Appartement',
+                description: $clean,
+                advertiser: $token . ' Immobilier',
+            ),
+            new SourceProfile(name: 'probe', family: 'private', defaultTenure: Tenure::LIBRE, mixedTenure: false),
+        );
+
+        self::assertSame(
+            [$control->tenure, $control->outcome, $control->confidenceBp],
+            [$withAdvertiser->tenure, $withAdvertiser->outcome, $withAdvertiser->confidenceBp],
+            sprintf('`%s` in the advertiser field changed the verdict; the advertiser is an identity, not text', $token),
+        );
     }
 }
