@@ -27,6 +27,46 @@ final class VehicleSourceLoader
      */
     private const array UNREAD_PARAMS = ['seller_pattern', 'postcode_pattern'];
 
+    /**
+     * Every `params` key a vehicle adapter actually reads, PER TYPE — the allow-list, and the rent
+     * side's `ConfigLoader::EMAIL_ALERT_PARAMS` mechanism ported over (Track 6-A2).
+     *
+     * `UNREAD_PARAMS` refused two keys by name and this class's own docblock claimed that closed
+     * the inert-parameter hole. It did not: a `link_hosts`, a `commune_pattern` carried across from
+     * a rent block, or any plain typo loaded cleanly, compiled nothing, and did nothing at all. A
+     * misspelt name is the commonest way to reach this failure and the only one no by-name list
+     * can see.
+     *
+     * Read from the CODE, not from what the shipped config uses:
+     * `grep -rnoE '[-]>param\(' src/php/Car/ src/php/Cli/` finds `VehicleEmailSource` (from,
+     * subject_pattern, card_separator, price_pattern, title_pattern, facts_pattern,
+     * make_model_pattern, make_model_source, link_host) and `CarScout` (from). A param an adapter
+     * reads but this list omits is a refusal on a CORRECT config — the opposite failure, loud, and
+     * the safe direction. The two move in the same change.
+     *
+     * `sitemap_jsonld` reads NONE: `SitemapVehicleSource` contains no `param(` call and autohero
+     * configures none, so a param on one is inert by construction. `fixture` likewise.
+     *
+     * The two `UNREAD_PARAMS` keys are deliberately ABSENT from this list: they keep their own,
+     * more specific refusal above, and an empty-string declaration of one — which that guard lets
+     * through — is refused here instead of being quietly accepted.
+     */
+    private const array READ_PARAMS = [
+        'email_alert' => [
+            'from',
+            'link_host',
+            'subject_pattern',
+            'card_separator',
+            'price_pattern',
+            'title_pattern',
+            'facts_pattern',
+            'make_model_pattern',
+            'make_model_source',
+        ],
+        'sitemap_jsonld' => [],
+        'fixture' => [],
+    ];
+
     /** @return array<string, VehicleSourceDefinition> */
     public static function load(string $path): array
     {
@@ -120,6 +160,27 @@ final class VehicleSourceLoader
                             . 'et retirez-le de VehicleSourceLoader::UNREAD_PARAMS dans le même changement',
                     );
                 }
+            }
+
+            // THE ALLOW-LIST (Track 6-A2). Everything above refuses a key BY NAME; this refuses
+            // every name nobody reads, which is the only guard a typo cannot walk past.
+            //
+            // Deliberately OUTSIDE the `enabled` branch — `--source=<name>` force-runs a disabled
+            // source, which is the documented onboarding path, so a guard firing only on enabled
+            // sources is one the intended workflow never meets.
+            $read = self::READ_PARAMS[$type];
+            foreach (array_keys($params) as $key) {
+                if (\in_array($key, $read, true)) {
+                    continue;
+                }
+
+                throw ConfigError::at(
+                    $where . '.params.' . $key,
+                    'aucun adaptateur véhicule ne lit ce paramètre sur une source ' . $type
+                        . '. Un nom mal orthographié se charge sans bruit et ne fait rien — le motif '
+                        . 'est absent, rien ne le remplace, et rien ne ressemble à une panne. '
+                        . 'Paramètres lus pour ce type : ' . ($read === [] ? 'aucun' : implode(', ', $read)),
+                );
             }
 
             $map = [];

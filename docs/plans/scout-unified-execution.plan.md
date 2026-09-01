@@ -330,6 +330,32 @@ read-only) and the merged prose as one review deep.
   only in that commit message. The stale `"7"` in the config's `_feed_silent_days` comment is
   Track 6-C1's to fix.
 
+- [2026-09-01 ~23:30] AGREED: **Track 6 execution order is A2 → A1 → A3**, then A4, A7, B, C1 —
+  the cheapest certain win first, then the live In'li degradation INVESTIGATED before anything is
+  built for it, then the `ListingMapper` bundle. A6 waits for 2026-09-02 data by construction.
+- [2026-09-01 ~23:30] AGREED, and it OVERRIDES the 2026-09-01 ~22:45 F30 ruling: **`advertiser_pattern`
+  is KEPT and EXEMPTED from miss-counting**, not dropped. The drop was ruled before anyone traced
+  what the key feeds. Measured this session: `advertiser_pattern` is read by
+  `EmailAlertSource` → `RawListing`/`ListingSnapshot` → `LandlordRegistry` → `TenureClassifier`,
+  and is the whole mechanism of `dede8ac` (Track 5a) — the fix that stopped 23 institutional-landlord
+  rows on SeLoger (16 In'li, 7 CDC) being judged LIBRE at the portal's 50bp default, 21 of which had
+  been pushed as MATCHes. Dropping the key sends those back to MATCH, which is a §1 regression, so
+  the question is *how* to satisfy §1, never *whether*. The 92.6 % miss is not a template change and
+  not a fault: the pattern reads the SUBJECT of the `exclusivités` template, and it is counted PER
+  CARD, which is what turns 30 real hits into a 375/405 ratio. **The car domain already rules this
+  exact shape** — `subject_pattern` is deliberately never counted, because a message-level pattern
+  counted per card dilutes the ratio the WARN depends on. Same treatment here. Reversed by counting
+  it again, which re-creates the spurious thin-pass WARN F30 identified.
+- [2026-09-01 ~23:30] AGREED (A5 shape): **a second queue, ONE drain, separated in the mail.**
+  Low-score-but-tenure-clean matches queue on their own and drain through the existing
+  `Cli/DigestBatch`, with the formatter keeping *"vérifié, score bas"* visibly apart from
+  *"à vérifier"* — the rent digest already MEANS tenure-doubt, and reusing that kind for a
+  score decision would misreport a listing's §1 status (schema v8's `DIGEST < MATCH` is monotone
+  and never demotes). **Executor note, measured: the car domain has NO digest at all** — by design
+  (`VehicleOutcome`: *"there is no mixed-stock digest in this domain"*), so the plan's "do NOT build
+  a second drain" is rent-only advice and the car half is a NEW rollup that must not be called a
+  digest. Reversed by pushing every match individually again.
+
 ---
 
 ## Fragile implementations register (the developer asked; keep this list honest)

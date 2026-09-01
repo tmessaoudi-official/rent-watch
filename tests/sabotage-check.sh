@@ -2949,6 +2949,15 @@ run_sabotage "a params key no adapter reads is accepted again (a misspelt patter
   src/php/Rent/Config/ConfigLoader.php \
   's%\\in_array(\$key, self::EMAIL_ALERT_PARAMS, true)%true%'
 
+# The CAR twin of that guard (Track 6-A2). The rent side closed this class on 2026-08-26; the car
+# loader refused two keys BY NAME and claimed in its own docblock to have closed it, while every
+# misspelling — `link_hosts`, a `commune_pattern` carried over from a rent block — loaded cleanly
+# and did nothing. No shipped car config reaches this branch, so nothing but this case and
+# `VehicleSourceLoaderRefusalsTest` stands between the guard and a silent deletion.
+run_sabotage "a car params key no vehicle adapter reads is accepted again (a misspelt pattern silently does nothing)" \
+  src/php/Car/VehicleSourceLoader.php \
+  's%\\in_array(\$key, \$read, true)%true%'
+
 # Cityloger writes the unit BOTH ways — `80 m2` on one frozen page, `63m²` on the other — and the
 # selector required the ASCII form. Measured on the live store before the fix: 56 of 61 cached
 # detail rows held `elevator, description, tenureField` and NO surface, so `min_surface_m2` could
