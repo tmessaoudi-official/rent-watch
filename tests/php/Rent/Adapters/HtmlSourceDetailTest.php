@@ -159,6 +159,71 @@ final class HtmlSourceDetailTest extends TestCase
         );
     }
 
+    /**
+     * A DETAIL PAGE SUPPLIES A POSTCODE THE CARD NEVER HAD — end to end, through the real merge.
+     *
+     * Track 5b, F-B: In'li's postcode came ENTIRELY from the URL slug, and the source publishes a
+     * second URL shape that carries none. In region mode `postcode_prefixes` is the whole location
+     * filter, so 212 live rows could not match at all — 212 rejections and 0 matches, though 44 of
+     * them already satisfied rent, surface and rooms.
+     *
+     * The unit assertions on the committed map prove the selector reads the frozen page. This
+     * proves the value actually REACHES the listing, which is a different claim and the one that
+     * matters: `RawListing::mergedWith()` is `$theirs ?? $mine`, so the detail fills a null card
+     * field — and a rule that silently preferred the card would have left the fix inert while every
+     * unit test stayed green.
+     */
+    public function testADetailPageSuppliesAPostcodeTheCardNeverCarried(): void
+    {
+        $client = new DetailHttpClient(
+            detailBody: '<html><head><title>Appartement 63m² à louer à LES ULIS (91940) | In\'li</title></head>'
+                . '<body><div class="description">Un logement</div></body></html>',
+        );
+
+        // BUDGET 1, so exactly one listing is hydrated and the others genuinely are not. Without
+        // that the counterweight below is vacuous: the cache is the gate, so every row would be
+        // hydrated from the same fake detail body and "an unhydrated row" would not exist.
+        $definition = $this->definitionWithDetailMap(new FieldMap(
+            description: ['.description'],
+            postcode: ['title => \((\d{5})\)'],
+        ));
+        $budgeted = new SourceDefinition(
+            name: $definition->name,
+            enabled: $definition->enabled,
+            family: $definition->family,
+            type: $definition->type,
+            mixedTenure: $definition->mixedTenure,
+            url: $definition->url,
+            baseUrl: $definition->baseUrl,
+            itemSelector: $definition->itemSelector,
+            map: $definition->map,
+            rateLimitMs: 0,
+            detailBudgetPerPass: 1,
+            detailMap: $definition->detailMap,
+        );
+
+        $source = $this->source($client, $budgeted, static fn (RawListing $l): int => $l->externalId === '3' ? 0 : 9);
+
+        $hydrated = null;
+        $untouched = null;
+        foreach ($source->fetch() as $row) {
+            if ($row->externalId === '3') {
+                $hydrated = $row;
+            } elseif ($untouched === null) {
+                $untouched = $row;
+            }
+        }
+
+        self::assertSame(['https://example.test/detail-3'], $client->detailUrls, 'exactly one hydration');
+
+        self::assertNotNull($hydrated);
+        self::assertSame('91940', $hydrated->postcode, 'the detail must fill a postcode the card lacks');
+
+        // The counterweight: this must not be satisfied by stamping every row with it.
+        self::assertNotNull($untouched);
+        self::assertNotSame('91940', $untouched->postcode, 'an unhydrated row invents nothing');
+    }
+
     /** Hard rule 9: a detail page that omits a field states nothing about it. */
     public function testADetailPageThatOmitsAFieldNeverErasesWhatTheCardKnew(): void
     {

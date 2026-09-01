@@ -3765,6 +3765,14 @@ run_sabotage "the title pattern refuses any candidate carrying a euro sign again
   config/rent/sources.json \
   's%(?!\[\\\\h\\\\d.,\]\*€\[\\\\h/a-zA-Zéè\]\*\$)(\[^\\\\n\]{2,80}?)%([^\\\\n€]{2,80}?)%'
 
+# Track 5b, F-B. The detail page is what supplies In'li's postcode on the 46 % of its listings whose
+# URL slug omits one, and in region mode the postcode is the ENTIRE location filter — so dropping it
+# from the merge takes 212 live rows straight back to 212 rejections and 0 matches, with the source
+# still reporting a healthy count. The map still reads the page; the value simply never arrives.
+run_sabotage "a detail page's postcode never reaches the listing (region mode rejects what it filled)" \
+  src/php/Rent/Core/RawListing.php \
+  's%postcode: \$any(\$this->postcode, \$detail->postcode),%postcode: \$this->postcode,%'
+
 # The FUEL preference had no ledger coverage at all until 2026-09-01, when the developer noticed
 # diesels in their pushes and the weight was deepened 10→20. Like the brand penalty below it, its
 # whole value is an ORDERING: every score stays plausible, the notification still lists a reason,

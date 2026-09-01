@@ -52,6 +52,62 @@ final class InliDetailFixtureTest extends TestCase
         self::assertNotNull($inli->detailMap);
         self::assertSame(['h1'], $inli->detailMap->title);
         self::assertSame(['.advert-body-description p'], $inli->detailMap->description);
+        self::assertSame(['title => \\((\\d{5})\\)'], $inli->detailMap->postcode);
+    }
+
+    /**
+     * THE POSTCODE COMES FROM THE DETAIL PAGE, and until 2026-09-01 it came from nowhere on 46 % of
+     * this source (Track 5b, F-B).
+     *
+     * In'li's postcode was derived ENTIRELY from the URL slug, and the source publishes two shapes:
+     * `/location-appartement-sceaux-92330/PRV-…` carries one and `/locations/offre/joinville-le-pont/PRV-…`
+     * does not. The correlation over the live store was perfect — 251 rows with a slug postcode had
+     * one, 205 without a slug postcode had none, and NOT ONE row got a postcode any other way.
+     *
+     * In region mode (`communes: []`) `postcode_prefixes` is the ENTIRE location filter, so those
+     * rows could never match: 212 rows, 212 rejections, 0 matches, against a 30 % match rate on the
+     * rows that had one. Measured cost: 44 of them cleared rent, surface AND rooms already — Les
+     * Ulis at 1042 €/64 m²/3p, Deuil-la-Barre, Maurepas ×3, Ozoir-la-Ferrière.
+     *
+     * THIS COSTS NO EXTRA REQUEST. All 212 were ALREADY hydrated — the detail page was being fetched
+     * for every one of them and this field simply was not read off it.
+     *
+     * Two wrong routes were investigated first and both are recorded so they are not retried. A
+     * commune→postcode table would have needed an authoritative dataset and carries a real
+     * ambiguity risk (French commune names repeat across departements, and In'li lets outside
+     * Île-de-France too). And the detail page's OTHER five-digit numbers were read as In'li's
+     * corporate CEDEX — they are neither: `875 9.5C5.09375` is SVG path data.
+     */
+    public function testTheDetailPageSuppliesThePostcodeTheUrlSlugOmits(): void
+    {
+        self::assertSame('Appartement 63m² à louer à LES ULIS (91940) | In\'li', $this->selected('title'));
+
+        $inli = ConfigLoader::loadSources(self::ROOT . '/config/rent/sources.json')['inli'];
+        [$selector, $regex] = explode(' => ', $inli->detailMap->postcode[0], 2);
+
+        self::assertSame(1, preg_match('~' . $regex . '~u', $this->selected($selector), $m));
+        self::assertSame('91940', $m[1], 'the listing\'s own postcode, stated beside its own commune');
+    }
+
+    /**
+     * THE COUNTERWEIGHT: the capture takes the postcode ALONE, never the whole title.
+     *
+     * The detail path deliberately adds no `_text`, so a detail map contributes only what it
+     * selects — the Cityloger ruling, "a map addresses the listing, never the page". A selector
+     * returning the whole `<title>` would push `| In'li` and the marketing wording into the
+     * listing's classified surface, which is the furniture failure this repo has paid for five
+     * times.
+     */
+    public function testThePostcodeCaptureTakesTheCodeAndNothingElse(): void
+    {
+        $inli = ConfigLoader::loadSources(self::ROOT . '/config/rent/sources.json')['inli'];
+        [$selector, $regex] = explode(' => ', $inli->detailMap->postcode[0], 2);
+
+        preg_match('~' . $regex . '~u', $this->selected($selector), $m);
+
+        self::assertSame('91940', $m[1]);
+        self::assertStringNotContainsString('In\'li', $m[1]);
+        self::assertStringNotContainsString('louer', $m[1]);
     }
 
     public function testTheDetailPageSuppliesTheTitleTheCardNeverCarried(): void
