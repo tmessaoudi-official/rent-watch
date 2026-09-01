@@ -196,11 +196,25 @@ read-only) and the merged prose as one review deep.
   has sent no car alert since 2026-08-27.
 - [2026-09-01] INPUT PENDING: CapCar alert created by the developer; awaiting its first message.
 - [2026-09-01] DEFAULT APPLIED: the advertiser is read from the **subject line** on SeLoger
-  (`<ADVERTISER> vous adresse ses dernières exclusivités`, ~201 messages, one listing each) and
-  from the **URL slug** on Bien'ici (`/annonce/iad-france-800209`). Anchored on the portal's own
-  layout, never on a vocabulary scan of the body — the `au plus près` / filter-facet / CTA failure
-  class has already cost this repo five fixes. Reversed by removing the source's
-  `advertiser_pattern`.
+  (`<ADVERTISER> vous adresse ses dernières exclusivités`, ~201 messages, one listing each).
+  Anchored on the portal's own layout, never on a vocabulary scan of the body — the `au plus près` /
+  filter-facet / CTA failure class has already cost this repo five fixes. Reversed by removing the
+  source's `advertiser_pattern`.
+- [2026-09-01] CORRECTION, same day, before any code: the count is **23 and all SeLoger**, not 24
+  with one on Bien'ici. The extra row was the alias `i3f` matching inside a base64url JWT signature
+  on a Century 21 listing — the sixth instance of the acronym-in-machine-text class, committed in
+  the audit that found the bug. **Bien'ici has no advertiser surface and is uncovered**; the
+  "advertiser is in the Bien'ici URL slug" claim was asserted from one example against a slug census
+  already in evidence showing CRM vendors and agencies only.
+- [2026-09-01] DEFAULT APPLIED: the landlord table is an **explicit registry pinned by a test**, not
+  derived from `sources.json`. Derivation was the first design and the data refutes it — RIVP has no
+  source block, *Immobilière 3F* lives under a block named `cityloger`, and *IN'LI* does not fold to
+  `inli`. Reversed by deleting the registry and its pinning test together; never one without the
+  other.
+- [2026-09-01] DEFAULT APPLIED: a recognised advertiser with **no source block** inherits the
+  fail-closed posture (`mixed_tenure: true`, `default_tenure: null`) — digest unless an explicit
+  label decides. Guessing LIBRE for an unmeasured landlord is the §1-dangerous direction. Reversed
+  per-landlord by giving it an explicit posture in the registry.
 
 ---
 
@@ -821,11 +835,32 @@ looks in `evidence_json`'s title+description):
 
 | Portal | In'li | CDC Habitat | Immobilière 3F | RIVP | total |
 |---|---|---|---|---|---|
-| seloger | 16 | 7 | 2 | 1 | 23 |
-| bienici | — | — | 1 | — | 1 |
+| seloger | 16 | 7 | 2 | 1 | **23** |
+| bienici | — | — | — | — | **0** |
 
-All 24 classified **`LIBRE`, confidence 50** — the source default — and **21 pushed as `MATCH`**.
-Six carry a v12 twin (4 `inli`, 2 `cdc_habitat`); **18 do not**, and that 18 is the fix's size.
+All 23 classified **`LIBRE`, confidence 50** — the source default — and **21 pushed as `MATCH`**.
+Six carry a v12 twin (4 `inli`, 2 `cdc_habitat`); **17 do not**, and that 17 is the fix's size.
+
+> **THE FIRST VERSION OF THIS TABLE SAID 24, WITH ONE ON BIEN'ICI, AND THE EXTRA ROW WAS THE
+> FAILURE CLASS THIS WHOLE FIX EXISTS TO PREVENT.** The scan looked for the alias `i3f`, which
+> matched inside a **base64url JWT signature** — `…vgdb-d5xbqjfxsvc5tsiri3fo0ug2y4b…` — on a
+> *Century 21* listing. An acronym found in opaque machine text: `Ce·lli·er`, `Plain-pied`,
+> `?c=plai_plus` a sixth time, committed in the audit that found the bug. It is kept here rather
+> than quietly corrected because the number was about to be quoted in a commit message.
+>
+> **Consequence: the developer's Bien'ici observation is NOT REPRODUCIBLE and the Bien'ici half of
+> this item does not exist.** Zero of 254 stored Bien'ici rows name an institutional landlord, and
+> a Gmail search over `in:anywhere` with no date restriction returns **zero** Bien'ici messages
+> mentioning CDC Habitat, In'li, Immobilière 3F or RIVP, ever. The phenomenon the developer saw is
+> real — 23 instances of it — and every one is SeLoger. Either the portal was mis-remembered, or
+> the advertiser was a subsidiary trading under another name, in which case no anchor can see it.
+>
+> **And "Bien'ici puts the advertiser in the URL slug" was unfounded**, asserted from one example
+> (`iad-france-800209`) without reading the census that was already in the transcript: the 254
+> slugs are CRM vendors and agencies — `immo-facile` 30, `laforet-immo-facile` 16, `nestenn` 8,
+> `iad-france` 7, `hektor-*`, `apimo`, `nockee-*` — and **no landlord**. If a landlord ever
+> advertises there, the slug is the place to look; today there is nothing to anchor on, and
+> building a body scan instead is what this design refuses. **Stated cost: Bien'ici is uncovered.**
 
 **Why it is §1 and not a nicety.** CDC Habitat is a mixed-tenure landlord — `CLAUDE.md` says so in
 its own words, *"social and intermediate stock on the same pages, sometimes in the same result
@@ -849,15 +884,19 @@ IN'LI       vous adresse ses dernières exclusivités
 NESTENN IGNY vous adresse ses dernières exclusivités
 ```
 
-and Bien'ici puts it in the path: `/annonce/iad-france-800209`, `laforet-…`, `nestenn-1-…`. A
-vocabulary scan over the body is REFUSED — `au plus près`, `Ce·lli·er`, `En savoir plus`,
+A vocabulary scan over the body is REFUSED — `au plus près`, `Ce·lli·er`, `En savoir plus`,
 `Plain-pied`, `?c=plai_plus` are five paid-for instances of exactly that mistake, and a landlord
 name in prose (`proche résidence CDC Habitat`) rebuilds it in reverse.
 
 **Mechanism — a per-listing override of the SOURCE DEFAULT, nothing else:**
 
-- New per-source param `advertiser_pattern` (compile-checked at load beside the other five, same
-  `matchParam()` funnel), read from the SUBJECT on SeLoger and from the URL on Bien'ici.
+- New per-source param `advertiser_pattern`, compile-checked at load beside the other five. It reads
+  the **SUBJECT**, not the segment — `matchParam()` runs over segment text and the SeLoger advertiser
+  is not in it. The car domain already built this exact shape for its own `title_pattern`
+  (`$fromSubject`); reuse that plumbing rather than inventing a second one.
+- It joins the **PatternMissLog** counted set. When SeLoger renames the `exclusivités` template the
+  miss must surface in `health()`, not silently revert this whole item — that is the F1/F3 lesson
+  (PAP's anchors broke for four days and nothing counted the misses).
 - `RawListing::$advertiser` (`?string`). It lives on the listing, not as a `judge()` argument —
   `scout --domain=rent reclassify` re-judges from the v7 snapshot alone, and a value passed
   alongside would be absent on every re-judge. This is the `commuteMinutes` lesson, already paid for.
@@ -867,18 +906,35 @@ name in prose (`proche résidence CDC Habitat`) rebuilds it in reverse.
   `mixed_tenure` — never a third invented treatment. That is literally the sentence *"the verdict
   must not depend on the route"* in code. Tiers 1–3 are untouched and still win: an explicit label
   beats an advertiser, always.
-- The landlord table is DERIVED from `config/rent/sources.json`'s own institutional blocks, not a
-  second hand-written list — a second list is a second place to forget, and this repo has the
-  `communeLabels` scar to prove it.
+- The landlord table is an **EXPLICIT REGISTRY**, pinned by a test that asserts every institutional
+  source block appears in it. Pure derivation from `sources.json` was the first design and **the 23
+  rows refute it**: RIVP has no source block at all (measured out of scope, A14), so derivation
+  leaves an RIVP-advertised card at the LIBRE default — the exact hole being closed; *Immobilière
+  3F* maps to a block named `cityloger`; *IN'LI* does not fold to the key `inli` by any rule. So
+  aliases and non-source landlords are needed regardless. The no-second-list concern is real and is
+  answered by **pinning**, not by derivation — a test that fails when a source block is missing from
+  the registry cannot drift, whereas a derived map silently covers only what happens to be enabled.
+- **A recognised advertiser with NO source block inherits the fail-closed posture**
+  (`mixed_tenure: true`, `default_tenure: null`) — i.e. digest unless an explicit label decides it.
+  RIVP is predominantly social; guessing LIBRE for a landlord nobody has measured is the §1-dangerous
+  direction.
 - Outcome for a recognised mixed-tenure advertiser with no explicit label: **DIGEST**, via the
   existing v8 `notified_as` machinery. Never a hard reject (hard rule 8: silent over-rejection is
   invisible).
 
-**Stated costs, both real:**
+**Stated costs, all four real:**
 1. The ordinary multi-card SeLoger alert names no advertiser per card, so this reaches the
    `exclusivités` template only. That template is where the landlords are, but it is not all of them.
 2. No backfill. The 21 already-notified rows stay as they are; `reclassify` will re-judge them once
    the snapshot carries an advertiser, and it carries one only for rows captured after the fix.
+3. **Bien'ici is uncovered** — it has no advertiser surface today (see the correction above).
+4. **16 of the 23 are In'li, and they will now ALL digest, permanently.** In'li inherits
+   `mixed_tenure: true`, an email-route card carries weak evidence, and its detail page can never be
+   read on that route — so the fail-closed rule digests every one. That is correct under §1 and it
+   is the majority of the affected rows: the developer will see the SeLoger match yield drop and the
+   *à vérifier* digest grow by roughly that much. Named here so the change is not mistaken for a
+   regression. In'li was itself proven not pure LLI (two live PLS listings), which is why this is the
+   right answer rather than an over-correction.
 
 **Tests:** corpus cases BOTH directions (advertiser-anchored card digests; a prose-only mention does
 NOT flip an otherwise-clear card), the counterweight (an unrecognised advertiser changes nothing),
