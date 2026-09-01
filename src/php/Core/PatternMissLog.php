@@ -2,9 +2,8 @@
 
 declare(strict_types=1);
 
-namespace Scout\Rent\Adapters;
+namespace Scout\Core;
 
-use Scout\Core\MutableByDesign;
 
 /**
  * How often each CONFIGURED positional pattern found nothing, for the pass just run.

@@ -9,8 +9,11 @@ use Scout\Adapters\Mail\EmailMessage;
 use Scout\Adapters\Mail\Mailbox;
 use Scout\Adapters\Mail\MailboxError;
 use Scout\Adapters\SourceError;
+use Scout\Core\CountsPatternMisses;
 use Scout\Core\MalformedText;
+use Scout\Core\PatternMissLog;
 use Scout\Core\SourceHealth;
+use Scout\Core\SourceStatus;
 use Scout\Core\Text;
 
 /**
@@ -31,7 +34,7 @@ use Scout\Core\Text;
  * A card whose price line is missing still yields a listing with `priceEur = null` (unknown is
  * not zero); a segment with no ad link yields nothing — it is the header or the footer.
  */
-final readonly class VehicleEmailSource implements VehicleSource, FeedFreshness
+final readonly class VehicleEmailSource implements CountsPatternMisses, VehicleSource, FeedFreshness
 {
     /** @param ?\Closure(string): void $warn */
     public function __construct(
@@ -40,6 +43,19 @@ final readonly class VehicleEmailSource implements VehicleSource, FeedFreshness
         private readonly Mailbox $mailbox,
         private readonly ?\Closure $warn = null,
         private readonly int $limit = 50,
+        /**
+         * F27: THIS DOMAIN COUNTED NOTHING UNTIL 2026-09-01, and the gap was built by the very fix
+         * that exists to prevent it. `PatternMissLog` shipped for the rent email adapter on
+         * 2026-08-31 as Track 1h's answer to PAP running four days with both positional patterns
+         * dead — and it landed on one adapter of five. Measured at the time: 13 of 99 stored
+         * ParuVendu rows carry `body`, `fuel`, `year` and `mileageKm` ALL null — the identical count
+         * on four fields being one `facts_pattern` miss rather than four absences — while
+         * `scout --domain=car doctor` reported `ok`.
+         *
+         * Mutable held by a `readonly` source, exactly as on the rent side: the property cannot be
+         * reassigned, the counter it points at can be written.
+         */
+        private PatternMissLog $patternMisses = new PatternMissLog(),
     ) {}
 
     public function name(): string
@@ -64,6 +80,11 @@ final readonly class VehicleEmailSource implements VehicleSource, FeedFreshness
 
     public function fetch(): array
     {
+        // A COUNT NEVER SPANS TWO FETCHES. A miss rate is a property of the pass in hand, so a log
+        // carried over would report a template that has since been fixed and send someone to read a
+        // capture that is fine. Same contract `CountsPatternMisses` states.
+        $this->patternMisses->reset();
+
         try {
             $messages = $this->mailbox->fetchRecent($this->limit);
         } catch (MailboxError $e) {
@@ -87,7 +108,23 @@ final readonly class VehicleEmailSource implements VehicleSource, FeedFreshness
             $segments = $separator === null ? [$message->body] : explode($separator, $message->body);
             $seen = [];
             foreach ($segments as $segment) {
+                // A SEGMENT IS NOT A CARD UNTIL `cardListing()` SAYS SO, and this source has a
+                // DOCUMENTED furniture segment: the CTA link ending a card sits on the line after
+                // the separator, so the tail segment carries that card's link and nothing else —
+                // it re-yielded the last card on every message, six times per doctor run on
+                // 2026-08-29. Counting the patterns it fails puts one permanent miss per message
+                // into the denominator, which is the bienici `commune_pattern 117/364` dilution
+                // that made `PatternMissLog::begin()` exist. `total()` fires only at 100 %, so a
+                // diluted ratio is a pattern that has genuinely died reporting short of it, saying
+                // nothing.
+                $this->patternMisses->begin();
                 $card = $this->cardListing($message, $segment);
+                // A WITHIN-MESSAGE DUPLICATE COUNTS. Its patterns ran on a real card's text and
+                // found what they found; that the id was already taken is an identity fact decided
+                // one layer up, and dropping the attempts would understate the denominator on
+                // exactly the source that emits duplicates.
+                $this->patternMisses->resolve($card !== null);
+
                 if ($card === null) {
                     continue;
                 }
@@ -105,7 +142,65 @@ final readonly class VehicleEmailSource implements VehicleSource, FeedFreshness
 
     public function health(?string $nowIso = null): SourceHealth
     {
-        return $this->store->runs()->health($this->name(), $nowIso, $this->definition->feedSilentDays);
+        $health = $this->store->runs()->health($this->name(), $nowIso, $this->definition->feedSilentDays);
+        $blind = $this->patternMisses->total();
+
+        if ($blind === []) {
+            return $health;
+        }
+
+        // A PATTERN THAT MATCHED NOTHING AT ALL IS A TEMPLATE CHANGE, and every other verdict here
+        // is blind to it: the cards still parsed, so `item_count` did not move, no run failed, and
+        // the feed kept arriving. That is the state PAP ran in for four days on the rent side.
+        //
+        // WARN rather than BROKEN, for the reason the rent half gives: cards ARE flowing and the
+        // source is reachable. What changed is the portal's layout, which needs a human to look at
+        // a capture — not a reason to stop polling.
+        return new SourceHealth(
+            sourceName: $health->sourceName,
+            status: $health->status === SourceStatus::OK ? SourceStatus::WARN_DROP : $health->status,
+            detail: rtrim($health->detail, ' .') . ' — MAIS aucun résultat pour ' . implode(', ', $blind)
+                . ' sur cette passe : le gabarit du portail a probablement changé, les champs concernés sont null',
+            consecutiveEmptyRuns: $health->consecutiveEmptyRuns,
+            lastSuccessAt: $health->lastSuccessAt,
+            lastFailureAt: $health->lastFailureAt,
+            lastCount: $health->lastCount,
+            rollingMean: $health->rollingMean,
+            runsInWindow: $health->runsInWindow,
+            failedRunsInWindow: $health->failedRunsInWindow,
+            totalRuns: $health->totalRuns,
+        );
+    }
+
+    /** The per-pattern miss counts of the last fetch — `scout --domain=car doctor` prints them. */
+    public function patternMisses(): PatternMissLog
+    {
+        return $this->patternMisses;
+    }
+
+    /**
+     * ONE RECORDING IMPLEMENTATION for every card-level pattern this adapter reads.
+     *
+     * The rent twin funnels through `matchParam()` because its patterns all share one shape —
+     * capture group 1 of a `preg_match`. These four do not: price wants `PREG_OFFSET_CAPTURE` to
+     * locate the line, facts wants `PREG_SET_ORDER` for its named groups, title reads the SUBJECT
+     * rather than the segment, and make/model reads whichever haystack `make_model_source` names.
+     * Forcing them into one signature would distort four readers to spare one line each.
+     *
+     * So the call sites stay four and the SET is guarded by a test instead of by discipline:
+     * {@see \Scout\Tests\Car\VehicleEmailPatternMissTest} reads `VehicleSourceLoader::PATTERN_PARAMS`
+     * by REFLECTION, subtracts the unread ones and the message-level `subject_pattern`, and asserts
+     * every remaining key is counted. A pattern param added and left uninstrumented fails there —
+     * which is the only form of "five places to forget" that actually holds, because the guard is
+     * set membership rather than someone remembering.
+     *
+     * `subject_pattern` is deliberately NOT counted: it decides whether a MESSAGE is ours at all, so
+     * a miss means "skip this one", which is the filter working. Counting it would put every
+     * unrelated mail in the denominator.
+     */
+    private function missed(string $key, bool $found): void
+    {
+        $this->patternMisses->record($key, $found);
     }
 
     private function cardListing(EmailMessage $message, string $segment): ?VehicleListing
@@ -128,10 +223,15 @@ final readonly class VehicleEmailSource implements VehicleSource, FeedFreshness
         $price = null;
         $priceLine = null;
         $pricePattern = $this->definition->param('price_pattern');
-        if ($pricePattern !== null && preg_match_all($pricePattern, $segment, $m, PREG_OFFSET_CAPTURE) > 0) {
-            $last = end($m[1]);
-            $price = self::int($last[0]);
-            $priceLine = substr_count(substr($segment, 0, $last[1]), "\n");
+        if ($pricePattern !== null) {
+            $hit = preg_match_all($pricePattern, $segment, $m, PREG_OFFSET_CAPTURE) > 0;
+            $this->missed('price_pattern', $hit);
+
+            if ($hit) {
+                $last = end($m[1]);
+                $price = self::int($last[0]);
+                $priceLine = substr_count(substr($segment, 0, $last[1]), "\n");
+            }
         }
 
         // TITLE — the SUBJECT when a pattern names it there, otherwise the card's own lines.
@@ -154,6 +254,9 @@ final readonly class VehicleEmailSource implements VehicleSource, FeedFreshness
 
         if ($fromSubject) {
             $title = preg_match($titlePattern, $message->subject(), $t) === 1 ? trim($t[1] ?? '') : '';
+            // The MISS is `''`, whether the pattern failed or captured nothing — both are the same
+            // fact for this signal, and the empty capture is the one that reads like a value.
+            $this->missed('title_pattern', $title !== '');
         } elseif ($priceLine !== null) {
             for ($i = min($priceLine, count($lines) - 1) - 1; $i >= 0; $i--) {
                 $l = trim($lines[$i]);
@@ -177,12 +280,20 @@ final readonly class VehicleEmailSource implements VehicleSource, FeedFreshness
         $body = $fuel = null;
         $year = $km = null;
         $factsPattern = $this->definition->param('facts_pattern');
-        if ($factsPattern !== null && preg_match_all($factsPattern, $segment, $f, PREG_SET_ORDER) > 0) {
-            $facts = end($f);
-            $body = self::foldOrNull($facts['body'] ?? null);
-            $fuel = self::fuel($facts['fuel'] ?? null);
-            $year = isset($facts['year']) ? (int) $facts['year'] : null;
-            $km = isset($facts['km']) ? self::int($facts['km']) : null;
+        if ($factsPattern !== null) {
+            $hit = preg_match_all($factsPattern, $segment, $f, PREG_SET_ORDER) > 0;
+            // THE ONE THAT PROVED THE GAP WAS REAL: 13 of 99 stored ParuVendu rows carry `body`,
+            // `fuel`, `year` and `mileageKm` all null — one miss here, four fields dark, and
+            // nothing said so.
+            $this->missed('facts_pattern', $hit);
+
+            if ($hit) {
+                $facts = end($f);
+                $body = self::foldOrNull($facts['body'] ?? null);
+                $fuel = self::fuel($facts['fuel'] ?? null);
+                $year = isset($facts['year']) ? (int) $facts['year'] : null;
+                $km = isset($facts['km']) ? self::int($facts['km']) : null;
+            }
         }
 
         // FURNITURE, not a card. The CTA link that ends a card sits on the line AFTER the separator,
@@ -210,8 +321,10 @@ final readonly class VehicleEmailSource implements VehicleSource, FeedFreshness
         $mm = $this->definition->param('make_model_pattern');
         if ($mm !== null) {
             $haystack = $this->definition->param('make_model_source') === 'title' ? $title : $link;
+            $hit = preg_match($mm, $haystack, $g) === 1;
+            $this->missed('make_model_pattern', $hit);
 
-            if (preg_match($mm, $haystack, $g) === 1) {
+            if ($hit) {
                 $make = self::foldOrNull($g[1] ?? null);
                 $model = self::foldOrNull($g[2] ?? null);
             }

@@ -587,6 +587,65 @@ widened — `MEUBLE - RUE WAGRAM` and `Beau 3P MEUBLÉ 59m²` both escape
 `\b(?:location|louer|loue|appartement|logement|studio|bien|t[1-9])\s+meuble`, and widening it needs
 the negation shapes checked first (`non meublé`), which is the lift-negation lesson.
 
+> **A POSITION NEEDS A LANDMARK, AND ONE LANDMARK IS NOT ENOUGH (F24, 2026-09-01).** The positional
+> anchor above is the `pièces` line — so a card that never states a room count had **no anchor at
+> all**, the title came back `''`, and every `exclude_title_patterns` entry was inert on it. That is
+> not cosmetic: `\bcolocation\b` lives in `exclude_patterns` and fires through the DESCRIPTION, but
+> the anchored `chambre` rule and the parking/box/garage/cave family match the TITLE ONLY — on
+> purpose, because `3 chambres` in a description is the family flat the criteria want. So they had
+> no second surface, and nothing matches an empty string.
+>
+> **Both victims are real, and the store had the evidence all along.** Schema v7 keeps the card text,
+> so no Gmail capture was needed to see the shape: `750 €/mois charges comprises` · the title
+> `chambre a louer dans une maison` · `140 m²`, and no `pièces` line anywhere. A single room quoting
+> the whole house's surface — **pushed as a MATCH on 2026-08-27**. The second, `Chambre colocation
+> evry village`, was rejected only because its text happens to say `colocation`. Luck on both counts.
+>
+> The repair is a **second anchor on the surface line**, and the trial is the part to copy: run the
+> candidate over every stored card of that source before shipping it — **617 unchanged, 2 gained, 0
+> changed, 0 lost** across all 619, the two gained being exactly the victims. `m2` is accepted beside
+> `m²` because 128 stored SeLoger titles write the ASCII form; a `pièces` line still wins on a card
+> carrying both, because SeLoger lays them on ONE line and the anchor is line-initial.
+>
+> **A first version of the test asserted the wrong thing** — the same trap the entry above records.
+> Recovering a title is worth nothing unless the exclusion then fires, so the test asserts the
+> REJECTION through the shipped criteria, with the description held empty so `colocation` cannot
+> deliver the verdict the title is supposed to.
+
+### An extraction that fails is only visible where something counts it (F27, 2026-09-01)
+
+`PatternMissLog` is the signal built after PAP ran four days with both positional patterns dead.
+**It shipped on one adapter of five**, and the Track 5b matrix measured what that cost: `HtmlSource`,
+`JsonSource`, `DetailHydrator` and `VehicleEmailSource` counted nothing, so a silently-null CSS
+selector or JSON path was exactly as invisible as the missed regex had been. *A fix landing on one
+of two symmetric surfaces* is this repo's named recurring defect, and it was committed **by the fix
+for the finding that names it**.
+
+The car half is closed. Three things about it are worth knowing before touching either domain:
+
+- **The class lives in `Scout\Core` now**, with `Scout\Core\CountsPatternMisses` as the READ side.
+  Both CLIs gate their miss report on the interface, never on `instanceof EmailAlertSource` — that
+  class check is *why* the report existed on one adapter, and it would have had to be remembered
+  again for every adapter that learned to count.
+- **The car adapter cannot have one funnel, so its guard is SET MEMBERSHIP instead.** Its four
+  patterns need four shapes (`PREG_OFFSET_CAPTURE` to locate the price line, `PREG_SET_ORDER` for
+  the facts' named groups, the SUBJECT for the title, whichever haystack `make_model_source` names),
+  and forcing them into one signature would distort four readers to spare one line each. So
+  `VehicleEmailPatternMissTest` reads `VehicleSourceLoader::PATTERN_PARAMS` **by reflection**,
+  subtracts `UNREAD_PARAMS` and the message-level `subject_pattern`, and asserts every remaining key
+  is counted. A fifth pattern added and instrumented by nobody fails there rather than going dark.
+- **`subject_pattern` is deliberately never counted**, and that exclusion is asserted too: a subject
+  filter rejecting a message is the filter working, and this mailbox carries five portals plus
+  everything else — counting those attempts would dilute the ratio into permanent silence with the
+  very mail the filter exists to ignore. Staging (`begin()`/`resolve()`) is mandatory on the car loop
+  for the same reason: it has a documented furniture segment, so counting it adds one permanent miss
+  per message and the WARN only ever fires at 100%.
+
+**What this does NOT yet cover:** the four rent sources on `html`/`json`. Cityloger carries 9 null
+surfaces of 60 with two re-sighted the same day, and nothing can say whether the detail page omits
+the figure or the selector misses it. Instrumenting `ListingMapper` — the one funnel every html,
+json and detail extraction passes through — is the remaining half.
+
 ### Bien'ici — source #6, and it disagrees with SeLoger on almost every decision (2026-08-25)
 
 Three real alerts landed within ninety minutes of the subscription being created, and the source was
@@ -1682,7 +1741,10 @@ docs/OPEN-QUESTIONS.md      All 25 questions, each closed 2026-08-07 with the de
 docs/plans/                 <topic>.plan.md, each with its own ## Decisions Log
 config/<domain>/            criteria.json + sources.json per domain (committed) — JSON, ruled 2026-08-07 (Q22)
 src/php/Cli/                Scout — the --domain dispatcher (never defaults) — Domains (the registry), WatchLoop, ChannelFactory
-src/php/Core/               the GENERIC core: Text, Redact, Pacer, Heartbeat, source health, RunStore
+src/php/Core/               the GENERIC core: Text, Redact, Pacer, Heartbeat, source health, RunStore,
+                            PatternMissLog + CountsPatternMisses (extraction-miss counting and its
+                            read side — moved out of Rent/Adapters 2026-09-01, because a portal
+                            changing its template is neither a housing fact nor a vehicle one)
                             (run log + health, owned by no domain), the Notify channels
 src/php/Rent/               the rent domain — Core (models, tenure classifier, criteria, dedup), Config, Adapters,
                             Store, Enrich, Notify (Formatter), Cli/RentScout

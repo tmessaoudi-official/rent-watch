@@ -9,6 +9,8 @@ use Scout\Adapters\Mail\Mailbox;
 use Scout\Adapters\Mail\MailboxError;
 use Scout\Rent\Config\SourceDefinition;
 use Scout\Rent\Core\RawListing;
+use Scout\Core\CountsPatternMisses;
+use Scout\Core\PatternMissLog;
 use Scout\Core\SourceHealth;
 use Scout\Core\SourceStatus;
 use Scout\Rent\Core\SourceProfile;
@@ -37,7 +39,7 @@ use Scout\Adapters\SourceError;
  * the scraping route hard rule 4 gates behind an explicit flag, and doing it invisibly from the
  * email path would route around the gate entirely.
  */
-final readonly class EmailAlertSource implements FeedFreshness, Source
+final readonly class EmailAlertSource implements CountsPatternMisses, FeedFreshness, Source
 {
     /**
      * Where a rent lives in an alert. Ordered: the most explicit form wins.

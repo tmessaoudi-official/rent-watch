@@ -3124,9 +3124,22 @@ run_sabotage "a source with no title_pattern loses its subject title" \
 # The POSITIONAL ANCHOR is what makes the pattern structural: the title is the line above
 # `<n> pièces . <s> m²`. Break the anchor and nothing matches, so every card falls back — which is
 # the state the source shipped in for a month.
+#
+# RETARGETED 2026-09-01 (F24), and the reason is worth more than the case. This expression anchored
+# on `pi[eè]ces?\b~mu` — the room-count landmark sitting at the very END of the pattern. Adding the
+# surface branch moved it into the middle of an alternation, so the expression stopped matching
+# ANYTHING and went silently inert, reporting a guarantee it no longer touched. It names no method
+# and no symbol, only a neighbouring byte sequence, which is exactly why `git grep` for the changed
+# thing would never have found it: `tests/test-sabotage-applies.sh` did. Same class as the
+# `Core/RunStore` split, where grepping for the moved names answered 1 and running the gate answered
+# 39. **Retarget at the guarantee that still exists; never delete.**
+#
+# The guarantee is unchanged — kill the anchor, every card falls back — so BOTH branches must die
+# now. Corrupting only `pièces` leaves the surface branch answering, which is a different (and
+# genuine) defect covered by its own case below.
 run_sabotage "the seloger title loses its positional anchor (every card falls back again)" \
   config/rent/sources.json \
-  's%pi\[eè\]ces?\\\\b~mu%piZZZces?\\\\b~mu%'
+  's%(?:\\\\d+\\\\h\*pi\[eè\]ces?\\\\b|\[\\\\d.,\]+\\\\h\*m(?:²|2)\\\\b)%(?:ZZZNOANCHOR)%'
 
 # And the capture floor is 2 characters, not 3, because `T5` and `T3` are real SeLoger titles. A
 # floor of 3 looks harmless and silently drops exactly the shortest titles the portal emits.
@@ -3886,6 +3899,53 @@ run_sabotage "the advertiser never substitutes the profile (a landlord's flat ke
 run_sabotage "the substitution takes the landlord's profile wholesale, so it can LOOSEN a strict source" \
   src/php/Rent/Core/LandlordRegistry.php \
   "s%        return self::stricterOf(\$source, \$profileFor(\$key) ?? self::unknownLandlordProfile((string) \$advertiser));%        return \$profileFor(\$key) ?? self::unknownLandlordProfile((string) \$advertiser);%"
+
+# ── F27: the extraction-miss signal on the CAR domain (2026-09-01) ─────────────────────────────
+#
+# The rent adapter counted misses from 2026-08-31; the other four adapters counted nothing, so the
+# fix for "PAP ran four days dark" reproduced that exact state on three car sources. Measured before
+# these existed: 13 of 99 stored ParuVendu rows carry body+fuel+year+mileageKm all null — one
+# facts_pattern miss, four fields dark — while `scout --domain=car doctor` reported `ok`.
+#
+# Every case below is silent in production. Nothing throws, no count moves, the feed keeps arriving,
+# and the fields simply come back null.
+
+# The recording itself, on the pattern that proved the gap was real.
+run_sabotage "the car facts_pattern stops being counted (four fields go dark and nothing says so)" \
+  src/php/Car/VehicleEmailSource.php \
+  "s%            \$this->missed('facts_pattern', \$hit);%%"
+
+# The report. Counting a miss and never surfacing it is hard rule 2's own shape — an alert computed
+# and never sent is worse than none, because someone believes the green.
+run_sabotage "a car pattern that matched nothing never reaches health() (counted, never reported)" \
+  src/php/Car/VehicleEmailSource.php \
+  "s%        \$blind = \$this->patternMisses->total();%        \$blind = [];%"
+
+# Per-pass, never cumulative. Without the reset a template already fixed keeps warning, which sends
+# an operator to read a capture that is fine and teaches them to ignore the signal — a failure worse
+# than silence, because it is credible.
+run_sabotage "the car miss count accumulates across passes (a fixed template keeps warning)" \
+  src/php/Car/VehicleEmailSource.php \
+  "s%        \$this->patternMisses->reset();%%"
+
+# The denominator, car twin of the rent case above. This source has a DOCUMENTED furniture segment —
+# the tail carrying the last card's CTA link — so counting it adds one permanent miss per message,
+# and the WARN fires only at 100 %%.
+run_sabotage "a car segment that never became a card still counts toward the pattern-miss ratio" \
+  src/php/Car/VehicleEmailSource.php \
+  "s%                \$this->patternMisses->resolve(\$card !== null);%                \$this->patternMisses->resolve(true);%"
+
+# ── F24 / T5B-9: a SeLoger card that states no room count (2026-09-01) ─────────────────────────
+#
+# The title anchor was the `pièces` line ALONE, so a card stating no room count had no anchor at all
+# and the title came back ''. Nothing matches an empty string, so every `exclude_title_patterns`
+# entry was inert — and the anchored `chambre` rule and the parking/box/garage family have NO second
+# surface, unlike `colocation`, which fires through the description. Both stored victims are room
+# rentals; the Clamart one, quoting the whole house's 140 m² for a single room, was PUSHED AS A
+# MATCH on 2026-08-27. Reverting to the single anchor is the defect, exactly.
+run_sabotage "the SeLoger title anchor loses its surface branch (a card with no room count goes untitled)" \
+  config/rent/sources.json \
+  's%(?:\\\\d+\\\\h\*pi\[eè\]ces?\\\\b|\[\\\\d.,\]+\\\\h\*m(?:²|2)\\\\b)%\\\\d+\\\\h*pi[eè]ces?\\\\b%'
 
 # The fail-closed posture for a landlord with no source block. RIVP is predominantly social and has
 # no block; guessing LIBRE for an unmeasured bailleur is the §1-dangerous direction.

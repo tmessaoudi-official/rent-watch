@@ -11,6 +11,7 @@ use Scout\Adapters\Mail\FileMailbox;
 use Scout\Adapters\Mail\ImapMailbox;
 use Scout\Adapters\SourceError;
 use Scout\Config\ConfigError;
+use Scout\Core\CountsPatternMisses;
 use Scout\Core\Heartbeat;
 use Scout\Core\Notify\Notification;
 use Scout\Core\Notify\NotificationKind;
@@ -184,6 +185,31 @@ final readonly class CarScout
                 ++$problems;
             }
             $this->line(sprintf('  %-12s %-13s %6d %6d ms  %s', $source->name(), $health->status->value, $items, $ms, $health->detail));
+
+            // THE PER-PATTERN MISS COUNTS (F27). Printed only when something actually missed, so a
+            // healthy source stays one line — a table printing four zero rows per source is a table
+            // nobody reads, and this exists to be noticed. A PARTIAL miss rate never reaches
+            // `health()`, which speaks only at 100 %, but it is the early warning that a portal is
+            // drifting and `doctor` is where an operator looks.
+            //
+            // Gated on the INTERFACE, not on a class name: the rent twin gated on
+            // `instanceof EmailAlertSource` and that is precisely why this report existed on one
+            // adapter — the next adapter to learn counting has to be remembered here too.
+            if ($source instanceof CountsPatternMisses) {
+                foreach ($source->patternMisses()->counts() as $key => $c) {
+                    if ($c['misses'] === 0) {
+                        continue;
+                    }
+
+                    $this->line(sprintf(
+                        '                     %-18s %d/%d carte(s) sans résultat%s',
+                        $key,
+                        $c['misses'],
+                        $c['calls'],
+                        $c['misses'] === $c['calls'] ? '  ← AUCUNE : gabarit changé ?' : '',
+                    ));
+                }
+            }
         }
 
         return $problems === 0 ? 0 : 1;

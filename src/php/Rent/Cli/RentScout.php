@@ -28,6 +28,7 @@ use Scout\Rent\Config\Criteria;
 use Scout\Rent\Config\SourceDefinition;
 use Scout\Rent\Core\CriteriaEngine;
 use Scout\Rent\Core\DigestSchedule;
+use Scout\Core\CountsPatternMisses;
 use Scout\Core\Heartbeat;
 use Scout\Rent\Core\ListingSnapshot;
 use Scout\Core\Notify\Channel;
@@ -412,7 +413,7 @@ final readonly class RentScout
             // a table nobody reads, and this exists to be noticed. A PARTIAL miss rate does not
             // reach `health()` — which only speaks at 100% — but it is the early warning that a
             // portal is drifting, and `doctor` is where an operator goes to look.
-            if ($source instanceof EmailAlertSource) {
+            if ($source instanceof CountsPatternMisses) {
                 foreach ($source->patternMisses()->counts() as $key => $c) {
                     if ($c['misses'] === 0) {
                         continue;
