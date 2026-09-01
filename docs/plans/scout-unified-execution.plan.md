@@ -262,6 +262,35 @@ read-only) and the merged prose as one review deep.
   fail-closed posture (`mixed_tenure: true`, `default_tenure: null`) — digest unless an explicit
   label decides. Guessing LIBRE for an unmeasured landlord is the §1-dangerous direction. Reversed
   per-landlord by giving it an explicit posture in the registry.
+- [2026-09-01] AGREED: **Track 5b's matrix was measured and triaged; three items build and three are
+  declined.** Report: `var/claude/track5-matrix-2026-09-01.md` (gitignored — its findings are
+  restated below so the record survives it). Build T5B-1 (the extraction-miss signal on every
+  adapter, both domains), T5B-9/F24 (a SeLoger title anchor that survives a card with no `pièces`
+  line), and the register corrections. The developer challenged the first triage question for
+  recommending one option without arguing the rest, and the re-ask carried a recommendation for
+  every row — recorded because *"which do you recommend"* was the right correction to make.
+- [2026-09-01] AGREED: **T5B-2 — no rescue route for rows rejected on an extraction since fixed.**
+  Recorded as a stated cost instead. **The rescue has a shelf life the §1 risk does not**: the 32
+  affected rows span 08-25 to 08-31 and `digest` already documents that the pipeline can only
+  re-offer a listing while its ad is still published, so most would push dead flats — while
+  re-judging on evidence the original verdict never saw is the breach `ListingSnapshot` exists to
+  prevent. Once T5B-1 lands, the detection window is one pass rather than four days, at which point
+  a MANUAL re-offer of a named set is sufficient and no standing machinery is warranted. **Stated
+  cost: 32 rows stay rejected permanently, 4 of them SeLoger rows whose titles state a surface above
+  the 50 m² floor.** Reversed by designing the route, keyed on *"the extraction changed"* rather
+  than on *"the classifier improved"* — which is the one framing that may not carry the §1 risk.
+- [2026-09-01] AGREED: **T5B-3 — `Core\Prose` does NOT learn `dernier étage`.** leboncoin states it
+  on 3 of 3 cards, but it is a POSITION WITHOUT AN ORDINAL, so the reader recovers zero floors; and
+  it cannot feed the high-floor penalty either, which requires an explicit `hasElevator = false` —
+  and corrected per-line measurement finds `ascenseur` in **zero** card texts across all four
+  portals' fixtures. A reading that changes no score is not worth the negation discipline it drags
+  behind it. Reversed if a portal starts stating a numeric floor.
+- [2026-09-01] AGREED: **T5B-7 — Logirep does NOT declare `prose_absent`.** It maps no `description`
+  (120/120 null), so `exclude_patterns` runs on its title alone and the load guard would permit the
+  declaration — but Logirep is an institutional landlord whose stock is not rooms or furnished
+  lets, so a line on 123 rows saying *"colocation/meublé non vérifiables"* is how a caveat becomes
+  the furniture its own counterweight test exists to prevent. Reversed by one key in
+  `config/rent/sources.json`.
 
 ---
 
@@ -287,11 +316,11 @@ read-only) and the merged prose as one review deep.
 |---|---|---|---|
 | F1 | PAP positional anchors (all FOUR params) | **BROKEN since ~08-28**, and worse than recorded: 100% null on 08-29/30/31, **23 null rows, 19 notified MATCH**. Two independent axes — the body layout changed, AND all four params anchor on `\(\d{5}\)`, which 3 of PAP's location shapes do not carry | Track 1h — patterns measured, 39/39 vs 16/39 today |
 | F1b | PAP department-only / arrondissement variants | `Cergy (95)`, `Paris 16e` carry no 5-digit postcode, so title+commune+surface+rooms all fail together; 4 rows, all `REJECT` with an empty title. **This IS F6's "4 pap" rows — one root cause, not two** | Track 1h (new) |
-| F2 | Bien'ici single-card "Une annonce" reader | **BROKEN** — reads the search-criteria line ("45 m² min") as the flat's surface; 5 real matches silently REJECTed, 2 more on 08-31 | Track 1g |
+| F2 | Bien'ici single-card "Une annonce" reader | **CLOSED 2026-09-01** — fixed by `5962ae6` (08-31 22:04, the `Pas de photo` separator). Measured over the store by cross-checking title-stated against extracted surface on every row that states one: **BEFORE 244 checkable / 6 wrong · AFTER 52 checkable / 0 wrong**. The 6 victims stay REJECTed for ever (T5B-2) | Track 1g — done |
 | F3 | Extraction failures are invisible | A configured pattern that misses yields null "visibly" — but nothing counts misses, so F1 ran 4 days unnoticed | Track 1h (health half) |
-| F4 | `postcode_pattern` + `title_pattern` on the CAR side | Declared in `VehicleSourceLoader::PATTERN_PARAMS`, read by ZERO adapters — configuring them loads fine and does nothing | Track 1c (documented, fix owed) |
+| F4 | `postcode_pattern` + `title_pattern` on the CAR side | **CLOSED, and discharged more strongly than this row asked for.** `title_pattern` became READ (`77ea035`, against leboncoin's subject); the remaining two are **REFUSED AT LOAD** — `VehicleSourceLoader::UNREAD_PARAMS` throws a `ConfigError` naming the file to edit, so an inert param cannot be configured at all rather than merely being documented | Track 1c — done |
 | F5 | Coliving exclusion | `\bcoliving\b` misses `Co-living` / `Co living` — one real notified MATCH (2026-08-30) | Track 1i |
-| F6 | Empty-title rows (3 seloger + 4 pap) | Every `exclude_title_patterns` entry inert on them (nothing matches an empty string) | Track 3 audit item |
+| F6 | Empty-title rows | **RE-MEASURED 2026-09-01: 3 rows, not 7 — 2 seloger, 1 INLI (new, never recorded), 0 pap.** The PAP four are fixed (Track 1h's re-anchoring); the In'li one nothing had noticed. Store counts are CURRENT STATE — a title is rewritten on every re-sighting — so this does not contradict the earlier census, it supersedes it. **One of the two seloger rows was NOTIFIED as a MATCH on 08-27** with every `exclude_title_patterns` entry inert on it | **T5B-9, building** |
 | F7 | La Centrale truncation | Email carries ~3 of 900+ stated cards; `FEED_SILENT` keys on message DATE, so health stays green while 99.7% blind | Track 2 step 4 (documented cost) |
 | F8 | SeLoger `id_from: content` + a misread surface | A bad surface reading changes the dedup key → one flat can notify twice under two identities | Noted in 1g; same root class |
 | F9 | n=1 separators/patterns (leboncoin rent, PAP) | Measured on one capture each; PAP already proved what that costs | standing; each new alert is the regression test |
@@ -308,9 +337,12 @@ read-only) and the merged prose as one review deep.
 | F16 | Cron `--once` never clears the refusal note | *FIXED `ccc8498`* — `takeLastRefusal()` is called only in `watch()`, so `doctor` reports a fixed outage for ever while saying it will be carried on the next beat | **OPEN — round 5, O4** |
 | F17 | Car `doctor` has no `pendingRefusal` | *FIXED `4503834`* — The gap round 4 closed for rent is fully open on car (`grep -c pendingRefusal`: rent 3, car 0) | **OPEN — round 5, O5** |
 | F18 | A plain `grep` silently skips the Latin-1 PAP fixtures | `grep -c .` prints nothing and exits 0; `grep -ac .` prints 145. Any grep-based "N fixtures scanned, 0 hits" sweep is unsound on this tree — use a byte-level scanner | **OPEN — round 5, O6 (method)** |
-| F19 | A §1 guard inside `twinClassification()` covered by neither the suite nor the ledger | *FIXED `43778bd`* — `Pipeline.php:829`'s `clusterClassification(..., groupExcludedTenure($key))` is the only thing reaching an excluded tenure on an ABSORBED SIBLING OF THE TWIN's cluster. Mutating it to `null` leaves all 2 339 tests green AND pushes the agency copy of a PLS flat (proven by execution). Round 4 added ledger cases for the twin fact's write-across and read-across; this third surface has none — the same "one of two surfaces" shape as the P0 it was fixing | **OPEN — round 5 correctness, needs a test THEN a ledger case** |
+| F19 | A §1 guard inside `twinClassification()` covered by neither the suite nor the ledger | **CLOSED — verified 2026-09-01.** The ledger case exists: `tests/sabotage-check.sh:3756` mutates `Pipeline.php:329`'s `groupExcludedTenure($key)` to `null`. This row read FIXED *and* OPEN at once, which is the R6-8 breach; a session re-verified it from scratch because of that. *FIXED `43778bd`* — `Pipeline.php:829`'s `clusterClassification(..., groupExcludedTenure($key))` is the only thing reaching an excluded tenure on an ABSORBED SIBLING OF THE TWIN's cluster. Mutating it to `null` leaves all 2 339 tests green AND pushes the agency copy of a PLS flat (proven by execution). Round 4 added ledger cases for the twin fact's write-across and read-across; this third surface has none — the same "one of two surfaces" shape as the P0 it was fixing | **OPEN — round 5 correctness, needs a test THEN a ledger case** |
 | **F20** | **Neither documented repair route for an over-merge/over-link actually works, and no command can re-open a durably-excluded row** | The judged verdict (carrying the group's or twin's excluded tenure) is written into the row's OWN `tenure`, which round 4 then made durable — so a veto is laundered into the row's own reading. `staleVerdicts()`/`pendingDigest()`/`replay` all skip it. Q39 corrected; the rejection reason also MISATTRIBUTES the PLS to "a previous reading of THIS listing" when it was read on the other track | **OPEN — round 5 correctness** |
 | F21 | An unrecognised `tenure` string silently releases a durable excluded reading | *FIXED `76251b4`* — it released the row's own reading, the group veto AND the twin veto together. `decodeTenure()` now refuses a non-empty value that does not decode; a NULL column still means nothing was said | closed |
+| F27 | **The extraction-miss signal reaches ONE adapter of five, across both domains** | **LIVE, and it is the fix for F3 landing on one of several symmetric surfaces — the repo's named recurring defect, committed by the fix for the finding that names it.** `grep -c PatternMiss`: `EmailAlertSource` 5, `HtmlSource` 0, `JsonSource` 0, `DetailHydrator` 0, `VehicleEmailSource` 0. So inli, cdc_habitat, cityloger, logirep and all three car sources count nothing — a silently-null CSS selector or JSON path is the same failure as a missed regex. Measured live: **13 of 99 ParuVendu rows carry `body`+`fuel`+`year`+`mileageKm` all null** (one `facts_pattern` miss, identical count on all four fields) while `doctor` reports `ok · 3 annonces`. Cityloger carries 9 null surfaces of 60, **two re-sighted today**, cause undecidable from the store | **T5B-1, building** |
+| F28 | Nothing re-judges a `REJECT`, so a fix never rescues its own victims | **ACCEPTED AS A STATED COST** (ruling above). `reclassify` filters on `outcome` and reaches DIGEST/UNKNOWN; `staleVerdicts()` skips an excluded tenure; `replay` writes no verdicts. 32 rows: pap 21, bienici 6, seloger 5 — and 4 of the seloger 5 state a surface ABOVE the 50 m² floor, so they are real matches rejected as too small | closed by ruling |
+| F29 | SeLoger's `link_host` is host-only and filters nothing | **DEFENDED, BUT NOT BY THAT PARAM.** Measured: 100 % of links in all five fixtures are on `click.by.seloger.com` (16/16, 19/19, 38/38, 17/17, 17/17), footer and unsubscribe included — so the PAP phantom-listing shape is available in principle. What actually prevents it is `card_separator` segmentation plus the no-information floor. Recorded because *guard* and *luck* are different things | watch; no work |
 | F22 | A re-scrubbed ParuVendu fixture had a 152-column quoted-printable line | *FIXED `3d24525`* — root cause was the hex replacer eating `=3D` escapes, not the re-scrub itself; the line was re-folded at a soft break under a decode-equality guard that refuses unless the payload is byte-identical. Max column 152 -> 77 | closed |
 
 ---
