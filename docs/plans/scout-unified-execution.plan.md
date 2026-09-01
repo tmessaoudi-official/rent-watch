@@ -291,6 +291,44 @@ read-only) and the merged prose as one review deep.
   lets, so a line on 123 rows saying *"colocation/meublé non vérifiables"* is how a caveat becomes
   the furniture its own counterweight test exists to prevent. Reversed by one key in
   `config/rent/sources.json`.
+- [2026-09-01 ~22:30] RECORD: **Full audit run and banked** — four read-only auditors (rent store,
+  car store, plan-vs-tree, config coherence) + a live Gmail census against HEAD `7a51ae3`.
+  Synthesis: `var/claude/audit-2026-09-01.md`; raw evidence with every query:
+  `var/claude/raw/audit-*-2026-09-01.md`. Zero closed register rows refuted; §1 store-wide sweep
+  clean. Track 3 is DISCHARGED by this audit (census, reconciliation, unmatched senders,
+  structural outliers — all four checklist parts per label/source are in the raw files).
+- [2026-09-01 ~22:40] AGREED: **all four audit triage clusters are selected for execution**
+  (A live-risk fixes, B new car sources, C hygiene + certification, D rulings) — see Track 6
+  below. The developer executes via a different model; this session saved the plan and stopped.
+- [2026-09-01 ~22:45] AGREED: **F30 — `advertiser_pattern` is DROPPED from the seloger block.**
+  The template names no agency (Track 5b matrix: N/A; live: 375/405 miss), so the pattern asks for
+  a field that does not exist, and a thin pass (truncated window, one agencyless 3-card alert)
+  reaches the 100%-of-≥3 WARN spuriously. A pattern the template structurally cannot satisfy is
+  not configured. Reversed by restoring the key — but capture a card that names an agency first.
+- [2026-09-01 ~22:45] AGREED: **push grain — SCORE-FLOOR BATCHING.** Individual push only for
+  score ≥ `high_priority_score` (rent 50 / car 73); every other match rolls into the existing
+  digest path. Nothing is hidden — low scorers arrive rolled up instead of one-per-mail (~200
+  rent + ~20–45 car mails/day today, 925 of 1141 rent-watch unread). AND, verbatim: *"we need to
+  work more and make the score more realistic and beneficial to me!"* — a score-recalibration
+  work item travels with this ruling (Track 6-A5): measure over stored snapshots, present 2–3
+  calibrated options with their effect on the developer's own recent matches via AskUserQuestion
+  (a user-facing product decision — the repo's mandatory-ask case), then apply the chosen one.
+- [2026-09-01 ~22:45] AGREED: **F28 victims — ONE-SHOT READ-ONLY REPORT, no rescue mechanism.**
+  Print the ~7 seloger rows REJECTed on misread surfaces (stored 5–9 m², titles stating 49–65 m²)
+  with titles + links for manual review — the ads may still be live. NO store writes, no
+  re-judging; the F28 ruling itself stands untouched.
+- [2026-09-01 ~22:45] AGREED: **T5B-7 is SUPERSEDED — Logirep DOES declare `prose_absent`.** The
+  earlier same-day decline (above) argued the caveat is furniture on an institutional landlord;
+  the developer ruled to declare it after seeing the measurement (120/120 null description, 100%
+  UNKNOWN tenure — the description-matching half of `exclude_patterns` structurally inert; titles
+  still real and still scanned). Stated cost: the caveat line on every logirep push. Reversed by
+  removing the key. Executor note: the load guard refuses the declaration only on a source that
+  MAPS a description — logirep maps none, so it is permitted.
+- [2026-09-01 ~22:45] RECORD (closing a log gap found by the audit): **`feed_silent_days` 7→5 for
+  car leboncoin was superseded by `4b50e47`** (both leboncoin thresholds had sat past the
+  IMAP_SINCE_DAYS window, so the ruled 7 was unobservable); the supersession previously existed
+  only in that commit message. The stale `"7"` in the config's `_feed_silent_days` comment is
+  Track 6-C1's to fix.
 
 ---
 
@@ -1176,3 +1214,104 @@ several landed on one surface of two — which is the same defect class the mile
 at every round. That pattern, not any single finding, is the thing to fix: **before closing a
 finding, enumerate every symmetric surface it has (rent/car, read/write, survivor/absorbed,
 tool/guard) and say which ones the fix covers.**
+
+---
+
+## Track 6 — 2026-09-01 full-audit execution (all four clusters selected; rulings in the Decisions Log above)
+
+> **Executor briefing.** Evidence for every item: `var/claude/audit-2026-09-01.md` (synthesis) and
+> `var/claude/raw/audit-{rent-store,car-store,plan-vs-tree,config-coherence,gmail}-2026-09-01.md`
+> (every query + raw output). Read the synthesis before building anything. Standing traps, all
+> paid for at least once: pair every `MAILBOX_DIR=` proof with a throwaway DB (F26); scrub every
+> new fixture with the address AND name needles (Agorastore and CapCar greet by name); never
+> follow a tracking redirect at ingest (CapCar links are `sendibt3.com` per-recipient tokens —
+> SeLoger's class); `/bin/grep` is ugrep (plain `|`; `-a` on Latin-1 fixtures); ledger runs need
+> the JIT workaround; timestamps are `T`-separated (never compare against `datetime('now')`
+> strings); trial any new pattern over the stored rows before shipping; sabotage cases for every
+> guarantee whose branch no fixture reaches. Certification boundaries are the reviewing session's,
+> not the executor's.
+
+### 6-A — live-risk fixes (first: A1 and A2 are live loss/risk today)
+
+- **A1 In'li degradation** (audit N1). 23 of 94 passes failed 2026-09-01 (20 s connection
+  timeouts + one bare HTTP 302 on the index), climbing 2→11→12→23/day; health `ok` throughout
+  because interleaved passes still return ~165 items. Investigate FIRST, fix second: read the
+  302's `Location` once (one request, hard rule 5 posture unchanged), check whether the timeouts
+  correlate with pagination depth or time of day (the run log has `duration_ms`), and only then
+  decide between (a) a failure-RATE health signal (N% failed over 24 h — new verdict, needs its
+  own counterweight run showing sources it does NOT fire on), (b) pacing changes, (c) nothing but
+  the report. A timeout increase without measurement is the anti-bandaid gate's named case.
+- **A2 car loader allow-list** (audit N4/C1). Port the rent side's EMAIL_ALERT_PARAMS-style
+  allow-list refusal to `VehicleSourceLoader`: any param key no car adapter reads is a
+  `ConfigError` naming the file. The docblock already promises this; make it true. One
+  table-driven test; also cover the ~21 untested car refusals while in the file (audit N10).
+- **A3 ListingMapper bundle** (F27b + audit N5 + N6). One pass over the one funnel: (1) instrument
+  `ListingMapper` with `PatternMissLog` so inli/cdc_habitat/cityloger/logirep and `DetailHydrator`
+  count null-yielding selectors/paths — this finally answers cityloger's 9-null-surfaces-of-60
+  question with data; (2) make `$map->tenureField` actually read on the JSON path (it is inert
+  today; fixture_demo passes by coincidence — §1-adjacent latent); (3) run the rent plausibility
+  band on mapped rents (7 stored history rows at 119–290 € came through the html path unbanded).
+  Gate the CLI report on `CountsPatternMisses`, as both CLIs already do. Sabotage cases for each
+  half; the miss-print itself is unpinned in both domains (audit N11) — pin it while here.
+- **A4 brand `autres` bypass** (audit N3). A ParuVendu DS4 stored `make='autres'` from the portal
+  ad path `/autres/autres/` and took the full 10-pt brand share. Preferred mechanism: when the
+  path token is a category word, read the make from the title (`Ds Ds4 E-tense` states it);
+  fallback mechanism: map category tokens to null (honest, unknown-make arm applies). Trial over
+  all stored makes; the existing zero-over-reach sabotage cases must stay green.
+- **A5 score-floor batching + recalibration** (ruling above). Two halves, ordered: (1) the
+  batching — individual push only at score ≥ `high_priority_score`, the rest through the existing
+  digest drain (`Cli/DigestBatch` is the shared landing zone; do NOT build a second one); (2) the
+  recalibration — re-judge stored snapshots offline (the 2026-08-26 precedent: no poll needed),
+  measure the distribution per component, present 2–3 weight options with their concrete effect
+  on the developer's own recent matches via AskUserQuestion, apply the chosen one, then re-check
+  `high_priority_score` still marks a sane fraction (the car 73 was calibrated 2026-09-01; rent 50
+  predates commute's current shape).
+- **A6 SeLoger surface-reader verification** (audit N2). One query on 2026-09-02+ data: rows
+  first-seen ≥ 09-02 with extracted surface ≤ 12 whose title states a larger figure. Zero → the
+  deployed fix stack covers surfaces too; close N2. Non-zero → the surface reader needs the same
+  positional repair the rooms reader got (Track 1j's shape), measured over the store first.
+- **A7 F28 one-shot victims report** (ruling above). Read-only script printing the ~7 misread-
+  surface REJECTs (source, title, stored vs title-stated surface, link). No store writes. Hand
+  the output to the developer; done.
+
+### 6-B — new car sources (payloads banked in Gmail; build offline)
+
+- **B1 CapCar** (`contact@capcar.fr`, first real alert 2026-09-01 18:00). Structured labelled
+  fields per card (`Marque/Modèle/Finition/Motorisation/Carburant/Boîte/Année/Kilométrage/Prix`),
+  4 cards/message. Links are per-recipient tracking redirects → identity is CONTENT-based (the
+  SeLoger discipline: no-information floor, rent/price out of the key, duplicate-in-message
+  announced). n=1 — state it, and let the second alert be the regression test. `params.from`
+  scopes to `contact@capcar.fr`; note `capcar.fr` also mails from agent addresses (noise).
+- **B2 La Centrale** (`info@mail-alerte.lacentrale.fr`, ~2/day since 08-27, ~10 payloads banked).
+  Build as ruled (Track 2 step 3): `feed_silent_days: 3`, truncation cost (email carries ~3 of
+  900+ stated cards — F7) documented IN THE CONFIG COMMENT, polling refused by ruling (DataDome).
+  `params.from` must exclude `mail-marketing` and `mail-rachat` senders.
+- **B3 Agorastore** (`support@agorastore.fr`, daily) — optional third, price-only truncated email
+  (Track 2 step 4's shape). Greets by name: scrubber needles mandatory on every fixture.
+- AutoScout24 stays BLOCKED (mailbox-verified 2026-09-01: still zero real alerts; likely future
+  sender `savedsearches@notifications.autoscout24.com`). The leboncoin car Gmail filter is DONE
+  (messages labeled) — strike it from Inputs-owed.
+
+### 6-C — hygiene + certification
+
+- **C1 one docs commit** syncing the register to the tree (audit N7): F1/F5/F10/F15/F16/F17/F19/
+  F24 → their true CLOSED/FIXED state with commit refs; fix the five State/Where cell
+  disagreements; F26's stale count in F1 ("23 null rows" → healed, 0); the two stale pre-collision
+  id citations (Track 3's "F10/F11", "3 seloger + 4 pap"); the stale `"7"` in car leboncoin's
+  `_feed_silent_days` comment; fold `pap-detail-hydration.plan.md` back under this file (archive
+  it with the SUPERSEDED banner and copy its prose_absent ruling's pointer into the log above) so
+  the single-source ruling holds; strike the done items from Inputs-owed.
+- **C2 certification round** (audit N8): freeze AFTER Track 6-A/C1 land (or at the reviewing
+  session's discretion), then ONE MAXIMAL round covering the entire uncertified span since
+  `7765997` — 45+ commits (Tracks 1, 2, 4, 5, T5B, this track). One panel for one backlog is the
+  economize ruling's shape; run by the REVIEWING session, not the executor.
+
+### 6-D — rulings: ALL RESOLVED 2026-09-01 (see Decisions Log) — F30 drop is one config edit
+(land it with A-cluster work); the rest are embedded in A5/A7 and the T5B-7 config line.
+
+### Explicitly out of scope for Track 6
+- Redact `%40` and redirect-vs-robots: still open by the developer's explicit earlier choice —
+  touch neither without a new ruling.
+- In'li: no headless browser, no fingerprinting, no timeout raise without measurement.
+- The 12 historical rooms-misread MATCHes already pushed: noise already spent; nothing retracts a
+  push. Only A7's read-only report looks backward.
