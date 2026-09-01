@@ -60,6 +60,8 @@
       "method": "GET",
       "item_selector": "#listeResultats article.residenceCard",
       "_page_path": "NO TRAILING SLASH, and that is measured. The site's OWN pagination links are written `/page-2/` and the site 301s them to `/page-2` [2026-08-20]. The adapter refuses a non-2xx rather than following it, deliberately: a redirect that lands back on page one terminates a walk exactly like a real last page. So the canonical form is requested directly and no redirect is involved.",
+      "_max_pages": "Explicit since 2026-09-01, and it was the DEFAULT 20 that broke the source in production. Measured that day: CDC declares 322 logements at 16 cards a page, so the walk needs 21 pages — it returned 314 in the morning, crossed the bound by the afternoon, and the adapter refused the whole pass rather than silently returning 320 of 322. THE MECHANISM WORKED; only the number was stale, which is the right way round. 30 gives headroom for an inventory that grew 8 listings in a day without being unbounded — the declared-total check is what actually ends the walk, and this is the backstop behind it. Two things make that backstop load-bearing here: page 22 REPEATS page 21's two cards rather than answering 301 (so a walk ending on 'an empty page' would never end), and CLAUDE.md's note that an out-of-range CDC page answers 301 is no longer true at this range. Re-measure both before touching either.",
+      "max_pages": 30,
       "page_path": "/page-{page}",
       "total_selector": ".headerResults p",
       "map": {
