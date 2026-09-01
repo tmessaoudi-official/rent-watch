@@ -155,6 +155,19 @@ final class CitylogerFixtureTest extends TestCase
 
         $social = $this->hydratedFrom('detail-social.html');
         self::assertSame('PEXNC', $social->fields['tenureField'] ?? null);
+
+        // THE SECOND PAGE'S SURFACE, and its absence here cost 92 % of this source's surfaces.
+        //
+        // The two frozen pages spell the unit DIFFERENTLY — `80 m2` on the intermediate one,
+        // `63m²` on this one — and the selector's regex required the ASCII `m2`. So the assertion
+        // above passed, this fixture sat in the repo already proving the bug, and nothing asserted
+        // against it: measured on the live store, 56 of 61 cached detail rows carried
+        // `elevator, description, tenureField` and NO surface, while `min_surface_m2` could not act
+        // on any of them (hard rule 9 — an unknown surface is not one below the minimum).
+        //
+        // A fixture that contains the passing spelling is not coverage of the failing one. Both
+        // spellings are asserted from here on, which is what makes the character class provable.
+        self::assertSame(63.0, $social->surfaceM2, 'the `m²` spelling must read exactly like `m2`');
     }
 
     /**

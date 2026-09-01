@@ -2900,6 +2900,15 @@ run_sabotage "the Bien'ici card separator stops matching (every card merges into
   config/rent/sources.json \
   's%(?:Photo|Pas de photo)%(?:ZZZ_NEVER_MATCHES)%'
 
+# Cityloger writes the unit BOTH ways — `80 m2` on one frozen page, `63m²` on the other — and the
+# selector required the ASCII form. Measured on the live store before the fix: 56 of 61 cached
+# detail rows held `elevator, description, tenureField` and NO surface, so `min_surface_m2` could
+# not act on 93 % of the source (hard rule 9 — unknown is not below the minimum) and one such row
+# was notified. The failing fixture was ALREADY COMMITTED; only the passing spelling was asserted.
+run_sabotage "the Cityloger surface selector accepts only the ASCII unit (the m² pages read as stating no surface)" \
+  config/rent/sources.json \
+  's%m\[2[^]]*\]%m2%'
+
 # The identity falls back to the card's own link ONLY on the segmented path. Remove the fallback and
 # every Bien'ici card is refused an identity, the zero-cards guard fires, and the source reports a
 # template change that has not happened.

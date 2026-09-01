@@ -113,7 +113,7 @@
       "detail_map": {
         "description": ".description",
         "tenure_field": "div.tab-content => Financement\\s*([A-Z0-9]{3,10})",
-        "surface": "div.tab-content => ([\\d.,]+)\\s*m2",
+        "surface": "div.tab-content => ([\\d.,]+)\\s*m[2²]",
         "elevator": "div.tab-content => Ascenseurs\\s*(Oui|Non)"
       }
     },
