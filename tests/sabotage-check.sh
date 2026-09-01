@@ -3765,6 +3765,14 @@ run_sabotage "the title pattern refuses any candidate carrying a euro sign again
   config/rent/sources.json \
   's%(?!\[\\\\h\\\\d.,\]\*€\[\\\\h/a-zA-Zéè\]\*\$)(\[^\\\\n\]{2,80}?)%([^\\\\n€]{2,80}?)%'
 
+# The FUEL preference had no ledger coverage at all until 2026-09-01, when the developer noticed
+# diesels in their pushes and the weight was deepened 10→20. Like the brand penalty below it, its
+# whole value is an ORDERING: every score stays plausible, the notification still lists a reason,
+# and only the ranking is wrong. Giving diesel the preferred share is the way that fails.
+run_sabotage "diesel earns the full fuel share (the preference dissolved, every ranking still plausible)" \
+  src/php/Car/VehicleScorer.php \
+  "s%'essence', 'hybride', 'electrique' => 1.0,%'essence', 'hybride', 'electrique', 'diesel' => 1.0,%"
+
 # TRACK 1d — the brand penalty. Its whole value is an ORDERING, and an ordering fails silently:
 # every score stays plausible, the notification still lists a reason, and only the ranking is wrong.
 run_sabotage "an avoided make earns the brand share anyway (the penalty inverted back into a reward)" \

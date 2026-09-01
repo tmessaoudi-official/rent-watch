@@ -130,6 +130,48 @@ final class VehicleBrandPenaltyTest extends TestCase
     }
 
     /**
+     * DIESEL FORFEITS THE WHOLE FUEL SHARE, AND STILL APPEARS (developer ruling, 2026-09-01).
+     *
+     * The developer asked whether only petrol and hybrid were meant to show, having seen diesels in
+     * the pushes. They were not: fuel was ruled a PREFERENCE on 2026-08-30 and recorded as settled.
+     * What changed on 2026-09-01 is the DEPTH — the fuel weight went 10→20, taken 5 from price and
+     * 5 from mileage — after measuring that 5 diesels were reaching the petrol median and the best
+     * scored 77.
+     *
+     * Asserted as the SHARE rather than as a number, so a future reallocation cannot make this
+     * silently vacuous: a diesel gives up exactly `weights['fuel']`, no more and no less. And the
+     * second half is the ruling's other side, which a penalty test always risks losing — hard rule
+     * 8 keeps disqualifiers and score apart, so the diesel is still a MATCH. It ranks lower; it
+     * does not vanish.
+     */
+    public function testADieselForfeitsTheWholeFuelShareAndIsStillNotified(): void
+    {
+        $criteria = VehicleCriteriaLoader::load(__DIR__ . '/../../../config/car/criteria.json');
+
+        $petrol = $this->judgeFuelWith('essence', $criteria);
+        $diesel = $this->judgeFuelWith('diesel', $criteria);
+
+        self::assertSame(
+            $criteria->weights['fuel'],
+            $petrol->score - $diesel->score,
+            'a diesel forfeits exactly the fuel share at otherwise-identical specs',
+        );
+        self::assertSame(\Scout\Car\VehicleOutcome::MATCH, $diesel->outcome, 'a preference, never a disqualifier');
+        self::assertGreaterThan(0, $diesel->score);
+    }
+
+    /** GPL is the half-share case — the only fuel that is neither preferred nor forfeited. */
+    public function testGplTakesHalfTheFuelShare(): void
+    {
+        $criteria = VehicleCriteriaLoader::load(__DIR__ . '/../../../config/car/criteria.json');
+
+        self::assertSame(
+            (int) round($criteria->weights['fuel'] / 2),
+            $this->judgeFuelWith('essence', $criteria)->score - $this->judgeFuelWith('gpl', $criteria)->score,
+        );
+    }
+
+    /**
      * A MARQUE IS CAUGHT WHATEVER SUFFIX THE SOURCE SPELLS IT WITH — and this is a measured
      * defect, not a hypothetical.
      *
@@ -293,6 +335,29 @@ final class VehicleBrandPenaltyTest extends TestCase
             body: 'suv',
             postcode: null,
             make: $make,
+        );
+
+        return (new VehicleScorer())->judge($car, (new VehicleClassifier())->classify($car), $criteria, 2026, 8);
+    }
+
+    /** The same car every time, varying only the FUEL — the twin of `judgeWith()` above. */
+    private function judgeFuelWith(string $fuel, \Scout\Car\VehicleCriteria $criteria): VehicleVerdict
+    {
+        $car = new VehicleListing(
+            sourceName: 'test',
+            externalId: 'x',
+            title: 'Voiture d\'occasion',
+            priceEur: 15000,
+            year: 2024,
+            month: 1,
+            mileageKm: 40000,
+            gearbox: 'automatique',
+            fuel: $fuel,
+            body: 'suv',
+            postcode: null,
+            // Deliberately a make NOT on `brand_avoid`, so the brand share is constant across the
+            // comparison and the difference measured is the fuel share alone.
+            make: 'Toyota',
         );
 
         return (new VehicleScorer())->judge($car, (new VehicleClassifier())->classify($car), $criteria, 2026, 8);
