@@ -10,6 +10,7 @@ use Scout\Adapters\Http\HttpError;
 use Scout\Adapters\Http\HttpRequest;
 use Scout\Adapters\Http\HttpResponse;
 use Scout\Adapters\Http\Robots;
+use Scout\Rent\Adapters\DetailHydrator;
 use Scout\Rent\Adapters\HtmlSource;
 use Scout\Adapters\SourceError;
 use Scout\Rent\Config\FieldMap;
@@ -317,8 +318,8 @@ final class HtmlSourceDetailTest extends TestCase
         self::assertSame(3, $attempt('2026-08-24T20:00:00+02:00'), 'and once more');
         self::assertSame(0, $attempt('2026-08-30T20:00:00+02:00'), 'three attempts is the cap');
 
-        self::assertSame(HtmlSource::DETAIL_ATTEMPT_CAP, $store->detail('cityloger', '2')?->attempts);
-        self::assertSame(3, $store->detailFailureCount('cityloger', minAttempts: HtmlSource::DETAIL_ATTEMPT_CAP));
+        self::assertSame(DetailHydrator::DETAIL_ATTEMPT_CAP, $store->detail('cityloger', '2')?->attempts);
+        self::assertSame(3, $store->detailFailureCount('cityloger', minAttempts: DetailHydrator::DETAIL_ATTEMPT_CAP));
     }
 
     /** Hard rule 5: the detail page is a different path, so it gets its own robots verdict. */

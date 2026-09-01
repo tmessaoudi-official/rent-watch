@@ -28,6 +28,26 @@ use Scout\Config\Reader;
 final readonly class FieldMap
 {
     /**
+     * Every mappable field, named as this class's own constructor names them.
+     *
+     * Written out rather than reflected, so that adding a field to the constructor without deciding
+     * what it means to an adapter is a visible omission here instead of a silently unresolved
+     * selector. It lives on `FieldMap` rather than on an adapter because more than one adapter walks
+     * it — {@see \Scout\Rent\Adapters\HtmlSource} over a card element, {@see
+     * \Scout\Rent\Adapters\DetailHydrator} over a detail document — and two copies of a list whose
+     * whole job is to make an omission visible is two places to forget.
+     *
+     * `chargesIncluded` is deliberately absent: it is a declaration about what `rent` MEANS, not a
+     * path, and nothing resolves a selector for it.
+     *
+     * @var list<string>
+     */
+    public const array FIELDS = [
+        'ref', 'title', 'url', 'commune', 'postcode', 'rent', 'rentHc', 'charges',
+        'surface', 'rooms', 'bedrooms', 'floor', 'elevator', 'description', 'tenureField',
+    ];
+
+    /**
      * @param list<string> $ref         the source's own stable id — the basis of within-source dedup
      * @param list<string> $title
      * @param list<string> $url

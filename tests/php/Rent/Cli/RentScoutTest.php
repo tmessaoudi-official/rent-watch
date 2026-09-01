@@ -328,7 +328,7 @@ final class RentScoutTest extends TestCase
     {
         $store = \Scout\Rent\Store\Store::open((string) $this->dbPath);
 
-        for ($attempt = 0; $attempt < \Scout\Rent\Adapters\HtmlSource::DETAIL_ATTEMPT_CAP; ++$attempt) {
+        for ($attempt = 0; $attempt < \Scout\Rent\Adapters\DetailHydrator::DETAIL_ATTEMPT_CAP; ++$attempt) {
             $store->recordDetailFailure('fixture_demo', 'ANN-1', 'HTTP 404', '2026-08-23T10:0' . $attempt . ':00+02:00');
         }
 

@@ -11,6 +11,7 @@ use Scout\Adapters\Http\HttpClient;
 use Scout\Adapters\Http\ReplayHttpClient;
 use Scout\Adapters\Http\Robots;
 use Scout\Adapters\Http\RobotsResolver;
+use Scout\Rent\Adapters\DetailHydrator;
 use Scout\Rent\Adapters\HtmlSource;
 use Scout\Rent\Adapters\HttpJsonSource;
 use Scout\Adapters\Mail\FileMailbox;
@@ -390,7 +391,7 @@ final readonly class RentScout
             // title — the broken-selector-forever shape, one layer down. It is reported as a count
             // rather than as a status because one dead page is noise: what means something is the
             // proportion, and the operator is the one who can see it against the item count.
-            $detailFailures = $store->detailFailureCount($source->name(), HtmlSource::DETAIL_ATTEMPT_CAP);
+            $detailFailures = $store->detailFailureCount($source->name(), DetailHydrator::DETAIL_ATTEMPT_CAP);
             $note = $error ?? ($health->detail ?? '');
 
             if ($detailFailures > 0) {

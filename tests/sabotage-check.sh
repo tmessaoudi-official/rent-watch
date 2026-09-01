@@ -1828,7 +1828,7 @@ run_sabotage "a page_path with no {page} placeholder is accepted, so the walk ne
 # guarantee while testing nothing at all, which is worse than one that fails. What bounds requests
 # now is the budget, not the ordering, so the sabotage targets the budget.
 run_sabotage "the per-pass detail budget stops bounding (every novel listing costs a request)" \
-  src/php/Rent/Adapters/HtmlSource.php \
+  src/php/Rent/Adapters/DetailHydrator.php \
   's%if ($spent >= $budget) {%if (false) {%'
 
 # ── Phase 2b: prose readers, and the two facts they manufacture if read carelessly ────────────────
@@ -1851,7 +1851,7 @@ run_sabotage "Prose::elevator stops reading the negation first (Aucun ascenseur 
   's%if ($negation !== null && ($assertion === null || $negation > $assertion)) {%if (false) {%'
 
 run_sabotage "the detail cache stops being keyed on the map, so a widened map serves stale rows" \
-  src/php/Rent/Adapters/HtmlSource.php \
+  src/php/Rent/Adapters/DetailHydrator.php \
   's%$listing->externalId, $detailMap->fingerprint());%$listing->externalId);%'
 
 run_sabotage "prose fields are scanned as identifiers again, so the adverb plus reads as PLUS" \
@@ -1867,12 +1867,12 @@ run_sabotage "a detail_map with a zero budget is accepted, so it can never run" 
   's%if ($detailMap !== null \&\& $detailBudget === 0) {%if (false) {%'
 
 run_sabotage "a failed detail fetch becomes an unhydrated listing (rule 3)" \
-  src/php/Rent/Adapters/HtmlSource.php \
+  src/php/Rent/Adapters/DetailHydrator.php \
   's%} catch (SourceError $e) {%} catch (SourceError $e) { return $listing;%'
 
-run_sabotage "the detail map gets the card path, so _text becomes the whole PAGE" \
-  src/php/Rent/Adapters/HtmlSource.php \
-  's%$this->flatMapped($detailMap, detailMode: true)%$this->flatMapped($detailMap, detailMode: false)%'
+run_sabotage "the detail extractor emits the whole PAGE as the description" \
+  src/php/Rent/Adapters/DetailHydrator.php \
+  "/private function detailFields/,\$ s%        return \$out;%        \$out['description'] = Selector::normalise(\$root->textContent); return \$out;%"
 
 run_sabotage "an absent detail value overwrites what the card knew (rule 9)" \
   src/php/Rent/Core/RawListing.php \
@@ -1887,11 +1887,11 @@ run_sabotage "the detail page re-identifies the listing, so it re-notifies forev
   's%externalId: $this->externalId,%externalId: $detail->externalId !== '"'"''"'"' ? $detail->externalId : $this->externalId,%'
 
 run_sabotage "robots is checked for the search page only, never for the detail pages" \
-  src/php/Rent/Adapters/HtmlSource.php \
+  src/php/Rent/Adapters/DetailHydrator.php \
   '/private function withDetail/,$ s%if (!$this->robots->allows(Robots::pathOf($url))) {%if (false) {%'
 
 run_sabotage "detail fetches stop being paced (a per-listing burst, hard rule 5)" \
-  src/php/Rent/Adapters/HtmlSource.php \
+  src/php/Rent/Adapters/DetailHydrator.php \
   '/private function withDetail/,$ s%usleep($this->definition->rateLimitMs \* 1000);%%'
 
 run_sabotage "a {page} url template is fetched literally, so page one is never real" \
@@ -2174,15 +2174,15 @@ run_sabotage "the postcode is dropped from the headline (ambiguous commune, no t
 # 3 names, and it presents as a listing that merely has no title.
 
 run_sabotage "a hydrated page is re-fetched every pass anyway (the crawl)" \
-  src/php/Rent/Adapters/HtmlSource.php \
+  src/php/Rent/Adapters/DetailHydrator.php \
   "s%if (\$cached !== null \&\& \$cached->fields !== null) {%if (false) {%"
 
 run_sabotage "the per-pass hydration budget stops being enforced" \
-  src/php/Rent/Adapters/HtmlSource.php \
+  src/php/Rent/Adapters/DetailHydrator.php \
   "s%if (\$spent >= \$budget) {%if (false) {%"
 
 run_sabotage "a failed detail fetch is swallowed and never recorded" \
-  src/php/Rent/Adapters/HtmlSource.php \
+  src/php/Rent/Adapters/DetailHydrator.php \
   "s%\$this->store->recordDetailFailure(%(static fn (...\$a) => null)(%"
 
 run_sabotage "the detail cache key loses its source, so two landlords share a row" \
@@ -2190,11 +2190,11 @@ run_sabotage "the detail cache key loses its source, so two landlords share a ro
   "s%FROM listing_detail WHERE source = :source AND external_id = :id%FROM listing_detail WHERE external_id = :id OR :source IS NULL%"
 
 run_sabotage "a failed detail page is retried on every pass, for ever" \
-  src/php/Rent/Adapters/HtmlSource.php \
+  src/php/Rent/Adapters/DetailHydrator.php \
   "s%if (\$cached->attempts >= self::DETAIL_ATTEMPT_CAP) {%if (false) {%"
 
 run_sabotage "hydration priority is inverted, so the worst candidate takes the slot" \
-  src/php/Rent/Adapters/HtmlSource.php \
+  src/php/Rent/Adapters/DetailHydrator.php \
   's%return $owed;%return array_reverse($owed, true);%'
 
 # ── the letterless fast path, and the one thing that makes it safe ────────────────────────────────
