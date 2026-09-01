@@ -3853,6 +3853,14 @@ run_sabotage "a NON-EMPTY housing table is dropped instead of refusing" \
   src/php/Car/VehicleStore.php \
   "s%            if (\$rows > 0) {%            if (false) {%"
 
+# The composing store must run the generic store's MIGRATION, not merely its DDL. Calling `ddl()`
+# creates the tables and skips `run_meta`, so the database ends up with the generic tables and no
+# record of their version — and a future RunStore v2 never migrates it. This shipped exactly once,
+# green across 2536 tests, and was found by querying production after the deploy.
+run_sabotage "the composing store creates the generic tables but records no version for them" \
+  src/php/Rent/Store/Store.php \
+  "s%        \$this->runs->migrate();%        RunStore::ddl(\$this->pdo);%"
+
 printf '\n  %d sabotage(s) detected, %d undetected\n' "$pass" "$fail"
 
 if [[ -n "$_filter" ]]; then

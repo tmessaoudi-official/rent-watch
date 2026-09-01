@@ -441,9 +441,18 @@ final readonly class Store
             SQL
         );
 
-        // The generic tables, from their single definition. Every statement is IF NOT EXISTS,
-        // so on the live rent database this is a no-op; it is the ONE place the DDL is written.
-        RunStore::ddl($this->pdo);
+        // The generic tables AND their own version bookkeeping, from their single definition.
+        //
+        // `RunStore::migrate()` rather than `RunStore::ddl()`, and the difference is not cosmetic:
+        // `ddl()` creates the tables, `migrate()` also records the run log's own schema version in
+        // `run_meta`. Calling only `ddl()` shipped, passed 2536 tests, and left the LIVE rent
+        // database with no record of the generic version at all — found by querying production after
+        // the deploy, not by any test. A future `RunStore` v2 would then never migrate this file,
+        // silently, because nothing here would know what version it was at.
+        //
+        // Placed ABOVE this method's own early return (see the `$recorded` check below), so it
+        // reaches a database already at the current rent version — which every live one is.
+        $this->runs->migrate();
 
         $recorded = $this->schemaVersionOrNull();
 

@@ -37,6 +37,38 @@ final class VehicleStoreHousingTablesTest extends TestCase
         }
     }
 
+    /**
+     * THE RENT STORE RECORDS THE GENERIC VERSION TOO — it composes `RunStore`, so it owns that
+     * bookkeeping exactly as the car store does.
+     *
+     * This is here because it shipped broken. `Store::migrate()` called `RunStore::ddl()`, which
+     * creates the tables but not `run_meta`, so every rent database — including the live 8.9 MB one
+     * — had the generic tables and no record of their version. 2536 tests were green; it was found
+     * by querying production after the deploy. A future `RunStore` v2 would never have migrated
+     * those files, silently, because nothing would know what version they were at.
+     */
+    public function testTheRentStoreAlsoRecordsTheGenericSchemaVersion(): void
+    {
+        $db = sys_get_temp_dir() . '/rentstore-runmeta-' . bin2hex(random_bytes(8)) . '.sqlite3';
+
+        try {
+            \Scout\Rent\Store\Store::open($db);
+
+            $pdo = new \PDO('sqlite:' . $db);
+            $recorded = $pdo->query("SELECT value FROM run_meta WHERE key = 'schema_version'")->fetchColumn();
+
+            self::assertSame(
+                (string) RunStore::SCHEMA_VERSION,
+                (string) $recorded,
+                'a store composing RunStore must record its version, or it can never be migrated',
+            );
+        } finally {
+            foreach (['', '-wal', '-shm'] as $suffix) {
+                @unlink($db . $suffix);
+            }
+        }
+    }
+
     /** A FRESH car database is created with the vehicle and generic tables, and nothing else. */
     public function testAFreshCarDatabaseHasNoHousingTables(): void
     {
