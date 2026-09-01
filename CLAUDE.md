@@ -133,8 +133,11 @@ two runs. Four things about it change how a source is added here:
   detail page classifies **UNKNOWN 0.00** — because *"Commission d'attribution"* and *"demande de
   logement social"* are page furniture present on social and intermediate listings alike, and three
   such signals conflict a correct verdict away. This is the CDC `au plus près` failure class on a
-  new surface, and `HtmlSource` enforces it structurally: the detail path deliberately does NOT add
-  `_text`, so a detail map contributes only what it selects.
+  new surface, and `Adapters/DetailHydrator` enforces it structurally: the detail path deliberately
+  does NOT add `_text`, so a detail map contributes only what it selects. (It lived in `HtmlSource`
+  until 2026-09-01 and was extracted so an email source can compose the same one — a hydrated
+  description is what the tenure classifier reads, so it is a §1-adjacent path and gets exactly one
+  implementation.)
 - **`{page}` may now appear in `url` itself**, for a site whose page number sits mid-path
   (`resultats-location-{page}-defaut-`). Page one substitutes like every other page. The rejected
   alternative — point `url` at the site root and let page one be the homepage widget, whose ten
