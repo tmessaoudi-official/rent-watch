@@ -118,7 +118,123 @@ final class VehicleBrandPenaltyTest extends TestCase
 
         self::assertSame(100, array_sum($criteria->weights));
         self::assertGreaterThan(0, $criteria->weights['brand'], 'a zero share is the feature switched off');
-        self::assertSame(['peugeot', 'renault', 'opel'], $criteria->brandAvoid);
+
+        // The 22 ruled 2026-09-01. Asserted as a SET rather than spot-checked, because the
+        // failure this list has is a make quietly going missing from it — which no sample catches.
+        self::assertSame([
+            'peugeot', 'citroen', 'ds', 'opel', 'vauxhall', 'fiat', 'abarth', 'lancia',
+            'alfa', 'jeep', 'dodge', 'chrysler', 'ram', 'maserati',
+            'ford', 'chevrolet',
+            'renault', 'dacia', 'nissan', 'alpine', 'mitsubishi', 'leapmotor',
+        ], $criteria->brandAvoid);
+    }
+
+    /**
+     * A MARQUE IS CAUGHT WHATEVER SUFFIX THE SOURCE SPELLS IT WITH — and this is a measured
+     * defect, not a hypothetical.
+     *
+     * The live car store carries the SAME marque under two spellings, one per source: autohero
+     * emits `ds automobiles` and leboncoin emits `ds`. `in_array($folded, $brandAvoid, true)` is
+     * exact equality, so a config entry `ds` caught the leboncoin row and SILENTLY MISSED the
+     * autohero one — a configured preference that is inert on one source, which is the failure
+     * class this repo has already paid for four times (`exclude_title_patterns` on In'li, the two
+     * unread car params, PAP's anchors). It costs 10 points of ordering and nothing reads as a
+     * fault.
+     *
+     * So the entry is a STEM and the match runs to a non-letter boundary. The stem is the shortest
+     * unambiguous form on purpose — `alfa`, not `alfa romeo` — because the gap runs BOTH ways: an
+     * entry longer than the make misses just as silently the day a source emits the short form.
+     *
+     * @return iterable<string, array{0: string}>
+     */
+    public static function suffixedSpellings(): iterable
+    {
+        yield 'ds automobiles (autohero, live)' => ['DS Automobiles'];
+        yield 'fiat professional' => ['Fiat Professional'];
+        yield 'alfa romeo' => ['Alfa Romeo'];
+        yield 'ram trucks' => ['RAM Trucks'];
+        // A hyphen is a boundary too — a portal writing the badge rather than the marque.
+        yield 'hyphenated' => ['Citroen-DS'];
+        // A digit is a boundary: `DS 3` and `DS3` are the same car typed two ways.
+        yield 'digit boundary' => ['DS3 Crossback'];
+    }
+
+    #[DataProvider('suffixedSpellings')]
+    public function testAMarqueIsCaughtWhateverSuffixTheSourceSpellsItWith(string $make): void
+    {
+        $criteria = VehicleCriteriaLoader::load(__DIR__ . '/../../../config/car/criteria.json');
+
+        self::assertTrue(
+            $criteria->isAvoidedBrand($make),
+            "`{$make}` must be penalised — a stem that misses a real spelling is an inert filter",
+        );
+    }
+
+    /**
+     * THE COUNTERWEIGHT, and without it the guarantee above is satisfied by penalising everything.
+     *
+     * A stem match can over-reach as silently as an exact match under-reaches, and the direction is
+     * worse: a make wrongly penalised is a car ranked below one that deserves less. Every spelling
+     * below is one the LIVE store actually contains (26 distinct makes across the three sources,
+     * 2026-09-01) — real inputs, not invented ones, which is the rule this repo's surface matrix
+     * already carries.
+     *
+     * @return iterable<string, array{0: string}>
+     */
+    public static function unlistedSpellings(): iterable
+    {
+        foreach ([
+            'audi', 'autres', 'bmw', 'hyundai', 'kia', 'lexus', 'mazda',
+            'mercedes', 'mercedes-benz', 'seat', 'skoda', 'smart', 'toyota', 'volkswagen',
+        ] as $make) {
+            yield $make => [$make];
+        }
+    }
+
+    #[DataProvider('unlistedSpellings')]
+    public function testAStemNeverReachesAMakeNobodyListed(string $make): void
+    {
+        $criteria = VehicleCriteriaLoader::load(__DIR__ . '/../../../config/car/criteria.json');
+
+        self::assertFalse(
+            $criteria->isAvoidedBrand($make),
+            "`{$make}` is on nobody's list — a stem reaching it ranks a car below one that deserves less",
+        );
+    }
+
+    /**
+     * THE COUNTERWEIGHT ABOVE DOES NOT REACH THE BOUNDARY CHECK, which is why this provider exists
+     * separately rather than as two more rows in it.
+     *
+     * Measured: deleting the boundary check left the whole suite GREEN. Not one of the 26 makes the
+     * live store contains BEGINS with one of the 22 stems, so the guard is never entered and was
+     * dead safety code the moment it was written — the trap this repo already documents ("a
+     * guarantee whose branch no fixture reaches is dead safety code until something reaches it").
+     * The sabotage case pins it, and it needs an input that enters the branch.
+     *
+     * Both below are REAL marques, not invented ones, and both are plausible on a classic listing
+     * — the rule that a cell must be fed something a real feed could emit. `Rambler` (American
+     * Motors) begins with the `ram` stem; `Fordson` (Ford's tractors) begins with `ford`. Neither
+     * is the marque its stem names, and penalising either would rank a car below one that deserves
+     * less, silently.
+     *
+     * @return iterable<string, array{0: string}>
+     */
+    public static function wordsThatMerelyBeginLikeAStem(): iterable
+    {
+        yield 'rambler (begins with the `ram` stem)' => ['Rambler'];
+        yield 'fordson (begins with the `ford` stem)' => ['Fordson'];
+    }
+
+    #[DataProvider('wordsThatMerelyBeginLikeAStem')]
+    public function testAStemStopsAtALetterAndDoesNotSwallowALongerWord(string $make): void
+    {
+        $criteria = VehicleCriteriaLoader::load(__DIR__ . '/../../../config/car/criteria.json');
+
+        self::assertFalse(
+            $criteria->isAvoidedBrand($make),
+            "`{$make}` merely BEGINS like a stem — the boundary check is the whole difference",
+        );
     }
 
     /**

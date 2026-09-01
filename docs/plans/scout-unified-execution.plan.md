@@ -92,6 +92,27 @@ read-only) and the merged prose as one review deep.
 - [2026-08-31] AGREED: Track 1d brand mechanism = PENALTY (inverted), in-weights: a `brand` weight
   reserved out of the existing 100; listed brands score 0 of it, unlisted score all of it. Not
   `body_rank`'s shape (which would score listed brands higher). Details in 1d.
+- [2026-09-01 12:20] AGREED: `brand_avoid` goes from 3 makes to **22** — the developer asked to
+  penalise more makes ("i know those come with manufacture problems"), enumerated them, and ruled
+  the full set: Stellantis' 14 marques (peugeot citroen ds opel vauxhall fiat abarth lancia alfa
+  jeep dodge chrysler ram maserati) + ford and chevrolet (the developer's own, neither Stellantis)
+  + the Renault-Nissan-Mitsubishi alliance (renault dacia nissan alpine mitsubishi, in because
+  they share Renault mechanicals) + leapmotor (Stellantis-distributed). MECHANISM UNCHANGED — flat,
+  equal, 10 of 100, still never a disqualifier. Reversed make by make in `config/car/criteria.json`.
+- [2026-09-01 12:20] AGREED (same ruling, its enabling repair): an entry is a **STEM matched to a
+  non-letter boundary**, not an exact string. Measured on the live store: the same marque is spelled
+  `ds` by leboncoin and `ds automobiles` by autohero, and `in_array(..., true)` caught one and
+  silently missed the other — a preference inert on a whole source, for 10 points of ordering, with
+  nothing reading as a fault. Write the shortest unambiguous form (`alfa`, not `alfa romeo`): the
+  gap runs both ways and a stem longer than the make misses just as quietly. Stated residual: a
+  make written with no separator at all (`alfaromeo`) is not caught; under-matching is the safe
+  direction and no source emits it.
+- [2026-09-01] MEASURED, and it refutes what was predicted at the gate: widening the list makes the
+  component MORE discriminating, not less. Re-judging all 160 stored snapshots through the real
+  scorer — avoided median **58** vs unlisted **71** (13 points apart, against 9 for the previous
+  three: 60 vs 69); 49 of 160 still clear `high_priority_score: 70`, so the marker stays reachable.
+  60 % of the fleet is now penalised, which reads like a coin flip and is in fact close to the
+  most discriminating split a binary component can take.
 - [2026-08-31] DEFAULT APPLIED (not ruled): brand's 10 points are taken from `price` (25→20) and
   `body` (15→10) — the assembling session's allocation, not the developer's. Reversed by taking
   the 10 from different components before building 1d.

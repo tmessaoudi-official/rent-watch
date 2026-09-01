@@ -62,6 +62,22 @@ final readonly class VehicleCriteria
      *
      * `null` — no make extracted — is NOT avoided (hard rule 9: unknown is not disfavoured), which
      * is the same direction every other unknown takes here.
+     *
+     * AN ENTRY IS A STEM, MATCHED TO A NON-LETTER BOUNDARY — and that is a measured repair, not a
+     * generalisation. This was `in_array($folded, $brandAvoid, true)`, exact equality, and the live
+     * store carries the SAME marque under two spellings, one per source: autohero emits
+     * `ds automobiles`, leboncoin emits `ds`. A config entry `ds` caught one row and silently
+     * missed the other — a configured preference inert on a whole source, which is this repo's
+     * recurring defect (`exclude_title_patterns` on In'li, the two unread car params, PAP's
+     * anchors). Nothing reads as a fault; the car merely ranks 10 points too high.
+     *
+     * The boundary is a NON-LETTER so `DS 3`, `DS-3` and `DS3` are all the same marque, and so the
+     * stem can never reach a longer word that merely begins with it. The counterweight is asserted
+     * against every make the live store actually contains — over-reaching here ranks a car BELOW
+     * one that deserves less, which is as silent as under-reaching and worse.
+     *
+     * The residual, stated rather than left to be found: a make written with NO separator at all
+     * (`alfaromeo`) is not caught. Under-matching is the safe direction, and no source emits it.
      */
     public function isAvoidedBrand(?string $make): bool
     {
@@ -69,7 +85,25 @@ final readonly class VehicleCriteria
             return false;
         }
 
-        return \in_array(\Scout\Core\Text::fold($make), $this->brandAvoid, true);
+        $folded = \Scout\Core\Text::fold($make);
+
+        foreach ($this->brandAvoid as $stem) {
+            if ($folded === $stem) {
+                return true;
+            }
+
+            if (!str_starts_with($folded, $stem)) {
+                continue;
+            }
+
+            // What ENDS the stem decides. A letter means this is a longer word that merely starts
+            // the same way; anything else — space, hyphen, digit — is a boundary and the marque.
+            if (!ctype_alpha($folded[\strlen($stem)])) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /** 1-based rank of a body in the preference list, or null when unranked. */

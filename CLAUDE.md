@@ -903,7 +903,8 @@ configures no pattern is bit-for-bit unchanged. Three rules travel with it:
 `VehicleClassifier` (the §1 vehicle set, non-overridable, NEGATION READ FIRST because every term
 arrives negated in honest copy), `VehicleCriteria` + `VehicleScorer` (one hard ceiling, one
 stated-location filter, everything else a clamped score component), `VehicleStore` (own tables on
-its own file, composing the housing `Store` for runs/health/alerts), two adapters (`VehicleEmailSource`
+its own file, composing `Core/RunStore` for runs/health/alerts — it composed the housing `Store`
+wholesale until the 2026-09-01 split), two adapters (`VehicleEmailSource`
 with positional card readers; `SitemapVehicleSource`, the detail-hydration pattern applied to a whole
 source), `VehiclePipeline`, `VehicleFormatter`, `Car/Cli/CarScout` (was `Cli/VehicleScout`). The rent path changed in two
 places only: the `--domain=car` dispatch line and `Cli/ChannelFactory`, extracted so both CLIs build
@@ -924,6 +925,26 @@ through (`[ _-]` now); and **`config/car/` is deliberately NOT a domain signal**
 vehicle set is CODE and non-overridable while that file's `exclude_patterns: []` is the ordinary
 user list and ships empty on purpose — a draft that included it fired on a shipped file, which is
 how a tripwire gets waved through. The banner names whichever domain actually fired.
+
+**`brand_avoid` IS A LIST OF STEMS, NOT OF MAKES, and that is the half worth knowing before editing
+it** (developer ruling, 2026-09-01, widening it from 3 makes to 22 — Stellantis' 14 marques, plus
+ford and chevrolet which are NOT Stellantis, plus the Renault-Nissan-Mitsubishi alliance and
+Stellantis-distributed leapmotor). The mechanism is untouched: flat, equal, 10 points of 100, a
+score component and never a disqualifier. What changed with it is the MATCHER. It was
+`in_array($folded, $brandAvoid, true)` — exact equality — and the live store carries one marque
+under two spellings, `ds` from leboncoin and `ds automobiles` from autohero, so a single entry
+caught one source's row and silently missed the other's. A preference inert on a whole source, worth
+10 points of ordering, with every score still plausible and nothing reading as a fault: the
+`exclude_title_patterns`-on-In'li class for the fourth time. So an entry now matches to a
+**non-letter boundary**, and the entry is the SHORTEST unambiguous form — `alfa`, never
+`alfa romeo` — because the gap runs BOTH ways and a stem longer than the make misses just as
+quietly. Two things guard it, and the second is what makes the first safe: every suffixed spelling
+must be caught, and every one of the 26 makes the live store actually contains must be classified
+as the list says — over-reaching ranks a car BELOW one that deserves less, which is as silent as
+under-reaching and worse. Both are sabotage cases. **The list is not "Stellantis" — do not tidy it
+into one**, and predicting its effect would have got it backwards: widening it took the avoided/
+unlisted median gap from 9 points to **13** (58 vs 71 over 160 re-judged snapshots), so a list
+covering 60 % of the fleet discriminates MORE, not less.
 
 `src/phorj/` is **ON INDEFINITE HOLD** (developer ruling, 2026-08-19) — not blocked, deprioritised.
 Do not start it; `docs/PHORJ-REQUIREMENTS.md` remains the record of what it would need.

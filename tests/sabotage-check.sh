@@ -3766,6 +3766,19 @@ run_sabotage "a brand that folds to nothing is accepted (a configured preference
   src/php/Car/VehicleCriteriaLoader.php \
   "s%            if (\$folded === '') {%            if (false) {%"
 
+# The stem boundary, both directions. Reverting to exact equality is the defect that was MEASURED:
+# `ds` caught leboncoin's row and silently missed autohero's `ds automobiles`, so a Stellantis car
+# outranked a Toyota by 10 points on one source only. Dropping the boundary check is the opposite
+# failure — the stem then reaches any longer word beginning the same way, penalising a make nobody
+# listed. Both are silent: every score stays plausible and only the ordering is wrong.
+run_sabotage "an avoided marque is matched by exact equality again (a suffixed spelling escapes the list)" \
+  src/php/Car/VehicleCriteria.php \
+  "s%            if (!str_starts_with(\$folded, \$stem)) {%            if (true) {%"
+
+run_sabotage "the stem loses its boundary check (it reaches any longer word that merely starts the same)" \
+  src/php/Car/VehicleCriteria.php \
+  "s%            if (!ctype_alpha(\$folded\[\\\\strlen(\$stem)\])) {%            if (true) {%"
+
 # The pattern-miss ratio's denominator. A furniture segment counted as a card dilutes it, and the
 # WARN fires only at 100 %% — so a pattern that has genuinely stopped matching every real card can
 # report short of it and say nothing, which is the silence Track 1h exists to end.
