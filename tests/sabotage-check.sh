@@ -2949,6 +2949,29 @@ run_sabotage "a params key no adapter reads is accepted again (a misspelt patter
   src/php/Rent/Config/ConfigLoader.php \
   's%\\in_array(\$key, self::EMAIL_ALERT_PARAMS, true)%true%'
 
+# A failure rate that CLIMBS is invisible against a seven-day denominator (Track 6-A1). Measured on
+# the live watcher: In'li failed 23 of 100 passes in a day while the seven-day figure read 8.2 %, so
+# WARN_FLAKY could not fire and `doctor` said `ok` for four days. No fixture in the ordinary suite
+# reaches this branch except the one test written for it — the shape that turns a guarantee into
+# dead safety code.
+run_sabotage "the short flaky window can never fire (a source degrading today reads as a fine week)" \
+  src/php/Core/RunStore.php \
+  's%FLAKY_SHORT_FAILURE_RATIO = 0.2%FLAKY_SHORT_FAILURE_RATIO = 0.99%'
+
+# And the window itself: collapse it back onto the long one and the rule still EXISTS, still
+# computes, still reads as configured — and detects exactly nothing the long rule did not already.
+run_sabotage "the short flaky window is widened to the long one (the dilution it exists to defeat is back)" \
+  src/php/Core/RunStore.php \
+  's%FLAKY_SHORT_WINDOW_DAYS = 1%FLAKY_SHORT_WINDOW_DAYS = 7%'
+
+# The COUNTERWEIGHT half, and it fails in the opposite direction: a cron-driven `--once` deployment
+# polls four times a day, where ONE failure is 25 % and means nothing. Drop the minimum and the
+# verdict starts alarming on sources doing nothing wrong — which is how a real signal becomes noise
+# the operator learns to ignore.
+run_sabotage "the short window's minimum run count is dropped (a sparse deployment alarms on one failure)" \
+  src/php/Core/RunStore.php \
+  's%MIN_RUNS_FOR_SHORT_FLAKY = 20%MIN_RUNS_FOR_SHORT_FLAKY = 1%'
+
 # The CAR twin of that guard (Track 6-A2). The rent side closed this class on 2026-08-26; the car
 # loader refused two keys BY NAME and claimed in its own docblock to have closed it, while every
 # misspelling — `link_hosts`, a `commune_pattern` carried over from a rent block — loaded cleanly

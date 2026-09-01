@@ -346,6 +346,26 @@ read-only) and the merged prose as one review deep.
   exact shape** — `subject_pattern` is deliberately never counted, because a message-level pattern
   counted per card dilutes the ratio the WARN depends on. Same treatment here. Reversed by counting
   it again, which re-creates the spurious thin-pass WARN F30 identified.
+- [2026-09-02] RECORD (Track 6-A1, audit N1): **In'li investigated before anything was built, and
+  the finding is not the one the audit predicted.** The audit recommended "a failure-RATE signal in
+  health"; `WARN_FLAKY` ALREADY EXISTS and already computes one. What is wrong is the TIMESCALE, and
+  reading the rule before writing a replacement is what found it: the ratio is 30 % over
+  `ROLLING_WINDOW_DAYS = 7`, and In'li measured 23.0 % over 24 h against **8.2 % over 7 days**, so
+  the rule could not fire while the daily rate climbed 2.0 → 11.3 → 11.7 → 22.8 % across four days.
+  **The window that makes a SUSTAINED fault visible is the window that hides a CLIMBING one** — the
+  `STALE`/`FEED_SILENT` class, a correct rule blind on one axis of what it measures. Built: a SHORT
+  window beside the long one (`FLAKY_SHORT_WINDOW_DAYS = 1`, ratio 0.2, `MIN_RUNS_FOR_SHORT_FLAKY =
+  20`), same rows, same clock bound, long rule checked first so a sustained fault keeps the fuller
+  statement, and the detail names which window fired. Ratio chosen against a COUNTERWEIGHT, not
+  fitted: last-24 h failure rate over eleven sources in both domains was inli 23.0 %, cdc_habitat
+  3.0 %, car leboncoin 1.0 %, the other eight 0.0 %. The minimum keeps a cron `--once` deployment
+  (four passes/day, where one failure is 25 %) out of it, and the seven-day rule still covers those
+  — asserted as its own test so the limit is not a hole. **Not built, deliberately:** no timeout
+  raise (the only measurement is a 1.4 s quiet-hour TTFB; the anti-bandaid gate's named case) and no
+  pacing change (failures track the site's daytime load, not our cadence — zero between 18:00 and
+  05:00, and 26 of 46 are on the INDEX rather than deep pages). Evidence: `var/claude/track6-a1.md`.
+  Stated cost: a source under 20 % today and under 30 % this week still reads `ok`. Reversed by
+  removing the second check.
 - [2026-09-01 ~23:30] AGREED (A5 shape): **a second queue, ONE drain, separated in the mail.**
   Low-score-but-tenure-clean matches queue on their own and drain through the existing
   `Cli/DigestBatch`, with the formatter keeping *"vérifié, score bas"* visibly apart from

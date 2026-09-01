@@ -234,6 +234,43 @@ final readonly class RunStore
     public const int MIN_RUNS_FOR_FLAKY = 3;
 
     /**
+     * The SHORT flaky window, and the reason there are two (Track 6-A1, 2026-09-01).
+     *
+     * The window that makes a SUSTAINED fault visible is the window that hides a CLIMBING one.
+     * Measured on the live watcher rather than reasoned: In'li's daily failure rate went 2.0 %
+     * (08-29) → 11.3 % → 11.7 % → **22.8 %** (09-01) — 23 of 100 passes on the last day — while
+     * the seven-day denominator held the reported figure at **8.2 %**, so
+     * {@see FLAKY_FAILURE_RATIO} could not fire and `doctor` said `ok` throughout. No other verdict
+     * could see it either: the interleaved successes still returned ~165 items, so nothing dropped,
+     * nothing was empty, and the schedule never stopped. Hard rule 2's shape, on an axis the
+     * existing rule averages away.
+     *
+     * Same class as `STALE` / `FEED_SILENT` — a correct rule with a blind spot on one axis of what
+     * it measures — so it takes the same repair: a second window beside the first, not a
+     * replacement, with the detail line naming which one fired.
+     *
+     * The ratio is CHOSEN AGAINST A COUNTERWEIGHT, not fitted to In'li. Failure rate over the last
+     * 24 h, eleven sources, both domains, 2026-09-01: inli 23.0 %, cdc_habitat 3.0 %, car leboncoin
+     * 1.0 %, and bienici / cityloger / leboncoin / logirep / pap / seloger / autohero / paruvendu
+     * all 0.0 %. 20 % separates the one degrading source from every healthy one with room on both
+     * sides. In'li's own history says the same: it would have fired on 09-01 and on no earlier day.
+     *
+     * THE MINIMUM IS THE HALF THAT KEEPS IT HONEST, and it is much larger than
+     * {@see MIN_RUNS_FOR_FLAKY} on purpose. At the Q37 cadence a day holds ~100 passes; on a
+     * cron-driven `--once` deployment it holds four, where ONE failure is 25 % and means nothing.
+     * So the short rule requires a dense window and stays deliberately inert on sparse
+     * deployments — the seven-day rule still covers those, which is what makes this a scope limit
+     * rather than a hole, and it is asserted as its own test.
+     */
+    public const int FLAKY_SHORT_WINDOW_DAYS = 1;
+
+    /** @see FLAKY_SHORT_WINDOW_DAYS — measured against every other source, not fitted to one. */
+    public const float FLAKY_SHORT_FAILURE_RATIO = 0.2;
+
+    /** @see FLAKY_SHORT_WINDOW_DAYS — a day's window on a sparse deployment says nothing. */
+    public const int MIN_RUNS_FOR_SHORT_FLAKY = 20;
+
+    /**
      * A source must have been trying for at least this long before "never produced" means anything.
      *
      * Without it, three successful empty polls at a 15-minute interval told a source onboarded
@@ -508,7 +545,11 @@ final readonly class RunStore
 
         $emptyStreak = self::trailingEmptyRuns($runs);
         $rollingMean = self::rollingMeanBefore($runs, \count($runs) - 1);
-        [$runsInWindow, $failedInWindow] = self::windowCounts($runs, $nowIso === null ? null : self::epoch($nowIso));
+        $edge = $nowIso === null ? null : self::epoch($nowIso);
+        [$runsInWindow, $failedInWindow] = self::windowCounts($runs, $edge);
+        // The SHORT window, computed from the same rows and bounded above by the same clock —
+        // a future-stamped success must not dilute this one either (Track 6-A1).
+        [$runsInShortWindow, $failedInShortWindow] = self::windowCounts($runs, $edge, self::FLAKY_SHORT_WINDOW_DAYS);
 
         $health = static fn (SourceStatus $status, string $detail): SourceHealth => new SourceHealth(
             sourceName: $sourceName,
@@ -611,6 +652,28 @@ final readonly class RunStore
                 $failedInWindow,
                 $runsInWindow,
                 self::ROLLING_WINDOW_DAYS,
+            ));
+        }
+
+        // The SHORT window, checked AFTER the long one so a sustained fault keeps the fuller
+        // statement, and reported with its own wording so the two are never confused: "failing hard
+        // today" and "failing steadily all week" are different faults with different responses.
+        // See {@see FLAKY_SHORT_WINDOW_DAYS} for the measurement behind both numbers.
+        if ($runsInShortWindow >= self::MIN_RUNS_FOR_SHORT_FLAKY
+            && $failedInShortWindow / $runsInShortWindow > self::FLAKY_SHORT_FAILURE_RATIO) {
+            return $health(SourceStatus::WARN_FLAKY, sprintf(
+                // The window is DERIVED from the constant, never written beside it: a prose "24 h"
+                // that outlives a changed `FLAKY_SHORT_WINDOW_DAYS` is a detail line that lies,
+                // and this class's whole job is producing a line the operator can believe.
+                '%d échecs sur %d runs sur les dernières %d h (%.0f %%) — dégradation récente, la '
+                    . 'moyenne sur %d jours ne la montre pas encore (%d sur %d)',
+                $failedInShortWindow,
+                $runsInShortWindow,
+                self::FLAKY_SHORT_WINDOW_DAYS * 24,
+                100 * $failedInShortWindow / $runsInShortWindow,
+                self::ROLLING_WINDOW_DAYS,
+                $failedInWindow,
+                $runsInWindow,
             ));
         }
 
@@ -752,7 +815,7 @@ final readonly class RunStore
      * @param  list<array{ok:int|string, at_epoch:int|string, ...}> $runs
      * @return array{int, int}
      */
-    private static function windowCounts(array $runs, ?int $now): array
+    private static function windowCounts(array $runs, ?int $now, int $windowDays = self::ROLLING_WINDOW_DAYS): array
     {
         // Anchored on the LAST-INSERTED row, deliberately, and NOT on `max(at_epoch)`.
         //
@@ -778,7 +841,7 @@ final readonly class RunStore
         // and self-correcting, rather than the second, unbounded in both directions. `CLAUDE.md`
         // requires `scout doctor` to pass one.
         $edge = $now ?? (int) $runs[array_key_last($runs)]['at_epoch'];
-        $cutoff = $edge - self::ROLLING_WINDOW_DAYS * 86400;
+        $cutoff = $edge - $windowDays * 86400;
         $total = 0;
         $failed = 0;
 
