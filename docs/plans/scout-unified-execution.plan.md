@@ -176,6 +176,31 @@ read-only) and the merged prose as one review deep.
   variants all four fail together. This is also the true cause of F6's "4 pap empty-title rows": one
   root cause, not two. Evidence and the measured replacement patterns:
   `var/claude/track1h-pap-evidence.md`.
+- [2026-09-01] AGREED (developer instruction, verbatim intent): *"everything specific case we
+  handled we need to check all sources/workflows to see if it needs to be generalized or in other
+  sources too"*. Becomes **Track 5**, a standing rule as much as a task: no per-source fix lands
+  again without its own row in the mechanism × source matrix saying which other sources were
+  checked and what the answer was.
+- [2026-09-01] AGREED (developer observation, then measured): a Bien'ici/SeLoger listing whose
+  ADVERTISER is an institutional landlord is judged `LIBRE` at the source default, while the same
+  flat on that landlord's own site is judged under `mixed_tenure: true`. **The verdict depends on
+  the route, not on the flat** — a §1 breach. 24 stored rows, 21 pushed as MATCH, 18 with no twin.
+  Fix = Track 5a. NOT a new classifier signal (the classifier reasons about tenure, not about who)
+  and NOT a new reject path.
+- [2026-09-01] AGREED: **AL'in goes on indefinite hold, like `src/phorj/`** (developer ruling).
+  It is no longer an owed input; do not start it, do not re-propose it. `docs/SOURCES.md` A4 keeps
+  the measurement. Reversed by the developer saying so.
+- [2026-09-01] VERIFIED, input closed: the leboncoin `vous propose` Gmail filter EXISTS and works —
+  all 5 messages carry `car-watch/portails` (`Label_809606989472151971`), confirmed over
+  `in:anywhere` with no date or read-state restriction. The source is quiet, not broken: leboncoin
+  has sent no car alert since 2026-08-27.
+- [2026-09-01] INPUT PENDING: CapCar alert created by the developer; awaiting its first message.
+- [2026-09-01] DEFAULT APPLIED: the advertiser is read from the **subject line** on SeLoger
+  (`<ADVERTISER> vous adresse ses dernières exclusivités`, ~201 messages, one listing each) and
+  from the **URL slug** on Bien'ici (`/annonce/iad-france-800209`). Anchored on the portal's own
+  layout, never on a vocabulary scan of the body — the `au plus près` / filter-facet / CTA failure
+  class has already cost this repo five fixes. Reversed by removing the source's
+  `advertiser_pattern`.
 
 ---
 
@@ -781,6 +806,101 @@ After Track 0 closes and Track 1 lands:
 
 ---
 
+## Track 5 — Generalisation: every per-source fix is a candidate rule for ALL sources
+
+Developer instruction, 2026-09-01. This repo's whole history is per-source repairs — `commune_pattern`
+for SeLoger, the card separator for Bien'ici, positional anchors for PAP, prose readers for In'li —
+and **each was measured on the source that hurt, then left there.** Nobody has ever asked the second
+question. The entry point was the developer noticing a Bien'ici listing that is actually CDC
+Habitat's.
+
+### 5a. The advertiser is evidence, and nothing reads it — a live §1 breach
+
+**Measured 2026-09-01 over `state/rent-watch.sqlite3`** (reproducible; the scan folds accents and
+looks in `evidence_json`'s title+description):
+
+| Portal | In'li | CDC Habitat | Immobilière 3F | RIVP | total |
+|---|---|---|---|---|---|
+| seloger | 16 | 7 | 2 | 1 | 23 |
+| bienici | — | — | 1 | — | 1 |
+
+All 24 classified **`LIBRE`, confidence 50** — the source default — and **21 pushed as `MATCH`**.
+Six carry a v12 twin (4 `inli`, 2 `cdc_habitat`); **18 do not**, and that 18 is the fix's size.
+
+**Why it is §1 and not a nicety.** CDC Habitat is a mixed-tenure landlord — `CLAUDE.md` says so in
+its own words, *"social and intermediate stock on the same pages, sometimes in the same result
+set"*. Its own source block is `mixed_tenure: true`, so a card of its stock stating no tenure goes
+to the *à vérifier* digest. Routed through SeLoger it inherits `mixed_tenure: false` +
+`default_tenure: LIBRE` and is pushed as a match. **Same flat, same evidence, opposite verdict,
+decided by which mailbox it arrived in.**
+
+**The user's premise was half right and the half matters:** this is NOT handled on SeLoger either.
+`CLAUDE.md` records it as a known "residual" on the grounds that *"PLAI and PLUS are allocated by
+commission and are not advertised on commercial portals; PLS occasionally is"*. That reasoning
+covers a card from an ANONYMOUS advertiser. It does not survive a card whose advertiser announces
+itself as a bailleur in the subject line.
+
+**The advertiser is STRUCTURAL, which is what makes this safe to build.** Every hit is the message's
+own opening line and subject:
+
+```
+CDC HABITAT vous adresse ses dernières exclusivités      <- ~201 such messages
+IN'LI       vous adresse ses dernières exclusivités
+NESTENN IGNY vous adresse ses dernières exclusivités
+```
+
+and Bien'ici puts it in the path: `/annonce/iad-france-800209`, `laforet-…`, `nestenn-1-…`. A
+vocabulary scan over the body is REFUSED — `au plus près`, `Ce·lli·er`, `En savoir plus`,
+`Plain-pied`, `?c=plai_plus` are five paid-for instances of exactly that mistake, and a landlord
+name in prose (`proche résidence CDC Habitat`) rebuilds it in reverse.
+
+**Mechanism — a per-listing override of the SOURCE DEFAULT, nothing else:**
+
+- New per-source param `advertiser_pattern` (compile-checked at load beside the other five, same
+  `matchParam()` funnel), read from the SUBJECT on SeLoger and from the URL on Bien'ici.
+- `RawListing::$advertiser` (`?string`). It lives on the listing, not as a `judge()` argument —
+  `scout --domain=rent reclassify` re-judges from the v7 snapshot alone, and a value passed
+  alongside would be absent on every re-judge. This is the `commuteMinutes` lesson, already paid for.
+  The snapshot encoder covers every constructor parameter BY REFLECTION, so it is carried for free —
+  assert that rather than assume it.
+- A recognised advertiser makes the listing inherit **that landlord's own** `default_tenure` /
+  `mixed_tenure` — never a third invented treatment. That is literally the sentence *"the verdict
+  must not depend on the route"* in code. Tiers 1–3 are untouched and still win: an explicit label
+  beats an advertiser, always.
+- The landlord table is DERIVED from `config/rent/sources.json`'s own institutional blocks, not a
+  second hand-written list — a second list is a second place to forget, and this repo has the
+  `communeLabels` scar to prove it.
+- Outcome for a recognised mixed-tenure advertiser with no explicit label: **DIGEST**, via the
+  existing v8 `notified_as` machinery. Never a hard reject (hard rule 8: silent over-rejection is
+  invisible).
+
+**Stated costs, both real:**
+1. The ordinary multi-card SeLoger alert names no advertiser per card, so this reaches the
+   `exclusivités` template only. That template is where the landlords are, but it is not all of them.
+2. No backfill. The 21 already-notified rows stay as they are; `reclassify` will re-judge them once
+   the snapshot carries an advertiser, and it carries one only for rows captured after the fix.
+
+**Tests:** corpus cases BOTH directions (advertiser-anchored card digests; a prose-only mention does
+NOT flip an otherwise-clear card), the counterweight (an unrecognised advertiser changes nothing),
+a round-trip through the v7 snapshot, and a sabotage case. Touches `src/php/Rent/Core` → MAXIMAL at
+the milestone.
+
+### 5b. The mechanism × source matrix — build it mechanically, then triage WITH the developer
+
+Method mirrors the ruled Track 3 approach: measure every cell, write findings to
+`var/claude/track5-matrix-<date>.md`, decide case by case. Do **not** build every row unilaterally.
+
+Cells to fill, per source, both domains (the non-config mechanisms matter as much as the params):
+criteria-line exposure (the PAP/Bien'ici `45 m² min` class — seloger and leboncoin have NO
+positional anchors and rely on the first-match-wins scan); `link_host` path-vs-host (the PAP phantom
+`/utilisateur/alertes` listing); `subject_pattern` presence; `exclude_title_patterns` reachability
+(needs a non-empty title on every source); separator variant lines (Bien'ici's `Pas de photo`);
+prose readers (`prose:floor` / `prose:elevator`, In'li-only today); `detail_map` presence on the
+HTML sources; the advertiser surface from 5a; and the car domain throughout.
+
+**The standing rule this leaves behind matters more than the one-off audit:** a per-source fix does
+not land without a line saying which other sources were checked against it.
+
 ## Explicitly NOT in this plan (negative space — protects the fresh executor)
 
 - **Do not "fix" drift-scan S8** (1b) — commented keys are documented by design.
@@ -801,11 +921,16 @@ After Track 0 closes and Track 1 lands:
 ## Inputs still owed BY THE DEVELOPER (nothing else blocks)
 
 1. AutoScout24: the first real listing alert (none has ever arrived — wait, don't build).
-2. AL'in: one logged-in look without a NUR (browser, developer's own session).
-3. CapCar: the one-time make-selector browser check.
-4. Gmail filter creation: route leboncoin "vous propose" → a scout-readable label (no tool can
-   create filters; retro-labelling the 5 messages is doable from here).
-5. At Track 0 round 4's verdict: the close-vs-round-5 decision (asked via AskUserQuestion).
+2. ~~AL'in: one logged-in look without a NUR.~~ **WITHDRAWN 2026-09-01** — AL'in is on indefinite
+   hold like `src/phorj/` (developer ruling). Not an input; not work.
+3. ~~CapCar: the one-time make-selector browser check.~~ **DONE 2026-09-01** — the developer created
+   the alert. Now waiting on its first message, like AutoScout24.
+4. ~~Gmail filter for leboncoin "vous propose".~~ **DONE 2026-09-01, verified** — all 5 messages
+   carry `car-watch/portails`; confirmed over `in:anywhere`, no date or read-state restriction.
+   The source is quiet (nothing since 2026-08-27), not broken.
+5. ~~Track 0 round 4's close-vs-round-5 decision.~~ **RULED** — Track 0 closed uncertified.
+6. **Go to run against the live `state/car-watch.sqlite3`** (Track 4's store split). Not yet given;
+   the re-explanation of what the item IS was not authorisation. Build up to that line only.
 
 ## Verification (whole plan)
 
