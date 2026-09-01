@@ -196,6 +196,21 @@ final readonly class EmailAlertSource implements FeedFreshness, Source
                 continue;
             }
 
+            // AND only messages whose SUBJECT this source claims. The sender is not always enough:
+            // rent and car leboncoin share `no.reply@leboncoin.fr`, the link host
+            // `leboncoin.fr/vi/` AND the `Voir l'annonce` separator, so a vehicle alert would parse
+            // as a flat, be rejected for having no commune, and still count toward this source's
+            // health.
+            //
+            // The key was CONFIGURED AND DOCUMENTED FOR THIS on 2026-08-26 and no adapter read it
+            // (found by Track 5b, 2026-09-01). Its own comment named the expiry: the two collide
+            // "the moment the Gmail filter that routes them is created, which is an owed developer
+            // action" — so the guard was written for a day that had not arrived, and would have
+            // been absent when it did.
+            if (!$this->subjectMatches($message)) {
+                continue;
+            }
+
             foreach ($this->listingsIn($message) as $listing) {
                 $listings[] = $listing;
             }
@@ -272,6 +287,29 @@ final readonly class EmailAlertSource implements FeedFreshness, Source
         }
 
         return stripos($message->from(), $expected) !== false;
+    }
+
+    /**
+     * Does this message's SUBJECT belong to this source?
+     *
+     * Absent, every message from the sender is accepted — the same direction `isFrom()` takes for
+     * the same reason: silently dropping everything is indistinguishable from an empty mailbox,
+     * which is the ambiguity hard rule 2 exists to remove. Only a source that CONFIGURES a subject
+     * filter gets one, so every other source is byte-identical.
+     *
+     * The pattern is compile-checked at load, because `preg_match` on a broken pattern returns
+     * `false` and `false !== 1` would reject EVERY message — a source that reports a dead portal on
+     * a template that never changed.
+     */
+    private function subjectMatches(EmailMessage $message): bool
+    {
+        $pattern = $this->definition->params['subject_pattern'] ?? null;
+
+        if (!\is_string($pattern) || $pattern === '') {
+            return true;
+        }
+
+        return preg_match($pattern, $message->subject()) === 1;
     }
 
     /**

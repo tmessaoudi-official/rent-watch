@@ -2900,6 +2900,21 @@ run_sabotage "the Bien'ici card separator stops matching (every card merges into
   config/rent/sources.json \
   's%(?:Photo|Pas de photo)%(?:ZZZ_NEVER_MATCHES)%'
 
+# Track 5b, F-A. Two guards, and both failures are silent in the way this repo keeps paying for.
+#
+# The subject filter decides which messages a source reads AT ALL. Rent and car leboncoin share
+# sender, link host and card separator; without it a vehicle alert parses as a flat, is rejected for
+# having no commune, and still counts toward the housing source's health.
+run_sabotage "an email source accepts every subject from its sender (a vehicle alert is ingested as housing)" \
+  src/php/Rent/Adapters/EmailAlertSource.php \
+  's%if (!\$this->subjectMatches(\$message)) {%if (false) {%'
+
+# And the param guard itself: without it a misspelt key loads cleanly and does nothing, which is the
+# PAP failure exactly — pattern absent, generic scan answering, wrong values stored, no fault shown.
+run_sabotage "a params key no adapter reads is accepted again (a misspelt pattern silently does nothing)" \
+  src/php/Rent/Config/ConfigLoader.php \
+  's%\\in_array(\$key, self::EMAIL_ALERT_PARAMS, true)%true%'
+
 # Cityloger writes the unit BOTH ways — `80 m2` on one frozen page, `63m²` on the other — and the
 # selector required the ASCII form. Measured on the live store before the fix: 56 of 61 cached
 # detail rows held `elevator, description, tenureField` and NO surface, so `min_surface_m2` could

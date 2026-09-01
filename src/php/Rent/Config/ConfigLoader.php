@@ -35,6 +35,32 @@ final class ConfigLoader
     private const string HEADER_NAME_TOKEN = '/^[!#$%&\'*+.^_`|~0-9A-Za-z-]+$/D';
 
     /**
+     * Every `params` key an `email_alert` source may carry — the union of every reader in
+     * `EmailAlertSource` (`params[...]`, `param()`, `stringParam()`, `matchParam()`) and the CLI
+     * construction sites, read from the CODE rather than from what the shipped config happens to
+     * use. Anything else is refused; see the guard in `sourceFromReader()` for why this list exists
+     * and why it applies to email sources only.
+     *
+     * Add a key here in the same change that teaches an adapter to read it. A param the adapter
+     * reads but this list omits is a refusal on a config that is correct — the opposite failure,
+     * and a loud one, which is the safe direction.
+     */
+    private const array EMAIL_ALERT_PARAMS = [
+        'from',
+        'subject_pattern',
+        'link_host',
+        'id_from',
+        'card_separator',
+        'card_separator_pattern',
+        'title_pattern',
+        'residence_pattern',
+        'commune_pattern',
+        'surface_pattern',
+        'rooms_pattern',
+        'advertiser_pattern',
+    ];
+
+    /**
      * Load criteria, applying a gitignored local override if one is present.
      *
      * The override exists so genuinely personal tuning never has to enter git (Q11): the committed
@@ -464,6 +490,48 @@ final class ConfigLoader
 
         $r->done();
 
+        // A PARAM NO ADAPTER READS IS REFUSED — on an email source ONLY (Track 5b, F-A).
+        //
+        // `params` is OVERLOADED, and that is why this guard is scoped by type rather than applied
+        // everywhere. On an `html` or `json` source it IS the HTTP query string — `HtmlSource` does
+        // `withQuery([...$this->definition->params, ...$extra])` — so In'li's `price_max`,
+        // `area_min`, `room_min` and Logirep's `ss_trnsctntp` are arguments for the SITE, read by no
+        // adapter by design and impossible to enumerate. Refusing them would break both live
+        // polling sources at startup, which is the lockout the `RENT_FEED_SILENT_DAYS` hard refusal
+        // already cost this repo once.
+        //
+        // On an `email_alert` source `params` is adapter configuration, a closed set, and the
+        // absence of this check was the ENABLING CONDITION for the whole silent-extraction family:
+        // a misspelt `titel_pattern` loaded cleanly and did nothing, which is exactly the PAP
+        // failure — the pattern silently absent, the generic scan answering instead, wrong values
+        // stored, and nothing reading as a fault. `CLAUDE.md` claimed "any other unrecognised key
+        // is a validation error"; that was true of the top level and false here.
+        //
+        // The list is the UNION OF EVERY READER, taken from the code rather than from what the
+        // shipped config happens to use — `params[...]`, `param()`, `stringParam()` and
+        // `matchParam()` in `EmailAlertSource` plus the construction sites. A param added to the
+        // adapter and forgotten here becomes a refusal on a config that is actually correct, so the
+        // two move together.
+        //
+        // Deliberately OUTSIDE the `enabled` branch: `--source=<name>` force-runs a disabled
+        // source — the documented onboarding path, `/add-source` step 5 — so a guard that fires
+        // only on enabled sources is one the intended workflow walks straight past.
+        if ($type === 'email_alert') {
+            foreach (array_keys($params) as $key) {
+                if (\in_array($key, self::EMAIL_ALERT_PARAMS, true)) {
+                    continue;
+                }
+
+                throw ConfigError::at(
+                    $where . '.params.' . $key,
+                    'aucun adaptateur ne lit ce paramètre sur une source email_alert. Un nom mal '
+                        . 'orthographié se charge sans bruit et ne fait rien — le motif est absent, '
+                        . 'le balayage générique répond à sa place, et rien ne ressemble à une '
+                        . 'panne. Paramètres lus : ' . implode(', ', self::EMAIL_ALERT_PARAMS),
+                );
+            }
+        }
+
         // Deliberately OUTSIDE the `enabled` branch, both of them. `--source=<name>` force-runs a
         // disabled source — that is the documented onboarding path, `/add-source` step 5 — so a
         // guard that fires only on enabled sources is a guard the intended workflow walks straight
@@ -551,7 +619,12 @@ final class ConfigLoader
         // yields `null`, the listing keeps the source's own profile, and a landlord-advertised card
         // on a `mixed_tenure: false` portal is notified as LIBRE again. That is the exact hole
         // LandlordRegistry closes, silently re-opened by a typo.
-        foreach (['title_pattern', 'residence_pattern', 'commune_pattern', 'surface_pattern', 'rooms_pattern', 'card_separator_pattern', 'advertiser_pattern'] as $patternKey) {
+        // `subject_pattern` joins them with the sharpest edge of all, because its failure is not an
+        // extraction but an ADMISSION: it decides which messages the source reads at all. A pattern
+        // that does not compile matches nothing, `@preg_match` neither warns nor throws, and the
+        // source silently ingests every message from its sender — including, on leboncoin, the
+        // VEHICLE alerts that share its sender, its link host and its card separator.
+        foreach (['title_pattern', 'residence_pattern', 'commune_pattern', 'surface_pattern', 'rooms_pattern', 'card_separator_pattern', 'advertiser_pattern', 'subject_pattern'] as $patternKey) {
             $pattern = $params[$patternKey] ?? null;
 
             if ($pattern === null || $pattern === '') {

@@ -497,6 +497,98 @@ final class ConfigTest extends TestCase
         self::assertFalse($sources['demo']->requiresScrapingOptIn());
     }
 
+    // ---------------------------------------------------------------- unrecognised params, per type
+
+    /**
+     * A PARAM NO ADAPTER READS IS REFUSED ON AN `email_alert` SOURCE (Track 5b, F-A).
+     *
+     * `CLAUDE.md` says of the config layer that "any other unrecognised key is a validation error". That
+     * was true of the top level and FALSE of `params`, which is where every silent-extraction defect
+     * this project has had lives: a misspelt `titel_pattern` loaded cleanly and did nothing, which
+     * is precisely the PAP failure — the pattern silently absent, the generic scan answering
+     * instead, wrong values stored, and nothing reading as a fault. Measured 2026-09-01: both
+     * `params.titel_pattern` and `params.totally_made_up` loaded without complaint.
+     *
+     * A live instance was already shipped: rent `leboncoin` carried a `subject_pattern`, a key only
+     * the CAR adapter reads. It is removed in the same commit as this guard, because a validator
+     * landing without that cleanup makes the deployed watcher refuse its own shipped config on the
+     * next restart.
+     */
+    public function testAnUnrecognisedParamOnAnEmailSourceIsRefusedAndNamed(): void
+    {
+        $this->expectException(ConfigError::class);
+        $this->expectExceptionMessageMatches('~titel_pattern~');
+
+        ConfigLoader::sourcesFromArray(self::minimalSource([
+            'type' => 'email_alert',
+            'params' => ['from' => 'a@b.test', 'link_host' => 'b.test', 'titel_pattern' => '~x~'],
+            'map' => ['ref' => 'url'],
+        ]));
+    }
+
+    /**
+     * THE COUNTERWEIGHT, and it is the half that makes the guard safe to ship: on an `html` or
+     * `json` source `params` IS THE HTTP QUERY STRING — `HtmlSource` does
+     * `withQuery([...$this->definition->params, ...$extra])` — so it cannot be a closed set. In'li
+     * ships `price_max`, `area_min`, `room_min` and Logirep ships `ss_trnsctntp`; every one is a
+     * query argument for the site, read by no adapter by design.
+     *
+     * `params` is therefore OVERLOADED: adapter configuration on an email source, a query string on
+     * a polling one. Refusing unrecognised keys on both would break the two live polling sources at
+     * startup — which is the failure the `RENT_FEED_SILENT_DAYS` hard refusal already taught this
+     * repo once, and the reason the guard is scoped by type rather than applied everywhere.
+     */
+    public function testAnUnrecognisedParamOnAPollingSourceIsTheQueryStringAndIsAccepted(): void
+    {
+        $sources = ConfigLoader::sourcesFromArray(self::minimalSource([
+            'type' => 'json',
+            'params' => ['ss_trnsctntp' => 'leasing', 'whatever_the_site_wants' => '1'],
+        ]));
+
+        self::assertSame('leasing', $sources['demo']->params['ss_trnsctntp'] ?? null);
+        self::assertSame('1', $sources['demo']->params['whatever_the_site_wants'] ?? null);
+    }
+
+    /**
+     * `subject_pattern` IS READ ON THE RENT SIDE — and it was configured, documented and UNARMED.
+     *
+     * The rent and car leboncoin alerts share the sender `no.reply@leboncoin.fr`, the link host
+     * `leboncoin.fr/vi/` AND the `Voir l'annonce` separator. Nothing but the subject separates
+     * them. Rent leboncoin carries a `subject_pattern` written for exactly that, with a comment
+     * saying the two collide the moment the Gmail filter routing the vehicle alerts is created —
+     * and no rent adapter read the key, so the guard did not exist.
+     *
+     * Track 5b found it as "a param no adapter reads", and deleting it was the wrong fix: it would
+     * have removed a documented intention and left the collision unguarded on the day the owed
+     * filter lands. A car alert would then parse as a flat, be rejected for having no commune, and
+     * count toward this source's health.
+     *
+     * Asserted against the SHIPPED pattern rather than a copy, so the config and the guarantee
+     * cannot drift.
+     */
+    public function testTheShippedLeboncoinSubjectPatternDistinguishesHousingFromVehicleAlerts(): void
+    {
+        $sources = ConfigLoader::loadSources(__DIR__ . '/../../../../config/rent/sources.json');
+        $pattern = $sources['leboncoin']->params['subject_pattern'] ?? null;
+
+        self::assertIsString($pattern, 'rent leboncoin must keep a subject filter');
+
+        self::assertSame(1, preg_match($pattern, '3 nouveaux biens à louer à Ile-de-France'));
+        self::assertSame(
+            0,
+            preg_match($pattern, 'Auto Presto vous propose PEUGEOT 208 à 8 990 € à Melun'),
+            'a VEHICLE alert on the same sender and link host must not match the housing subject',
+        );
+    }
+
+    /** Every param the shipped config actually uses must survive the guard — the regression half. */
+    public function testEveryShippedSourceStillLoadsUnderTheParamGuard(): void
+    {
+        $sources = ConfigLoader::loadSources(__DIR__ . '/../../../../config/rent/sources.json');
+
+        self::assertGreaterThanOrEqual(8, count($sources), 'the shipped config must still load in full');
+    }
+
     // ---------------------------------------------------------------- feed_silent_days, per source
 
     /**

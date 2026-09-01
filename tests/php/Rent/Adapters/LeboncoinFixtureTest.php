@@ -202,6 +202,67 @@ final class LeboncoinFixtureTest extends TestCase
     }
 
     /** @return list<RawListing> */
+    /**
+     * A VEHICLE ALERT ON THE SAME SENDER YIELDS NOTHING — the guard `subject_pattern` was written
+     * for and, until 2026-09-01, did not provide.
+     *
+     * Rent and car leboncoin share the sender `no.reply@leboncoin.fr`, the link host
+     * `leboncoin.fr/vi/` and the `Voir l'annonce` card separator. Only the subject separates them,
+     * the key was configured and documented for exactly this, and NO RENT ADAPTER READ IT. They do
+     * not collide today only because the vehicle alerts sit unlabelled in the INBOX while this
+     * source reads the alert folder — luck, and its own config comment named the expiry: "the
+     * moment the Gmail filter that routes them is created, which is an owed developer action".
+     *
+     * Without the filter a car parses as a flat, is rejected for having no commune, and counts
+     * toward this source's health — so the source would report a plausible number while ingesting
+     * another domain's mail.
+     *
+     * The message is the REAL frozen alert with only its Subject rewritten to a real vehicle
+     * subject, so nothing but the discriminator differs.
+     */
+    public function testAVehicleAlertOnTheSameSenderIsNotIngestedAsHousing(): void
+    {
+        $dir = sys_get_temp_dir() . '/lbc-subject-' . bin2hex(random_bytes(8));
+        mkdir($dir);
+
+        try {
+            $raw = file_get_contents(self::ROOT . '/tests/fixtures/rent/leboncoin/alert-3-listings.eml');
+            $swapped = preg_replace(
+                '~^Subject:.*$~mi',
+                'Subject: Auto Presto vous propose PEUGEOT 208 a 8 990 EUR a Melun',
+                (string) $raw,
+                1,
+            );
+            self::assertNotSame($raw, $swapped, 'the Subject header must actually have been replaced');
+            file_put_contents($dir . '/vehicle-alert.eml', $swapped);
+
+            $definition = ConfigLoader::loadSources(self::ROOT . '/config/rent/sources.json')['leboncoin'];
+            $db = sys_get_temp_dir() . '/rentwatch-lbc-subj-' . bin2hex(random_bytes(8)) . '.sqlite3';
+
+            $source = new EmailAlertSource(
+                $definition,
+                Store::open($db),
+                new FileMailbox($dir),
+                ConfigLoader::loadCriteria(self::ROOT . '/config/rent/criteria.json')->communeLabels,
+            );
+
+            self::assertSame([], $source->fetch(), 'a vehicle alert must not be ingested as housing');
+
+            // The counterweight: the SAME body under its own housing subject still yields its three
+            // cards, so the guarantee cannot be satisfied by rejecting everything.
+            self::assertCount(3, $this->listings());
+
+            foreach (['', '-wal', '-shm'] as $s) {
+                @unlink($db . $s);
+            }
+        } finally {
+            foreach (glob($dir . '/*') ?: [] as $f) {
+                @unlink($f);
+            }
+            @rmdir($dir);
+        }
+    }
+
     private function listings(): array
     {
         $this->dbPath ??= sys_get_temp_dir() . '/rentwatch-lbc-' . bin2hex(random_bytes(8)) . '.sqlite3';
