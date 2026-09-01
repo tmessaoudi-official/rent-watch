@@ -616,4 +616,56 @@ final class ImapMailbox implements Mailbox, MutableByDesign
 
         return '"' . str_replace(['\\', '"'], ['\\\\', '\\"'], $value) . '"';
     }
+    /**
+     * Whether the threshold is high enough, relative to the IMAP window, to rarely fire.
+     *
+     * `null` when there is nothing to say. A STRING for `doctor` to print — **not** a refusal, and
+     * the reason it is not is worth keeping.
+     *
+     * **This WAS a hard startup refusal, and both of its legs broke under review (2026-08-29).**
+     *
+     * Its premise was *"the newest message `SEARCH SINCE` can match is by definition at most
+     * `IMAP_SINCE_DAYS` old"*, which is false: `SEARCH SINCE` filters on **INTERNALDATE**, the
+     * server's arrival time, while this threshold is measured against the message's own **`Date:`
+     * header**. A message delivered today and stamped weeks ago — a bulk re-label, a delayed relay,
+     * exactly the 2026-08-25 incident shape — is inside the window and arbitrarily old. Demonstrated
+     * at twenty days. So the age is NOT bounded by the window and `feed_silent` is not unreachable;
+     * it is merely less likely to fire, which is advice, not an error.
+     *
+     * And the refusal LOCKED THE TOOL OUT. `IMAP_SINCE_DAYS=1` — which `.env.example` documents as
+     * meaningful and which `ImapMailbox` clamps to happily — leaves no integer satisfying
+     * `1 <= days < 1`, so every store-opening verb (`doctor`, `dump`, `run`, `digest`,
+     * `reclassify`) exited 2, **including on deployments with no email source at all**. That was a
+     * regression: before this feature the same value was simply clamped. Worse, a refused `run`
+     * writes `state/rent-last-refusal.txt` to be reported on the next SUCCESSFUL start, which could never
+     * come — under Docker, a crash loop writing a note nobody reads, verbatim the reader Q27 exists
+     * for.
+     *
+     * MOVED HERE FROM `RentScout` on 2026-09-01: `IMAP_SINCE_DAYS` is SHARED between the two
+     * domains (`CarScout` says so in its own doctor output), and the check lived only on the rent
+     * side — so the car domain carried the identical clash and said nothing. `config/car/sources.json`
+     * had `leboncoin: feed_silent_days 7` against the default 7-day window, an empty observable band,
+     * for as long as that value existed. This class owns the window, so it owns the advice about it.
+     *
+     * `doctor` DIAGNOSES, it does not refuse. Direct precedent in this same class: an unusable `TZ`
+     * is reported by `doctor` as a line and refused only by `run`.
+     */
+    public static function feedSilentWindowNote(?int $days, string $label = 'RENT_FEED_SILENT_DAYS'): ?string
+    {
+        $window = (int) (getenv('IMAP_SINCE_DAYS') ?: 7);
+
+        if ($days === null || $days < $window) {
+            return null;
+        }
+
+        return sprintf(
+            '%s (%d) >= IMAP_SINCE_DAYS (%d) — un flux muet fera surtout retomber le '
+            . 'compteur à zéro (statut broken) avant d\'atteindre le seuil ; la bande observable est '
+            . '(seuil, fenêtre). Baissez le seuil ou augmentez la fenêtre.',
+            $label,
+            $days,
+            $window,
+        );
+    }
+
 }

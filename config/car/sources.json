@@ -23,7 +23,8 @@
       "enabled": true,
       "family": "portal",
       "type": "email_alert",
-      "feed_silent_days": 7,
+      "_feed_silent_days": "5, not 7 — the band, not the cadence (corrected 2026-09-01, hours after 7 was set). `feed_silent` can only fire while the newest message is OLDER than the threshold and still INSIDE the `SEARCH SINCE` window, so the observable band is (threshold, IMAP_SINCE_DAYS]. At 7 against the default 7-day window that band is EMPTY: a genuinely silent feed returns no messages at all, the count drops to zero, and the source reports `broken` — the vague verdict — before the precise one can ever fire. 5 leaves two days of observability while still not calling an ordinary bursty gap a silence. Raising the window instead was rejected: SeLoger already truncates at 250 of 337 messages in a 7-day window, so a longer window makes a worse problem. `scout doctor` warns when this is at or past the window — on BOTH domains since 2026-09-01.",
+      "feed_silent_days": 5,
       "params": {
         "from": "no.reply@leboncoin.fr",
         "link_host": "leboncoin.fr/vi/",

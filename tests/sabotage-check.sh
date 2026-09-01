@@ -3303,8 +3303,17 @@ run_sabotage "a future-dated message is trusted, masking a silent feed for ever"
 # now -- but a diagnostic nobody prints is the dead config the refusal was trying to prevent, one
 # layer over. Silencing it must go red.
 run_sabotage "doctor stops warning that the threshold is at or above the IMAP window" \
-  src/php/Rent/Cli/RentScout.php \
+  src/php/Adapters/Mail/ImapMailbox.php \
   's%if (\$days === null || \$days < \$window) {%if (true) {%'
+
+# The check MOVED to ImapMailbox on 2026-09-01 because IMAP_SINCE_DAYS is shared between the two
+# domains and it lived only on the rent side — so config/car/sources.json shipped `leboncoin: 7`
+# against the default 7-day window, an empty observable band, and nothing said a word. The case
+# above now covers the shared helper; this one covers the CAR doctor actually printing it, because
+# a helper nobody calls is the dead diagnostic the refusal was trying to prevent, one layer over.
+run_sabotage "the CAR doctor stops printing the threshold/window band advice" \
+  src/php/Car/Cli/CarScout.php \
+  's%if (\$windowNote !== null) {%if (false) {%'
 
 # THE DECORATOR MUST FORWARD IT. `wrapAll()` wraps every source under --watch, which is the ONLY
 # mode in which a feed can go silent unnoticed for days -- so a decorator that drops the capability

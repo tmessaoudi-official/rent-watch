@@ -98,6 +98,54 @@ final class CarScoutTest extends TestCase
         self::assertStringContainsString('car-watch', $r['out']);
     }
 
+    /**
+     * THE CAR DOCTOR WARNS WHEN A THRESHOLD SITS AT OR PAST THE IMAP WINDOW — which it never did.
+     *
+     * `IMAP_SINCE_DAYS` is SHARED between the two domains (`CarScout` says so in its own env
+     * listing), and the check lived only in `RentScout`. So `config/car/sources.json` could ship —
+     * and did ship — `leboncoin: feed_silent_days 7` against the default 7-day window, and nothing
+     * said a word.
+     *
+     * The band is (threshold, IMAP_SINCE_DAYS]. At 7 against 7 it is EMPTY: a genuinely silent feed
+     * returns no messages at all, the count falls to zero and the source reports `broken` — the
+     * vague verdict — before the threshold can ever report `feed_silent`, the precise one. The
+     * misconfiguration hides exactly the diagnosis it was set to sharpen.
+     *
+     * Found 2026-09-01 by the RENT doctor warning about a value copied FROM this side. Asserted
+     * here on BOTH surfaces the rent side covers — the global env threshold and a per-source one —
+     * because a check landing on one of two symmetric surfaces is what put this here.
+     */
+    public function testDoctorWarnsWhenTheFeedSilenceThresholdReachesTheImapWindow(): void
+    {
+        $before = getenv('CAR_FEED_SILENT_DAYS');
+        putenv('CAR_FEED_SILENT_DAYS=9');
+
+        try {
+            $r = $this->scout(['--domain=car', 'doctor', '--source=paruvendu']);
+
+            self::assertStringContainsString('CAR_FEED_SILENT_DAYS', $r['err'] . $r['out']);
+            self::assertStringContainsString('IMAP_SINCE_DAYS', $r['err'] . $r['out']);
+            self::assertStringContainsString('bande observable', $r['err'] . $r['out']);
+        } finally {
+            $before === false ? putenv('CAR_FEED_SILENT_DAYS') : putenv('CAR_FEED_SILENT_DAYS=' . $before);
+        }
+    }
+
+    /** The counterweight: a threshold INSIDE the window is silent, or the warning is just noise. */
+    public function testDoctorIsSilentWhenTheThresholdSitsInsideTheWindow(): void
+    {
+        $before = getenv('CAR_FEED_SILENT_DAYS');
+        putenv('CAR_FEED_SILENT_DAYS=3');
+
+        try {
+            $r = $this->scout(['--domain=car', 'doctor', '--source=paruvendu']);
+
+            self::assertStringNotContainsString('bande observable', $r['err'] . $r['out']);
+        } finally {
+            $before === false ? putenv('CAR_FEED_SILENT_DAYS') : putenv('CAR_FEED_SILENT_DAYS=' . $before);
+        }
+    }
+
     public function testDumpShowsTheFirstCardAndItsVerdict(): void
     {
         $r = $this->scout(['--domain=car', 'dump', 'paruvendu']);

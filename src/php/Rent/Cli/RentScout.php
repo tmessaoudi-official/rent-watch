@@ -314,7 +314,7 @@ final readonly class RentScout
         // Diagnostic, never a refusal — see feedSilentWindowNote() for why that distinction cost a
         // review round. A misconfiguration that merely makes a verdict unlikely is advice; the tool
         // still runs, and on a deployment with no email source at all it is not even advice.
-        $windowNote = self::feedSilentWindowNote(self::feedSilentDays());
+        $windowNote = ImapMailbox::feedSilentWindowNote(self::feedSilentDays());
 
         if ($windowNote !== null) {
             $this->warn($windowNote);
@@ -327,7 +327,7 @@ final readonly class RentScout
             if ($definition->feedSilentDays === null) {
                 continue;
             }
-            $note = self::feedSilentWindowNote($definition->feedSilentDays, 'feed_silent_days de ' . $definition->name);
+            $note = ImapMailbox::feedSilentWindowNote($definition->feedSilentDays, 'feed_silent_days de ' . $definition->name);
             if ($note !== null) {
                 $this->warn($note);
             }
@@ -2177,51 +2177,6 @@ final readonly class RentScout
         return $days;
     }
 
-    /**
-     * Whether the threshold is high enough, relative to the IMAP window, to rarely fire.
-     *
-     * `null` when there is nothing to say. A STRING for `doctor` to print — **not** a refusal, and
-     * the reason it is not is worth keeping.
-     *
-     * **This WAS a hard startup refusal, and both of its legs broke under review (2026-08-29).**
-     *
-     * Its premise was *"the newest message `SEARCH SINCE` can match is by definition at most
-     * `IMAP_SINCE_DAYS` old"*, which is false: `SEARCH SINCE` filters on **INTERNALDATE**, the
-     * server's arrival time, while this threshold is measured against the message's own **`Date:`
-     * header**. A message delivered today and stamped weeks ago — a bulk re-label, a delayed relay,
-     * exactly the 2026-08-25 incident shape — is inside the window and arbitrarily old. Demonstrated
-     * at twenty days. So the age is NOT bounded by the window and `feed_silent` is not unreachable;
-     * it is merely less likely to fire, which is advice, not an error.
-     *
-     * And the refusal LOCKED THE TOOL OUT. `IMAP_SINCE_DAYS=1` — which `.env.example` documents as
-     * meaningful and which `ImapMailbox` clamps to happily — leaves no integer satisfying
-     * `1 <= days < 1`, so every store-opening verb (`doctor`, `dump`, `run`, `digest`,
-     * `reclassify`) exited 2, **including on deployments with no email source at all**. That was a
-     * regression: before this feature the same value was simply clamped. Worse, a refused `run`
-     * writes `state/rent-last-refusal.txt` to be reported on the next SUCCESSFUL start, which could never
-     * come — under Docker, a crash loop writing a note nobody reads, verbatim the reader Q27 exists
-     * for.
-     *
-     * `doctor` DIAGNOSES, it does not refuse. Direct precedent in this same class: an unusable `TZ`
-     * is reported by `doctor` as a line and refused only by `run`.
-     */
-    private static function feedSilentWindowNote(?int $days, string $label = 'RENT_FEED_SILENT_DAYS'): ?string
-    {
-        $window = (int) (getenv('IMAP_SINCE_DAYS') ?: 7);
-
-        if ($days === null || $days < $window) {
-            return null;
-        }
-
-        return sprintf(
-            '%s (%d) >= IMAP_SINCE_DAYS (%d) — un flux muet fera surtout retomber le '
-            . 'compteur à zéro (statut broken) avant d\'atteindre le seuil ; la bande observable est '
-            . '(seuil, fenêtre). Baissez le seuil ou augmentez la fenêtre.',
-            $label,
-            $days,
-            $window,
-        );
-    }
 
     /**
      * Every source that is enabled AND has an adapter.

@@ -129,6 +129,32 @@ final readonly class CarScout
         $this->line(sprintf('  critères : ≤ %s € · zone %s · pic ≤ %d ans / ≤ %s km · carrosseries %s', number_format($criteria->maxPriceEur, 0, ',', ' '), $criteria->postcodePrefixes === [] ? 'nationale' : implode(',', $criteria->postcodePrefixes), $criteria->peakAgeYears, number_format($criteria->peakMileageKm, 0, ',', ' '), implode(' > ', $criteria->bodyRank) ?: '(aucune)'));
         $this->line('');
 
+        // THE SAME BAND ADVICE THE RENT DOCTOR HAS GIVEN SINCE 2026-08-29, AND THIS SIDE NEVER DID.
+        // `IMAP_SINCE_DAYS` is SHARED between the domains — this class says so in its own env
+        // listing — so a car source can set `feed_silent_days` past the window exactly as a rent one
+        // can, and nothing said so. `config/car/sources.json` shipped `leboncoin: 7` against the
+        // default 7-day window — an empty observable band — for as long as that value existed: a
+        // genuinely silent feed drops the counter to zero and reports `broken` (vague) before the
+        // threshold can ever report `feed_silent` (precise).
+        //
+        // Found 2026-09-01 by the RENT doctor warning about a value COPIED FROM THIS SIDE. A check
+        // living on one of two symmetric surfaces is the shape this repo keeps paying for.
+        $windowNote = ImapMailbox::feedSilentWindowNote($this->feedSilentDays(), 'CAR_FEED_SILENT_DAYS');
+
+        if ($windowNote !== null) {
+            $this->warn($windowNote);
+        }
+
+        foreach (VehicleSourceLoader::load($this->rootDir . '/config/car/sources.json') as $definition) {
+            if ($definition->feedSilentDays === null) {
+                continue;
+            }
+            $note = ImapMailbox::feedSilentWindowNote($definition->feedSilentDays, 'feed_silent_days de ' . $definition->name);
+            if ($note !== null) {
+                $this->warn($note);
+            }
+        }
+
         $sources = $this->sources($store, $this->onlySources($flags));
         if ($sources === []) {
             $this->line('  aucune source activée.');
