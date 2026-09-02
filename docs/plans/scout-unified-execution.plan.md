@@ -603,6 +603,19 @@ read-only) and the merged prose as one review deep.
   check F5, found nothing, and would have left the row OPEN — the shipped
   `co[\s-]?living` defeats a substring grep. Check the pattern, not a fragment of it, and verify
   the check as well as the claim.
+- [2026-09-02] RECORD (Track 6-A4 DEPLOYED, and the realised cost MEASURED): image
+  `fd8ab0f7249e…` built 12:33:31Z, both watchers recreated onto it ONE AT A TIME (F25) with image
+  ids verified and no wedge. Two car passes at 14:29 and 14:38 — all three sources `ok`, paruvendu
+  111 items — and **zero `autres` makes remain in the store**. The DS4 row healed **in place**:
+  `make` and `model` are now NULL and the score fell **15 → 5**, exactly the 10-point brand share
+  it should never have had. **No re-notification, and that is the contrast worth keeping against
+  A6 the day before:** ParuVendu's identity is the real ad id, so a corrected field UPDATES the
+  row, while SeLoger is `id_from: content` with the surface IN the key, so A6's corrections re-keyed
+  and cost 2 duplicate pushes. The same class of repair costs a duplicate push on one identity
+  scheme and nothing at all on the other — **check which scheme a source uses before predicting
+  what a correction will cost.** `last_seen_at` correctly did NOT move (2026-08-29T10:05:12Z): for
+  an email listing that is the MESSAGE date, per the 2026-08-29 `observedAt` fix, not the pass time.
+  Rollback is one retag away: `scout:pre-a4`.
 
 ---
 
@@ -1592,8 +1605,14 @@ tool/guard) and say which ones the fix covers.**
   `_feed_silent_days` comment; fold `pap-detail-hydration.plan.md` back under this file (archive
   it with the SUPERSEDED banner and copy its prose_absent ruling's pointer into the log above) so
   the single-source ruling holds; strike the done items from Inputs-owed.
-- **C2 certification round** (audit N8): freeze AFTER Track 6-A/C1 land (or at the reviewing
-  session's discretion), then ONE MAXIMAL round covering the entire uncertified span since
+- **C2 certification round** (audit N8) — **THE FREEZE POINT IS `ede198e`** (2026-09-02, the C1
+  commit; A4 is `0ae6cd0` before it). That is the last CODE-touching commit: the developer ruled on
+  2026-09-02 that A4 + C1 land and then the tree freezes, with A5 and B1-B3 deferred past the panel
+  so the span stops growing. Any docs-only commit after `ede198e` — including the one that wrote
+  this line — leaves the code under review unchanged; **if a commit after it touches
+  `src`/`config`/`tests`, the freeze is broken and this pointer is wrong.** Verify with
+  `git log --oneline ede198e..HEAD -- src config tests`, which must be empty. Then ONE MAXIMAL
+  round covering the entire uncertified span since
   `7765997` — **58 commits, 38 of them touching `src`/`config`/`tests` at `0ae6cd0` (measured
   2026-09-02, and bigger than the "45+" this line used to state; the C1 commit that corrected
   this line makes it **59/39** — it is not docs-only, having repointed two in-tree citations of
