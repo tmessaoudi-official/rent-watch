@@ -52,13 +52,25 @@ stop and say why config was not enough — a contract every source bypasses is n
 > SUBSCRIBER'S OWN SEARCH CRITERIA somewhere in the message — *"jusqu'à 1.200 EUR à partir de 45 m²"*.
 > Bien'ici hit this through segmentation (3 of 13 surfaces read 45) and PAP hit it with no
 > segmentation at all (the surface read 45 instead of 50, below `min_surface_m2`, so the first alert
-> ever sent was rejected as too small — silently). Five per-source `params` regexes exist for this and
-> are compile-checked at load: `title_pattern`, `commune_pattern`, `residence_pattern`,
-> `surface_pattern`, `rooms_pattern`. Key them on a STRUCTURAL landmark the template guarantees — a
+> ever sent was rejected as too small — silently). **Five** per-source `params` regexes exist for
+> positional anchoring: `title_pattern`, `commune_pattern`, `residence_pattern`, `surface_pattern`,
+> `rooms_pattern`. Key them on a STRUCTURAL landmark the template guarantees — a
 > `(NNNNN)` postcode line, the line above the `pièces` line — never on vocabulary someone typed.
 > **A configured `title_pattern`/`surface_pattern`/`rooms_pattern` that MISSES yields nothing rather
 > than falling back to the generic scan**, so a broken one shows as a fault instead of as a small flat.
 > And measure, do not predict: run the real extractors against the real capture before writing config.
+>
+> **EIGHT patterns are compile-checked at load, not five** — this passage used to conflate the two
+> sets and so hid three keys from every session that read it (C2 round-1 completeness lens,
+> 2026-09-02). The other three are not anchors and serve different jobs: `subject_pattern` (the
+> source's scope inside a shared mailbox), `card_separator_pattern` (the regex form of the segmenter
+> — Bien'ici needs it, and the literal `card_separator` is the other form; configuring both is
+> refused, and since 2026-09-02 so is either one on a `mixed_tenure` source), and
+> **`advertiser_pattern`, which is §1-relevant**: it feeds `Core/LandlordRegistry`, so a card
+> advertised by a bailleur is judged with that landlord's profile rather than the portal's `LIBRE`
+> default. All eight are compile-checked because `matchParam()` uses `@preg_match`, which neither
+> warns nor throws — a broken one is silent, and on `advertiser_pattern` the silence re-opens the
+> exact hole the registry closes.
 
 Direct HTTP scraping of a private portal is opt-in only: `legal_risk: true`, disabled by default, and it
 must **refuse to run** without an explicit flag. No CAPTCHA solving, proxy rotation, fingerprint

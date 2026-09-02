@@ -641,10 +641,39 @@ The car half is closed. Three things about it are worth knowing before touching 
   for the same reason: it has a documented furniture segment, so counting it adds one permanent miss
   per message and the WARN only ever fires at 100%.
 
-**What this does NOT yet cover:** the four rent sources on `html`/`json`. Cityloger carries 9 null
-surfaces of 60 with two re-sighted the same day, and nothing can say whether the detail page omits
-the figure or the selector misses it. Instrumenting `ListingMapper` — the one funnel every html,
-json and detail extraction passes through — is the remaining half.
+**The html/json half CLOSED on 2026-09-02** (`070964b` + `2ab3245`): `ListingMapper` — the one funnel
+every html, json and detail extraction passes through — is instrumented, and `HtmlSource`,
+`HttpJsonSource` and `FixtureSource` implement `CountsPatternMisses`. `SitemapVehicleSource` was the
+last surface counting nothing and joined them the same day, through its own single `$field` funnel.
+**Only a CONFIGURED key can miss**, on every adapter: counting an unmapped one reports a permanent
+100 % on fields nobody asked for, and since `total()` speaks only at 100 % the signal would be pure
+furniture on any source mapping a subset.
+
+> **COUNTING IS NOT REPORTING, and for a month four adapters of five did the first and not the
+> second** (C2 round-1 resilience lens + completeness lens, 2026-09-02). Their `health()` was a
+> one-line delegation to the store that never read `total()`, so under `run --watch` — the deployed
+> mode — a field map going 100 % null produced **no status change, no `isAlerting()`, no alert**,
+> only a `doctor` printout. Hard rule 2's own shape: an alert computed and never sent is worse than
+> none, because someone believes the green. It was not theoretical — In'li's card `cp` went 171/171
+> dead on the deployed image while `HtmlSource::health()` returned `ok`, and a human found it running
+> `doctor` after a redeploy. The repair then left In'li's postcode resting on ONE selector, and in
+> region mode `postcode_prefixes` IS the location filter: if that selector dies the source keeps
+> returning ~171 listings, `item_count` does not move, no run fails, and In'li matches zero flats for
+> ever while reporting `ok`.
+>
+> **The escalation is now ONE implementation** — `PatternMissLog::escalate()` — rather than the two
+> verbatim inline copies it had become. Four more copies is precisely how the sixth adapter forgets,
+> so the guard is structural: `PatternMissEscalationTest` discovers every `CountsPatternMisses`
+> implementor **by reflection** and fails when one does not route through it. **And `reset()` is now
+> called at the top of every `fetch()`**, which is the same finding's other half: the CLI builds its
+> sources ONCE and the watch loop closes over them, so a log that accumulates makes a template
+> already fixed warn for ever — worse than silence, because it is credible.
+
+**What this still does NOT cover:** cityloger's 9 null surfaces of 60 are a **16 %** miss rate, and
+`total()` speaks only at 100 %, so the signal is SILENT on them by design. That question was settled
+by one live fetch instead — the page states `65 m2` on line 221 while the selector scopes to
+`div.tab-content`, which opens on line 268: a SCOPE miss, tracked separately. Partial-variant
+detection remains uncovered.
 
 ### Bien'ici — source #6, and it disagrees with SeLoger on almost every decision (2026-08-25)
 
@@ -968,6 +997,23 @@ configures no pattern is bit-for-bit unchanged. Three rules travel with it:
 > PLAI and PLUS are allocated by commission and are not advertised on commercial portals; **PLS
 > occasionally is, and that is the residual.** Reversed by one line — `mixed_tenure: true` — and
 > `docs/plans/archive/seloger-email-alert.plan.md` records what that costs.
+>
+> > **THE RESIDUAL IS NARROWER SINCE `dede8ac` (2026-09-01), AND THE PARAGRAPH ABOVE STOOD UNCHANGED
+> > FOR A DAY SAYING OTHERWISE** — found by the C2 round-1 completeness lens, which noticed the new
+> > class's own docblock naming this text as no longer holding while the text itself was never
+> > edited. `Core/LandlordRegistry` reads the advertiser out of the card and substitutes THAT
+> > landlord's profile, so a SeLoger card advertised by In'li or CDC Habitat is judged as the
+> > landlord it names rather than by the portal's `LIBRE` default. The sentence *"a card stating no
+> > tenure takes the source default and matches"* is therefore true only of an **anonymous**
+> > advertiser now, which is what the residual has shrunk to. Everything else above still holds —
+> > the tier-2 label rules never consult `mixed_tenure`, and arming the flag would still digest the
+> > whole source.
+> >
+> > **It is a NARROWING, not a closure.** A card whose advertiser is a bailleur that names itself is
+> > covered; one that advertises anonymously, or through an agency that does not, is not — and
+> > `advertiser_pattern` is a per-source regex, so a source that configures none is exactly as
+> > exposed as before. The registry is a new input to the classifier's five-tier signal priority in
+> > § "Domain glossary" and is documented there.
 
 > **ONE MAILBOX SERVING MANY PORTALS IS A SHARED BUDGET, and it zeroed a live source hours after it
 > went live (2026-08-25).** The developer widened their Gmail filter to catch five portals and
@@ -1367,6 +1413,25 @@ higher one:
 4. **Plafonds de ressources** — compare quoted ceilings against known LLI vs PLUS/PLAI bands for the zone.
 5. **Source default** — lowest confidence, used only when nothing else fires. An **absent** signal must
    *lower* confidence, never silently inherit `default_tenure` at full confidence.
+
+**Tier 5 has a substitution in front of it: `Core/LandlordRegistry` (2026-09-01, `dede8ac`).** It is
+not a sixth tier — it changes *whose* default tier 5 reads. A private-portal card whose advertiser
+names itself a bailleur is judged with **that landlord's** profile rather than the portal's, because
+a flat advertised by CDC Habitat on SeLoger is CDC Habitat's stock whichever window it is seen
+through. Four things about it are load-bearing, and none is obvious from the call site:
+
+- **It only ever tightens.** `stricterOf()` combines the portal's profile with the landlord's and
+  keeps the more restrictive; a landlord cannot make a source *less* careful than its own block.
+- **The input is a per-source `advertiser_pattern` regex.** A source that configures none gets no
+  substitution, so this narrows the SeLoger §1 residual rather than closing it — an anonymous
+  advertiser is exactly as exposed as before.
+- **A broken pattern is silent in the §1 direction**, which is why it joined the load-time
+  compile-check: `@preg_match` neither warns nor throws, the advertiser comes back `null`, the card
+  keeps the portal's own profile, and a landlord-advertised card on a `mixed_tenure: false` portal is
+  notified as `LIBRE` again — the exact hole this class closes, re-opened by a typo.
+- **`effectiveProfile()` returns the unknown-landlord profile directly for a recognised landlord with
+  no source block**, skipping `stricterOf()`. That is safe *only* because an excluded `default_tenure`
+  is refused at load; the dependency is real and was unstated until the C2 round-1 panel named it.
 
 ---
 

@@ -556,7 +556,7 @@ byte-identical. Every ruling it implements is in
 `docs/plans/archive/scout-rename-and-car-domain.plan.md`; the build record is
 `docs/plans/archive/car-domain-first-slice.plan.md`.
 
-Two sources, both built against a real payload read the same day:
+Three sources, each built against a real payload:
 
 - **ParuVendu** (`email_alert`) — the portal's saved-search mail, ~every two hours. **It samples its
   feed**: each message carries THREE cards for the tens or hundreds its subject counts (stated
@@ -566,13 +566,25 @@ Two sources, both built against a real payload read the same day:
   schema.org `Vehicle` block. The sitemap is the index; a lot page is fetched only for an id not
   yet in the seen-set, behind `lot_budget_per_pass`. **Seed before watching**: the seed records the
   whole index without fetching a lot, and an unseeded run refuses (Q36's car analog).
+- **leboncoin** (`email_alert`, source #3, 2026-08-31) — one vehicle per message, no
+  `card_separator`: the portal sends a mail per hit rather than a digest. **Everything that matters
+  is in the SUBJECT**, which is what made it need code rather than config alone — the body above the
+  price line carries only the dealer's name, rating and stock count, so a positional title reader
+  would have titled every car with a marketing sentence. It shares its sender, its link host and
+  even its `Voir l'annonce` string with the RENT leboncoin source; `subject_pattern` is the only
+  thing separating the two domains' alerts.
 
 What never surfaces: `VEI`, `VGE` / procédure VE, gagé / opposition, pour pièces, épave, sans carte
 grise, CT non fourni / non roulant — and `accidenté`, réparé or not, a risk-appetite ruling and the
 first line to relax, by a commit. **The classifier reads negations first**: *jamais accidenté*,
 *non gagé*, *aucun accident* are what an honest ad says, and a bare scan would reject the good ads
 and keep the silent ones. Price (≤ 30 000 €, the one hard ceiling) and a STATED location outside
-Île-de-France reject; age, mileage, gearbox, fuel and body are score components and never reject.
+Île-de-France reject; age, mileage, gearbox, fuel, body and **brand** are score components and never
+reject. `brand_avoid` is 10 points of the existing 100 — flat and equal, a list of **stems** rather
+than of makes (`alfa`, never `alfa romeo`), matched to a non-letter boundary because the live store
+carries one marque under two spellings. An unlisted make earns the share; a listed one earns none;
+an **unextracted** make earns none either and says `marque inconnue — hors score`, which is the arm
+every other unknown component here takes.
 Neither first-slice source states a location, so the geography filter is inert on both by
 measurement.
 

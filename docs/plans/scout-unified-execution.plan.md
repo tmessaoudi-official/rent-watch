@@ -626,6 +626,127 @@ read-only) and the merged prose as one review deep.
   ladder exists: a MAXIMAL round run by the session that wrote `0ae6cd0` and `ede198e` certifies its
   own work, and two of the span's commits are today's. **Deferred past the panel by the same
   2026-09-02 ruling: A5, B1, B2, B3.** Nothing else is in flight.
+- [2026-09-02 16:40] RULING (Track 6-C2): **the handback above is SUPERSEDED by the developer, and
+  this session runs C2 after all.** Asked again at the start of a fresh, compacted context, the
+  developer chose *"Run C2 here"* over building B1 or A5. The objection the earlier ruling raised —
+  an author certifying its own 39 commits — is answered by the ladder's own mechanism rather than
+  waived: the three lenses are **unnamed fresh-context subagents** that read the diff, the code and
+  the tests themselves in their own pinned worktrees, and are chartered to REFUTE. The briefing
+  carried that risk explicitly by phrasing every scope item as *a commit and a claim to refute*,
+  never as this session's conclusion.
+- [2026-09-02 17:05] RECORD (C2 ROUND 1 — **NOT CLEAN: 2 P0, 4 P1, 9 P2**, plus 5 P3 that do not
+  reset). Three lenses, each in its own worktree pinned at `ede198e`, run concurrently; all three
+  removed their worktrees and the live tree stayed clean throughout. Reports:
+  `var/claude/c2-round1-{correctness,resilience,completeness}.md`. **The two-clean counter is at
+  zero**, so a clean round 2 still leaves round 3 owed.
+
+  **The reset rule was stated in the briefing rather than left to each charter**, because on a
+  16 000-line span an unstated threshold makes convergence impossible: P0/P1/P2 reset, P3
+  style/wording notes are reported separately and do not. That matches the charters' own taxonomy.
+
+  Four decisions shaped the briefing and are worth keeping:
+
+  - **Scope was given as COMMITS, never as this session's conclusions.** Where this session had a
+    verdict — A4's refuted premise, C1's nine relabelled register rows — the prompt named the commit
+    and the claim and asked the lens to refute it. Author bias enters through the prompt, not the
+    diff. It paid: the correctness lens **verified** `VehicleScorer`'s null arm scores 0 rather than
+    taking A4's word, and confirmed `9ea9d77`'s link-reader boundary by byte-identical `dump` output
+    either side of the commit — the risk that would have re-keyed every link-keyed backlog.
+  - **The CAR §1 surface was put in the correctness lens's scope explicitly.** That charter is
+    written for French housing tenure and predates `src/php/Car/`; `VehicleClassifier`'s
+    non-overridable excluded set is §1's twin, and without saying so it would have gone unreviewed
+    across eight commits.
+  - **Four local hazards were briefed**, all previously paid for: `difft` makes `git diff` silently
+    empty, the tracing JIT kills the ledger at exit 134, `/bin/grep` is ugrep so a `\|` in
+    `SABOTAGE_FILTER` yields a green PARTIAL RUN, and a `MAILBOX_DIR=` proof without a throwaway DB
+    writes into the live store (F26).
+  - **Each lens had to end with what it did NOT read and did NOT execute.** With 88 files a clean
+    verdict is cheap; that list is what makes one worth anything — and it is what routes round 2.
+    Between them the three left `Core/RunStore.php` (+950) unopened, `LandlordRegistry.php` unread by
+    resilience, 39 of ~41 test files unread by resilience, and `test-sabotage-applies.sh` unfinished
+    by correctness. Round 2 gets those by name.
+
+  **One claim this session had made is downgraded by the round, in the safe direction.** A1's
+  short-window rate rule was declared UNCERTIFIED-BY-EXECUTION; the resilience lens executed its
+  alert path end to end — traced to `markAlerted()`, counterweight confirmed read-only against BOTH
+  live stores (max 2.9 % against a 20 % threshold), all three ledger cases run 3 detected / 0
+  undetected, and production `source_alerts` rows proving the send half. It is now certified as far
+  as it can be short of a live firing, which has still not happened.
+- [2026-09-02 18:20] RECORD (C2 round-1 **F2 CLOSED**, §1 config key): `card_separator_pattern` — the
+  regex form of the segmenter, added in this span and honoured IN PREFERENCE to the literal — walked
+  past both `card_separator` load-time refusals, one of whose own message calls its subject *"une
+  décision §1 que personne n'a prise"*. All 16 occurrences in the tests and the ledger were the
+  literal, so both guards could be defeated by a config change with everything green. Both now read
+  either key. Two details beyond the report: **the refusal names the key the file actually carries**,
+  because an error pointing at `card_separator` on a config that sets the pattern form sends the
+  operator to a line that is not there; and **the existing ledger case went inert the moment the
+  condition changed** — retargeted in the same commit rather than left for
+  `test-sabotage-applies.sh`, which is the `4d49eda` failure class exactly. Three cases now cover it,
+  and the two new ones are **one per guard** rather than one mutation of the shared `$segmented`:
+  a single mutation reddens both new tests at once, so deleting either test would leave the case
+  still detected. **4 detected, 0 undetected**, both baselines green.
+- [2026-09-02 18:40] RECORD (C2 round-1 **F1 CLOSED**, §1 P0 — the re-advertised flat): the veto
+  travelled three ways and **all three need an EDGE** — a persisted cluster `group_key`, a twin in the
+  pass's harvest, or the row's own previous reading. A portal re-advertising an excluded flat under a
+  NEW AD ID has none of them: a new `external_id` is a fresh row, and `Dedup` refuses a same-source
+  edge because the source's own id is authoritative. **That refusal is right about IDENTITY and was
+  being applied to the VETO**, which is a fact about the DWELLING. Reachable on `bienici`, `leboncoin`
+  and `pap`; not on `seloger`, which is content-keyed.
+
+  Shipped as a FOURTH route that needs no edge: `Store::excludedDwellings()` decodes the v7 snapshot
+  of every row holding an excluded tenure (43 of 2 331 in the live store, so one indexed scan and a
+  few dozen JSON decodes, loaded ONCE per pass), and `Pipeline::storedDwellingClassification()`
+  compares each survivor against them through `Dedup::sameDwellingReason()` — the SAME
+  positive-evidence bar as `duplicateReason()` and `twinReason()`, with only the source and family
+  test dropped.
+
+  Five decisions travel with it, and one was forced by evidence rather than chosen:
+
+  - **It runs LAST, after `twinClassification()`, and the order is load-bearing.** Placed before it,
+    the new veto pre-empted the old one — `twinClassification()` early-returns on an already excluded
+    survivor, so `recordTwin()` never fired and the cross-track fact stopped being PERSISTED on every
+    row this veto happened to catch first. **Three existing twin-durability tests went red and said
+    so.** A veto that silently disables another veto's recording is a net loss: this one is derived
+    from what is on disk, while the twin fact is what PUTS the other track's reading there.
+  - **It is the row's OWN judged verdict, never a twin fact.** `recordTwin()` would persist a source
+    name and `scout digest` would then announce *"relevé via bienici (autre voie)"* about a bienici
+    row. A same-source copy is not another route.
+  - **EXCLUDED ONLY — propagating `UNKNOWN` this way is an explicit NON-GOAL**, recorded here so a
+    later round does not file it as an omission. A doubt spread by content match against the whole
+    store is the In'li cost, *not §1 satisfied, the tool switched off*.
+  - **STATED COST, the Gros Saule shape:** two genuinely different flats in one residence agreeing on
+    commune, rooms, surface and rent within tolerance are one dwelling to the bar, so if either is
+    excluded both are rejected permanently. Q39 already prices pairwise over-linking as a permanent
+    rejection in this direction. **And a row with NO SNAPSHOT is not vetoed** — a pre-v7 row (never
+    backfilled, by ruling) or one whose payload could not be encoded. That is the unsafe direction,
+    stated rather than hidden; it decays, and the alternative — comparing on the four flat columns
+    `listings` happens to carry — would merge on the ABSENCE of a difference.
+  - **A corrupt snapshot is SKIPPED here, not thrown**, a deliberate departure from `evidence()`.
+    There the row is the one being re-judged; here it is one candidate among many, and throwing would
+    take the whole pass down — every source, every listing — turning one bad row into a total outage.
+
+  **BOTH JUDGING ORDERS ARE ASSERTED**, because `Core\Pacer` shuffles the harvest: a fix that works
+  when the vetoed row happens to be judged first works half the time, and survivorship following the
+  harvest order is how the round-4 durable-reading defect escaped for a day.
+
+  **The tests assert the MECHANISM, not the silence.** A first version checked only that no MATCH was
+  sent, which PHPUnit reported as *"did not perform any assertions"* — and would have stayed green
+  with the veto deleted and something else broken. They now assert the stored `tenure` of the
+  re-advertised row.
+
+  **ONE EXISTING TEST'S FIXTURE WAS WRONG, and the evidence is here rather than in a quiet edit.**
+  `testEveryJudgedOutcomeIsRecordedWhicheverWayItWent` built its three listings from the same helper,
+  so all three stated Sartrouville, 4 rooms, 88 m² and 1450 € — **one dwelling advertised three
+  times, one copy saying `PLAI`** — and the new veto correctly rejected all three. The rejection was
+  right and the fixture was wrong: the test's guarantee is that `recordOutcome()` runs before the
+  REJECT and DIGEST branches, which needs three outcomes and says nothing about them sharing a flat.
+  Varying rooms, surface and rent restores the guarantee without a §1 veto standing in the middle of
+  it. **This is §1's clause on weakening a fixture being satisfied, not waived.**
+
+  Suite **2 672 tests / 10 373 assertions** green. Three ledger cases: the veto never firing, the
+  candidate set coming back empty (the shape a performance edit takes — present, called, permanently
+  silent), and the **counterweight**, ignoring the positive-evidence bar so every stored exclusion
+  vetoes every listing.
 
 ---
 
