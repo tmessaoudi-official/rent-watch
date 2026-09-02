@@ -191,7 +191,7 @@ final readonly class SourceDefinition
          * advertised with the whole flat's room count and surface passes every numeric filter and
          * there is no text in which to catch it — measured, and the two ways out are both closed:
          * the detail page is behind a bot challenge (hard rule 5) and rent-per-room has no gap to
-         * threshold on. See `docs/plans/pap-detail-hydration.plan.md`.
+         * threshold on. See `docs/plans/archive/pap-detail-hydration.plan.md`.
          *
          * What it buys is honesty rather than filtering: {@see \Scout\Rent\Core\CriteriaEngine}
          * says so in the notification's own reasons, beside the unverifiable-ceiling line it

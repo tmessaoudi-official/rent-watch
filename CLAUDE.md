@@ -843,7 +843,9 @@ applies and the figure lands in `rentHc`.
 > `description`, outside the `enabled` branch because `--source=` force-runs disabled sources: a
 > caveat contradicted by the config beside it is worse than none, since it reads as considered.
 > **The counterweight is load-bearing** — a line on every push everywhere is furniture, so the
-> sabotage ledger pins both halves. Full measurements: `docs/plans/pap-detail-hydration.plan.md`.
+> sabotage ledger pins both halves. Full measurements: `docs/plans/archive/pap-detail-hydration.plan.md`
+> (archived 2026-09-02 — it was a second live plan holding a ruling, which the unified plan
+> declares itself the single source of truth for; the refusal and its probes are unchanged).
 >
 > Two robots lessons came with it, both general. **`robots.txt` must be READ, never recalled**: the
 > plan that authorised this work paraphrased a file it had seen and inverted its first rule

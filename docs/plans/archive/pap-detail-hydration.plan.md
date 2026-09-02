@@ -1,3 +1,12 @@
+> 📦 **SUPERSEDED AND ARCHIVED 2026-09-02 (Track 6-C1).** This file was a SECOND live plan holding a
+> ruling — `prose_absent` — outside `docs/plans/scout-unified-execution.plan.md`, which that file
+> declares the single source of truth. Audit finding N7 flagged it; C1 discharges it. The ruling
+> itself is unchanged and is summarised in the unified plan's Decisions Log, with `CLAUDE.md`
+> § "PAP" carrying the operational version. **Nothing here is a live task.** Kept verbatim because
+> its measurements — the three spaced Cloudflare probes, and the rent-per-room distribution that
+> closed the last numeric route — are the evidence for a REFUSAL, and a refusal without its
+> measurements invites the next session to retry it.
+
 # PAP detail hydration — giving an email source the words its alert omits
 
 > ⛔ **REFUSED BY HARD RULE 5 (2026-09-01, after the plan was written and step 1 was built).**

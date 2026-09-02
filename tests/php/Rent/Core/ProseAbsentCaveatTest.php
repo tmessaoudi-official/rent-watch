@@ -28,7 +28,7 @@ use Scout\Rent\Core\Verdict;
  * stored rows and `title` is `Location appartement` or `Location maison` on every one.
  *
  * **Both routes out are closed, and both were measured rather than assumed** (see
- * `docs/plans/pap-detail-hydration.plan.md`). The detail page answers a Cloudflare bot challenge
+ * `docs/plans/archive/pap-detail-hydration.plan.md`). The detail page answers a Cloudflare bot challenge
  * from the deployment's own IP, which hard rule 5 refuses to work around — the A15 Val d'Oise
  * Habitat precedent. And rent-per-room, the last numeric candidate, has no gap to threshold on: over
  * the four private-market sources the low tail runs 63, 71, 78, 84, 85, 90, 90, 91, 92, 92, 93, 94,
