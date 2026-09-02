@@ -1921,6 +1921,26 @@ var/claude/                 Reports, review outputs — gitignored scratch (hand
   Measured over all 1 593 stored titles before shipping: 48 room rentals caught (anchored: 36),
   zero flats. **Trial a pattern over the store before shipping it** — `SELECT title FROM listings`
   is one query and it is the only corpus of real titles this project has.
+- **A GENERIC READER MUST NOT SCAN A URL'S QUERY — seventh instance of *URLs are classified text*,
+  and the second poisoning of the SAME scan (2026-09-02).** Track 1j anchored the rooms branch
+  against hexadecimal photo UUIDs with `(?<![A-Za-z0-9])`; base64url walks straight past that,
+  because `-` and `_` are not alphanumeric. SeLoger wraps every link as
+  `click.by.seloger.com/?qs=<per-recipient token>`, and one token reading `…zaw7m29jtx…` stored
+  **7 m²** for a flat whose own card says `3 pièces . 64,25 m²` — offset 1029 beating offset 1948.
+  The repair is a rule this repo had ALREADY RULED one layer up and never applied here:
+  `RawListing::text()` drops a URL's query and fragment and KEEPS its path before the classifier
+  reads it, because `?c=plai_plus` is a campaign string nobody can rewrite while a `plai` path
+  SEGMENT is a real social signal. `EmailAlertSource::prose()` makes the same cut for the generic
+  readers, and **its scope is load-bearing at both ends**: a CONFIGURED pattern owns its answer and
+  is left untouched (pap is bit-for-bit unchanged), and the LINK readers never see it — for seloger
+  the whole URL *is* the query, so stripping it there empties every notification's link and re-keys
+  the entire backlog on the portals whose identity IS the link. **Measured over 2 043 stored card
+  bodies before shipping**: 26 surfaces and 4 room counts recovered, all seloger; rent, postcode and
+  commune 0; the other six sources 0 each. Seven of the 26 were matches that cleared every filter at
+  their true size and were never notified. **Found by a scheduled query, not by a test** — Track
+  6-A6, on the first day it was answerable — and the plan predicted the wrong cause (it expected the
+  positional repair the rooms reader got), which is why the query says *run it*, not *reason about
+  it*.
 - **Two tracks, ONE push (developer ruling, 2026-08-29).** The 2026-08-06 rule that a landlord's
   listing and its agency copy on SeLoger/Bien'ici are two findings STANDS — identities, groups and
   histories stay per track, `Dedup::duplicateReason()` still refuses across families — but 43 flats

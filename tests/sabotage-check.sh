@@ -4085,6 +4085,36 @@ run_sabotage "the composing store creates the generic tables but records no vers
   src/php/Rent/Store/Store.php \
   "s%        \$this->runs->migrate();%        RunStore::ddl(\$this->pdo);%"
 
+
+# ── Track 6-A6: a surface read out of a base64url TRACKING TOKEN (2026-09-02) ──────────────────
+#
+# SEVENTH instance of *URLs are classified text*, and the SECOND poisoning of the same
+# first-match-wins scan: Track 1j anchored the rooms branch against hex photo UUIDs with
+# `(?<![A-Za-z0-9])`, and base64url walks straight past it because `-` and `_` are not alphanumeric.
+# The live row of 2026-09-02T05:24:51Z stored 7 m² for a flat whose own card says `64,25 m²`,
+# because a `click.by.seloger.com/?qs=` token reads `…zaw7m29jtx…` at offset 1029 and the real
+# figure sits at 1948. Measured over 2 043 stored bodies: 26 surfaces and 4 room counts wrong, all
+# seloger, SEVEN of them matches that were never notified at all and six pushed with no surface.
+run_sabotage "the generic readers scan a URL's query again (a tracking token becomes the surface)" \
+  src/php/Rent/Adapters/EmailAlertSource.php \
+  's%return preg_replace(self::URL_NOISE, .\$1., \$body) ?? \$body;%return $body;%'
+
+# THE SCOPE GUARD, and it fails in the opposite direction. `RawListing::text()` already rules this
+# split for the classifier — drop the query and fragment, KEEP THE PATH — because `?c=plai_plus` is
+# a campaign string nobody can rewrite while a `plai` path SEGMENT is a real social signal. Widen
+# the strip to blank whole URLs and a surface stated in a path is lost.
+run_sabotage "the URL strip widens from query-and-fragment to the whole URL (the path is prose)" \
+  src/php/Rent/Adapters/EmailAlertSource.php \
+  's%self::URL_NOISE, .$1., $body%self::URL_NOISE, "", $body%'
+
+# THE COUNTERWEIGHT THAT MATTERS MOST: the LINK readers never see the stripped body. For seloger the
+# whole URL *is* the query, so stripping it there empties every notification's link — and on bienici
+# and leboncoin, whose identity IS the link, it re-keys the entire stored backlog and re-notifies
+# every flat already seen.
+run_sabotage "the URL strip leaks into the link reader (every notification loses its link)" \
+  src/php/Rent/Adapters/EmailAlertSource.php \
+  's%, $text, $matches);%, self::prose($text), $matches);%'
+
 printf '\n  %d sabotage(s) detected, %d undetected\n' "$pass" "$fail"
 
 if [[ -n "$_filter" ]]; then

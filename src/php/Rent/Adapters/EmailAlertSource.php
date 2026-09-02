@@ -106,6 +106,29 @@ final readonly class EmailAlertSource implements CountsPatternMisses, FeedFreshn
      */
     private const string ROOMS_PATTERN = '~(?<![A-Za-z0-9])(?:T|F)\s?(\d)\b|\b(\d)\s*pi[eè]ces?\b~iu';
 
+    /**
+     * A URL's QUERY and FRAGMENT — noise no generic reader may scan. The PATH is kept.
+     *
+     * SEVENTH instance of *URLs are classified text*, and the second poisoning of this same
+     * first-match-wins scan: Track 1j anchored the rooms branch against hexadecimal photo UUIDs
+     * with `(?<![A-Za-z0-9])`, and base64url walks past that anchor because `-` and `_` are not
+     * alphanumeric. SeLoger wraps every link as `click.by.seloger.com/?qs=<per-recipient token>`,
+     * and a token reading `…zaw7m29jtx…` stored **7 m²** for a flat whose card says `64,25 m²`
+     * (the live row of 2026-09-02T05:24:51Z, found by Track 6-A6's own query).
+     *
+     * KEEPING THE PATH IS THE RULED SPLIT, not a convenience: `RawListing::text()` already makes
+     * exactly this cut before the tenure classifier reads a URL, because `?c=plai_plus` is a
+     * campaign string nobody can rewrite while a `plai` PATH SEGMENT is a real social signal.
+     * Blanking the whole URL would lose that. Same rule, same reason, one layer down.
+     *
+     * MEASURED OVER 2 043 STORED CARD BODIES before shipping: surface 26 changed (all seloger,
+     * every one a recovery), rooms 4, and rent, postcode and commune 0 each; inli, cdc_habitat,
+     * cityloger, bienici, leboncoin and pap 0 apiece. SEVEN of the 26 are matches that cleared
+     * every filter at their true size and were never notified; six more were pushed with no
+     * surface at all. The full list is Track 6-A7's report.
+     */
+    private const string URL_NOISE = '~(https?://\S*?)(?:[?#]\S*)~i';
+
     public function __construct(
         private SourceDefinition $definition,
         private Store $store,
@@ -913,7 +936,7 @@ final readonly class EmailAlertSource implements CountsPatternMisses, FeedFreshn
             return $this->matchParam('commune_pattern', $body);
         }
 
-        $folded = \Scout\Core\Text::fold($body);
+        $folded = \Scout\Core\Text::fold(self::prose($body));
 
         foreach ($this->communeLabels as $key => $label) {
             if ($key !== '' && str_contains($folded, $key)) {
@@ -924,8 +947,26 @@ final readonly class EmailAlertSource implements CountsPatternMisses, FeedFreshn
         return null;
     }
 
+    /**
+     * The body with every URL's query and fragment removed — what a GENERIC reader scans.
+     *
+     * **Scope is the generic readers ONLY**, and the boundary is load-bearing at both ends. A
+     * CONFIGURED pattern owns its answer, is positional, and was measured against a real payload
+     * when it was written (pap's `surface_pattern` and `rooms_pattern` are unchanged bit-for-bit,
+     * which their fixtures assert). And the LINK readers never see this: for seloger the whole URL
+     * *is* the query, so stripping it there would empty every notification's link — and on bienici
+     * and leboncoin, whose identity IS the link, re-key the entire stored backlog and re-notify
+     * every flat already seen.
+     */
+    private static function prose(string $body): string
+    {
+        return preg_replace(self::URL_NOISE, '$1', $body) ?? $body;
+    }
+
     private static function postcodeIn(string $body): ?string
     {
+        $body = self::prose($body);
+
         // Anchored to the departments in scope rather than any five digits, because a rent, a
         // surface and a reference number are all five digits too, and a wrong postcode is worse
         // than none: it can pass the prefix filter for a listing that is nowhere near.
@@ -944,6 +985,8 @@ final readonly class EmailAlertSource implements CountsPatternMisses, FeedFreshn
      */
     private static function rentIn(string $body): ?int
     {
+        $body = self::prose($body);
+
         foreach (self::RENT_PATTERNS as $pattern) {
             if (preg_match_all($pattern, $body, $matches, PREG_PATTERN_ORDER) === false) {
                 continue;
@@ -995,7 +1038,7 @@ final readonly class EmailAlertSource implements CountsPatternMisses, FeedFreshn
             return $captured === null ? null : self::plausibleSurface(Payload::float(['v' => $captured], ['v']));
         }
 
-        if (preg_match(self::SURFACE_PATTERN, $body, $m) !== 1) {
+        if (preg_match(self::SURFACE_PATTERN, self::prose($body), $m) !== 1) {
             return null;
         }
 
@@ -1022,7 +1065,7 @@ final readonly class EmailAlertSource implements CountsPatternMisses, FeedFreshn
             return $captured === null ? null : self::plausibleRooms((int) $captured);
         }
 
-        if (preg_match(self::ROOMS_PATTERN, $body, $m) !== 1) {
+        if (preg_match(self::ROOMS_PATTERN, self::prose($body), $m) !== 1) {
             return null;
         }
 

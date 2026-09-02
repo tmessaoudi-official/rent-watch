@@ -452,7 +452,33 @@ read-only) and the merged prose as one review deep.
   due. A dated prediction of what firing will look like is in `var/claude/track6-a1.md`, so tomorrow
   is checked against a record rather than a memory. Track 6-C2's MAXIMAL round is the REVIEWING
   session's, against a frozen commit.
-- [2026-09-02] RECORD (Track 6-A6, audit N2): **premature, not answerable — re-run tomorrow.** The
+- [2026-09-02] RECORD (Track 6-A6 CLOSED, audit N2): **the query is NON-ZERO, and the plan's
+  predicted cause was WRONG.** The 09-02 row is real — `seloger`, stored surface **7 m²**, own card
+  `3 pièces . 64,25 m²`, Orly 94310 — and it does not need the positional repair the rooms reader
+  got. The generic `SURFACE_PATTERN` matched `7m2` INSIDE a base64url tracking token
+  (`click.by.seloger.com/?qs=…zaw7m29jtx…`, offset 1029; the real figure at 1948). SEVENTH instance
+  of *URLs are classified text*, and the SECOND poisoning of this same first-match-wins scan —
+  Track 1j's `(?<![A-Za-z0-9])` anchor is blind to base64url, whose alphabet includes `-` and `_`.
+  **The repair is a rule already ruled here**, not a new one: `RawListing::text()` already drops a
+  URL's query and fragment and KEEPS its path before the classifier reads it (`?c=plai_plus` is a
+  campaign string; a `plai` path segment is a real social signal). Same cut, one layer down, applied
+  to the GENERIC readers only — a configured pattern owns its answer and pap is unchanged
+  bit-for-bit, and the LINK readers never see it, because for seloger the whole URL *is* the query
+  and stripping it there would empty every notification and re-key the link-identity portals.
+  **Measured over 2 043 stored bodies before shipping**: surface 26 changed (all seloger, every one
+  a recovery), rooms 4, rent 0, postcode 0, commune 0; inli 497, cdc_habitat 469, cityloger 60,
+  bienici 316, leboncoin 3, pap 62 — 0 each.
+- [2026-09-02] RECORD (Track 6-A7 DELIVERED, F28): the backward-looking report is
+  `var/claude/track6-a7-surface-victims.txt` — read-only, no store writes, and it is the SAME defect
+  A6 just found rather than a separate one. Of the 26 misread rows: **7 LOST** (they clear every
+  numeric filter and every shipped exclusion at their true size and were never notified), 6 pushed
+  with no surface at all, 4 room rentals the exclusions catch regardless, 9 that fail the ceiling or
+  the floor at the true figure too. A first count said 8 and 5; it compared an int snapshot value
+  with a float reader result using `===`, which reports 61 and 61.0 as different surfaces and
+  inflated the total to 420. **Nothing is retracted and nothing is repaired in place** — the ruling
+  stands that only a report looks backward — and a row self-heals only if its alert is still inside
+  the IMAP window, which for the 25–28 August victims it is not.
+- [2026-09-02] RECORD (Track 6-A6, audit N2): **SUPERSEDED by the entry above — premature when written.** The
   plan's own query filters `first_seen_at >= '2026-09-02'` and the newest row in the store is
   `2026-09-01T20:50:49Z`, so it returns nothing on every source. Against the DEPLOY boundary
   instead (image `2026-09-01T19:25:06Z`): all 14 tiny-surface seloger rows are pre-deploy, zero
@@ -530,6 +556,8 @@ read-only) and the merged prose as one review deep.
 | F28 | Nothing re-judges a `REJECT`, so a fix never rescues its own victims | **ACCEPTED AS A STATED COST** (ruling above). `reclassify` filters on `outcome` and reaches DIGEST/UNKNOWN; `staleVerdicts()` skips an excluded tenure; `replay` writes no verdicts. 32 rows: pap 21, bienici 6, seloger 5 — and 4 of the seloger 5 state a surface ABOVE the 50 m² floor, so they are real matches rejected as too small | closed by ruling |
 | F29 | SeLoger's `link_host` is host-only and filters nothing | **DEFENDED, BUT NOT BY THAT PARAM.** Measured: 100 % of links in all five fixtures are on `click.by.seloger.com` (16/16, 19/19, 38/38, 17/17, 17/17), footer and unsubscribe included — so the PAP phantom-listing shape is available in principle. What actually prevents it is `card_separator` segmentation plus the no-information floor. Recorded because *guard* and *luck* are different things | watch; no work |
 | F30 | SeLoger's `advertiser_pattern` misses 92.6 % of cards, permanently and quietly | **OPEN, and it is the cost of the F27 signal being honest.** First deployed `doctor` run: `advertiser_pattern 375/405 carte(s) sans résultat`, beside `residence_pattern 187/405`. The advertiser miss is not a template change — the Track 5b matrix already measured it as **N/A**: an ordinary SeLoger alert names no agency at all, so the pattern is asking for a field the template does not carry. On a full-window pass it cannot reach 100 %, so it will simply print a large ratio on every run for ever — **but that ceiling is a property of the window, not of the pattern.** The WARN is 100 % of ≥3, and a sparse read (the IMAP window truncated harder, or a quiet stretch where one agencyless 3-card alert is the whole pass) satisfies it exactly. So the reachable failure is a SPURIOUS WARN on a thin pass, not permanent silence — which is the worse of the two, because it fires the one signal F27 exists to give, on a pattern nobody can satisfy. Two readings, and choosing between them is a config decision, not a bug fix: either the pattern is right and 92.6 % is the honest shape of the source, or a pattern that structurally cannot be satisfied should not be configured. **Do not "fix" it by lowering the WARN floor** — that would fire on this row for ever and dilute the one signal F27 exists to give. Decide with the developer before touching it | watch; decide, don't build |
+| F31 | A generic reader scans a URL's QUERY, so a tracking token becomes the flat's surface | **CLOSED 2026-09-02 (Track 6-A6).** Found by the plan's own A6 query on the first day it was answerable, and the plan predicted the WRONG cause — it expected the positional repair the rooms reader got. The live row of `2026-09-02T05:24:51Z` stored **7 m²** for a flat whose card says `3 pièces . 64,25 m²`: `SURFACE_PATTERN` matched `7m2` inside `click.by.seloger.com/?qs=…zaw7m29jtx…` at offset 1029, beating the real figure at 1948. SEVENTH instance of *URLs are classified text* and the SECOND poisoning of this same first-match-wins scan — Track 1j's `(?<![A-Za-z0-9])` anchor is blind to base64url, whose alphabet includes `-` and `_`. Fixed by applying `RawListing::text()`'s already-ruled query-and-fragment strip (path KEPT) to the generic readers only; configured patterns and the link readers are untouched, and both boundaries are sabotage cases. Measured over 2 043 stored bodies: 26 surfaces and 4 room counts recovered, all seloger; rent, postcode, commune 0; the other six sources 0 each | closed. Victims report: F31b |
+| F31b | The 26 misread rows are still wrong on disk | **REPORTED, NOT REPAIRED** — Track 6-A7, and the F28 ruling stands that only a report looks backward. `var/claude/track6-a7-surface-victims.txt`: 7 LOST (cleared every filter at their true size, never notified), 6 pushed with no surface at all, 4 room rentals the exclusions catch regardless, 9 failing the ceiling or floor at the true figure too. A row self-heals only while its alert is still inside the IMAP window, which for the 25–28 August victims it is not | closed by ruling |
 | F22 | A re-scrubbed ParuVendu fixture had a 152-column quoted-printable line | *FIXED `3d24525`* — root cause was the hex replacer eating `=3D` escapes, not the re-scrub itself; the line was re-folded at a soft break under a decode-equality guard that refuses unless the payload is byte-identical. Max column 152 -> 77 | closed |
 
 ---
@@ -1413,13 +1441,16 @@ tool/guard) and say which ones the fix covers.**
   on the developer's own recent matches via AskUserQuestion, apply the chosen one, then re-check
   `high_priority_score` still marks a sane fraction (the car 73 was calibrated 2026-09-01; rent 50
   predates commute's current shape).
-- **A6 SeLoger surface-reader verification** (audit N2). One query on 2026-09-02+ data: rows
-  first-seen ≥ 09-02 with extracted surface ≤ 12 whose title states a larger figure. Zero → the
-  deployed fix stack covers surfaces too; close N2. Non-zero → the surface reader needs the same
-  positional repair the rooms reader got (Track 1j's shape), measured over the store first.
-- **A7 F28 one-shot victims report** (ruling above). Read-only script printing the ~7 misread-
-  surface REJECTs (source, title, stored vs title-stated surface, link). No store writes. Hand
-  the output to the developer; done.
+- **A6 SeLoger surface-reader verification** (audit N2) — **DONE 2026-09-02, NON-ZERO.** One row,
+  and the cause is not the predicted one: the generic scan read `7m2` out of a base64url tracking
+  token. Fixed by applying `RawListing::text()`'s already-ruled query-and-fragment strip to the
+  generic readers; 26 stored surfaces and 4 room counts recovered, 0 change on the other six
+  sources. See the Decisions Log entry of 2026-09-02.
+- **A7 F28 one-shot victims report** (ruling above) — **DONE 2026-09-02.** It is A6's defect, not
+  a separate one, so the report was generated from the shipped reader rather than from a title
+  heuristic: `var/claude/track6-a7-surface-victims.txt`, read-only, no store writes. 26 rows
+  misread → 7 lost, 6 pushed with no surface, 4 excluded regardless, 9 failing anyway. The estimate
+  of "~7 REJECTs" was right by coincidence: 7 is the LOST count, and there are 13 rejects in all.
 
 ### 6-B — new car sources (payloads banked in Gmail; build offline)
 
