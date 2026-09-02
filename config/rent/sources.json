@@ -24,11 +24,10 @@
       "page_param": "page",
       "total_selector": ".sf-results-head h5",
       "map": {
-        "_comment": "Selectors, not dotted paths — see src/php/Rent/Adapters/Html/Selector.php. `=>` introduces a capture, because the card packs rooms and surface into ONE text node (`3 pièces · 55.32 m²`) and a general number parser would return whichever comes first.",
+        "_comment": "Selectors, not dotted paths — see src/php/Rent/Adapters/Html/Selector.php. `=>` introduces a capture, because the card packs rooms and surface into ONE text node (`3 pièces · 55.32 m²`) and a general number parser would return whichever comes first. REMOVED 2026-09-02: the card `cp`. In'li changed its URL format — the old `/location-appartement-sceaux-92330/441-20013-2003` carried the postcode, the new `/locations/offre/paris/PRV-251653` carries only a commune slug — so `a@href => -(\\d{5})/` matched 0 of 190 rows seen that morning, and it CANNOT be repaired because the figure is no longer in the URL at all. Found by the Track 6-A3 miss signal on its first honest pass (`cp 171/171 ← AUCUNE : gabarit changé ?`), which is the F1 template-change shape it exists for; pooled with the detail map it had read as a benign 50 %. `detail_map.cp` reads it from the page `<title>` and missed on 0 of 171. STATED COST (developer ruling): an UNHYDRATED card now carries no postcode, and `matchesCommune()` refuses a null postcode in region mode, so during a cold start, a detail-budget backlog or a hydration failure an In'li listing cannot match until it is hydrated. Measured the day of the change: 0 recent rows affected, 38 historical rows unhydrated and postcode-less. Reversed by restoring a pattern, which needs the postcode to be back in the URL first.",
         "ref": "a@href => /([^/]+)$",
         "url": "a@href",
         "commune": "img@alt",
-        "cp": "a@href => -(\\d{5})/",
         "rent": ".featured-price .demi-condensed",
         "surface": ".featured-details span => ([\\d.,]+)\\s*m²",
         "rooms": ".featured-details span => (\\d+)\\s*pièce",
