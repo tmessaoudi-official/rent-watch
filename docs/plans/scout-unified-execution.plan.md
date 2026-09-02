@@ -619,6 +619,13 @@ read-only) and the merged prose as one review deep.
   correction costs.** `last_seen_at` correctly did NOT move (2026-08-29T10:05:12Z): for
   an email listing that is the MESSAGE date, per the 2026-08-29 `observedAt` fix, not the pass time.
   Rollback is one retag away: `scout:pre-a4`.
+- [2026-09-02] AGREED: **C2 is HANDED BACK — the reviewing session runs it, not this one.** The
+  freeze is set at `ede198e` and holds (`git log --oneline ede198e..HEAD -- src config tests` is
+  empty; every commit after it is docs-only). The alternative offered was for this session to spawn
+  the three lenses immediately against the frozen commit, and it was declined for the reason the
+  ladder exists: a MAXIMAL round run by the session that wrote `0ae6cd0` and `ede198e` certifies its
+  own work, and two of the span's commits are today's. **Deferred past the panel by the same
+  2026-09-02 ruling: A5, B1, B2, B3.** Nothing else is in flight.
 
 ---
 
