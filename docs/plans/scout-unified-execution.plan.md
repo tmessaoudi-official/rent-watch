@@ -610,10 +610,13 @@ read-only) and the merged prose as one review deep.
   `make` and `model` are now NULL and the score fell **15 → 5**, exactly the 10-point brand share
   it should never have had. **No re-notification, and that is the contrast worth keeping against
   A6 the day before:** ParuVendu's identity is the real ad id, so a corrected field UPDATES the
-  row, while SeLoger is `id_from: content` with the surface IN the key, so A6's corrections re-keyed
-  and cost 2 duplicate pushes. The same class of repair costs a duplicate push on one identity
-  scheme and nothing at all on the other — **check which scheme a source uses before predicting
-  what a correction will cost.** `last_seen_at` correctly did NOT move (2026-08-29T10:05:12Z): for
+  row, while SeLoger is `id_from: content` **with the surface IN the key**, so A6's corrections
+  re-keyed and cost 2 duplicate pushes. **The rule is NOT "content-addressed re-keys, link-keyed
+  does not"** — that is the tempting generalisation and it is wrong: Bien'ici and leboncoin are
+  link-keyed, and a correction to `linksIn()` would re-key their whole backlog just as thoroughly.
+  The question is only ever **whether the field being corrected is part of that source's identity**.
+  Here it is not (the make is not in an ad id), on A6 it was. **Ask that before predicting what a
+  correction costs.** `last_seen_at` correctly did NOT move (2026-08-29T10:05:12Z): for
   an email listing that is the MESSAGE date, per the 2026-08-29 `observedAt` fix, not the pass time.
   Rollback is one retag away: `scout:pre-a4`.
 
