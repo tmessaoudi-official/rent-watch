@@ -27,6 +27,19 @@ final readonly class ListingMapper
     public function __construct(
         private readonly SourceDefinition $source,
         private readonly ?PatternMissLog $misses = null,
+        /**
+         * Prefix for every key this mapper records — `'detail.'` for a detail-page map, `''` for a
+         * card map. NOT cosmetic, and found by running the deployed image rather than by design.
+         *
+         * In'li maps `cp` on BOTH maps: the card reads it from the URL slug, the detail page from
+         * the `<title>` (the `683a31b` fix). Pooled under one key the first live pass reported
+         * `cp 171/342` — and `PatternMissLog::total()` speaks only at 100 %, so **a card pattern
+         * that missed on all 171 cards was averaged with 171 detail successes into a silent 50 %**.
+         * One whole map dead, reported as half-working, WARN unreachable. That is the same
+         * dilution `RunStore`'s seven-day flaky window had, one layer down and shipped the same
+         * evening.
+         */
+        private readonly string $missPrefix = '',
     ) {}
 
     /**
@@ -58,7 +71,7 @@ final readonly class ListingMapper
 
         // An empty string is not an answer — the rule `PatternMissLog` already states for the email
         // readers, and the same one that made `$plain ??= ''` hide four MIME defects.
-        $this->misses->record($field, $value !== null && $value !== '');
+        $this->misses->record($this->missPrefix . $field, $value !== null && $value !== '');
 
         return $value;
     }

@@ -225,6 +225,77 @@ final class HtmlSourceDetailTest extends TestCase
         self::assertNotSame('91940', $untouched->postcode, 'an unhydrated row invents nothing');
     }
 
+    /**
+     * THE CARD MAP AND THE DETAIL MAP COUNT SEPARATELY — through the real wiring, not a mapper
+     * built by hand.
+     *
+     * Found on the deployed image's FIRST live pass, hours after the miss signal shipped. In'li
+     * maps `cp` on both maps (the card from its URL slug, the detail page from its `<title>`), and
+     * pooled under one key `doctor` reported `cp 171/342`. `PatternMissLog::total()` speaks only at
+     * 100 %, so a card pattern missing on ALL 171 cards was averaged with 171 detail successes into
+     * a silent 50 %: one whole map dead, reported as half-working, WARN unreachable. That is the
+     * same dilution `RunStore`'s seven-day flaky window had, one layer down and shipped the same
+     * evening.
+     *
+     * This test goes through `HtmlSource` -> `DetailHydrator` deliberately: the separation lives in
+     * the hydrator's construction of its mapper, so a test that builds the mapper itself would keep
+     * passing while the wiring was removed.
+     */
+    public function testTheCardMapAndTheDetailMapDoNotPoolTheirMisses(): void
+    {
+        $client = new DetailHttpClient(
+            detailBody: '<html><head><title>Appartement 63m² à louer à LES ULIS (91940) | In\'li</title></head>'
+                . '<body><div class="description">Un logement</div></body></html>',
+        );
+
+        $base = $this->definitionWithDetailMap(new FieldMap(
+            description: ['.description'],
+            postcode: ['title => \((\d{5})\)'],
+        ));
+
+        // The CARD map points its postcode at a selector the card does not carry — In'li's URL-slug
+        // pattern exactly, which is why `683a31b` had to read the postcode off the detail page. The
+        // detail map supplies it on every listing.
+        $definition = new SourceDefinition(
+            name: $base->name,
+            enabled: $base->enabled,
+            family: $base->family,
+            type: $base->type,
+            mixedTenure: $base->mixedTenure,
+            url: $base->url,
+            baseUrl: $base->baseUrl,
+            itemSelector: $base->itemSelector,
+            map: new FieldMap(
+                ref: ['@href => -(\d+)$'],
+                url: ['@href'],
+                commune: ['.commune'],
+                postcode: ['.un-selecteur-que-la-carte-ne-porte-pas'],
+                rent: ['.price'],
+                chargesIncluded: true,
+            ),
+            rateLimitMs: 0,
+            detailBudgetPerPass: $base->detailBudgetPerPass,
+            detailMap: $base->detailMap,
+        );
+
+        $source = $this->source($client, $definition, null);
+        iterator_to_array($source->fetch());
+
+        $counts = $source->patternMisses()->counts();
+
+        self::assertSame(
+            $counts['cp']['calls'],
+            $counts['cp']['misses'],
+            'the card side missed on every card — that is the fault that must stay visible',
+        );
+        self::assertSame(0, $counts['detail.cp']['misses'], 'the detail side supplied it every time');
+
+        // THE POINT: the WARN is reachable on the dead half. Pooled into one key this is
+        // `misses/calls = 3/6`, which `total()` never reports, and the dead map stays invisible.
+        self::assertContains('cp', $source->patternMisses()->total());
+        self::assertNotContains('detail.cp', $source->patternMisses()->total());
+    }
+
     /** Hard rule 9: a detail page that omits a field states nothing about it. */
     public function testADetailPageThatOmitsAFieldNeverErasesWhatTheCardKnew(): void
     {

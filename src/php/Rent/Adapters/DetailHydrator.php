@@ -366,7 +366,10 @@ final readonly class DetailHydrator
      */
     private function mergeDetail(RawListing $listing, FieldMap $detailMap, array $flat): RawListing
     {
-        $mapper = new ListingMapper($this->literalKeyed($detailMap), $this->patternMisses);
+        // `detail.` so a detail-map miss is counted SEPARATELY from the card map's field of the
+        // same name — see {@see ListingMapper}'s `$missPrefix` for the live pass that proved pooling
+        // them hides a whole dead map.
+        $mapper = new ListingMapper($this->literalKeyed($detailMap), $this->patternMisses, 'detail.');
         $flat['ref'] = $listing->externalId;
 
         return $listing->mergedWith($mapper->map($flat));

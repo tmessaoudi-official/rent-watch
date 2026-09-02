@@ -133,6 +133,45 @@ final class ListingMapperMissTest extends TestCase
     }
 
     /**
+     * A DETAIL map's misses are counted SEPARATELY from the card map's field of the same name.
+     *
+     * Found on the deployed image's first pass, not by design. In'li maps `cp` on both maps — the
+     * card from the URL slug, the detail page from its `<title>` — and pooled under one key the run
+     * reported `cp 171/342`. `total()` speaks only at 100 %, so a card pattern missing on ALL 171
+     * cards was averaged with 171 detail successes into a silent 50 %: one whole map dead, WARN
+     * unreachable. The same dilution the seven-day flaky window had, one layer down.
+     */
+    public function testADetailMapMissIsCountedApartFromTheCardMapsFieldOfTheSameName(): void
+    {
+        $log = new PatternMissLog();
+        $definitions = ConfigLoader::sourcesFromArray([
+            'sources' => [
+                'probe' => [
+                    'enabled' => false, 'family' => 'institutional', 'type' => 'json',
+                    'default_tenure' => 'LLI', 'mixed_tenure' => false,
+                    'url' => 'https://example.test/api', 'items_path' => 'items',
+                    'map' => ['ref' => 'id', 'title' => 'titre', 'cp' => 'absent_du_lien'],
+                ],
+            ],
+        ]);
+
+        $card = new ListingMapper($definitions['probe'], $log);
+        $detail = new ListingMapper($definitions['probe'], $log, 'detail.');
+
+        for ($i = 0; $i < 3; ++$i) {
+            $card->map(['id' => 'a' . $i, 'titre' => 'T3']);                       // cp misses
+            $detail->map(['id' => 'a' . $i, 'titre' => 'T3', 'absent_du_lien' => '91410']); // cp found
+        }
+
+        $counts = $log->counts();
+        self::assertSame(['calls' => 3, 'misses' => 3], $counts['cp'], 'the card map alone must be 3/3');
+        self::assertSame(['calls' => 3, 'misses' => 0], $counts['detail.cp'], 'the detail map is its own key');
+        // And the WARN is now reachable on the dead half, which pooling made impossible.
+        self::assertContains('cp', $log->total());
+        self::assertNotContains('detail.cp', $log->total());
+    }
+
+    /**
      * The log is OPTIONAL, so nothing that constructs a mapper without one changes behaviour — the
      * counterweight for a change that touches the single funnel every extraction passes through.
      */

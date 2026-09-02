@@ -392,6 +392,23 @@ read-only) and the merged prose as one review deep.
   email band exists because a prose reader assembles a plausible wrong figure from three numbers on
   a card; a mapped field is a declared price and fails differently. Price-per-m² is the shape that
   might work and needs its own study. Evidence: `var/claude/track6-a3.md`. Reversed by building it.
+- [2026-09-02] RECORD (Track 6-A3, found by DEPLOYING it): **the card map and the detail map must
+  count separately — pooling them hides a whole dead map.** The miss signal shipped, the image was
+  rebuilt, and the FIRST live `doctor` reported `inli … cp 171/342`. In'li maps `cp` on both maps
+  (card = URL slug, detail = page `<title>`, the `683a31b` fix), so 342 = 171 card + 171 detail —
+  confirmed by `floor`/`elevator` reading `/171`, those being detail-only. `PatternMissLog::total()`
+  speaks only at 100 %, so **a card pattern missing on all 171 cards averages with 171 detail
+  successes into a silent 50 %**: one whole map dead, reported as half-working, WARN unreachable.
+  The seven-day flaky window's dilution, one layer down, shipped the same evening by the same
+  session. Fixed with a `$missPrefix` on `ListingMapper` (`'detail.'` from `DetailHydrator`).
+  **The test goes through `HtmlSource` → `DetailHydrator`, not a hand-built mapper**, because the
+  separation lives in the wiring — a mapper-level test keeps passing while the wiring is removed,
+  which is the dead-safety-code shape. Its first draft asserted the card side missed on the shared
+  fixture, which carries `.cp`, so it failed on a premise I assumed rather than measured; the card
+  map now points at a selector the fixture genuinely lacks. Ledger case added; mutation verified
+  detected (`3 is identical to 6` — the pooling exactly) and the restore verified byte-identical.
+  **Standing rule this leaves behind: a signal is not proven by its tests, only by its first live
+  pass.** Reversed by dropping the prefix.
 - [2026-09-02] RECORD (Track 6-A6, audit N2): **premature, not answerable — re-run tomorrow.** The
   plan's own query filters `first_seen_at >= '2026-09-02'` and the newest row in the store is
   `2026-09-01T20:50:49Z`, so it returns nothing on every source. Against the DEPLOY boundary

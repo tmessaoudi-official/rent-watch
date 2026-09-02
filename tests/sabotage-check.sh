@@ -2965,6 +2965,14 @@ run_sabotage "an UNMAPPED field is counted as a miss (every source reports a per
   src/php/Rent/Adapters/ListingMapper.php \
   's%\$this->misses === null || \$paths === \[\]%$this->misses === null%'
 
+# The card map and the detail map must count SEPARATELY. Pool them and a field mapped on both —
+# In'li's `cp`, card slug plus detail `<title>` — reports `171/342` when one whole side is dead, and
+# `total()` speaks only at 100 %, so the WARN is unreachable. Found on the deployed image's first
+# pass, hours after the signal shipped: the seven-day flaky window's dilution, one layer down.
+run_sabotage "detail-map misses are pooled with the card map's field of the same name (a dead map reads as half-working)" \
+  src/php/Rent/Adapters/DetailHydrator.php \
+  "s%\\\$this->patternMisses, 'detail.'%\\\$this->patternMisses%"
+
 # audit N5: `tenure_field` acts on the html path (via `flatMapped()`'s renaming) and did nothing on
 # the json path. No verdict changes today — the classifier's unknown-field path already scans any
 # value for excluded vocabulary — but the asymmetry is the defect, and this is what keeps it closed.
