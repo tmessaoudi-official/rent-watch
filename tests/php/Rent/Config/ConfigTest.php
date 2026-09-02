@@ -1695,6 +1695,38 @@ final class ConfigTest extends TestCase
         ]]]);
     }
 
+    /**
+     * THE SAME REFUSAL, REACHED THROUGH THE OTHER SEPARATOR — and it was not there.
+     *
+     * `card_separator_pattern` is a second segmentation mechanism added on 2026-08-31 for Bien'ici,
+     * and `EmailAlertSource::segments()` honours it IN PREFERENCE to the literal. Both §1-adjacent
+     * guards above tested `card_separator` alone, so every one of them could be defeated by writing
+     * the same configuration in the regex form — with the whole suite and the whole sabotage ledger
+     * green, because all 16 of their occurrences there are the literal.
+     *
+     * That is `CLAUDE.md` §1 verbatim: *a config key that can re-enable an excluded regime is P0
+     * even if nothing currently sets it*. It is also this repo's named recurring defect — a rule
+     * applied to one of two symmetric surfaces — and the third guard added in the SAME commit
+     * (`card_separator` and `card_separator_pattern` both set) already reads both keys, which is
+     * what makes this a slip rather than a design.
+     *
+     * Found by the C2 round-1 correctness lens, 2026-09-02.
+     */
+    public function testASegmentedMixedTenureSourceIsRefusedThroughThePatternFormToo(): void
+    {
+        $this->expectException(ConfigError::class);
+        $this->expectExceptionMessageMatches('/mixed_tenure/');
+
+        ConfigLoader::sourcesFromArray(['sources' => ['x' => [
+            'enabled' => false,
+            'family' => 'private',
+            'type' => 'email_alert',
+            'mixed_tenure' => true,
+            'params' => ['card_separator_pattern' => '~^Photo$~m'],
+            'map' => ['ref' => 'url', 'charges_included' => true],
+        ]]]);
+    }
+
     /** The same source without segmentation loads — the refusal is about the combination. */
     public function testAMixedTenureEmailSourceWithoutSegmentationLoads(): void
     {
@@ -1913,6 +1945,32 @@ final class ConfigTest extends TestCase
             'type' => 'email_alert',
             'mixed_tenure' => false,
             'params' => ['card_separator' => "\nPhoto\n", 'link_host' => '  '],
+            'map' => ['ref' => 'url', 'charges_included' => true],
+        ]]]);
+    }
+
+    /**
+     * THE LINK-IDENTITY REFUSAL, REACHED THROUGH THE PATTERN FORM — the second half of the same
+     * slip. Without it, a source segmented by regex and keyed on its links needs no `link_host`,
+     * so a card's identity becomes the last link that happens to sit in it. Two cards ending on the
+     * same stray link is caught loudly at fetch; two cards ending on DIFFERENT rotating advert
+     * links is caught by nothing, and the whole source re-notifies for ever while reading as a busy
+     * market.
+     *
+     * Bien'ici — the only `card_separator_pattern` user today — does set `link_host`, so there is no
+     * live exposure. The finding is the guard.
+     */
+    public function testASegmentedSourceKeyedOnItsLinksMustSayWhichLinksAreListingsThroughThePatternFormToo(): void
+    {
+        $this->expectException(ConfigError::class);
+        $this->expectExceptionMessageMatches('/link_host/');
+
+        ConfigLoader::sourcesFromArray(['sources' => ['x' => [
+            'enabled' => false,
+            'family' => 'private',
+            'type' => 'email_alert',
+            'mixed_tenure' => false,
+            'params' => ['card_separator_pattern' => '~^Photo$~m'],
             'map' => ['ref' => 'url', 'charges_included' => true],
         ]]]);
     }

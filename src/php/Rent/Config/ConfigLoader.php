@@ -551,11 +551,27 @@ final class ConfigLoader
             }
         }
 
+        // BOTH SEPARATORS SEGMENT, SO EVERY GUARD ABOUT SEGMENTATION READS BOTH (C2 round-1
+        // correctness lens, 2026-09-02). `card_separator_pattern` is the regex form added for
+        // Bien'ici, and `EmailAlertSource::segments()` honours it IN PREFERENCE to the literal —
+        // but the two guards below tested the literal alone, so both could be defeated by writing
+        // the same configuration in the other form, with the whole suite and the whole ledger
+        // green. One of them names its own subject a §1 decision. §1 says a config key that can
+        // re-enable an excluded regime is P0 even when nothing sets it, and the third guard further
+        // down already read both keys — which is what makes this a slip rather than a design.
+        // The key NAMED in a refusal is the one the file actually carries: an error pointing at
+        // `card_separator` on a config that configures `card_separator_pattern` sends the operator
+        // to a line that is not there, which is how a correct refusal reads as a broken tool.
+        $separatorKey = ($params['card_separator'] ?? '') !== ''
+            ? 'card_separator'
+            : (($params['card_separator_pattern'] ?? '') !== '' ? 'card_separator_pattern' : null);
+        $segmented = $separatorKey !== null;
+
         // Deliberately OUTSIDE the `enabled` branch, both of them. `--source=<name>` force-runs a
         // disabled source — that is the documented onboarding path, `/add-source` step 5 — so a
         // guard that fires only on enabled sources is a guard the intended workflow walks straight
         // past.
-        if (isset($params['card_separator']) && $params['card_separator'] !== '' && $mixedTenure) {
+        if ($segmented && $mixedTenure) {
             // Segmenting makes each listing's description its own CARD rather than the whole
             // message. That is the Cityloger ruling — a map addresses the listing, never the page —
             // and it costs one signal: a batch-level `logement conventionné` stated once for a
@@ -566,11 +582,11 @@ final class ConfigLoader
             // so it is refused here rather than answered by a batch-veto mechanism written blind.
             // Same shape as `detail_budget_per_pass: 0`.
             throw ConfigError::at(
-                $where . '.params.card_separator',
+                $where . '.params.' . $separatorKey,
                 'segmenter un message en cartes retire au classifieur toute mention de régime '
                     . 'énoncée une seule fois pour le lot entier, ce qui sur une source '
                     . 'mixed_tenure est une décision §1 que personne n\'a prise face à un vrai '
-                    . 'message. Retirez mixed_tenure, ou retirez card_separator',
+                    . 'message. Retirez mixed_tenure, ou retirez ' . $separatorKey,
             );
         }
 
@@ -594,7 +610,7 @@ final class ConfigLoader
         // below describes, reached by a different mistake.
         $linkHost = $params['link_host'] ?? null;
 
-        if (isset($params['card_separator']) && $params['card_separator'] !== ''
+        if ($segmented
             && ($params['id_from'] ?? 'link') !== 'content'
             && (!\is_string($linkHost) || trim($linkHost) === '')) {
             throw ConfigError::at(

@@ -2819,7 +2819,24 @@ run_sabotage "a message full of cards that yields none returns quietly" \
 # source that is a decision nobody has made against a real payload.
 run_sabotage "a segmented mixed-tenure source is allowed to load" \
   src/php/Rent/Config/ConfigLoader.php \
-  "s%if (isset(\\\$params\['card_separator'\]) && \\\$params\['card_separator'\] !== '' && \\\$mixedTenure) {%if (false) {%"
+  's%if (\$segmented && \$mixedTenure) {%if (false) {%'
+
+# BOTH SEPARATORS SEGMENT, AND FOR A MONTH ONLY ONE OF THEM WAS GUARDED (C2 round-1 correctness
+# lens, 2026-09-02). `card_separator_pattern` is the regex form, honoured by `segments()` IN
+# PREFERENCE to the literal, and both §1-adjacent guards read the literal alone -- so either could
+# be defeated by writing the same configuration in the other form, with the whole suite and the
+# whole ledger green: all 16 occurrences of `card_separator` in tests and here were the literal.
+#
+# TWO CASES, ONE PER GUARD, and deliberately not one mutation of `$separatorKey` -- that would
+# redden both new tests at once, so deleting either test would leave the case still detected. Each
+# mutation reverts ONE guard to the literal-only condition, which is the exact regression.
+run_sabotage "the mixed-tenure refusal reads the literal separator only, so the regex form loads" \
+  src/php/Rent/Config/ConfigLoader.php \
+  's%if (\$segmented && \$mixedTenure) {%if ((\$params["card_separator"] ?? "") !== "" \&\& \$mixedTenure) {%'
+
+run_sabotage "the link-host refusal reads the literal separator only, so the regex form skips it" \
+  src/php/Rent/Config/ConfigLoader.php \
+  's%if (\$segmented$%if ((\$params["card_separator"] ?? "") !== ""%'
 
 # RETIRED 2026-08-25, and retired rather than repaired because the GUARANTEE changed.
 #
