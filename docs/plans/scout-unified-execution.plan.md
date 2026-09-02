@@ -468,6 +468,28 @@ read-only) and the merged prose as one review deep.
   **Measured over 2 043 stored bodies before shipping**: surface 26 changed (all seloger, every one
   a recovery), rooms 4, rent 0, postcode 0, commune 0; inli 497, cdc_habitat 469, cityloger 60,
   bienici 316, leboncoin 3, pap 62 — 0 each.
+- [2026-09-02] RECORD (Track 6-A6 DEPLOYED, and the realised cost MEASURED): image `0eab6f1…`
+  built 09:41:37Z, both watchers recreated onto it and their image ids verified — `car-scout`
+  wedged in F25's exact shape on the way (`Created` beside `Up 3 hours`, old container renamed)
+  and cleared itself inside the 5-minute stop grace. **The first live pass proved it**: the same
+  Orly card that was stored as 7 m² was re-read as **64,25** (rowid 2230 beside the old 2202) —
+  *a pipeline fix is not done until the deployed watcher's first live pass says so*.
+  **A CORRECTED CARD CHANGES IDENTITY**, because seloger is `id_from: content` and the surface is
+  in the key, so a repaired extraction is a NEW listing rather than an update. That is the
+  documented, accepted cost of content-addressing, and at 11:44:45 it was realised in both
+  directions at once — **7 pushes, of which 2 are duplicates and 5 are new**:
+  `EAUBONNE` (pushed 08-28 with NO surface, pushed again at 65 m²) and `F3 SAVIGNY SUR ORGE`
+  (08-30, again at 58,84) are the duplicates, both from the *pushed-with-no-surface* group and both
+  second pushes carrying strictly better information. **Four of the five new ones are named victims
+  from A7's lost list** — `Appartement en RDC` 50,2, `T3 avec balcon … Brétigny` 65, `APARTMENT`
+  83,75, `APPARTEMENT … ETRECHY` 61,49 — rescued and pushed at their true size.
+  **That refutes this session's own prediction** that only the 09-01 and 09-02 victims could come
+  back: the 7-day IMAP window still reaches 08-26, so 08-28's and 08-30's returned too. Predicting
+  a window's reach is not measuring it. The remaining old rows keep their wrong surface for ever —
+  nothing repairs a stored row in place. One observed shape left unexplained rather than guessed:
+  3 seloger rows carry a `group_key` with a NULL `outcome` (81 carry one with an outcome), row 2230
+  among them; consistent with a non-survivor cluster member being marked rather than judged, but
+  not verified.
 - [2026-09-02] RECORD (Track 6-A7 DELIVERED, F28): the backward-looking report is
   `var/claude/track6-a7-surface-victims.txt` — read-only, no store writes, and it is the SAME defect
   A6 just found rather than a separate one. Of the 26 misread rows: **7 LOST** (they clear every
