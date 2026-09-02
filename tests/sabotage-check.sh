@@ -1798,9 +1798,14 @@ run_sabotage "RDC stops meaning the ground floor (null is not zero, hard rule 9)
   src/php/Rent/Adapters/Payload.php \
   's%return 0;%return null;%'
 
+# RETARGETED 2026-09-02: this matched the WHOLE assignment line, and Track 6-A3 wrapped the call in
+# `$this->noted(...)` to count extraction misses — so the expression went INERT, reporting coverage
+# it did not have, and `tests/test-sabotage-applies.sh` is what said so. It now targets the CALL
+# rather than the line, which survives a wrapper. Same class as the `Core/RunStore` extraction that
+# orphaned 39 expressions: code moving or being wrapped is invisible to a green suite.
 run_sabotage "a floor is read with the generic number parser (the room count becomes the floor)" \
   src/php/Rent/Adapters/ListingMapper.php \
-  's%floor: Payload::floor(\$item, \$map->floor),%floor: Payload::int($item, $map->floor),%'
+  's%Payload::floor(\$item, \$map->floor)%Payload::int($item, $map->floor)%'
 
 run_sabotage "robots is checked for the index only, never for the pages the walk visits" \
   src/php/Rent/Adapters/HtmlSource.php \
