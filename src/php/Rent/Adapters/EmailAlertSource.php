@@ -262,34 +262,17 @@ final readonly class EmailAlertSource implements CountsPatternMisses, FeedFreshn
         // The source's OWN threshold rides through here — the one funnel `doctor`, the pipeline
         // and the heartbeat all read — so a per-source `feed_silent_days` cannot be honoured by
         // one caller and ignored by another. `null` leaves the store's global threshold in force.
-        $health = $this->store->health($this->name(), $nowIso, $this->definition->feedSilentDays);
-        $blind = $this->patternMisses->total();
-
-        if ($blind === []) {
-            return $health;
-        }
-
         // A PATTERN THAT MATCHED NOTHING AT ALL IS A TEMPLATE CHANGE, and it is invisible to every
         // other verdict here: the cards still parsed, so `item_count` did not move, no run failed,
         // and the feed kept arriving. PAP ran four days like that — 23 rows with a null surface, 19
         // of them notified as MATCH — while `doctor` said `ok`.
         //
-        // WARN rather than BROKEN, deliberately: cards ARE flowing and the source is reachable. What
-        // has changed is the portal's layout, which needs a human to look at a capture, not a
-        // reason to stop polling.
-        return new SourceHealth(
-            sourceName: $health->sourceName,
-            status: $health->status === SourceStatus::OK ? SourceStatus::WARN_DROP : $health->status,
-            detail: rtrim($health->detail, ' .') . ' — MAIS aucun résultat pour ' . implode(', ', $blind)
-                . ' sur cette passe : le gabarit du portail a probablement changé, les champs concernés sont null',
-            consecutiveEmptyRuns: $health->consecutiveEmptyRuns,
-            lastSuccessAt: $health->lastSuccessAt,
-            lastFailureAt: $health->lastFailureAt,
-            lastCount: $health->lastCount,
-            rollingMean: $health->rollingMean,
-            runsInWindow: $health->runsInWindow,
-            failedRunsInWindow: $health->failedRunsInWindow,
-            totalRuns: $health->totalRuns,
+        // The decoration itself lives in `PatternMissLog::escalate()`, which used to be an inline
+        // copy here and another verbatim one in the car twin, while three counting adapters had none
+        // at all (C2 round-1 resilience lens). One implementation, five callers, and a reflection
+        // test that fails when a sixth forgets.
+        return $this->patternMisses->escalate(
+            $this->store->health($this->name(), $nowIso, $this->definition->feedSilentDays),
         );
     }
 

@@ -8,6 +8,8 @@ use Scout\Adapters\Http\HttpClient;
 use Scout\Adapters\Http\HttpRequest;
 use Scout\Adapters\Http\Robots;
 use Scout\Adapters\SourceError;
+use Scout\Core\CountsPatternMisses;
+use Scout\Core\PatternMissLog;
 use Scout\Core\SourceHealth;
 
 /**
@@ -24,7 +26,7 @@ use Scout\Core\SourceHealth;
  * so it is retried next pass within the budget. Stated cost: a permanently-broken lot page costs
  * one budget slot per pass until it leaves the sitemap.
  */
-final readonly class SitemapVehicleSource implements VehicleSource
+final readonly class SitemapVehicleSource implements CountsPatternMisses, VehicleSource
 {
     /** @param ?\Closure(string): void $warn */
     public function __construct(
@@ -35,6 +37,7 @@ final readonly class SitemapVehicleSource implements VehicleSource
         private readonly ?\Closure $warn = null,
         private readonly ?\Closure $sleeper = null,
         private readonly IndexSize $lastIndexSize = new IndexSize(),
+        private readonly PatternMissLog $patternMisses = new PatternMissLog(),
     ) {}
 
     public function name(): string
@@ -52,9 +55,24 @@ final readonly class SitemapVehicleSource implements VehicleSource
         return $this->definition->url === null ? null : (parse_url($this->definition->url, PHP_URL_HOST) ?: null);
     }
 
+    /**
+     * C-3 — THIS SOURCE EXTRACTED TWELVE CONFIGURED MAP KEYS AND COUNTED NOTHING.
+     *
+     * `PatternMissLog` reached the two email adapters and then the four rent html/json ones, and
+     * this class was the last extraction surface with no instrumentation at all — autohero is
+     * `enabled: true`, and a JSON-LD key the reseller renames would go null on every lot with
+     * `item_count` unmoved, no run failed and `ok` reported. The gap was stated in no doc, plan or
+     * register until the C2 round-1 completeness lens found it.
+     */
     public function health(?string $nowIso = null): SourceHealth
     {
-        return $this->store->runs()->health($this->name(), $nowIso);
+        return $this->patternMisses->escalate($this->store->runs()->health($this->name(), $nowIso));
+    }
+
+    /** The per-key miss counts of the last fetch — `scout --domain=car doctor` prints them. */
+    public function patternMisses(): PatternMissLog
+    {
+        return $this->patternMisses;
     }
 
     /**
@@ -119,6 +137,10 @@ final readonly class SitemapVehicleSource implements VehicleSource
 
     public function fetch(): array
     {
+        // A count never spans two fetches — the `CountsPatternMisses` contract, and the reason the
+        // rent adapters grew this line the same day: a source object outlives the pass.
+        $this->patternMisses->reset();
+
         $index = $this->index();
         $known = $this->store->knownExternalIds($this->name());
         $budget = $this->definition->lotBudgetPerPass;
@@ -209,7 +231,21 @@ final readonly class SitemapVehicleSource implements VehicleSource
         };
         $map = $this->definition->map;
         $str = static fn (mixed $v): ?string => is_scalar($v) ? trim((string) $v) : null;
-        $field = fn (string $key): mixed => isset($map[$key]) ? $get($vehicle, $map[$key]) : null;
+        // ONLY A CONFIGURED KEY CAN MISS, and that guard is the F27b lesson rather than a nicety:
+        // counting an unmapped key would report a permanent 100 % on fields nobody asked for, and
+        // `total()` only ever speaks at 100 % — so the signal would be pure furniture on every
+        // source that maps a subset. `$field` is the ONE funnel all twelve keys pass through, which
+        // is why the instrumentation is one line rather than twelve call sites to forget.
+        $field = function (string $key) use ($get, $map, $vehicle): mixed {
+            if (!isset($map[$key])) {
+                return null;
+            }
+
+            $value = $get($vehicle, $map[$key]);
+            $this->patternMisses->record($key, $value !== null);
+
+            return $value;
+        };
 
         [$year, $month] = VehicleFacts::firstRegistered($str($field('first_registered')));
 

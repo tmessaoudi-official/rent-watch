@@ -178,9 +178,19 @@ final readonly class HtmlSource implements CountsPatternMisses, Source
         return $this->definition->profile();
     }
 
+    /**
+     * A CONFIGURED SELECTOR THAT MATCHED NOTHING AT ALL IS A TEMPLATE CHANGE, and until 2026-09-02
+     * this method could not say so: it counted misses through `ListingMapper` and then returned the
+     * store's verdict untouched, so a field map going 100 % null produced no status change, no
+     * `isAlerting()` and no alert — only a `doctor` printout (C2 round-1 resilience lens). In'li's
+     * card `cp` went 171/171 dead on the deployed image exactly like that, and a human found it.
+     *
+     * `PatternMissLog::escalate()` is the one implementation, shared with the email adapters and
+     * both domains.
+     */
     public function health(?string $nowIso = null): SourceHealth
     {
-        return $this->store->health($this->name(), $nowIso);
+        return $this->patternMisses->escalate($this->store->health($this->name(), $nowIso));
     }
 
     /**
@@ -190,6 +200,14 @@ final readonly class HtmlSource implements CountsPatternMisses, Source
      */
     public function fetch(): array
     {
+        // A COUNT NEVER SPANS TWO FETCHES, and this line is the second half of F-R1. `RentScout`
+        // builds its sources ONCE and the watch loop closes over them, so an adapter — and its log —
+        // lives for the whole process. Without the reset a template already fixed keeps warning for
+        // ever, which sends an operator to read a capture that is fine and teaches them to ignore
+        // the signal. That failure is worse than silence because it is credible. It is also the
+        // contract `CountsPatternMisses` states outright: implementing it promises this call.
+        $this->patternMisses->reset();
+
         $url = $this->definition->url;
 
         if ($url === null || $url === '') {

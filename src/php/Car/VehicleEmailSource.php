@@ -142,33 +142,12 @@ final readonly class VehicleEmailSource implements CountsPatternMisses, VehicleS
 
     public function health(?string $nowIso = null): SourceHealth
     {
-        $health = $this->store->runs()->health($this->name(), $nowIso, $this->definition->feedSilentDays);
-        $blind = $this->patternMisses->total();
-
-        if ($blind === []) {
-            return $health;
-        }
-
         // A PATTERN THAT MATCHED NOTHING AT ALL IS A TEMPLATE CHANGE, and every other verdict here
         // is blind to it: the cards still parsed, so `item_count` did not move, no run failed, and
         // the feed kept arriving. That is the state PAP ran in for four days on the rent side.
-        //
-        // WARN rather than BROKEN, for the reason the rent half gives: cards ARE flowing and the
-        // source is reachable. What changed is the portal's layout, which needs a human to look at
-        // a capture — not a reason to stop polling.
-        return new SourceHealth(
-            sourceName: $health->sourceName,
-            status: $health->status === SourceStatus::OK ? SourceStatus::WARN_DROP : $health->status,
-            detail: rtrim($health->detail, ' .') . ' — MAIS aucun résultat pour ' . implode(', ', $blind)
-                . ' sur cette passe : le gabarit du portail a probablement changé, les champs concernés sont null',
-            consecutiveEmptyRuns: $health->consecutiveEmptyRuns,
-            lastSuccessAt: $health->lastSuccessAt,
-            lastFailureAt: $health->lastFailureAt,
-            lastCount: $health->lastCount,
-            rollingMean: $health->rollingMean,
-            runsInWindow: $health->runsInWindow,
-            failedRunsInWindow: $health->failedRunsInWindow,
-            totalRuns: $health->totalRuns,
+        // The decoration is `PatternMissLog::escalate()` — one implementation for both domains.
+        return $this->patternMisses->escalate(
+            $this->store->runs()->health($this->name(), $nowIso, $this->definition->feedSilentDays),
         );
     }
 

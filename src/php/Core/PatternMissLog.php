@@ -143,4 +143,48 @@ final class PatternMissLog implements MutableByDesign
 
         return $out;
     }
+
+    /**
+     * Decorate a source's health verdict with what stopped extracting — the ONE implementation.
+     *
+     * **This was inline in two adapters and absent from three more** (C2 round-1 resilience lens,
+     * 2026-09-02). `HtmlSource`, `HttpJsonSource` and `FixtureSource` counted misses and their
+     * `health()` never read the count, so a field map going 100 % null on the four rent html/json
+     * sources produced no status change, no `isAlerting()` and no alert — only a `doctor` printout.
+     * Hard rule 2: an alert computed and never sent is worse than none.
+     *
+     * Extracted rather than copied a fifth time. The two email adapters already carried it verbatim,
+     * and a fifth inline copy is exactly how the sixth adapter forgets;
+     * `PatternMissEscalationTest::testEveryCountingSourceEscalatesThroughHealth()` discovers the
+     * implementors by reflection and fails when one does not route through here.
+     *
+     * **WARN, never BROKEN**, and it only ever upgrades from `OK`. Cards ARE flowing and the source
+     * IS reachable — what changed is the portal's layout, which needs a human to look at a capture
+     * rather than a reason to stop polling. A source already `BROKEN`, `STALE` or `FEED_SILENT` keeps
+     * its more specific verdict: those say something the operator must act on differently, and
+     * downgrading one to a layout complaint would lose the instruction.
+     */
+    public function escalate(SourceHealth $health): SourceHealth
+    {
+        $blind = $this->total();
+
+        if ($blind === []) {
+            return $health;
+        }
+
+        return new SourceHealth(
+            sourceName: $health->sourceName,
+            status: $health->status === SourceStatus::OK ? SourceStatus::WARN_DROP : $health->status,
+            detail: rtrim($health->detail, ' .') . ' — MAIS aucun résultat pour ' . implode(', ', $blind)
+                . ' sur cette passe : le gabarit du portail a probablement changé, les champs concernés sont null',
+            consecutiveEmptyRuns: $health->consecutiveEmptyRuns,
+            lastSuccessAt: $health->lastSuccessAt,
+            lastFailureAt: $health->lastFailureAt,
+            lastCount: $health->lastCount,
+            rollingMean: $health->rollingMean,
+            runsInWindow: $health->runsInWindow,
+            failedRunsInWindow: $health->failedRunsInWindow,
+            totalRuns: $health->totalRuns,
+        );
+    }
 }

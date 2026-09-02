@@ -7,6 +7,7 @@ namespace Scout\Tests\Car;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 use Scout\Adapters\Http\HttpClient;
+use Scout\Core\SourceStatus;
 use Scout\Adapters\Http\HttpError;
 use Scout\Adapters\Http\HttpRequest;
 use Scout\Adapters\Http\HttpResponse;
@@ -162,6 +163,65 @@ final class AutoheroFixtureTest extends TestCase
         return new TableHttpClient($this->table());
     }
 
+    /**
+     * C-3 — A JSON-LD KEY THAT RESOLVES NOWHERE REACHES `health()` AS A WARN.
+     *
+     * This source extracted twelve configured map keys and counted NONE of them: `PatternMissLog`
+     * reached the two email adapters and then the four rent html/json ones, and this was the last
+     * extraction surface with no instrumentation at all (C2 round-1 completeness lens, 2026-09-02).
+     * autohero is `enabled: true`, so a key the reseller renames would go null on every lot while
+     * `item_count` did not move, no run failed, and `doctor` said `ok` — hard rule 2's shape.
+     *
+     * Broken by rewriting the MAP rather than by editing the shipped config: the guarantee is that a
+     * dead key is REPORTED, and proving it must not depend on the repo shipping one.
+     */
+    public function testAMapKeyThatResolvesNowhereWarnsThroughHealth(): void
+    {
+        $store = VehicleStore::open(':memory:');
+        foreach (['2026-08-30T09:00:00+00:00', '2026-08-31T09:00:00+00:00', '2026-09-01T09:00:00+00:00'] as $at) {
+            $store->runs()->recordRun('autohero', 5, true, null, $at, 20);
+        }
+
+        $source = $this->source($this->client(), budget: 5, store: $store, mapOverrides: ['make' => 'il_ny_a_rien_ici']);
+        $source->fetch();
+
+        self::assertSame(['make'], $source->patternMisses()->total());
+
+        $health = $source->health('2026-09-01T12:00:00+00:00');
+        self::assertSame(SourceStatus::WARN_DROP, $health->status);
+        self::assertStringContainsString('make', $health->detail);
+    }
+
+    /**
+     * A COUNT NEVER SPANS TWO FETCHES.
+     *
+     * The source object outlives the pass — the CLI builds its sources once and the watch loop
+     * closes over them — so without the reset a template already fixed keeps warning for ever. That
+     * sends an operator to read a capture that is fine and teaches them to ignore the signal, which
+     * is worse than silence because it is credible. It is also the contract `CountsPatternMisses`
+     * states outright: implementing it promises `reset()` at the start of every fetch.
+     */
+    public function testTheCountIsPerPassAndNeverAccumulates(): void
+    {
+        $source = $this->source($this->client(), budget: 5, mapOverrides: ['make' => 'il_ny_a_rien_ici']);
+
+        $source->fetch();
+        $first = $source->patternMisses()->counts();
+        $source->fetch();
+
+        self::assertSame($first, $source->patternMisses()->counts(), 'a second identical pass must read identically');
+    }
+
+    /** The counterweight: the shipped map resolves, so nothing is warned about. */
+    public function testTheShippedMapReportsNoBlindKey(): void
+    {
+        $source = $this->source($this->client(), budget: 5);
+        $source->fetch();
+
+        self::assertSame([], $source->patternMisses()->total());
+    }
+
+    /** @param array<string, string> $mapOverrides */
     private function source(
         HttpClient $client,
         int $budget,
@@ -170,11 +230,13 @@ final class AutoheroFixtureTest extends TestCase
         ?\Closure $warn = null,
         int $rateLimitMs = 0,
         ?\Closure $sleeper = null,
+        array $mapOverrides = [],
     ): SitemapVehicleSource {
         $shipped = VehicleSourceLoader::load(self::ROOT . '/config/car/sources.json')['autohero'];
         $definition = new VehicleSourceDefinition(
             name: $shipped->name, enabled: true, family: $shipped->family, type: $shipped->type,
-            url: $shipped->url, itemUrlPattern: $shipped->itemUrlPattern, map: $shipped->map,
+            url: $shipped->url, itemUrlPattern: $shipped->itemUrlPattern,
+            map: [...$shipped->map, ...$mapOverrides],
             lotBudgetPerPass: $budget, rateLimitMs: $rateLimitMs,
         );
 

@@ -3094,6 +3094,40 @@ run_sabotage "an empty link host passes for a named one" \
   src/php/Rent/Config/ConfigLoader.php \
   's%(!\\is_string(\$linkHost) || trim(\$linkHost) === ..)%(!isset(\$params["link_host"]))%'
 
+# ── the miss signal reaching health() on every counting adapter (C2 round 1, F-R1 + C-3) ─────
+#
+# Four adapters of five COUNTED extraction misses and nothing read the count: HtmlSource,
+# HttpJsonSource and FixtureSource each returned the store's verdict untouched, and
+# SitemapVehicleSource counted nothing at all. Under `run --watch` a field map going 100% null on
+# inli/cdc_habitat/cityloger/logirep produced no status change, no isAlerting(), no alert -- only a
+# `doctor` printout. Hard rule 2: an alert computed and never sent is worse than none, because
+# someone believes the green. In'li's card `cp` went 171/171 dead on the deployed image exactly like
+# that, and a HUMAN found it.
+run_sabotage "the miss escalation goes deaf (counted on every adapter, reported by none)" \
+  src/php/Core/PatternMissLog.php \
+  's%        \$blind = \$this->total();%        \$blind = [];%'
+
+# ONE ADAPTER REVERTS TO THE DEAF ONE-LINER. The escalation was inline in two adapters and absent
+# from three; extracting it is what makes a sixth adapter's omission FAIL rather than go dark, and
+# the reflection test over the CountsPatternMisses implementors is what enforces that.
+run_sabotage "an html source stops routing health() through the miss escalation" \
+  src/php/Rent/Adapters/HtmlSource.php \
+  's%        return \$this->patternMisses->escalate(\$this->store->health(\$this->name(), \$nowIso));%        return \$this->store->health(\$this->name(), \$nowIso);%'
+
+# THE SITEMAP SOURCE STOPS COUNTING. autohero is enabled, and a renamed JSON-LD key would go null on
+# every lot with item_count unmoved, no run failed and `ok` reported.
+run_sabotage "the sitemap source stops recording its map-key misses" \
+  src/php/Car/SitemapVehicleSource.php \
+  "s%            \\\$this->patternMisses->record(\\\$key, \\\$value !== null);%            \\\$this->patternMisses->record(\\\$key, true);%"
+
+# A COUNT THAT SPANS TWO FETCHES. RentScout builds its sources ONCE and the watch loop closes over
+# them, so without the reset a template already fixed keeps warning for ever -- which sends an
+# operator to read a capture that is fine and teaches them to ignore the signal. Worse than silence,
+# because it is credible.
+run_sabotage "a counting source's miss log accumulates across passes" \
+  src/php/Car/SitemapVehicleSource.php \
+  's%        \$this->patternMisses->reset();%        \/\/ reset removed%'
+
 # ── §1: the re-advertised flat (C2 round 1, F1 — 2026-09-02) ─────────────────
 #
 # The veto travelled three ways -- the persisted cluster group_key, the cross-track twin_tenure, and
