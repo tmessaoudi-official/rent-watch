@@ -407,6 +407,15 @@ read-only) and the merged prose as one review deep.
   fixture, which carries `.cp`, so it failed on a premise I assumed rather than measured; the card
   map now points at a selector the fixture genuinely lacks. Ledger case added; mutation verified
   detected (`3 is identical to 6` — the pooling exactly) and the restore verified byte-identical.
+  **CORRECTION, and it must be recorded because the commit message cannot be: `2ab3245` describes
+  the hazard as *"a card pattern missing on all 171 cards averaged with 171 detail successes"*, and
+  that split is NOT established.** Measured afterwards over the store: **281 of 531 In'li URLs carry
+  a 5-digit slug the card pattern can read (53 %)**, so the card map is not structurally dead, and
+  `171/342` is merely CONSISTENT with one dead map rather than evidence of one. The real split is
+  undetermined — which is the whole reason the pooling had to go, and the un-pooled report on the
+  next deployed pass is what answers it. A true number with an assumed cause is this repo's named
+  failure, and the reasoning for the FIX (pooling makes a 100 % failure on one side unreportable)
+  stands on its own without that diagnosis.
   **Standing rule this leaves behind: a signal is not proven by its tests, only by its first live
   pass.** Reversed by dropping the prefix.
 - [2026-09-02] RECORD (Track 6-A6, audit N2): **premature, not answerable — re-run tomorrow.** The
