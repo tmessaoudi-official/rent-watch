@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Scout\Rent\Adapters;
 
+use Scout\Core\PatternMissLog;
 use Dom\HTMLDocument;
 use Scout\Adapters\Http\HttpClient;
 use Scout\Adapters\Http\HttpError;
@@ -104,6 +105,12 @@ final readonly class DetailHydrator
          * page gets re-fetched every fifteen minutes for ever.
          */
         private ?string $nowIso = null,
+        /**
+         * The SOURCE's miss log, so a detail-map field that stops extracting is reported against
+         * the source rather than against this collaborator — Track 6-A3. Optional, because a
+         * hydrator built without one must behave exactly as before.
+         */
+        private ?PatternMissLog $patternMisses = null,
     ) {}
 
     private function name(): string
@@ -359,7 +366,7 @@ final readonly class DetailHydrator
      */
     private function mergeDetail(RawListing $listing, FieldMap $detailMap, array $flat): RawListing
     {
-        $mapper = new ListingMapper($this->literalKeyed($detailMap));
+        $mapper = new ListingMapper($this->literalKeyed($detailMap), $this->patternMisses);
         $flat['ref'] = $listing->externalId;
 
         return $listing->mergedWith($mapper->map($flat));

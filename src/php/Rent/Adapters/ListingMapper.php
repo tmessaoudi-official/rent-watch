@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Scout\Rent\Adapters;
 
+use Scout\Core\PatternMissLog;
 use Scout\Rent\Config\FieldMap;
 use Scout\Rent\Config\SourceDefinition;
 use Scout\Rent\Core\RawListing;
@@ -17,7 +18,50 @@ use Scout\Adapters\SourceError;
  */
 final readonly class ListingMapper
 {
-    public function __construct(private readonly SourceDefinition $source) {}
+    /**
+     * @param ?PatternMissLog $misses where a CONFIGURED field that extracted nothing is recorded —
+     *                                Track 6-A3 / F27b. Optional, so a mapper built without one
+     *                                behaves exactly as before; every production construction site
+     *                                passes its source's log.
+     */
+    public function __construct(
+        private readonly SourceDefinition $source,
+        private readonly ?PatternMissLog $misses = null,
+    ) {}
+
+    /**
+     * Record one extraction attempt — and ONLY for a field the map configures.
+     *
+     * `map()` calls every `Payload::` reader unconditionally, so an UNMAPPED field yields null on
+     * every item. Counting those reports a permanent 100 % miss on a field nobody asked for, and
+     * `PatternMissLog::total()`'s rule is exactly 100 %, so it would fire every pass for ever.
+     * Measured: logirep maps no `floor` and no `elevator`, and its 123 rows are 123/123 null on
+     * both. That is F30's shape — a signal demanding a field the source structurally does not carry
+     * — rebuilt on four sources at once, so the emptiness check is the guard that makes the whole
+     * signal usable rather than a detail.
+     *
+     * Returns the value unchanged, so instrumenting a field is a wrapper and never a second
+     * extraction — one call site per field, and no way for the counted value and the stored one to
+     * drift apart.
+     *
+     * `!==` is strict on purpose: hard rule 9 lives in this class. `floor === 0` is RDC and REAL,
+     * `hasElevator === false` is an explicitly absent lift, and both must count as FOUND — a loose
+     * comparison would record the two facts this codebase most often loses as extraction failures.
+     *
+     * @param list<string> $paths the field's configured paths; empty means the field is not mapped
+     */
+    private function noted(string $field, array $paths, mixed $value): mixed
+    {
+        if ($this->misses === null || $paths === []) {
+            return $value;
+        }
+
+        // An empty string is not an answer — the rule `PatternMissLog` already states for the email
+        // readers, and the same one that made `$plain ??= ''` hide four MIME defects.
+        $this->misses->record($field, $value !== null && $value !== '');
+
+        return $value;
+    }
 
     /**
      * @throws SourceError if the item has no id — see below
@@ -45,24 +89,73 @@ final readonly class ListingMapper
         return new RawListing(
             sourceName: $this->source->name,
             externalId: $ref,
-            title: Payload::string($item, $map->title) ?? '',
-            description: Payload::string($item, $map->description) ?? '',
+            title: $this->noted('title', $map->title, Payload::string($item, $map->title)) ?? '',
+            description: $this->noted('description', $map->description, Payload::string($item, $map->description)) ?? '',
             // The WHOLE structured surface, not only the mapped fields. The classifier reads field
             // NAMES as tier-1 evidence, so a `financement` nobody thought to map must still be seen.
-            fields: Payload::flatten($item),
+            fields: $this->fields($item, $map),
             url: $this->url($item, $map),
-            commune: Payload::string($item, $map->commune),
-            postcode: Payload::string($item, $map->postcode),
+            commune: $this->noted('commune', $map->commune, Payload::string($item, $map->commune)),
+            postcode: $this->noted('cp', $map->postcode, Payload::string($item, $map->postcode)),
             rentCc: $rentCc,
             rentHc: $rentHc,
-            charges: Payload::int($item, $map->charges),
-            surfaceM2: Payload::float($item, $map->surface),
-            rooms: Payload::int($item, $map->rooms),
-            bedrooms: Payload::int($item, $map->bedrooms),
-            floor: Payload::floor($item, $map->floor),
-            hasElevator: Payload::bool($item, $map->elevator),
+            charges: $this->noted('charges', $map->charges, Payload::int($item, $map->charges)),
+            surfaceM2: $this->noted('surface', $map->surface, Payload::float($item, $map->surface)),
+            rooms: $this->noted('rooms', $map->rooms, Payload::int($item, $map->rooms)),
+            bedrooms: $this->noted('bedrooms', $map->bedrooms, Payload::int($item, $map->bedrooms)),
+            floor: $this->noted('floor', $map->floor, Payload::floor($item, $map->floor)),
+            hasElevator: $this->noted('elevator', $map->elevator, Payload::bool($item, $map->elevator)),
             proseAbsent: $this->source->proseAbsent,
         );
+    }
+
+    /**
+     * The whole structured surface, plus this project's own tenure declaration under the literal
+     * key the classifier knows (`tenureField`) — audit N5, Track 6-A3.
+     *
+     * `HtmlSource::flatMapped()` rewrites every selector to a literal key before the mapper runs, so
+     * on the HTML path the extracted array already carries `tenureField` and `TenureClassifier`
+     * reads it as a structured declaration. The JSON path has no such renaming: `$item` carries the
+     * portal's own key names and `$map->tenureField` was READ BY NOBODY. Same config key, two
+     * adapter types, one of them acting on it — *a mechanism landing on one of two symmetric
+     * surfaces*, which is this repo's named recurring defect.
+     *
+     * **HONESTY ABOUT WHAT THIS BUYS.** The audit filed N5 as "§1-adjacent latent: a future JSON
+     * source mapping a non-standard tenure key would silently lose the signal". Measured against
+     * the classifier before writing this, that is NOT reproducible: `financement: PLS`,
+     * `regime: PLS` and `tenureField: PLS` all classify PLS at tier 1, and `financement: LLI` and
+     * `regime: LLI` both give LLI 97 — because the unknown-field path was already hardened to scan
+     * any field's value for excluded vocabulary (see the long note at `TenureClassifier`'s
+     * `TENURE_FIELDS` check, written after that closed list stood between a spelled-out PLAI and a
+     * notification). So NO VERDICT CHANGES TODAY. What this removes is the asymmetry itself: a
+     * configured key that means something on one adapter and nothing on the other, whose safety
+     * currently rests on a fallback rather than on the declaration the operator wrote.
+     *
+     * The raw surface is still passed WHOLE and first — the classifier reads field NAMES as
+     * evidence, so a `financement` nobody thought to map must still be seen, and a mapped value
+     * must never REPLACE the payload it came from.
+     *
+     * @return array<string, scalar|null>
+     */
+    private function fields(mixed $item, FieldMap $map): array
+    {
+        $fields = Payload::flatten($item);
+
+        if ($map->tenureField === []) {
+            return $fields;
+        }
+
+        $declared = Payload::string($item, $map->tenureField);
+
+        if ($declared === null || $declared === '') {
+            return $fields;
+        }
+
+        // Idempotent on the HTML path: there the value was extracted FROM `tenureField`, so this
+        // writes back what is already there.
+        $fields['tenureField'] = $declared;
+
+        return $fields;
     }
 
     /**

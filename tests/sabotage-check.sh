@@ -2949,6 +2949,29 @@ run_sabotage "a params key no adapter reads is accepted again (a misspelt patter
   src/php/Rent/Config/ConfigLoader.php \
   's%\\in_array(\$key, self::EMAIL_ALERT_PARAMS, true)%true%'
 
+# F27b / Track 6-A3: the extraction-miss signal reaches the four rent html/json sources and the
+# detail hydrator, through `ListingMapper` — the one funnel every structured extraction passes. It
+# shipped on ONE adapter of five, so a silently-null CSS selector or JSON path was exactly as
+# invisible as the missed PAP regex that motivated the whole signal.
+run_sabotage "a mapped field that extracts nothing is no longer counted as a miss" \
+  src/php/Rent/Adapters/ListingMapper.php \
+  's%\$value !== null \&\& \$value !== ..%true%'
+
+# The guard that makes the signal USABLE rather than permanent noise: only a CONFIGURED field can
+# miss. Remove it and every unmapped field reports a 100 % miss for ever — measured, logirep maps
+# no floor and no elevator and its 123 rows are 123/123 null on both, which is exactly the F30
+# shape (a signal demanding a field the source structurally does not carry).
+run_sabotage "an UNMAPPED field is counted as a miss (every source reports a permanent 100 % on fields nobody mapped)" \
+  src/php/Rent/Adapters/ListingMapper.php \
+  's%\$this->misses === null || \$paths === \[\]%$this->misses === null%'
+
+# audit N5: `tenure_field` acts on the html path (via `flatMapped()`'s renaming) and did nothing on
+# the json path. No verdict changes today — the classifier's unknown-field path already scans any
+# value for excluded vocabulary — but the asymmetry is the defect, and this is what keeps it closed.
+run_sabotage "a mapped tenure_field stops being declared under the key the classifier knows" \
+  src/php/Rent/Adapters/ListingMapper.php \
+  "s%\\\$fields\['tenureField'\] = \\\$declared;%%"
+
 # A failure rate that CLIMBS is invisible against a seven-day denominator (Track 6-A1). Measured on
 # the live watcher: In'li failed 23 of 100 passes in a day while the seven-day figure read 8.2 %, so
 # WARN_FLAKY could not fire and `doctor` said `ok` for four days. No fixture in the ordinary suite

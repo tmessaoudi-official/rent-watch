@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Scout\Rent\Adapters;
 
+use Scout\Core\CountsPatternMisses;
+use Scout\Core\PatternMissLog;
 use Dom\Element;
 use Dom\HTMLDocument;
 use Scout\Rent\Adapters\Html\Selector;
@@ -61,7 +63,7 @@ use Scout\Adapters\SourceError;
  * so far — stay `null`, which Q5 and hard rule 9 already account for: unknown is not zero, and the
  * criteria engine must not disqualify on it.
  */
-final readonly class HtmlSource implements Source
+final readonly class HtmlSource implements CountsPatternMisses, Source
 {
     /**
      * @param ?\Closure(RawListing): int $detailPriority which listings go FIRST when the per-pass
@@ -97,6 +99,17 @@ final readonly class HtmlSource implements Source
          * a dead page gets re-fetched every fifteen minutes for ever.
          */
         private ?string $nowIso = null,
+        /**
+         * How often each CONFIGURED map field extracted nothing this pass — Track 6-A3 / F27b.
+         * Mutable object behind a readonly property, the same shape {@see EmailAlertSource} uses
+         * and for the same reason: a `final readonly` adapter cannot otherwise accumulate anything.
+         *
+         * SHARED WITH THE HYDRATOR below, deliberately. A detail-map field that stops extracting is
+         * a fault of THIS SOURCE — that is what the operator needs told, and what `doctor` prints
+         * per source — so the two maps report into one log rather than into a collaborator nobody
+         * queries.
+         */
+        private PatternMissLog $patternMisses = new PatternMissLog(),
     ) {
         // Built here rather than injected, because this class already holds every dependency it
         // needs — so injecting one would add a construction site to every caller and every test in
@@ -115,7 +128,14 @@ final readonly class HtmlSource implements Source
             $definition->params,
             $detailPriority,
             $nowIso,
+            $this->patternMisses,
         );
+    }
+
+    /** The per-field miss counts of the last fetch, card map and detail map alike — `doctor` prints them. */
+    public function patternMisses(): PatternMissLog
+    {
+        return $this->patternMisses;
     }
 
     /**
@@ -506,7 +526,7 @@ final readonly class HtmlSource implements Source
             );
         }
 
-        $mapper = new ListingMapper($this->flatMapped());
+        $mapper = new ListingMapper($this->flatMapped(), $this->patternMisses);
 
         $out = [];
         foreach ($items as $item) {

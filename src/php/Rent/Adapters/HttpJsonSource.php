@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Scout\Rent\Adapters;
 
+use Scout\Core\CountsPatternMisses;
+use Scout\Core\PatternMissLog;
 use Dom\HTMLDocument;
 use Scout\Adapters\Http\HttpClient;
 use Scout\Adapters\Http\HttpError;
@@ -36,7 +38,7 @@ use Scout\Adapters\SourceError;
  * 3. **It never disguises itself.** One honest User-Agent, no cookie jar, no proxy, no cross-host
  *    redirect. When a site blocks us the answer is the email-alert route, never a better disguise.
  */
-final readonly class HttpJsonSource implements Source
+final readonly class HttpJsonSource implements CountsPatternMisses, Source
 {
     public function __construct(
         private SourceDefinition $definition,
@@ -51,7 +53,19 @@ final readonly class HttpJsonSource implements Source
          * defect the old `= null` default caused.
          */
         private Robots $robots,
+        /**
+         * How often each CONFIGURED map field extracted nothing this pass — Track 6-A3 / F27b.
+         * Mutable object behind a readonly property, the shape {@see EmailAlertSource} already uses.
+         */
+        private PatternMissLog $patternMisses = new PatternMissLog(),
     ) {}
+
+    /** The per-field miss counts of the last fetch — `doctor` prints them. */
+    public function patternMisses(): PatternMissLog
+    {
+        return $this->patternMisses;
+    }
+
 
     public function name(): string
     {
@@ -242,7 +256,7 @@ final readonly class HttpJsonSource implements Source
             );
         }
 
-        $mapper = new ListingMapper($this->definition);
+        $mapper = new ListingMapper($this->definition, $this->patternMisses);
 
         $out = [];
         foreach ($items as $item) {

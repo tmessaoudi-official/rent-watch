@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Scout\Rent\Adapters;
 
+use Scout\Core\CountsPatternMisses;
+use Scout\Core\PatternMissLog;
 use Scout\Rent\Config\SourceDefinition;
 use Scout\Core\SourceHealth;
 use Scout\Rent\Core\SourceProfile;
@@ -23,14 +25,26 @@ use Scout\Adapters\SourceError;
  * It is also why `scout run --once` can be demonstrated end to end today, with every real endpoint
  * still unverified under hard rule 1.
  */
-final readonly class FixtureSource implements Source
+final readonly class FixtureSource implements CountsPatternMisses, Source
 {
     public function __construct(
         private readonly SourceDefinition $definition,
         private readonly Store $store,
         /** Repo root, so a config path stays relative and portable. */
         private readonly string $rootDir,
+        /**
+         * How often each CONFIGURED map field extracted nothing this pass — Track 6-A3 / F27b.
+         * Mutable object behind a readonly property, the shape {@see EmailAlertSource} already uses.
+         */
+        private readonly PatternMissLog $patternMisses = new PatternMissLog(),
     ) {}
+
+    /** The per-field miss counts of the last fetch — `doctor` prints them. */
+    public function patternMisses(): PatternMissLog
+    {
+        return $this->patternMisses;
+    }
+
 
     public function name(): string
     {
@@ -124,7 +138,7 @@ final readonly class FixtureSource implements Source
             );
         }
 
-        $mapper = new ListingMapper($this->definition);
+        $mapper = new ListingMapper($this->definition, $this->patternMisses);
 
         $out = [];
         foreach ($items as $item) {
