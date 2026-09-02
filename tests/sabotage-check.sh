@@ -3605,9 +3605,15 @@ run_sabotage "ImapMailbox keeps a stale feed date across a fetch that returned n
 # a source's own `feed_silent_days` reaches the store, and doctor, the pipeline and the heartbeat
 # all read health through the source. Dropping the argument there re-installs the global threshold
 # for every caller at once, and the suite must say so.
+#
+# RETARGETED 2026-09-02, same cause as the car case: this matched the whole `$health = ...`
+# assignment, and the C2 round-1 fix collapsed that assignment into the ARGUMENT of `escalate(...)`.
+# The GUARANTEE is untouched and is the one that matters -- the source's own feed_silent_days must
+# reach `health()`, the ONE funnel doctor, the pipeline and the heartbeat all read -- so the
+# expression now names the CALL rather than the assignment that used to hold it.
 run_sabotage "a per-source feed_silent_days is ignored by the source's own health()" \
   src/php/Rent/Adapters/EmailAlertSource.php \
-  's%\$health = $this->store->health($this->name(), $nowIso, $this->definition->feedSilentDays);%$health = $this->store->health($this->name(), $nowIso);%'
+  's%\$this->store->health(\$this->name(), \$nowIso, \$this->definition->feedSilentDays)%\$this->store->health(\$this->name(), \$nowIso)%'
 
 # Both load-time refusals share one guard: a threshold on a source that cannot act on it (html/json
 # report no feed date), and a threshold of 0, which disables the verdict. Disabling the guard accepts
@@ -4062,9 +4068,16 @@ run_sabotage "the car facts_pattern stops being counted (four fields go dark and
 
 # The report. Counting a miss and never surfacing it is hard rule 2's own shape — an alert computed
 # and never sent is worse than none, because someone believes the green.
+#
+# RETARGETED 2026-09-02: the decoration this mutated was an INLINE COPY here, and the C2 round-1 fix
+# extracted it to `PatternMissLog::escalate()` -- it was duplicated verbatim in the rent twin and
+# absent from three more adapters. The expression named nothing that MOVED, so it went INERT and
+# `test-sabotage-applies.sh` caught it: the `4d49eda` failure class, hit one commit after the commit
+# message describing it. The guarantee is unchanged -- this adapter ROUTES through the shared
+# escalation -- and deafening the escalation itself is a separate case on that class.
 run_sabotage "a car pattern that matched nothing never reaches health() (counted, never reported)" \
   src/php/Car/VehicleEmailSource.php \
-  "s%        \$blind = \$this->patternMisses->total();%        \$blind = [];%"
+  's%        return \$this->patternMisses->escalate(%        return (fn (\$h) => \$h)(%'
 
 # Per-pass, never cumulative. Without the reset a template already fixed keeps warning, which sends
 # an operator to read a capture that is fine and teaches them to ignore the signal — a failure worse
