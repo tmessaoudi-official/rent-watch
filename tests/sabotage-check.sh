@@ -4115,6 +4115,31 @@ run_sabotage "the URL strip leaks into the link reader (every notification loses
   src/php/Rent/Adapters/EmailAlertSource.php \
   's%, $text, $matches);%, self::prose($text), $matches);%'
 
+# ── Track 6-A4: a portal's "I don't know" token stored as a MAKE (2026-09-02) ──────────────────
+#
+# ParuVendu writes `/voiture-occasion/autres/autres/` when it cannot name the marque. The capture
+# succeeds, so nothing reads as a fault — and `autres` then matches no `brand_avoid` stem, so the
+# car earns the whole 10-point brand share. The live row was `Ds Ds4 E-tense 225ch Performance
+# Line`: a DS, which IS on the avoid list. Not the unknown-make arm; a wrong answer wearing one.
+run_sabotage "a portal's unknown-marque token is stored as a make again (the DS4 keeps the brand share)" \
+  src/php/Car/VehicleEmailSource.php \
+  "s%\$sentinel = \$this->definition->param('make_model_unknown_pattern');%\$sentinel = null;%"
+
+# THE EMPTY DECLARATION. `PATTERN_PARAMS` skips an empty value, so without this refusal an empty
+# sentinel compile-checks clean and nulls nothing at all — a disabled feature dressed as a
+# configured one, and the `detail_budget_per_pass: 0` precedent.
+run_sabotage "an empty sentinel loads instead of being refused (configured, and inert)" \
+  src/php/Car/VehicleSourceLoader.php \
+  "s%if (\$params\['make_model_unknown_pattern'\] === '') {%if (false) {%"
+
+# THE COUNTERWEIGHT, and it fails in the opposite direction. The sentinel is subtracted from
+# `VehicleEmailPatternMissTest`'s reflection guard, so a `missed()` call added here would pass that
+# test — and put every CORRECTLY-read card in the denominator, holding the ratio near 100 % for
+# ever. F30's shape: a signal that fires always says nothing.
+run_sabotage "the sentinel is counted as an extraction miss (every named marque becomes a miss)" \
+  src/php/Car/VehicleEmailSource.php \
+  "s%if (\$sentinel !== null) {%if (\$sentinel !== null) { \$this->missed('make_model_unknown_pattern', false);%"
+
 printf '\n  %d sabotage(s) detected, %d undetected\n' "$pass" "$fail"
 
 if [[ -n "$_filter" ]]; then

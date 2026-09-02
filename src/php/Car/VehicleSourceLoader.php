@@ -16,7 +16,7 @@ final class VehicleSourceLoader
 {
     private const array TYPES = ['email_alert', 'sitemap_jsonld', 'fixture'];
     private const array FAMILIES = ['portal', 'dealer', 'auction'];
-    private const array PATTERN_PARAMS = ['subject_pattern', 'price_pattern', 'facts_pattern', 'title_pattern', 'make_model_pattern', 'seller_pattern', 'postcode_pattern'];
+    private const array PATTERN_PARAMS = ['subject_pattern', 'price_pattern', 'facts_pattern', 'title_pattern', 'make_model_pattern', 'make_model_unknown_pattern', 'seller_pattern', 'postcode_pattern'];
 
     /**
      * Of those, the ones NO vehicle adapter reads — measured, not assumed
@@ -62,6 +62,7 @@ final class VehicleSourceLoader
             'facts_pattern',
             'make_model_pattern',
             'make_model_source',
+            'make_model_unknown_pattern',
         ],
         'sitemap_jsonld' => [],
         'fixture' => [],
@@ -207,6 +208,39 @@ final class VehicleSourceLoader
                     $where . '.params.make_model_source',
                     'nomme la source d\'un motif qui n\'existe pas — ajoutez make_model_pattern ou retirez cette clé',
                 );
+            }
+
+            // THE PORTAL'S OWN "I DON'T KNOW" TOKEN (Track 6-A4).
+            //
+            // A capture that succeeds is not the same as a capture that means something: ParuVendu
+            // writes `/voiture-occasion/autres/autres/` when it cannot name the marque, and that
+            // token was stored as the make, matched no `brand_avoid` stem, and earned the whole
+            // brand share — on a **DS**, which is on the avoid list. It is not the unknown-make arm
+            // (the value is non-null and looks real); it is a wrong answer wearing one.
+            //
+            // Declared PER SOURCE because it is a property of one portal's URL scheme, not of the
+            // domain. TWO refusals, and neither is decoration:
+            //
+            //   - EMPTY is refused. `PATTERN_PARAMS` above skips an empty value, so an empty
+            //     declaration would compile-check clean and null nothing at all — a disabled
+            //     feature dressed as a configured one (the `detail_budget_per_pass: 0` precedent).
+            //     An OMITTED key is fine and means "this portal has no sentinel", which is every
+            //     other source.
+            //   - It needs `make_model_pattern`, for the same reason `make_model_source` does:
+            //     a sentinel for captures nobody makes can never fire, and reads as configured.
+            if (isset($params['make_model_unknown_pattern'])) {
+                if ($params['make_model_unknown_pattern'] === '') {
+                    throw ConfigError::at(
+                        $where . '.params.make_model_unknown_pattern',
+                        'un motif vide ne reconnaîtrait jamais aucun jeton — retirez la clé ou donnez-lui une valeur',
+                    );
+                }
+                if (!isset($params['make_model_pattern'])) {
+                    throw ConfigError::at(
+                        $where . '.params.make_model_unknown_pattern',
+                        'décrit les jetons d\'un motif qui n\'existe pas — ajoutez make_model_pattern ou retirez cette clé',
+                    );
+                }
             }
 
             if ($type === 'email_alert') {

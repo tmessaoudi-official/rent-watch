@@ -524,6 +524,49 @@ read-only) and the merged prose as one review deep.
   (`VehicleOutcome`: *"there is no mixed-stock digest in this domain"*), so the plan's "do NOT build
   a second drain" is rent-only advice and the car half is a NEW rollup that must not be called a
   digest. Reversed by pushing every match individually again.
+- [2026-09-02] AGREED (C2 freeze point, re-asked): **A4 + C1 land, then freeze for the MAXIMAL
+  round.** The order in this file said freeze *after* Track 6-A and C1; the 2026-09-02 handback
+  reserved A4 onward for the reviewing session so the freeze point would stop moving. Those
+  conflicted and the developer settled it. **C1 was never the choice** — it is a PREREQUISITE: the
+  completeness lens checks claims against the tree, the register disagrees with the tree on eight
+  F-rows plus five State/Where cells and two stale id citations, and under MAXIMAL every one of
+  those non-defect findings resets the two-consecutive-clean counter. The only real question was
+  whether A4 rides along, and it does: it is small, it is ruled next, it closes cluster A, and
+  certifying it in this round is cheaper than the separate round it would otherwise need (the
+  economize ruling's own logic — one panel for one backlog). **The span is bigger than this file
+  says**: `7765997..HEAD` is **57 commits, 37 touching `src`/`config`/`tests`**, not the "45+"
+  written in C2, and it is simultaneously Track 1's and Track 4's never-run rounds. Deferred past
+  the freeze: A5 and B1-B3. Reversed by freezing earlier or by adding another item before it.
+  **The re-ask is itself the record of a correction**: the first question named a recommendation
+  and left the other rows unargued, which is the developer's 2026-09-01 challenge repeated; the
+  second argued every row and named the deciding fact.
+- [2026-09-02] RECORD (Track 6-A4 CLOSED): **built as sentinel-to-null, NOT the title read the
+  plan preferred — and the premise that justified the title read is REFUTED.** ParuVendu writes
+  `/voiture-occasion/autres/autres/` when it cannot name the marque; the capture succeeds, so
+  `autres` was stored as the make, matched no `brand_avoid` stem, and earned the whole 10-point
+  brand share on `Ds Ds4 E-tense 225ch Performance Line` — a **DS**, which IS on the avoid list.
+  Not the unknown-make arm: a wrong answer wearing one. **Audit N3 preferred reading the make from
+  the title because nulling would leave the car with "still full share by hard rule 9". It does
+  not.** `VehicleScorer`'s `make === null` arm scores **0** and says `marque inconnue — hors score`
+  — a deliberate, documented deviation from this plan's own line, and its docblock even said
+  *"both shipped car sources do extract a make"*, which is what made the finding mis-scoped when it
+  was raised. So both mechanisms give this car brand 0; they differ ONLY for a non-avoided make
+  hiding behind a sentinel, **never once observed**. Building the title read for that case would be
+  the n=1 generalisation this repo keeps paying for, in exactly the fallback shape
+  `make_model_source`'s own docblock refuses — and on the measurably worse haystack: over all 108
+  stored ParuVendu rows the title's first word is the make **101 times**, the seven misses starting
+  with the model (`Captur (2) Techno Tce 90`, `3 1.2 Puretech 130`) or mangled (`Il-peugeot 208`),
+  and one `citroen` path is titled `Ds Ds 7`. **Measured before shipping:** 1 of 108 paruvendu rows
+  carries the token, 107 unchanged; autohero (261 rows) and car leboncoin (5) have no sentinel at
+  all. Shipped as a per-source `make_model_unknown_pattern` (anchored — an unanchored `~autres~`
+  would null a real marque containing the word), refused EMPTY and refused without
+  `make_model_pattern`, and **deliberately never counted as an extraction miss**: the pattern HIT,
+  the portal declared an unknown, and counting it would put every correctly-read card in the
+  denominator — F30's shape, the `subject_pattern` ruling read the other way round. That
+  subtraction from `VehicleEmailPatternMissTest`'s reflection guard has its own counterweight
+  assertion, because a `missed()` call added later would pass the reflection test. Three ledger
+  cases. Reversed by building the title read, which a non-avoided make behind a sentinel would
+  justify and nothing has yet.
 
 ---
 
@@ -1450,11 +1493,14 @@ tool/guard) and say which ones the fix covers.**
   band on mapped rents (7 stored history rows at 119–290 € came through the html path unbanded).
   Gate the CLI report on `CountsPatternMisses`, as both CLIs already do. Sabotage cases for each
   half; the miss-print itself is unpinned in both domains (audit N11) — pin it while here.
-- **A4 brand `autres` bypass** (audit N3). A ParuVendu DS4 stored `make='autres'` from the portal
-  ad path `/autres/autres/` and took the full 10-pt brand share. Preferred mechanism: when the
-  path token is a category word, read the make from the title (`Ds Ds4 E-tense` states it);
-  fallback mechanism: map category tokens to null (honest, unknown-make arm applies). Trial over
-  all stored makes; the existing zero-over-reach sabotage cases must stay green.
+- **A4 brand `autres` bypass** (audit N3) — **DONE 2026-09-02, and NOT by the preferred
+  mechanism.** The finding's premise for preferring the title read — that nulling leaves "still
+  full share by hard rule 9" — is refuted at `VehicleScorer`'s null arm, which scores 0. Both
+  routes give the DS4 brand 0; the title read is the worse haystack and the refused fallback shape.
+  Shipped as a per-source `make_model_unknown_pattern`. See the Decisions Log entry of 2026-09-02.
+  (The plan's "the existing zero-over-reach sabotage cases must stay green" was trivially true —
+  they test `isAvoidedBrand`, which this does not touch, so they never guarded this change; three
+  new cases do.)
 - **A5 score-floor batching + recalibration** (ruling above). Two halves, ordered: (1) the
   batching — individual push only at score ≥ `high_priority_score`, the rest through the existing
   digest drain (`Cli/DigestBatch` is the shared landing zone; do NOT build a second one); (2) the

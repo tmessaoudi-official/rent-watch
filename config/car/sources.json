@@ -14,7 +14,9 @@
         "card_separator": "Voir l'annonce",
         "price_pattern": "~^\\h*(\\d[\\d\\h]*)\\h*€\\h*$~mu",
         "facts_pattern": "~^\\h*(?<body>.+?)\\h*-\\h*(?<fuel>Essence|Diesel|Hybride rechargeable|Hybride|Électrique|Electrique|GPL|Bioéthanol|[^\\n-]+?)\\h*-\\h*Année\\h+(?<year>\\d{4})\\h*-\\h*(?<km>\\d[\\d\\h]*)\\h*km~mu",
-        "make_model_pattern": "~/voiture-occasion/([^/]+)/([^/]+)/~"
+        "make_model_pattern": "~/voiture-occasion/([^/]+)/([^/]+)/~",
+        "_make_model_unknown_pattern": "Track 6-A4. ParuVendu writes `/voiture-occasion/autres/autres/` when it cannot name the marque, and the capture above reads that token perfectly — so the make was stored as `autres`, matched no `brand_avoid` stem, and the car earned the whole 10-point brand share. The live row was `Ds Ds4 E-tense 225ch Performance Line`: a DS, which IS on the avoid list. Anchored on purpose — an unanchored `~autres~` would also null a real marque merely containing the word. MEASURED over the store before shipping: 1 of 108 stored ParuVendu rows carries the token, the other 107 are unchanged, and neither autohero (261 rows) nor car leboncoin (5) has a sentinel at all. THE AUDIT'S OTHER ROUTE WAS NOT BUILT, AND ITS PREMISE IS REFUTED: finding N3 preferred reading the make from the title because nulling would leave `still full share by hard rule 9`, but `VehicleScorer`'s null arm scores 0 and says `marque inconnue — hors score` — a deliberate, documented deviation from the plan's line. Both routes give this car brand 0; they differ only for a NON-avoided make behind a sentinel, never once observed. The title read would also be the fallback shape `make_model_source`'s own docblock refuses, on the measurably worse haystack (the title's first word is the make on 101 of 108 rows, the misses starting with the model). Reversed by removing this key.",
+        "make_model_unknown_pattern": "~^autres$~"
       }
     },
     "leboncoin": {

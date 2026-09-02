@@ -131,7 +131,16 @@ final class VehicleScorer
             // disqualifier — and nothing here disqualifies; hard rule 8 keeps the two mechanisms
             // apart. Awarding the share instead would rank an EXTRACTION FAILURE as a definitely-
             // not-Peugeot, which is this repo's recurring defect: a fact manufactured from its own
-            // absence, wearing an alibi. Both shipped car sources do extract a make.
+            // absence, wearing an alibi.
+            //
+            // THIS ARM IS REACHED ON A REAL SOURCE since Track 6-A4, and the comment that used to
+            // stand here ("both shipped car sources do extract a make") is why the finding was
+            // mis-scoped when it was raised. ParuVendu writes `/autres/autres/` when it cannot name
+            // the marque; that token is now nulled at the adapter, so such a card lands here rather
+            // than earning the share as a definitely-not-DS. Audit finding N3 assumed the opposite
+            // of this arm — that a null make keeps the full share "by hard rule 9" — and preferred
+            // a title fallback on that basis. It does not, so it did not need one.
+            //
             // Reversed by adding `$score += $w['brand'];` to this arm.
             $reasons[] = 'marque inconnue — hors score';
         } elseif ($criteria->isAvoidedBrand($car->make)) {

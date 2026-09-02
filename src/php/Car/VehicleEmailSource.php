@@ -330,6 +330,33 @@ final readonly class VehicleEmailSource implements CountsPatternMisses, VehicleS
             }
         }
 
+        // THE PORTAL'S OWN "I DON'T KNOW" TOKEN IS NOT A MAKE (Track 6-A4).
+        //
+        // ParuVendu writes `/voiture-occasion/autres/autres/` when it cannot name the marque. The
+        // pattern captures it perfectly, so nothing above reads as a fault — and `autres` then
+        // matches no `brand_avoid` stem, so the car earns the entire brand share. The live row was
+        // `Ds Ds4 E-tense 225ch Performance Line`, a DS, which is ON the avoid list.
+        //
+        // NOT COUNTED AS A MISS, deliberately. The pattern HIT; the portal declared an unknown.
+        // Counting it would dilute the ratio the WARN depends on with an expected non-extraction —
+        // the `subject_pattern` ruling, and F30's shape.
+        //
+        // Both fields, because the row carries `model = autres` too. Applied AFTER the capture and
+        // never as a fallback to another haystack: reading the make out of the title in this branch
+        // is what `make_model_source`'s docblock refuses ("a fallback lets a pattern written for one
+        // haystack quietly match the other"), and the title is measurably the worse haystack here —
+        // over 108 stored rows its first word is the make 101 times. What this branch buys is the
+        // HONEST arm: `VehicleScorer` scores a null make 0 and says `marque inconnue — hors score`.
+        $sentinel = $this->definition->param('make_model_unknown_pattern');
+        if ($sentinel !== null) {
+            if ($make !== null && preg_match($sentinel, $make) === 1) {
+                $make = null;
+            }
+            if ($model !== null && preg_match($sentinel, $model) === 1) {
+                $model = null;
+            }
+        }
+
         return new VehicleListing(
             sourceName: $this->name(),
             externalId: $id,

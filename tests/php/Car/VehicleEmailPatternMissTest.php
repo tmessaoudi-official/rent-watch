@@ -52,6 +52,13 @@ final class VehicleEmailPatternMissTest extends TestCase
      * denominator. `UNREAD_PARAMS` is subtracted because those are refused at load and no adapter
      * may read them.
      *
+     * `make_model_unknown_pattern` (Track 6-A4) is subtracted for `subject_pattern`'s reason read
+     * the other way round: it does not describe an extraction at all, it describes what the portal
+     * writes when it HAS no answer. `make_model_pattern` has already hit by the time it is applied,
+     * so a "miss" here means the ordinary case — the marque was named — and counting it would put
+     * every correctly-read card in the denominator and hold the ratio near 100 % for ever. That is
+     * F30's shape exactly. Its own behaviour is pinned by `MakeSentinelTest`, not by absence here.
+     *
      * @return list<string>
      */
     private static function cardLevelPatternParams(): array
@@ -62,7 +69,7 @@ final class VehicleEmailPatternMissTest extends TestCase
         /** @var list<string> $unread */
         $unread = $r->getConstant('UNREAD_PARAMS');
 
-        return array_values(array_diff($all, $unread, ['subject_pattern']));
+        return array_values(array_diff($all, $unread, ['subject_pattern', 'make_model_unknown_pattern']));
     }
 
     /**

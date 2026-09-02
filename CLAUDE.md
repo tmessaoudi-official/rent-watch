@@ -1047,6 +1047,29 @@ into one**, and predicting its effect would have got it backwards: widening it t
 unlisted median gap from 9 points to **13** (58 vs 71 over 160 re-judged snapshots), so a list
 covering 60 % of the fleet discriminates MORE, not less.
 
+> **A CAPTURE THAT SUCCEEDS IS NOT A CAPTURE THAT MEANS SOMETHING — the portal's own "I don't
+> know" token (Track 6-A4, 2026-09-02).** ParuVendu writes `/voiture-occasion/autres/autres/` when
+> it cannot name the marque. The pattern captured `autres` perfectly, so nothing read as a fault;
+> `autres` then matched no `brand_avoid` stem, and the car earned the **whole 10-point brand
+> share** — on `Ds Ds4 E-tense 225ch Performance Line`, a **DS**, which is on the avoid list. This
+> is not the unknown-make arm, which is honest: it is a wrong answer wearing one, and the whole
+> class of defect that `null`-versus-value discipline (hard rule 9) exists to prevent, one layer
+> up. The repair is a per-source `make_model_unknown_pattern`, anchored, refused empty, and
+> **deliberately never counted as an extraction miss** — the pattern HIT, so counting it would put
+> every correctly-read card in the denominator and hold the ratio near 100 % for ever (F30's shape,
+> the `subject_pattern` ruling read backwards).
+>
+> **The half worth carrying is the other one: the audit's own recommendation rested on a premise
+> nobody re-read.** Finding N3 preferred reading the make from the title, because nulling would
+> supposedly leave the car with *"still full share by hard rule 9"*. `VehicleScorer`'s null arm
+> scores **0** and says `marque inconnue — hors score` — a deliberate deviation from the plan's
+> line, made months earlier, and the arm's own docblock still claimed *"both shipped car sources do
+> extract a make"*. Both mechanisms therefore give this car the same score, and the preferred one
+> was the fallback shape `make_model_source`'s docblock refuses, on the measurably worse haystack:
+> over 108 stored rows the title's first word is the make **101 times**, the misses starting with
+> the model. **Re-read the code an audit recommendation reasons about before building the thing it
+> recommends** — a finding can be right about the defect and wrong about the fix.
+
 `src/phorj/` is **ON INDEFINITE HOLD** (developer ruling, 2026-08-19) — not blocked, deprioritised.
 Do not start it; `docs/PHORJ-REQUIREMENTS.md` remains the record of what it would need.
 
