@@ -790,6 +790,36 @@ final readonly class EmailAlertSource implements CountsPatternMisses, FeedFreshn
         return $this->matchParam('title_pattern', $segment) ?? '';
     }
 
+    /**
+     * Patterns `matchParam()` reads but never COUNTS — F30, and the car domain's precedent applied.
+     *
+     * `advertiser_pattern` is read from the message SUBJECT and consulted once per CARD, so its miss
+     * ratio is a statement about the wrong denominator. Measured on the first deployed run of the
+     * miss signal: `advertiser_pattern 375/405`. That is not a template change — an ordinary SeLoger
+     * alert names no agency at all, and the pattern anchors on the `exclusivités` template, one
+     * listing each, so on a full-window pass it CANNOT be satisfied on the other ~92 %.
+     *
+     * The dangerous half is not the noise. `PatternMissLog::total()` fires at `misses === calls`
+     * with a floor of three, so a THIN pass — the IMAP window truncated harder, or a quiet stretch
+     * where one agencyless 3-card alert is the whole pass — satisfies it exactly and WARNs on a
+     * pattern nobody can satisfy. That fires the one signal F27 exists to give, on the one occasion
+     * it means nothing.
+     *
+     * DROPPING THE KEY WAS RULED AND OVERRULED, because it is a §1 mechanism: it feeds
+     * {@see \Scout\Rent\Core\LandlordRegistry}, which is all of `dede8ac` — 23 SeLoger rows
+     * advertised by an institutional landlord were judged `LIBRE` at the portal's 50bp default and
+     * 21 were pushed as MATCHes. So the question is how to satisfy §1, never whether.
+     * `VehicleEmailSource` already exempts its own message-level `subject_pattern` for exactly this
+     * reason; this is that rule, not a new one.
+     *
+     * STATED COST: nothing now reports the `exclusivités` template changing. The ratio was the only
+     * thing watching it, and it was watching it uselessly — but that is not the same as not at all.
+     *
+     * Kept as a SET and asserted by reflection, so a second name cannot be added quietly and turn a
+     * named exception into a way of switching the signal off.
+     */
+    public const array UNCOUNTED_PARAMS = ['advertiser_pattern'];
+
     private function matchParam(string $key, string $subject): ?string
     {
         $pattern = $this->stringParam($key);
@@ -798,8 +828,12 @@ final readonly class EmailAlertSource implements CountsPatternMisses, FeedFreshn
             return null;
         }
 
+        $counted = !\in_array($key, self::UNCOUNTED_PARAMS, true);
+
         if (@preg_match($pattern, $subject, $m) !== 1) {
-            $this->patternMisses->record($key, false);
+            if ($counted) {
+                $this->patternMisses->record($key, false);
+            }
 
             return null;
         }
@@ -809,7 +843,9 @@ final readonly class EmailAlertSource implements CountsPatternMisses, FeedFreshn
         // `title_pattern`, `commune_pattern`, `surface_pattern`, `rooms_pattern` and
         // `residence_pattern` all land on this line. Counting at each call site instead would be
         // five places to forget, and the one forgotten is the one that goes silent.
-        $this->patternMisses->record($key, $captured !== '');
+        if ($counted) {
+            $this->patternMisses->record($key, $captured !== '');
+        }
 
         return $captured === '' ? null : $captured;
     }

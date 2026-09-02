@@ -45,13 +45,31 @@ final class ProseAbsentCaveatTest extends TestCase
     private const string ROOT = __DIR__ . '/../../../..';
     private const string CAVEAT = 'annonce sans texte';
 
-    /** The declaration is the SHIPPED config's, not one written for the test. */
-    public function testPapIsTheOnlySourceThatShipsTheDeclaration(): void
+    /**
+     * The declaration is the SHIPPED config's, not one written for the test — and it is a NAMED FEW,
+     * never the default.
+     *
+     * This asserted `['pap']` until 2026-09-02, when the developer ruled logirep declares it too
+     * (measured: 120/120 null descriptions, 100 % UNKNOWN tenure — the description-matching half of
+     * `exclude_patterns` structurally inert on the whole source). Widening the expected list is the
+     * correct response to a ruling; **what must not be weakened is the counterweight below**, which
+     * is the actual guarantee: a caveat printed on every push everywhere is furniture, and this is
+     * the assertion that stops it becoming one.
+     */
+    public function testOnlyTheSourcesThatShipTheDeclarationCarryIt(): void
     {
         $sources = ConfigLoader::loadSources(self::ROOT . '/config/rent/sources.json');
         $declared = array_keys(array_filter($sources, static fn ($d): bool => $d->proseAbsent));
 
-        self::assertSame(['pap'], $declared);
+        self::assertSame(['pap', 'logirep'], $declared);
+
+        // THE COUNTERWEIGHT: the declaration stays exceptional. Most sources carry real listing
+        // prose, and on those the exclusion lists do their job unqualified.
+        self::assertLessThan(
+            \count($sources) / 2,
+            \count($declared),
+            'prose_absent must stay the exception — a caveat on every push is furniture',
+        );
     }
 
     public function testAListingFromAProselessSourceSaysTheCheckCouldNotBeMade(): void

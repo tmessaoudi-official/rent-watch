@@ -34,8 +34,7 @@
         "make_model_source": "title",
         "price_pattern": "~^\\h*(\\d[\\d\\h]*)\\h*€\\h*$~mu",
         "facts_pattern": "~^\\h*[^\\n·]+·\\h*(?<year>\\d{4})\\h*·\\h*(?<km>\\d[\\d\\h]*)\\h*km\\h*·\\h*(?<fuel>[^\\n·]+?)\\h*$~mu"
-      },
-      "_feed_silent_days": "7 — the observed cadence is a burst then several quiet days (five alerts within 38 minutes on 2026-08-27, nothing since). The default 3 would raise a false alarm on a portal behaving normally."
+      }
     },
     "autohero": {
       "_why": "Source #2, the one that proves the HTTP path. Measured 2026-08-27 and 2026-08-29: robots open, /fr/sitemap_search.xml lists ~3 400 lots as /fr/<make>-<model>/id/<uuid>/, and a lot page carries ONE application/ld+json block of @type Vehicle with price, brand, model, body, first registration (YYYY-MM), fuel, transmission, mileage ('136 278 KMT') and sku. A reseller: fixed price, delivered nationally, no location field at all — decision 6 is inert here by measurement.",

@@ -287,6 +287,8 @@
       "type": "json",
       "default_tenure": null,
       "mixed_tenure": true,
+      "_prose_absent": "Logirep's payload carries NO listing text: `description` is null on all 123 stored rows and tenure is UNKNOWN on 100 % of them, so the description-matching half of `exclude_patterns` is structurally inert here and every row is digest-only. Titles are real and still scanned, so `exclude_title_patterns` still acts. DECLARED 2026-09-02 on the developer's ruling, which SUPERSEDES the same-day decline arguing the caveat would be furniture on an institutional landlord — the measurement (120/120 null description) changed the answer. STATED COST: the caveat line on every logirep push. The load guard permits it because logirep maps no `description`; it would be REFUSED on a source that does.",
+      "prose_absent": true,
       "url": "https://logirep.polylogis.immo/recherche",
       "method": "GET",
       "params": {
