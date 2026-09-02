@@ -312,6 +312,13 @@ final readonly class Pipeline
         // prose, not a key, so a chain A–B–C where A and C would never have been linked directly now
         // vetoes both. Q39 already prices pairwise over-linking as a permanent rejection; this widens
         // that, and §1's own instruction is to bias every ambiguous decision toward NOT notifying.
+        // THE FOURTH VETO ROUTE, loaded ONCE per pass and read at both classification sites below.
+        // The other three need an EDGE — a persisted cluster, a twin in hand or the row's own
+        // previous reading — and a portal re-advertising an excluded flat under a new ad id has
+        // none of them, so it was pushed as a match with the `PLS` one row away on disk. See
+        // `Store::excludedDwellings()` for what it costs and what it cannot reach.
+        $excludedDwellings = $this->store->excludedDwellings();
+
         $twinRank = static fn (Tenure $t): int => $t->isExcluded() ? 2 : ($t === Tenure::UNKNOWN ? 1 : 0);
 
         /** @var array<int, array{tenure: Tenure, source: string}> $twinReading survivor id -> resolved */
@@ -324,9 +331,13 @@ final readonly class Pipeline
                 continue;
             }
             $key = $keyOf[$id] ?? null;
-            $base = $this->clusterClassification(
-                $observation['classification'],
-                $key === null ? null : $this->store->groupExcludedTenure($key),
+            $base = $this->storedDwellingClassification(
+                $this->clusterClassification(
+                    $observation['classification'],
+                    $key === null ? null : $this->store->groupExcludedTenure($key),
+                ),
+                $listing,
+                $excludedDwellings,
             );
             $twinReading[$id] = ['tenure' => $base->tenure, 'source' => $listing->sourceName];
         }
@@ -423,6 +434,16 @@ final readonly class Pipeline
             // Removed rather than kept." The guarantee lives at the write, where a member that is
             // never judged is also covered.
             $judged = $this->twinClassification($judged, $sighting->dedupKey, $clusterKeys[spl_object_id($listing)] ?? [$sighting->dedupKey], $twinsOf[spl_object_id($listing)] ?? [], $twinReading);
+
+            // THE STORED-DWELLING VETO RUNS LAST, AND THE ORDER IS LOAD-BEARING. Placed before
+            // `twinClassification()` it pre-empted it — that method early-returns on an already
+            // excluded survivor, so `recordTwin()` never fired and the cross-track fact stopped
+            // being PERSISTED on every row this new veto happened to catch first. Three existing
+            // twin-durability tests went red and said so. A veto that silently disables another
+            // veto's recording is a net loss: this one is derived from what is on disk, while the
+            // twin fact is what PUTS the other track's reading there for the passes in which the
+            // twin is not fetched at all.
+            $judged = $this->storedDwellingClassification($judged, $listing, $excludedDwellings);
 
             $verdict = $engine->judge($listing, $judged, $this->ageSeconds($sighting->dedupKey, $nowIso));
 
@@ -981,6 +1002,72 @@ final readonly class Pipeline
                     evidence: $fact['source'],
                 )],
                 outcome: Outcome::DIGEST,
+            );
+        }
+
+        return $survivor;
+    }
+
+    /**
+     * A dwelling the store already judged EXCLUDED rejects this listing, whatever advertised it.
+     *
+     * §1 is a fact about the FLAT, not about the advertisement. The three routes above all need an
+     * edge — a persisted `group_key`, a twin in this pass's harvest, or the row's own previous
+     * reading — and a portal re-advertising an excluded flat under a NEW AD ID has none: a new
+     * `external_id` is a fresh row, and `Dedup` refuses a same-source edge because the source's own
+     * id is authoritative for IDENTITY. Correct for identity, wrong for §1, and the C2 round-1
+     * correctness lens proved it end to end through the real pipeline: `s1` rejected because the
+     * store says `PLS`, `s2` pushed as a MATCH, one pass, one portal, one flat.
+     *
+     * **It is the row's OWN judged verdict, never a twin fact.** `recordTwin()` would persist it with
+     * a source name and `scout digest` would then announce *"relevé via bienici (autre voie)"* about
+     * a bienici row — a same-source copy is not another route, and a notification that names the
+     * route the operator is already looking at is worse than one that names none.
+     *
+     * **Excluded only.** The twin mechanism also turns an UNDETERMINED reading into a DIGEST; doing
+     * that by content match against the whole store is a different decision — the In'li cost, *not
+     * §1 satisfied, the tool switched off* — and it is deliberately not made here.
+     *
+     * **STATED COST, and it is the Gros Saule shape.** Two genuinely different flats in one residence
+     * sharing commune, rooms, surface and rent within tolerance are one dwelling to
+     * `sameFlatReason()`, so if either is excluded both are rejected — permanently, since the reading
+     * is durable. Q39 already prices pairwise over-linking as a permanent rejection in exactly this
+     * direction, and §1's own instruction is to bias every ambiguous decision toward not notifying.
+     * The bar is unchanged and merges only on POSITIVE evidence: a stated disagreement on rent,
+     * surface, rooms or floor is decisive, and two unknown communes are two unknowns rather than a
+     * match.
+     *
+     * @param list<array{key: string, source: string, externalId: string, tenure: Tenure, listing: RawListing}> $excludedDwellings
+     */
+    private function storedDwellingClassification(Classification $survivor, RawListing $listing, array $excludedDwellings): Classification
+    {
+        if ($survivor->tenure->isExcluded()) {
+            return $survivor;
+        }
+
+        foreach ($excludedDwellings as $candidate) {
+            // A row never vetoes itself: its own durable reading is what covers that, and a
+            // self-match would name this very listing as the evidence against it.
+            if ($candidate['source'] === $listing->sourceName && $candidate['externalId'] === $listing->externalId) {
+                continue;
+            }
+
+            $reason = $this->dedup->sameDwellingReason($listing, $candidate['listing']);
+            if ($reason === null) {
+                continue;
+            }
+
+            return new Classification(
+                tenure: $candidate['tenure'],
+                confidenceBp: 100,
+                signals: [new TenureSignal(
+                    tier: 1,
+                    tenure: $candidate['tenure'],
+                    reason: 'régime exclu (' . $candidate['tenure']->value . ') déjà relevé sur le même logement — '
+                        . $candidate['source'] . ' ' . $candidate['externalId'] . ' (' . $reason . ')',
+                    evidence: $candidate['tenure']->value,
+                )],
+                outcome: Outcome::REJECT,
             );
         }
 

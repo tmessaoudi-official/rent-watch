@@ -90,6 +90,29 @@ final class Dedup
         return $this->sameFlatReason($a, $b);
     }
 
+    /**
+     * Is this the same DWELLING as one the store already judged excluded — whatever the source?
+     *
+     * The §1 question, and it is not the identity question. {@see duplicateReason()} refuses a
+     * same-source pair because the source's own id is authoritative and exact, and fuzzy matching
+     * there would second-guess the only reliable identifier; {@see twinReason()} refuses a same-track
+     * pair because that is a duplicate rather than a twin. Both refusals are right about IDENTITY and
+     * were being applied to the VETO, which is a fact about the flat rather than about the
+     * advertisement — so a portal re-advertising an excluded flat under a new ad id inherited
+     * nothing, and was pushed as a match (C2 round-1 correctness lens, 2026-09-02).
+     *
+     * Same bar as both of them: `sameFlatReason()`, unchanged, merging only on POSITIVE evidence.
+     * What is dropped is the source and family test, and nothing else.
+     *
+     * **This must never feed identity.** It answers the veto and only the veto — not `cluster()`,
+     * not `dedup_key`, not the history, and not the *autre voie* wording, because a same-source copy
+     * is not another route.
+     */
+    public function sameDwellingReason(RawListing $a, RawListing $b): ?string
+    {
+        return $this->sameFlatReason($a, $b);
+    }
+
     private function sameFlatReason(RawListing $a, RawListing $b): ?string
     {
         // Location must AGREE POSITIVELY. Two unknown communes are not a match — they are two

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Scout\Tests\Rent\Cli;
 
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use Scout\Rent\Adapters\Source;
 use Scout\Adapters\SourceError;
@@ -1292,19 +1293,43 @@ final class PipelineRunTest extends TestCase
 
         // A clean LLI match, an undetermined listing on a mixed source, and one the criteria reject
         // outright — one of each, in a single pass.
+        //
+        // THE THREE ARE DIFFERENT FLATS ON PURPOSE, and they were not until 2026-09-02. All three
+        // came from the same helper, so all three stated Sartrouville, 4 rooms, 88 m² and 1450 € —
+        // one dwelling advertised three times, one copy of which says `PLAI`. That was invisible
+        // while the §1 veto needed a dedup or twin EDGE (there is none between two rows of one
+        // source), and the C2 round-1 fix for the re-advertised flat made it visible by rejecting
+        // all three. **The rejection was right and the fixture was wrong**: this test's guarantee is
+        // that `recordOutcome()` runs before the REJECT and DIGEST branches, which needs three
+        // outcomes and says nothing about them sharing a flat. Varying rooms, surface and rent makes
+        // `sameFlatReason()` refuse on a stated disagreement, so the guarantee is tested without a
+        // §1 veto standing in the middle of it. All three still clear this fixture's floors of
+        // 3 rooms / 75 m² / 1800 €.
         $match = $this->listing('m1');
         $doubtful = new RawListing(
             sourceName: 'fake',
             externalId: 'd1',
-            title: 'T4 Sartrouville',
-            description: '4 pieces de 88 m2.',
+            title: 'T3 Sartrouville',
+            description: '3 pieces de 78 m2.',
             commune: 'Sartrouville',
             postcode: '78500',
-            rentCc: 1450,
-            surfaceM2: 88.0,
-            rooms: 4,
+            rentCc: 1300,
+            surfaceM2: 78.0,
+            rooms: 3,
         );
-        $rejected = $this->listing('r1', ['description' => '4 pieces de 88 m2, PLAI, ascenseur.', 'fields' => ['financement' => 'PLAI']]);
+        $rejected = new RawListing(
+            sourceName: 'fake',
+            externalId: 'r1',
+            title: 'T5 Sartrouville',
+            description: '5 pieces de 110 m2, PLAI, ascenseur.',
+            fields: ['financement' => 'PLAI'],
+            url: 'https://example.test/r1',
+            commune: 'Sartrouville',
+            postcode: '78500',
+            rentCc: 1700,
+            surfaceM2: 110.0,
+            rooms: 5,
+        );
 
         $this->pipeline($store)->runOnce(
             [new FakeSource('fake', listings: [$match, $doubtful, $rejected], mixedTenure: true)],
@@ -2241,6 +2266,213 @@ final class PipelineRunTest extends TestCase
             $channel->sent,
             static fn (Notification $n): bool => $n->kind === NotificationKind::SOURCE_HEALTH,
         ));
+    }
+
+    // ────────────────────────────────────────────── §1: the re-advertised flat (C2 round 1, F1)
+
+    /**
+     * A FLAT THE STORE IS HOLDING AS `PLS` IS PUSHED AS A MATCH WHEN THE PORTAL RE-ADVERTISES IT
+     * UNDER A NEW AD ID. Found by the C2 round-1 correctness lens, 2026-09-02; §1 refuted.
+     *
+     * The veto travelled three ways and a re-advertisement acquires none of them. A new ad id means
+     * a new `external_id`, so the row has **no persisted `tenure`, no `group_key` and no
+     * `twin_tenure`** — and it can never inherit one from its own sibling, because `Dedup` returns
+     * `null` for both the duplicate and the twin relation between two listings of the SAME source.
+     * That refusal is correct for IDENTITY (the source's own id is authoritative, and fuzzy matching
+     * there would second-guess the only reliable identifier) and wrong for §1, which is a fact about
+     * the DWELLING rather than about the advertisement.
+     *
+     * Reachable on every link-keyed portal — `bienici`, `leboncoin`, `pap` — where a re-advertisement
+     * mints a new URL and therefore a new id. Not reachable on `seloger`, which is content-keyed and
+     * where two identical cards collapse to one id.
+     *
+     * THE DELISTING VARIANT IS THE ONE THAT NEEDS PERSISTENCE. Here the excluded copy is gone from
+     * pass 2 entirely — a failed CDC fetch, a `--source=` run, or the landlord allocating the flat by
+     * commission — so there is no in-pass edge to travel along and the store is the only place the
+     * `PLS` survives.
+     */
+    public function testAReadvertisedFlatInheritsTheStoredExclusionAfterTheExcludedCopyIsGone(): void
+    {
+        $store = $this->store();
+        $channel = new RecordingChannel();
+        $pipeline = $this->pipeline($store, new Notifier([$channel]));
+
+        // Pass 1: the landlord's own route states PLS; the portal card says nothing.
+        $pipeline->runOnce([
+            new FakeSource('cdc_habitat', [$this->listing('c1', [
+                'source' => 'cdc_habitat',
+                'fields' => ['financement' => 'PLS'],
+                'description' => '4 pieces de 88 m2, ascenseur.',
+            ])], mixedTenure: true),
+            new FakeSource('bienici', [$this->listing('b1', [
+                'source' => 'bienici',
+                'family' => 'private',
+                'fields' => [],
+                'description' => '4 pieces de 88 m2, ascenseur.',
+            ])], family: 'private'),
+        ], self::NOW);
+
+        $channel->sent = [];
+
+        // Pass 2: the excluded route is GONE, and the portal re-advertises the same flat under a
+        // new ad id. Nothing in hand says PLS; the store does.
+        $pipeline->runOnce([
+            new FakeSource('bienici', [$this->listing('b2', [
+                'source' => 'bienici',
+                'family' => 'private',
+                'fields' => [],
+                'description' => '4 pieces de 88 m2, ascenseur.',
+            ])], family: 'private'),
+        ], '2026-08-08T12:00:00+02:00');
+
+        $kinds = array_map(static fn ($n) => $n->kind, $channel->sent);
+        self::assertNotContains(
+            NotificationKind::MATCH,
+            $kinds,
+            '§1: the same dwelling was recorded PLS one row away — a new ad id is a new '
+                . 'advertisement, not a new flat',
+        );
+
+        // ASSERT THE MECHANISM, NOT THE SILENCE. `assertNotContains` alone is satisfied by a pass
+        // that sent nothing for any reason at all — a crash, a criteria rejection, an empty
+        // harvest — so it would stay green with the veto deleted and something else broken. The
+        // stored verdict is what says the veto is what did the rejecting.
+        self::assertSame(
+            'PLS',
+            $this->tenureOf('bienici', 'b2'),
+            'the re-advertised row must carry the excluded reading it inherited, not its own LIBRE',
+        );
+    }
+
+    /** The tenure the store recorded for one row, read straight out of the table. */
+    private function tenureOf(string $source, string $externalId): ?string
+    {
+        $statement = (new \PDO('sqlite:' . (string) $this->dbPath))
+            ->prepare('SELECT tenure FROM listings WHERE source = :s AND external_id = :e');
+        $statement->execute(['s' => $source, 'e' => $externalId]);
+        /** @var string|false|null $value */
+        $value = $statement->fetchColumn();
+
+        return is_string($value) ? $value : null;
+    }
+
+    /**
+     * THE SAME FLAT, BOTH COPIES PRESENT IN ONE PASS — and this variant is why the fix cannot be an
+     * in-pass graph edge alone. One portal, two rows: the first is rejected because the store says
+     * `PLS`, the second is a new ad id with nothing attached, and it was pushed as a MATCH with the
+     * `PLS` on disk at the moment of the push.
+     *
+     * BOTH ORDERS ARE ASSERTED, because `Core\Pacer` shuffles the harvest every pass: a fix that
+     * happens to work when the vetoed row is judged first is a fix that works half the time, and
+     * survivorship following the harvest order is precisely how the round-4 durable-reading defect
+     * escaped for a day.
+     *
+     * @param list<string> $ids
+     */
+    #[DataProvider('readvertisedOrders')]
+    public function testBothCopiesInOnePassAreVetoedWhicheverIsJudgedFirst(array $ids): void
+    {
+        $store = $this->store();
+        $channel = new RecordingChannel();
+        $pipeline = $this->pipeline($store, new Notifier([$channel]));
+
+        $pipeline->runOnce([
+            new FakeSource('cdc_habitat', [$this->listing('c1', [
+                'source' => 'cdc_habitat',
+                'fields' => ['financement' => 'PLS'],
+                'description' => '4 pieces de 88 m2, ascenseur.',
+            ])], mixedTenure: true),
+            new FakeSource('bienici', [$this->listing('b1', [
+                'source' => 'bienici',
+                'family' => 'private',
+                'fields' => [],
+                'description' => '4 pieces de 88 m2, ascenseur.',
+            ])], family: 'private'),
+        ], self::NOW);
+
+        $channel->sent = [];
+
+        $pipeline->runOnce([
+            new FakeSource('bienici', array_map(fn (string $id): RawListing => $this->listing($id, [
+                'source' => 'bienici',
+                'family' => 'private',
+                'fields' => [],
+                'description' => '4 pieces de 88 m2, ascenseur.',
+            ]), $ids), family: 'private'),
+        ], '2026-08-08T12:00:00+02:00');
+
+        $kinds = array_map(static fn ($n) => $n->kind, $channel->sent);
+        self::assertNotContains(
+            NotificationKind::MATCH,
+            $kinds,
+            '§1: order ' . implode(',', $ids) . ' — one of these rows carries the stored PLS and '
+                . 'the other is the same dwelling under a new ad id',
+        );
+
+        // Both rows must END excluded, whichever was judged first — the silence alone would be
+        // satisfied by a pass that sent nothing.
+        self::assertSame('PLS', $this->tenureOf('bienici', 'b1'), 'b1 in order ' . implode(',', $ids));
+        self::assertSame('PLS', $this->tenureOf('bienici', 'b2'), 'b2 in order ' . implode(',', $ids));
+    }
+
+    /** @return iterable<string, array{list<string>}> */
+    public static function readvertisedOrders(): iterable
+    {
+        yield 'vetoed row first' => [['b1', 'b2']];
+        yield 'new ad id first' => [['b2', 'b1']];
+    }
+
+    /**
+     * THE COUNTERWEIGHT, and without it the fix is satisfied by rejecting everything.
+     *
+     * A different flat in the same commune — different rooms, different surface, different rent —
+     * must still match while an excluded row sits in the store. `sameFlatReason()` merges only on
+     * POSITIVE evidence, so a listing that disagrees on a stated fact is not the same dwelling
+     * whatever else lines up.
+     */
+    public function testADifferentFlatInTheSameCommuneStillMatchesWhileAnExcludedRowIsStored(): void
+    {
+        $store = $this->store();
+        $channel = new RecordingChannel();
+        $pipeline = $this->pipeline($store, new Notifier([$channel]));
+
+        $pipeline->runOnce([
+            new FakeSource('cdc_habitat', [$this->listing('c1', [
+                'source' => 'cdc_habitat',
+                'fields' => ['financement' => 'PLS'],
+                'description' => '4 pieces de 88 m2, ascenseur.',
+            ])], mixedTenure: true),
+        ], self::NOW);
+
+        $channel->sent = [];
+
+        $other = new RawListing(
+            sourceName: 'bienici',
+            externalId: 'other',
+            title: 'T5 Sartrouville - logement intermediaire',
+            description: '5 pieces de 112 m2, LLI, ascenseur.',
+            fields: ['financement' => 'LLI'],
+            url: 'https://example.test/other',
+            commune: 'Sartrouville',
+            postcode: '78500',
+            rentCc: 1700,
+            surfaceM2: 112.0,
+            rooms: 5,
+            floor: 1,
+            hasElevator: true,
+        );
+
+        $pipeline->runOnce([new FakeSource('bienici', [$other], family: 'private')], '2026-08-08T12:00:00+02:00');
+
+        $kinds = array_map(static fn ($n) => $n->kind, $channel->sent);
+        self::assertContains(
+            NotificationKind::MATCH,
+            $kinds,
+            'a stored exclusion must not reject a DIFFERENT flat — the veto merges on positive '
+                . 'evidence, and rooms/surface/rent all disagree here (5p/112 m²/1700 € against '
+                . 'the excluded 4p/88 m²/1450 €), while still clearing this fixture\'s own floors '
+                . 'of 3 rooms and 75 m² — a counterweight rejected for its SIZE would prove nothing',
+        );
     }
 
     private function pipeline(Store $store, ?Notifier $notifier = null, ?CommutePlanner $commute = null): Pipeline

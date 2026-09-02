@@ -3094,6 +3094,32 @@ run_sabotage "an empty link host passes for a named one" \
   src/php/Rent/Config/ConfigLoader.php \
   's%(!\\is_string(\$linkHost) || trim(\$linkHost) === ..)%(!isset(\$params["link_host"]))%'
 
+# ── §1: the re-advertised flat (C2 round 1, F1 — 2026-09-02) ─────────────────
+#
+# The veto travelled three ways -- the persisted cluster group_key, the cross-track twin_tenure, and
+# the row's own durable reading -- and ALL THREE need an edge. A portal re-advertising an excluded
+# flat under a NEW AD ID has none: a new external_id is a fresh row, and Dedup refuses a same-source
+# edge because the source's own id is authoritative for IDENTITY. Correct for identity, wrong for
+# §1, which is a fact about the DWELLING. Proven end to end through the real pipeline: one pass, one
+# portal, one flat -- the first copy rejected because the store says PLS, the second pushed as a
+# MATCH with that PLS one row away on disk.
+run_sabotage "a re-advertised flat no longer inherits the stored exclusion (new ad id, same dwelling)" \
+  src/php/Rent/Cli/Pipeline.php \
+  "s%\\\$reason = \\\$this->dedup->sameDwellingReason(\\\$listing, \\\$candidate\['listing'\]);%\\\$reason = null;%"
+
+# THE SAME GUARANTEE FROM THE STORE END. An emptied candidate set is the shape a well-meaning
+# performance edit takes, and it leaves the veto present, called, and permanently silent.
+run_sabotage "the stored excluded-dwelling set comes back empty" \
+  src/php/Rent/Store/Store.php \
+  "s%WHERE tenure IN (%WHERE 0 AND tenure IN (%"
+
+# THE COUNTERWEIGHT, and without it the fix is satisfied by rejecting everything. Ignoring the
+# positive-evidence bar makes every stored exclusion veto every listing -- §1 satisfied by switching
+# the tool off, which is the In'li lesson and the direction this repo keeps having to re-learn.
+run_sabotage "the stored-dwelling veto ignores its positive-evidence bar (rejects a different flat)" \
+  src/php/Rent/Cli/Pipeline.php \
+  "s%if (\\\$reason === null) {%if (false) {%"
+
 # ── tier 4: the income-ceiling band (2026-08-26) ──────────────────────────────
 # The tier answers SOCIAL or nothing, and every case here is silent. Over-firing rejects an eligible
 # flat and nothing arrives to say so; under-firing loses a social listing into the digest, which is
