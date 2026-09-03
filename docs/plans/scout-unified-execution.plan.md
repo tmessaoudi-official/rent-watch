@@ -747,6 +747,24 @@ read-only) and the merged prose as one review deep.
   candidate set coming back empty (the shape a performance edit takes — present, called, permanently
   silent), and the **counterweight**, ignoring the positive-evidence bar so every stored exclusion
   vetoes every listing.
+- [2026-09-03] AGREED (four rulings taken at `/goal-brief`, in one round): **(1) A3 half 3 — the rent
+  plausibility band on mapped rents — is DEFERRED past the panel**, with A5 and B1–B3. It is genuinely
+  open (verified: the band lives in `EmailAlertSource`, and neither `ListingMapper` nor `Payload`
+  carries one), so the 16:40 *"nothing else is in flight"* line was wrong about the tree rather than
+  about the intent; deferring makes it true. The freeze therefore re-sets on the P2 batch alone and
+  the reviewed span stops growing. **(2) The four `Deep —` status rows ARE plan work** — the car
+  `MalformedText` arms with no sabotage case, the field-map regex with no load-time compile check, the
+  doc drift, and the stale track sections — accepted into the goal rather than left as sweep output,
+  so the plan does not complete until they land. **(3) F5 — a persisted UNDETERMINED twin doubt is
+  cleared by POSITIVE EVIDENCE ONLY.** A tier-5 source default may never overwrite a recorded `UNKNOWN`
+  twin; only a tier 1–4 signal can. The refutation was a third route's In'li default `LLI` at 50bp
+  erasing a doubt a mixed-stock landlord had raised (`[pass1] twin='UNKNOWN'` → `[pass2] twin='LLI'`,
+  matches 0→2), and `CLAUDE.md` itself records In'li as proven **not** pure LLI — so the erasing signal
+  was the weakest kind there is. This is §1's safe direction and it is narrower than *"only the
+  doubting route may clear it"*: evidence still clears, absence no longer does. **(4) The goal brief
+  covers 100 % of the project**, not this milestone — developer's words, verbatim: *"i want the goal
+  brief to the 100 % of everything ! not just this milestone or recent work !!"*. So `A5`/`B1`–`B3`
+  are in THIS plan, and the done-when spans the product, the two on-hold tracks and the register.
 
 ---
 
