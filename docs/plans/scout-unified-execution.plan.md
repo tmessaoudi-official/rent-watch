@@ -897,6 +897,37 @@ read-only) and the merged prose as one review deep.
   ever make the store more careful, never less, which is the direction §1 requires and the reason
   it is safe to land without re-opening the 2026-08-30 ruling.
 
+- [2026-09-04 10:55] RECORD (**COR-F5 CLOSED, `eb5d971` — the last open C2 round-1 finding**). Built
+  exactly as ruled above: `Store::TWIN_DOUBT_MIN_CONFIDENCE = 60`, gating the RESOLVING direction
+  only, with the confidence carried through `$twinReading` and `$seen` so the number reaching the
+  store belongs to the tenure that actually won rather than being recomputed. **Refutation
+  reproduced through the real pipeline BEFORE the fix** — pass 1 records the doubt from the
+  mixed-stock landlord's silent card, pass 2 drops that route and adds an In'li card stating
+  nothing, and the stored twin goes `UNKNOWN → LLI`. Suite **2704 / 10 537** (from 2691).
+
+  Four things travel with it, three of them scars:
+
+  - **Store-level contract tests in the `twin` category**, per this repo's rule that a store
+    behaviour without a named category is one nobody decided to guarantee: a weak reading cannot
+    resolve a doubt, a reading AT the threshold can (the boundary is inclusive, because the
+    threshold is where a classification stops being fail-closed), and **tightening is never gated**
+    — asserted so the fix cannot later be widened into a general *"ignore weak readings"* rule,
+    which would drop a weak `PLS` on the floor.
+  - **The tenure tripwire fired twice, both the documented false positive**, and both were fixed by
+    rewording rather than by touching a pattern. First `array $fields = []` in a test helper — `= []`
+    is one of the shapes it reads as the excluded set being emptied. Then, less obviously, a constant
+    named `…CLEARING_CONFIDENCE`: `clear` is another of those shapes, and it sat inside the pattern's
+    80-character window of the `isExcluded()` call below it. The guard matches the EDIT PAYLOAD, not
+    the file, which is why re-running it against the file on disk came back silent and briefly looked
+    like a phantom.
+  - **A two-line sed matches nothing**, and the counterweight case was first written that way. `sed`
+    does not span lines; the expression would have applied to nothing while reporting no error —
+    exactly what `tests/test-sabotage-applies.sh` exists to catch, caught here by trying each
+    expression against a copy before committing it rather than after.
+  - **The third sabotage case is the one worth keeping**: the store's gate is only as good as the
+    number reaching it, so sending a constant from the pipeline leaves the guard intact and inert.
+    A guard that cannot be reached is not a guard, and nothing else in the ledger would have said so.
+
 ---
 
 ## Fragile implementations register (the developer asked; keep this list honest)
@@ -2040,7 +2071,7 @@ tool/guard) and say which ones the fix covers.**
 | 16 | 6-C2 r1 F-R1 + CMP-3 (P1) — counting a miss is not reporting one | M | done | 581cbce | src/php/Core/PatternMissLog.php src/php/Rent/Adapters/HtmlSource.php src/php/Car/SitemapVehicleSource.php |
 | 17 | 6-C2 r1 — two ledger expressions retargeted after the escalation moved | S | done | 081ab28 | tests/sabotage-check.sh |
 | 18 | 6-C2 P2 bundle — dump-eml fail-open guard, LOGIN trace, no docs/test (3 of 9) | M | done | 38f64bb | tools/dump-eml.php docs/ALERT-CAPTURE.md tests/test-dump-eml.sh |
-| 19 | 6-C2 P2 COR-F5 — a persisted twin doubt cleared by a third route | M | todo | - | src/php/Rent/Cli/Pipeline.php src/php/Rent/Store/Store.php |
+| 19 | 6-C2 P2 COR-F5 — a persisted twin doubt cleared by a third route | M | done | eb5d971 | src/php/Rent/Cli/Pipeline.php src/php/Rent/Store/Store.php |
 | 20 | 6-C2 P2 COR-F4 — SURFACE_PATTERN still has no left anchor | S | done | 38f64bb | src/php/Rent/Adapters/EmailAlertSource.php |
 | 21 | 6-C2 P2 COR-F3 — digest title asserts an undetermined regime that is determined | S | done | 38f64bb | src/php/Rent/Core/CriteriaEngine.php src/php/Rent/Notify/Formatter.php |
 | 22 | 6-C2 P2 CMP-2 — the frozen In'li fixture is the old template | M | done | 38f64bb | tests/fixtures/rent/inli/search-2026-09-04-nouveau-gabarit.html tests/php/Rent/Adapters/InliCurrentTemplateTest.php |
