@@ -1018,6 +1018,71 @@ read-only) and the merged prose as one review deep.
   **RE-FREEZE for round 3: `5833b87`** — 82 commits since `7765997`, **49 touching code**. The
   pointer's own test is empty and the tree is clean.
 
+- [2026-09-04 14:29] RECORD (**C2 ROUND 3 RAN AND WAS NOT CLEAN — 0 P0, 2 P1, 4 P2, 5 P3; all
+  fixed in `909c159`; the two-clean counter RESTARTS AGAIN**). Three lenses, unnamed, pinned at
+  `5833b87`. Suite **2735 / 10 662**, 667 sabotage expressions applying, every guard green, drift
+  `P0=0 P1=0 P2=0`. Reports under `var/claude/c2-round3-*.md`.
+
+  **THE TWO SHARPEST FINDINGS WERE THIS SESSION'S OWN WORK, for the second round running.**
+
+  - **A SABOTAGE CASE THAT FAILS.** The SMTP-wrapper case replaced only the line INSIDE the `try`,
+    so the `catch` survived, the `TypeError` was still swallowed, and the code was still safe — it
+    reported an undetected regression against code that had not regressed. `ci.yml` opens a GitHub
+    issue on a red nightly ledger, so `5833b87` shipped **a scheduled alarm for a non-defect**,
+    which is hard rule 2 read backwards. The author's own run never saw it: that case was one of two
+    the machine SIGKILLed at **exit 137** under the load of three concurrent reviewers.
+    `test-sabotage-applies.sh` was green throughout and correctly so — **an expression that APPLIES
+    is not one that MODELS the defect**, and only running the ledger tells them apart. The mutation
+    is now the `catch`, verified red.
+
+  - **THE CONSTRUCTOR IS A CREDENTIAL SURFACE NO PER-SITE FIX REACHED, and it leaks the most.** Each
+    parameter carries its OWN 15-character budget, so the username no longer spends it first and the
+    password arrives in CLEAR TEXT — fifteen characters, against the two that made
+    `ImapMailbox::login()` a finding. Latent behind three `(int)` casts on the port that nothing
+    asserted. **Fixed structurally rather than at a fourth call site**, because the per-site pattern
+    had already been shown to miss one: `bin/scout` sets `zend.exception_ignore_args=1`, removing
+    every argument from every frame in that process, including surfaces nobody has enumerated. The
+    per-site fixes stay — they hold for code reached outside the executable (`tools/`, the suite, a
+    future entrypoint). *Stated cost: deployed traces lose all argument information*, which is real
+    debugging value given up, and the right trade only because this project already redacts its
+    diagnostics on purpose.
+
+  - **AND A CURE ASSERTED THAT DID NOT EXIST.** Round 2's rent-side anchor was justified by a
+    docblock claiming *"the property the car side already had"*. It did not: `READ_PARAMS` was read
+    by no test, and the car reflection guard constrains **four of eight** keys — a lens added a
+    ninth `*_pattern` key to the car allow-list and loaded it uncompilable and silent with 382 tests
+    green. So the sentence describing the one-of-two-symmetric-surfaces shape was itself an instance
+    of it. The car anchor now exists and the docblock cites it instead of assuming it.
+
+  - **Both lenses converged on the residual from opposite directions**: anchoring the compile-check
+    set on the `_pattern` NAME SUFFIX is a convention, so a regex param named otherwise escapes both
+    lists. The rent guard now also reads the `matchParam()` FUNNEL — every literal key handed to it
+    is applied as a regex whatever it is called — which is an anchor rather than a habit.
+
+  - **The round-trip guard covered the ENCODER only**, and `mergedWith()`'s own docblock conceded it
+    in words. A comment is not a guard: a lens wired a 22nd field into the encoder alone and measured
+    the encoder guard forcing it in while **both readers silently dropped it**. Latent — all 21
+    current parameters are carried by both — but this is the trap `CLAUDE.md` records firing on the
+    sibling `enrich()` path at a cost of 429 phantom history rows and 128 emails, fixed there with a
+    clone-with AND a reflection guard; the merge had neither. Both readers now round-trip every
+    parameter with a value distinguishable from its default, nothing skipped.
+
+  Four more: `verify-deploy`'s freshness list was read off four `Dockerfile` LINES rather than the
+  recipe, omitting the `Dockerfile` itself, `.dockerignore` and the baked demo fixture (**a
+  line-number citation is what drifted, again**); `dump-eml.php`'s own credential write was the one
+  surface of three left at level 1; `recordTwin()`'s docblock called a CONFIDENCE bar a tier test
+  when a tier-3 procedural signal measurably clears at 80; and a docblock cited a method that had
+  been renamed away.
+
+  **The car domain's missing `PacedSource` is RECORDED, NOT FIXED**, with the condition that would
+  make it real: its only web source (`SitemapVehicleSource`) rate-limits itself between detail
+  fetches and every car email source answers `host(): null`, so the decorator's absence has no live
+  consequence. A second car web source without its own limiter is the moment it becomes one, and
+  the fix then is to lift `PacedSource` into `Scout\Adapters` over a shared contract — not to write
+  a car twin, because two decorators is how one of them drifts.
+
+  **RE-FREEZE for round 4: `909c159`** — 85 commits since `7765997`, **50 touching code**.
+
 ---
 
 ## Fragile implementations register (the developer asked; keep this list honest)
@@ -2190,7 +2255,7 @@ tool/guard) and say which ones the fix covers.**
 | 24 | 6-C2 P2 CMP-4 — F19 register row cites two stale line numbers | S | done | 38f64bb | docs/plans/scout-unified-execution.plan.md |
 | 25 | 6-C2 re-freeze at the last P2 commit and re-measure the span | S | done | 6001b01 | docs/plans/scout-unified-execution.plan.md |
 | 26 | 6-C2 round 2 — MAXIMAL, ran at 8fb9b64: 2 P1, 5 P2, 5 P3, all fixed | L | done | 5833b87 | src/php/Adapters/Mail/ImapMailbox.php src/php/Core/Notify/SmtpTransport.php src/php/Rent/Cli/Pipeline.php |
-| 27 | 6-C2 round 3 — round 2 had findings, so the two-clean count restarts here | L | todo | - | src/php |
+| 27 | 6-C2 round 3 — ran at 5833b87: 2 P1, 4 P2, 5 P3, all fixed | L | done | 909c159 | bin/scout src/php/Rent/Core/ListingSnapshot.php tests/sabotage-check.sh |
 | 28 | F18 a plain grep silently skips the Latin-1 PAP fixtures | S | done | 38f64bb | tests/php/Repo/FixtureSecretsTest.php |
 | 29 | F20 the durable reading no longer claims where it was read | M | done | 526d246 | src/php/Rent/Cli/Pipeline.php docs/OPEN-QUESTIONS.md |
 | 30 | F25 compose recreate wedges and leaves the watcher down silently | M | done | 38f64bb | tools/verify-deploy.sh tests/test-verify-deploy.sh README.md |
@@ -2198,6 +2263,7 @@ tool/guard) and say which ones the fix covers.**
 | 32 | Deep — field-map regex has no load-time compile check | S | done | 38f64bb | src/php/Rent/Config/FieldMap.php tests/php/Rent/Config/ConfigTest.php |
 | 33 | Deep — doc drift: WARN_FLAKY, card_separator_pattern refusals, 4 stale Core paths | M | done | 38f64bb | CLAUDE.md docs/OPEN-QUESTIONS.md |
 | 34 | Deep — plan track sections stale for Tracks 0 1 2-step0 4 and 6-A1/A2/A3 | M | done | 38f64bb | docs/plans/scout-unified-execution.plan.md |
+| 35 | 6-C2 — the TWO CONSECUTIVE CLEAN rounds the bar requires; rounds 1-3 each found real defects, cap is 5 then ask | L | todo | - | src/php |
 <!-- /progress-block -->
 ### Blocked
 
