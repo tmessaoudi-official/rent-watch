@@ -321,7 +321,14 @@ final readonly class Pipeline
 
         $twinRank = static fn (Tenure $t): int => $t->isExcluded() ? 2 : ($t === Tenure::UNKNOWN ? 1 : 0);
 
-        /** @var array<int, array{tenure: Tenure, source: string}> $twinReading survivor id -> resolved */
+        /**
+         * The confidence rides WITH the tenure, and that is load-bearing (COR-F5). `recordTwin()`
+         * refuses to let a weak reading resolve a recorded doubt, so it needs to know how strong
+         * this one is — and the fixed point below copies whole entries, so the number that arrives
+         * at the store is the one belonging to the tenure that actually won, not a recomputation.
+         *
+         * @var array<int, array{tenure: Tenure, source: string, bp: int}> $twinReading survivor id -> resolved
+         */
         $twinReading = [];
         foreach ($clustered as $cluster) {
             $listing = $cluster['listing'];
@@ -339,7 +346,7 @@ final readonly class Pipeline
                 $listing,
                 $excludedDwellings,
             );
-            $twinReading[$id] = ['tenure' => $base->tenure, 'source' => $listing->sourceName];
+            $twinReading[$id] = ['tenure' => $base->tenure, 'source' => $listing->sourceName, 'bp' => $base->confidenceBp];
         }
 
         // Bounded by the number of survivors: each sweep either tightens at least one node or ends.
@@ -922,8 +929,10 @@ final readonly class Pipeline
      *
      * @param list<string> $memberKeys every row of this cluster, the survivor's included
      * @param list<array{listing: RawListing, family: string}> $twins
-     * @param array<int, array{tenure: Tenure, source: string}> $twinReading survivor object id ->
-     *        the reading resolved across the WHOLE twin graph, computed before any judging
+     * @param array<int, array{tenure: Tenure, source: string, bp: int}> $twinReading survivor object
+     *        id -> the reading resolved across the WHOLE twin graph, computed before any judging.
+     *        `bp` is that reading's own confidence, carried so `recordTwin()` can refuse to let a
+     *        tier-5 source default resolve a doubt another route raised (COR-F5)
      */
     private function twinClassification(Classification $survivor, string $dedupKey, array $memberKeys, array $twins, array $twinReading): Classification
     {
@@ -941,7 +950,7 @@ final readonly class Pipeline
         // surface EXCEPT the twin's own twins. So an exclusion that reached a listing through ITS
         // twin never reached the listing's OTHER twins, and the second copy of a flat rejected as
         // PLS was pushed as a match naming the rejected route (round-6 panel, proven by execution).
-        /** @var array{tenure: Tenure, source: string}|null $seen */
+        /** @var array{tenure: Tenure, source: string, bp: int}|null $seen */
         $seen = null;
         foreach ($twins as $twin) {
             $resolved = $twinReading[spl_object_id($twin['listing'])] ?? null;
@@ -952,13 +961,15 @@ final readonly class Pipeline
                 // The SOURCE named is the twin actually in hand, not whatever distant node the
                 // reading propagated from: the notification tells the operator where to look, and a
                 // route they cannot see from here is not that.
-                $seen = ['tenure' => $resolved['tenure'], 'source' => $twin['listing']->sourceName];
+                // The SOURCE is the twin in hand; the CONFIDENCE is the resolved reading's own, so
+                // the two describe the same judgement even when it propagated from further away.
+                $seen = ['tenure' => $resolved['tenure'], 'source' => $twin['listing']->sourceName, 'bp' => $resolved['bp']];
             }
         }
 
         if ($seen !== null) {
             foreach ($memberKeys as $memberKey) {
-                $this->store->recordTwin($memberKey, $seen['tenure'], $seen['source']);
+                $this->store->recordTwin($memberKey, $seen['tenure'], $seen['source'], $seen['bp']);
             }
         }
 

@@ -711,6 +711,104 @@ final class PipelineRunTest extends TestCase
         self::assertSame(Tenure::LLI, $store->twinTenure($store->dedupKey($agency))['tenure'] ?? null, 'pass 2 clears it');
     }
 
+    /**
+     * COR-F5 — A DOUBT IS CLEARED BY POSITIVE EVIDENCE, NEVER BY A SOURCE DEFAULT.
+     *
+     * The test above is the legitimate clearing: the two routes are judged together again and the
+     * direct one now states `financement: LLI`, a tier-1 structured field. This is the refutation
+     * that shipped beside it — a THIRD route, which never saw the doubting one, clearing the doubt
+     * with the weakest signal the classifier has.
+     *
+     * `inli`'s card here states nothing about tenure at all, so its verdict is the SOURCE DEFAULT:
+     * tier 5, confidence 50, the tier whose whole documented property is that *an absent signal
+     * must lower confidence, never silently inherit `default_tenure` at full confidence*. And In'li
+     * is the source `CLAUDE.md` records as **proven not pure LLI** — two live listings state
+     * `plafond de ressources PLS` on their detail pages while their cards say nothing. So the
+     * erasing signal was not merely weak; it came from the source that most concretely disproves
+     * the assumption behind it.
+     *
+     * The gate is on the CLEARING direction only, at ≥ 60 — §1's own fail-closed threshold, not a
+     * new number. Tightening still needs no bar, and an excluded reading is still durable, so this
+     * can only ever make the store more careful.
+     */
+    public function testAThirdRoutesSourceDefaultCannotClearAPersistedDoubt(): void
+    {
+        $store = $this->store();
+        $pipeline = $this->pipeline($store, new Notifier([new RecordingChannel()]));
+        [, $agency] = $this->twins();
+
+        // Pass 1: the mixed-stock landlord's card says nothing, so the agency copy records a DOUBT.
+        $pipeline->runOnce([
+            new FakeSource('cdc_habitat', [$this->directRoute([], 'Bel appartement de 4 pieces de 88 m2, proche gare.')], mixedTenure: true),
+            new FakeSource('seloger', [$agency], family: 'private'),
+        ], '2026-08-07T12:00:00+02:00');
+        self::assertSame(
+            Tenure::UNKNOWN,
+            $store->twinTenure($store->dedupKey($agency))['tenure'] ?? null,
+            'pass 1 records the doubt',
+        );
+
+        // Pass 2: the doubting route is absent. A third route arrives stating nothing at all.
+        $pipeline->runOnce([
+            new FakeSource('inli', [$this->thirdRoute([], 'Bel appartement de 4 pieces de 88 m2.')]),
+            new FakeSource('seloger', [$agency], family: 'private'),
+        ], '2026-08-07T12:20:00+02:00');
+
+        self::assertSame(
+            Tenure::UNKNOWN,
+            $store->twinTenure($store->dedupKey($agency))['tenure'] ?? null,
+            'a tier-5 source default is not evidence, and must not erase a doubt a mixed-stock landlord raised',
+        );
+    }
+
+    /**
+     * THE COUNTERWEIGHT, and without it the gate is satisfied by never clearing anything —
+     * a doubt that can never be resolved is a listing permanently in the digest.
+     */
+    public function testAThirdRoutesTierOneSignalDoesClearAPersistedDoubt(): void
+    {
+        $store = $this->store();
+        $pipeline = $this->pipeline($store, new Notifier([new RecordingChannel()]));
+        [, $agency] = $this->twins();
+
+        $pipeline->runOnce([
+            new FakeSource('cdc_habitat', [$this->directRoute([], 'Bel appartement de 4 pieces de 88 m2, proche gare.')], mixedTenure: true),
+            new FakeSource('seloger', [$agency], family: 'private'),
+        ], '2026-08-07T12:00:00+02:00');
+
+        // Same shape as above, but the third route STATES its regime — a tier-1 structured field.
+        $pipeline->runOnce([
+            new FakeSource('inli', [$this->thirdRoute(['financement' => 'LLI'], '4 pieces de 88 m2, logement intermediaire.')]),
+            new FakeSource('seloger', [$agency], family: 'private'),
+        ], '2026-08-07T12:20:00+02:00');
+
+        self::assertSame(
+            Tenure::LLI,
+            $store->twinTenure($store->dedupKey($agency))['tenure'] ?? null,
+            'evidence still clears; only absence no longer does',
+        );
+    }
+
+    /**
+     * A third route onto the same flat, on a source that is neither of the twins.
+     *
+     * BOTH ARGUMENTS ARE REQUIRED, and that is not style. An `array $fields = []` default trips
+     * `.claude/hooks/tenure-guard.sh` — `= []` is one of the shapes it reads as the excluded-tenure
+     * set being emptied, the documented false-positive class it fires on for ordinary PHP. The
+     * repo's rule is to reword rather than weaken the pattern, so the callers state what they mean.
+     *
+     * @param array<string,string> $fields
+     */
+    private function thirdRoute(array $fields, string $description): RawListing
+    {
+        return new RawListing(
+            sourceName: 'inli', externalId: 'i1', title: '4 pièces - 88m²',
+            description: $description, fields: $fields,
+            url: 'https://inli.test/i1', commune: 'Sartrouville', postcode: '78500',
+            rentCc: 1450, surfaceM2: 88.0, rooms: 4,
+        );
+    }
+
     public function testAnExcludedTwinFactIsNeverOverwrittenByALaterEligibleReading(): void
     {
         // A portal that stops printing the PLS it printed yesterday has not changed the flat.

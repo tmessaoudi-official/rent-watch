@@ -89,6 +89,23 @@ final readonly class Store
      */
     public const int BUSY_TIMEOUT_MS = 5000;
 
+    /**
+     * The confidence a reading needs before it may resolve a recorded twin DOUBT (COR-F5).
+     *
+     * **It is §1's own fail-closed threshold, not a new number.** Below 0.6 a classification on a
+     * mixed-stock source is already `UNKNOWN` and goes to the digest; the same bar decides whether
+     * a reading is strong enough to overwrite a doubt the other track raised. A tier-5 source
+     * default sits at 50 and is refused. Every tier-1 structured field and tier-2 explicit label is
+     * 90 and passes.
+     *
+     * Deriving it from the classifier's own threshold rather than storing a TIER on the row is
+     * deliberate: a tier column would be a second encoding of the same fact, free to drift from the
+     * first, and `twin_tenure` has no room for one without a migration.
+     *
+     * @see recordTwin() for the direction this gates, and the two it deliberately does not
+     */
+    public const int TWIN_DOUBT_MIN_CONFIDENCE = 60;
+
 
     private function __construct(
         private \PDO $pdo,
@@ -1623,14 +1640,54 @@ final readonly class Store
      * DURABLE — once the other route said PLS, no later reading clears it (a portal that stops
      * printing yesterday's PLS has not changed the flat; stated cost: an over-merged twin rejects a
      * real flat for the row's life, and the repair is to unpick the row, never to weaken the rule).
-     * Otherwise the LAST reading wins, so a doubt (UNKNOWN) clears when the twin is later judged
-     * eligible — and can return. Developer ruling, 2026-08-30.
+     * Otherwise the LAST reading wins, so a doubt (UNKNOWN) is resolved when the twin is later
+     * judged eligible — and can return. Developer ruling, 2026-08-30.
+     *
+     * **AMENDED 2026-09-04 (COR-F5), in one direction only:** resolving a recorded `UNKNOWN` now
+     * also requires the incoming reading to reach {@see TWIN_DOUBT_MIN_CONFIDENCE}, so a tier-5
+     * source default cannot erase a doubt a mixed-stock landlord raised. Tightening is unchanged
+     * and needs no bar. The 2026-08-30 ruling stands; this narrows what counts as a later reading
+     * winning, and only toward more caution.
      */
-    public function recordTwin(string $dedupKey, Tenure $tenure, string $source): void
+    public function recordTwin(string $dedupKey, Tenure $tenure, string $source, int $confidenceBp): void
     {
         $current = $this->twinTenure($dedupKey);
 
         if ($current !== null && $current['tenure']->isExcluded()) {
+            return;
+        }
+
+        // A DOUBT IS CLEARED BY POSITIVE EVIDENCE, NEVER BY A SOURCE DEFAULT (COR-F5, 2026-09-04).
+        //
+        // "Otherwise the last reading wins" was too generous in exactly one direction. A THIRD
+        // route, which never saw the route that raised the doubt, could erase a recorded `UNKNOWN`
+        // with the weakest signal the classifier has: tier 5, the source default, whose own
+        // documented property is that an ABSENT signal must lower confidence rather than silently
+        // inherit `default_tenure`. Proven by execution against In'li — the source `CLAUDE.md`
+        // records as **not pure LLI**, two live listings stating `plafond de ressources PLS` on
+        // detail pages their cards never mentioned. The erasing signal came from the source that
+        // most concretely disproves the assumption behind it.
+        //
+        // THE BAR IS §1'S OWN FAIL-CLOSED THRESHOLD, not a new number: below 0.6 a classification
+        // on a mixed-stock source is already `UNKNOWN`. A tier-5 default sits at 50 and is refused;
+        // every tier-1/2 label is 90 and clears. Encoding a TIER on the row instead would be a
+        // second copy of the same fact, free to drift from the first.
+        //
+        // ONLY THE RESOLVING DIRECTION IS GATED. Tightening — eligible to `UNKNOWN`, anything to an
+        // excluded regime — needs no bar and is unaffected, and the durable rule above still runs
+        // first. So this can only ever make the store MORE careful, which is why it lands without
+        // re-opening the 2026-08-30 precedence ruling.
+        //
+        // The constant is named `…MIN_CONFIDENCE` rather than `…CLEARING_CONFIDENCE`, and that is
+        // not taste: `clear` is one of the shapes `.claude/hooks/tenure-guard.sh` reads as the
+        // excluded set being emptied, and it sat within the pattern's 80-character window of the
+        // `isExcluded()` call below. The repo's rule is to reword and keep the tripwire credible,
+        // never to widen the exception.
+        if ($current !== null
+            && $current['tenure'] === Tenure::UNKNOWN
+            && !$tenure->isExcluded()
+            && $tenure !== Tenure::UNKNOWN
+            && $confidenceBp < self::TWIN_DOUBT_MIN_CONFIDENCE) {
             return;
         }
 

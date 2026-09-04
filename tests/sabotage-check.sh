@@ -4271,6 +4271,35 @@ run_sabotage "headerSafe strips non-ASCII from a title (the shipped emoji badge 
   src/php/Core/Notify/NtfyChannel.php \
   "s%return trim(preg_replace('~\[\\\\r\\\\n\]+~', ' ', \$value) ?? '');%return trim(preg_replace('~[^\\\\x20-\\\\x7E]+~', ' ', \$value) ?? '');%"
 
+# ── COR-F5: a doubt is resolved by positive evidence, never by a source default (2026-09-04) ────
+#
+# "Otherwise the last reading wins" was too generous in ONE direction: a third route that never saw
+# the route which raised the doubt could erase a recorded `UNKNOWN` with the weakest signal the
+# classifier has — the tier-5 source default, whose own documented property is that an ABSENT signal
+# must lower confidence rather than inherit `default_tenure`. Proven against In'li, which CLAUDE.md
+# records as NOT pure LLI.
+run_sabotage "a source default resolves a persisted twin doubt again (absence read as evidence)" \
+  src/php/Rent/Store/Store.php \
+  "s%            && \$confidenceBp < self::TWIN_DOUBT_MIN_CONFIDENCE) {%            \&\& false) {%"
+
+# THE COUNTERWEIGHT, and it fails in the §1-dangerous direction. Gating every direction rather than
+# only the resolving one turns the fix into a general "ignore weak readings" rule — and a weak PLS
+# then never lands at all, which is the exclusion being dropped on the floor.
+#
+# ONE LINE, not two: `sed` does not match across lines, and the two-line form this was first
+# written as applied to nothing at all while reporting no error — the shape
+# `tests/test-sabotage-applies.sh` exists to catch, caught here by trying it first instead.
+run_sabotage "the confidence gate is applied to an EXCLUDED reading too (a weak PLS never lands)" \
+  src/php/Rent/Store/Store.php \
+  "s%            && !\$tenure->isExcluded()%            \&\& true%"
+
+# AND THE PIPELINE'S HALF. The gate is only as good as the number reaching it: the fixed point
+# copies whole entries so the confidence belongs to the tenure that actually won. Send a constant
+# instead and every reading looks like evidence — the store's guard intact and inert.
+run_sabotage "the pipeline sends a fixed confidence with the twin fact (the gate goes inert)" \
+  src/php/Rent/Cli/Pipeline.php \
+  "s%\$seen\['source'\], \$seen\['bp'\]);%\$seen['source'], 100);%"
+
 printf '\n  %d sabotage(s) detected, %d undetected\n' "$pass" "$fail"
 
 if [[ -n "$_filter" ]]; then

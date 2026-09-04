@@ -480,7 +480,7 @@ final class RentScoutReclassifyTest extends TestCase
     {
         $root = $this->tempRoot();
         $key = $this->seed($root, $this->intermediateListing('TWIN-1'), 'UNKNOWN', 'REJECT');
-        Store::open($root . '/state/rent-watch.sqlite3')->recordTwin($key, Tenure::PLS, 'cdc_habitat');
+        Store::open($root . '/state/rent-watch.sqlite3')->recordTwin($key, Tenure::PLS, 'cdc_habitat', 90);
 
         $r = $this->scout($root, ['reclassify'], $this->delivering());
 
@@ -496,7 +496,7 @@ final class RentScoutReclassifyTest extends TestCase
         // out of the matches until both are judged together again.
         $root = $this->tempRoot();
         $key = $this->seed($root, $this->intermediateListing('TWIN-2'), 'UNKNOWN', 'DIGEST');
-        Store::open($root . '/state/rent-watch.sqlite3')->recordTwin($key, Tenure::UNKNOWN, 'cdc_habitat');
+        Store::open($root . '/state/rent-watch.sqlite3')->recordTwin($key, Tenure::UNKNOWN, 'cdc_habitat', 90);
 
         $r = $this->scout($root, ['reclassify'], $this->delivering());
 

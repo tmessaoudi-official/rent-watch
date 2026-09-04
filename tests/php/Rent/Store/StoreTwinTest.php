@@ -39,7 +39,7 @@ final class StoreTwinTest extends TestCase
     {
         $key = $this->recorded('a1');
 
-        $this->store->recordTwin($key, Tenure::UNKNOWN, 'cdc_habitat');
+        $this->store->recordTwin($key, Tenure::UNKNOWN, 'cdc_habitat', 90);
 
         self::assertSame(['tenure' => Tenure::UNKNOWN, 'source' => 'cdc_habitat'], $this->store->twinTenure($key));
     }
@@ -49,12 +49,12 @@ final class StoreTwinTest extends TestCase
         // The group veto's rule, read across the track boundary: once the other route said PLS,
         // a later reading that says nothing — or says LLI — does not clear it.
         $key = $this->recorded('a1');
-        $this->store->recordTwin($key, Tenure::PLS, 'cdc_habitat');
+        $this->store->recordTwin($key, Tenure::PLS, 'cdc_habitat', 90);
 
-        $this->store->recordTwin($key, Tenure::LLI, 'cdc_habitat');
+        $this->store->recordTwin($key, Tenure::LLI, 'cdc_habitat', 90);
         self::assertSame(Tenure::PLS, $this->store->twinTenure($key)['tenure']);
 
-        $this->store->recordTwin($key, Tenure::UNKNOWN, 'inli');
+        $this->store->recordTwin($key, Tenure::UNKNOWN, 'inli', 90);
         self::assertSame(['tenure' => Tenure::PLS, 'source' => 'cdc_habitat'], $this->store->twinTenure($key));
     }
 
@@ -62,15 +62,78 @@ final class StoreTwinTest extends TestCase
     {
         $key = $this->recorded('a1');
 
-        $this->store->recordTwin($key, Tenure::UNKNOWN, 'cdc_habitat');
-        $this->store->recordTwin($key, Tenure::LLI, 'cdc_habitat');
+        $this->store->recordTwin($key, Tenure::UNKNOWN, 'cdc_habitat', 90);
+        $this->store->recordTwin($key, Tenure::LLI, 'cdc_habitat', 90);
         self::assertSame(Tenure::LLI, $this->store->twinTenure($key)['tenure'], 'a doubt clears');
 
-        $this->store->recordTwin($key, Tenure::UNKNOWN, 'cdc_habitat');
+        $this->store->recordTwin($key, Tenure::UNKNOWN, 'cdc_habitat', 90);
         self::assertSame(Tenure::UNKNOWN, $this->store->twinTenure($key)['tenure'], 'and can return');
 
-        $this->store->recordTwin($key, Tenure::PLUS, 'cdc_habitat');
+        $this->store->recordTwin($key, Tenure::PLUS, 'cdc_habitat', 90);
         self::assertSame(Tenure::PLUS, $this->store->twinTenure($key)['tenure'], 'until it is excluded');
+    }
+
+    /**
+     * COR-F5 — A DOUBT IS RESOLVED BY POSITIVE EVIDENCE, NEVER BY A SOURCE DEFAULT.
+     *
+     * *"Otherwise the last reading wins"* above was too generous in exactly one direction: a THIRD
+     * route that never saw the route which raised the doubt could erase a recorded `UNKNOWN` using
+     * the weakest signal the classifier has — tier 5, the source default, whose own documented
+     * property is that an ABSENT signal must lower confidence rather than silently inherit
+     * `default_tenure`. Proven by execution against In'li, the source `CLAUDE.md` records as **not
+     * pure LLI**.
+     *
+     * The bar is {@see Store::TWIN_DOUBT_MIN_CONFIDENCE}, which is §1's own fail-closed threshold
+     * rather than a new number: below it, a classification on a mixed-stock source is already
+     * `UNKNOWN`.
+     */
+    public function testAWeakReadingCannotResolveARecordedDoubt(): void
+    {
+        $key = $this->recorded('a1');
+        $this->store->recordTwin($key, Tenure::UNKNOWN, 'cdc_habitat', 0);
+
+        // 50 is the tier-5 source default — the exact value that erased a real doubt.
+        $this->store->recordTwin($key, Tenure::LLI, 'inli', 50);
+
+        self::assertSame(
+            ['tenure' => Tenure::UNKNOWN, 'source' => 'cdc_habitat'],
+            $this->store->twinTenure($key),
+            'the doubt stands, and it still names the route that raised it',
+        );
+    }
+
+    /**
+     * THE COUNTERWEIGHT, and without it the gate is satisfied by never resolving anything — which
+     * would leave a flat in the digest for ever. The boundary is INCLUSIVE, deliberately: the
+     * threshold is the value at which a classification stops being fail-closed, so a reading AT it
+     * is on the eligible side.
+     */
+    public function testAReadingAtTheThresholdDoesResolveIt(): void
+    {
+        $key = $this->recorded('a1');
+        $this->store->recordTwin($key, Tenure::UNKNOWN, 'cdc_habitat', 0);
+
+        $this->store->recordTwin($key, Tenure::LLI, 'cdc_habitat', Store::TWIN_DOUBT_MIN_CONFIDENCE);
+
+        self::assertSame(Tenure::LLI, $this->store->twinTenure($key)['tenure']);
+    }
+
+    /**
+     * ONLY THE RESOLVING DIRECTION IS GATED. Tightening a reading — eligible to `UNKNOWN`, anything
+     * to an excluded regime — is what §1 wants and needs no confidence at all. Asserting it here
+     * stops the gate being widened into a general "ignore weak readings" rule, which would let a
+     * weak PLS be dropped on the floor.
+     */
+    public function testTighteningIsNeverGatedOnConfidence(): void
+    {
+        $key = $this->recorded('a1');
+
+        $this->store->recordTwin($key, Tenure::LLI, 'cdc_habitat', 90);
+        $this->store->recordTwin($key, Tenure::UNKNOWN, 'inli', 0);
+        self::assertSame(Tenure::UNKNOWN, $this->store->twinTenure($key)['tenure'], 'a weak doubt still tightens');
+
+        $this->store->recordTwin($key, Tenure::PLS, 'seloger', 1);
+        self::assertSame(Tenure::PLS, $this->store->twinTenure($key)['tenure'], 'and a weak exclusion still lands');
     }
 
     public function testTheFactSurvivesReopening(): void
@@ -80,7 +143,7 @@ final class StoreTwinTest extends TestCase
             $store = Store::open($path);
             $key = $store->dedupKey($this->listing('a1'));
             $store->record($this->listing('a1'), 1450, '2026-08-30T10:00:00+02:00');
-            $store->recordTwin($key, Tenure::PLS, 'cdc_habitat');
+            $store->recordTwin($key, Tenure::PLS, 'cdc_habitat', 90);
             unset($store);
 
             self::assertSame(['tenure' => Tenure::PLS, 'source' => 'cdc_habitat'], Store::open($path)->twinTenure($key));
@@ -112,7 +175,7 @@ final class StoreTwinTest extends TestCase
             $reopened = Store::open($path);
             self::assertSame(Store::SCHEMA_VERSION, $reopened->schemaVersion());
             self::assertNull($reopened->twinTenure($key));
-            $reopened->recordTwin($key, Tenure::PLS, 'cdc_habitat');
+            $reopened->recordTwin($key, Tenure::PLS, 'cdc_habitat', 90);
             self::assertSame(Tenure::PLS, $reopened->twinTenure($key)['tenure']);
         } finally {
             foreach (glob($path . '*') ?: [] as $f) {
@@ -126,7 +189,7 @@ final class StoreTwinTest extends TestCase
         // A 0-row UPDATE that returns quietly is a fact that was never stored, reported as stored.
         $this->expectException(\LogicException::class);
 
-        $this->store->recordTwin('never-recorded', Tenure::PLS, 'cdc_habitat');
+        $this->store->recordTwin('never-recorded', Tenure::PLS, 'cdc_habitat', 90);
     }
     /**
      * `Store::tenure()` — the row's OWN last reading, which the pipeline's durable-reading rule is
@@ -184,7 +247,7 @@ final class StoreTwinTest extends TestCase
             $store->record($this->listing('a1'), 1450, '2026-08-30T10:00:00+02:00');
             $store->record($this->listing('b1'), 1450, '2026-08-30T10:00:00+02:00');
             $store->assignGroup([$a, $b]);
-            $store->recordTwin($a, Tenure::PLS, 'cdc_habitat');
+            $store->recordTwin($a, Tenure::PLS, 'cdc_habitat', 90);
 
             (new \PDO('sqlite:' . $path))->exec("UPDATE listings SET tenure = 'pls', twin_tenure = 'pls'");
 
