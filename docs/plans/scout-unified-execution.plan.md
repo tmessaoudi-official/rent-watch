@@ -2110,6 +2110,34 @@ tool/guard) and say which ones the fix covers.**
 > — **and that must be settled before the first enabled pass**, because nothing migrates a stored
 > row between key schemes and switching later re-notifies the whole backlog.
 
+> **B1 IS NOT CONFIG-ONLY, MEASURED 2026-09-04, and the whole 6-B heading assumes it is.**
+> `VehicleEmailSource` applies `title_pattern` to the message SUBJECT, never to the card segment.
+> CapCar's subject is one banner for the whole message (*"Nouvelle sélection de véhicules
+> disponibles !"*), so no pattern over it can name an individual car; with no `title_pattern` the
+> adapter falls back to the line ABOVE the price, which here is `Kilométrage : 24409`. And
+> `make_model_source: title` then reads the make out of THAT — the only other haystack it offers is
+> the link, and every CapCar link is an opaque per-recipient `sendibt3.com` redirect carrying no
+> make at all.
+>
+> **Shipping it config-only would store a mileage label as the title and no make**, and `brand_avoid`
+> reads `make`: an unextracted make scores 0 on that component, so every CapCar car would rank ten
+> points below an identical one from a source that states its make — the silent-ordering failure
+> Track 1d exists for. Worse than not shipping the source.
+>
+> What is needed is a per-SEGMENT field reader; the labelled block is perfectly regular, so it is a
+> small adapter change — but a CODE change with its own tests and its own review, not a config
+> block. **Two more things measured and worth having before anyone writes it**: the labels use
+> U+00A0 before the colon and the price a U+202F thousands mark, so `explode('Marque :', $body)`
+> returns ONE segment silently — a source yielding nothing while reporting a healthy fetch. And the
+> CTA cannot be the separator: `harvestHrefs()` puts each link INSIDE its card after the CTA, so
+> splitting there leaves every card holding the PREVIOUS card's link, which is the PAP
+> phantom-listing shape with the fields shifted by one.
+>
+> The capture is committed, scrubbed and audited for a recoverable identity in every encoding:
+> `tests/fixtures/car/capcar/2026-09-03-001-quatre-cartes.eml`, pinned by
+> `tests/php/Car/CapCarPayloadShapeTest.php` so the finding is reproducible without the mailbox and
+> whoever builds the reader has ground truth to write it against.
+
 - **B1 CapCar** (`contact@capcar.fr`, first real alert 2026-09-01 18:00). Structured labelled
   fields per card (`Marque/Modèle/Finition/Motorisation/Carburant/Boîte/Année/Kilométrage/Prix`),
   4 cards/message. Links are per-recipient tracking redirects → identity is CONTENT-based (the
@@ -2232,7 +2260,7 @@ tool/guard) and say which ones the fix covers.**
 | 1 | 6-A1 In'li degradation — failure-rate health signal (dual window) | M | done | 56437d9 | src/php/Core/RunStore.php |
 | 2 | 6-A2 car loader — a params key no adapter reads is refused | M | done | 413f38e | src/php/Car/VehicleSourceLoader.php |
 | 3 | 6-A3 ListingMapper miss instrumentation + tenureField on the JSON path | L | done | 2ab3245 | src/php/Rent/Adapters/ListingMapper.php |
-| 4 | 6-A3 half 3 — rent plausibility band on mapped rents (open, NOT deferred) | M | todo | - | src/php/Rent/Adapters/ListingMapper.php src/php/Rent/Adapters/Payload.php |
+| 4 | 6-A3 half 3 — rent plausibility band on mapped rents | M | done | d3c201a | src/php/Rent/Adapters/ListingMapper.php src/php/Rent/Adapters/Payload.php |
 | 5 | 6-A4 brand `autres` bypass — make_model_unknown_pattern | M | done | 0ae6cd0 | src/php/Car/VehicleSourceLoader.php config/car/sources.json |
 | 6 | 6-A5 score-floor batching + weight recalibration | L | deferred | - | src/php/Rent/Cli/DigestBatch.php config/rent/criteria.json |
 | 7 | 6-A6 SeLoger surface read out of a base64url tracking token | M | done | 9ea9d77 | src/php/Rent/Adapters/EmailAlertSource.php |
