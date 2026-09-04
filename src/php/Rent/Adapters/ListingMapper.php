@@ -158,7 +158,15 @@ final readonly class ListingMapper
             return $fields;
         }
 
-        $declared = Payload::string($item, $map->tenureField);
+        // COUNTED, and this one is §1. `tenureField` is the classifier's TIER-1 signal — the
+        // explicit structured field that outranks every label, tell and default. A selector that
+        // dies here does not fail loudly: the key is simply absent, the classifier falls through to
+        // the SOURCE DEFAULT, and a mixed-stock portal starts judging every listing by its most
+        // optimistic assumption. Nothing else moves — `item_count` is unchanged, no run fails, and
+        // `SourceHealth` stays `ok` — which is hard rule 2's exact shape on the one field §1 rests
+        // on. It was the last configured key in this class counting nothing (C2 round 5, found
+        // independently by two lenses).
+        $declared = $this->noted('tenure_field', $map->tenureField, Payload::string($item, $map->tenureField));
 
         if ($declared === null || $declared === '') {
             return $fields;
@@ -184,17 +192,31 @@ final readonly class ListingMapper
      */
     private function rents(mixed $item, FieldMap $map): array
     {
-        // BANDED, and until 2026-09-04 this path was not (Track 6-A3 half 3). `EmailAlertSource`
-        // has had the band since the SeLoger price-drop fix; the html and json sources went through
-        // here with none, and the live store carries 7 price-history rows at 119–290 € to show for
-        // it. The low end is the dangerous one: 95 € clears every ceiling with maximum headroom and
-        // is notified, while 2024 € merely fails everything quietly.
+        // DELIBERATELY UNBANDED, and it was banded for one day (Track 6-A3 half 3, 2026-09-04).
+        // Both attempts failed the same way, on opposite bounds, and the second was written by the
+        // fix for the first — which is why the reasoning is here rather than in a commit message.
         //
-        // `mappedRent()`, NOT `plausibleRent()`: the FLOOR transfers to a labelled value and the
-        // ceiling does not. Nulling an over-band figure skips `max_rent_cc`, which guards on
-        // `$rentCc !== null` — a 25 000 € flat MATCHED instead of being rejected, and it shipped.
-        $rent = Payload::mappedRent(Payload::int($item, $map->rent));
-        $explicitHc = Payload::mappedRent(Payload::int($item, $map->rentHc));
+        // Every downstream guard in this codebase reads a rent as `!== null`, so on a SINGLE
+        // labelled value "outside the band" and "not stated" become the same input, and nulling
+        // does not reject the listing — it DELETES THE EVIDENCE the guard needed:
+        //
+        //   - the ceiling. `CriteriaEngine::disqualify()` guards `max_rent_cc` with
+        //     `$rentCc !== null`, so nulling 25 000 € turned a REJECT into a MATCH, with the push
+        //     saying *"loyer non communiqué"* about a rent the portal communicated. Shipped.
+        //   - the floor. `CriteriaEngine::pricePerM2()` returns null when the rent is null, so
+        //     nulling 119 € skips the Track 1f plausibility branch — `{119 €, 60 m²}` judged
+        //     DIGEST unbanded and MATCH with the floor in place. Caught before it shipped.
+        //
+        // The band belongs to `EmailAlertSource::rentIn()`, where it sits inside a loop over
+        // CANDIDATES: there "refused" means KEEP LOOKING, and discarding one implausible figure
+        // costs nothing because the real rent is on the next line. That is a different statement
+        // with the opposite safety direction, and it does not transfer.
+        //
+        // Measured before removing it: the "7 price-history rows at 119–290 €" that motivated the
+        // band contain ONE below the floor, already digested on tenure. Zero rows either way. The
+        // mechanism for a mis-mapped low rent is the price-per-m² floor — which the band disabled.
+        $rent = $this->noted('rent', $map->rent, Payload::int($item, $map->rent));
+        $explicitHc = $this->noted('rent_hc', $map->rentHc, Payload::int($item, $map->rentHc));
 
         if ($rent === null) {
             return [null, $explicitHc];
@@ -211,7 +233,9 @@ final readonly class ListingMapper
      */
     private function url(mixed $item, FieldMap $map): ?string
     {
-        $url = Payload::string($item, $map->url);
+        // COUNTED, and it is the reason a detail fetch can go dark: hydration needs this URL, so a
+        // selector that dies here stops every detail page being read while the card still maps.
+        $url = $this->noted('url', $map->url, Payload::string($item, $map->url));
 
         if ($url === null || $url === '') {
             return null;

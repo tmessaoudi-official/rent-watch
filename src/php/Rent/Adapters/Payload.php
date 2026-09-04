@@ -434,32 +434,11 @@ final class Payload
     public const int RENT_FLOOR = 200;
 
     /**
-     * The highest, and it applies to the SCAN ONLY — see {@see mappedRent()}.
+     * The highest. BOTH bounds apply to the SCAN ONLY. `ListingMapper` deliberately applies no
+     * band at all: on a single labelled value, nulling deletes the evidence the ceiling and the
+     * price-per-m² floor each need, and both directions were proven to flip a verdict. The
+     * reasoning is at `ListingMapper::rents()`; do not reintroduce a band there.
      */
     public const int RENT_CEILING = 20000;
 
-    /**
-     * The band for a value the portal LABELLED as its rent: the floor only.
-     *
-     * **THE UPPER BOUND BELONGS TO THE SCAN AND NOWHERE ELSE, and shipping it here was a P1**
-     * (C2 round 4, 2026-09-04). `CriteriaEngine::disqualify()` guards `max_rent_cc` with
-     * `$rentCc !== null`, so nulling an over-band figure SKIPS the ceiling entirely: a 25 000 €
-     * flat was REJECTED before the band reached this path and MATCHED after it, and the push said
-     * *"loyer non communiqué"* about a rent the portal had communicated. It was deployed.
-     *
-     * The cause is a difference in what "refused" MEANS on each side, and it is worth stating
-     * because the numbers are identical. In {@see EmailAlertSource::rentIn()} the band sits inside
-     * a loop over CANDIDATES: refusing one means *keep looking*, and discarding a 95 000 costs
-     * nothing because the real rent is still two lines down. Applied to a single mapped value,
-     * refusing means *this listing has no rent* — a different claim, with the opposite safety
-     * direction.
-     *
-     * So: the FLOOR transfers and the ceiling does not. Below {@see RENT_FLOOR} the figure was read
-     * off the wrong thing and nulling it is safe; above {@see RENT_CEILING} the ceiling already
-     * rejects, and a rejection is strictly better than silence.
-     */
-    public static function mappedRent(?int $value): ?int
-    {
-        return $value !== null && $value >= self::RENT_FLOOR ? $value : null;
-    }
 }
