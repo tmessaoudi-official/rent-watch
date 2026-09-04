@@ -1992,23 +1992,23 @@ tool/guard) and say which ones the fix covers.**
 | 15 | 6-C2 r1 F1 (P0) — a flat the store holds as PLS is vetoed under a new ad id | M | done | 3eca42f | src/php/Rent/Cli/Pipeline.php src/php/Rent/Core/Dedup.php src/php/Rent/Store/Store.php |
 | 16 | 6-C2 r1 F-R1 + CMP-3 (P1) — counting a miss is not reporting one | M | done | 581cbce | src/php/Core/PatternMissLog.php src/php/Rent/Adapters/HtmlSource.php src/php/Car/SitemapVehicleSource.php |
 | 17 | 6-C2 r1 — two ledger expressions retargeted after the escalation moved | S | done | 081ab28 | tests/sabotage-check.sh |
-| 18 | 6-C2 P2 bundle — dump-eml fail-open guard, LOGIN trace, no docs/test (3 of 9) | M | todo | - | tools/dump-eml.php docs/ALERT-CAPTURE.md tests/test-dump-eml.sh |
+| 18 | 6-C2 P2 bundle — dump-eml fail-open guard, LOGIN trace, no docs/test (3 of 9) | M | done | 38f64bb | tools/dump-eml.php docs/ALERT-CAPTURE.md tests/test-dump-eml.sh |
 | 19 | 6-C2 P2 COR-F5 — a persisted twin doubt cleared by a third route | M | todo | - | src/php/Rent/Cli/Pipeline.php src/php/Rent/Store/Store.php |
-| 20 | 6-C2 P2 COR-F4 — SURFACE_PATTERN still has no left anchor | S | todo | - | src/php/Rent/Adapters/EmailAlertSource.php |
-| 21 | 6-C2 P2 COR-F3 — digest title asserts an undetermined regime that is determined | S | todo | - | src/php/Rent/Core/CriteriaEngine.php src/php/Rent/Notify/Formatter.php |
-| 22 | 6-C2 P2 CMP-2 — the frozen In'li fixture is the old template | M | todo | - | tests/fixtures/rent/inli/search.html |
-| 23 | 6-C2 P2 CMP-1 — ntfy badge test uses an ASCII stand-in | S | todo | - | tests/php/Core/Notify/NtfyChannelWireTest.php |
-| 24 | 6-C2 P2 CMP-4 — F19 register row cites two stale line numbers | S | todo | - | docs/plans/scout-unified-execution.plan.md |
+| 20 | 6-C2 P2 COR-F4 — SURFACE_PATTERN still has no left anchor | S | done | 38f64bb | src/php/Rent/Adapters/EmailAlertSource.php |
+| 21 | 6-C2 P2 COR-F3 — digest title asserts an undetermined regime that is determined | S | done | 38f64bb | src/php/Rent/Core/CriteriaEngine.php src/php/Rent/Notify/Formatter.php |
+| 22 | 6-C2 P2 CMP-2 — the frozen In'li fixture is the old template | M | done | 38f64bb | tests/fixtures/rent/inli/search-2026-09-04-nouveau-gabarit.html tests/php/Rent/Adapters/InliCurrentTemplateTest.php |
+| 23 | 6-C2 P2 CMP-1 — ntfy badge test uses an ASCII stand-in | S | done | 38f64bb | tests/php/Core/Notify/NtfyChannelWireTest.php |
+| 24 | 6-C2 P2 CMP-4 — F19 register row cites two stale line numbers | S | done | 38f64bb | docs/plans/scout-unified-execution.plan.md |
 | 25 | 6-C2 re-freeze at the last P2 commit and re-measure the span | S | todo | - | docs/plans/scout-unified-execution.plan.md |
 | 26 | 6-C2 round 2 — MAXIMAL, weighted to RunStore LandlordRegistry and the unread tests | L | todo | - | src/php/Core/RunStore.php src/php/Rent/Core/LandlordRegistry.php |
 | 27 | 6-C2 round 3 — the second consecutive clean round the bar requires | L | todo | - | src/php |
-| 28 | F18 a plain grep silently skips the Latin-1 PAP fixtures | S | todo | - | tests/php/Repo/FixtureSecretsTest.php |
+| 28 | F18 a plain grep silently skips the Latin-1 PAP fixtures | S | done | 38f64bb | tests/php/Repo/FixtureSecretsTest.php |
 | 29 | F20 no command can re-open a durably-excluded row | M | todo | - | src/php/Rent/Store/Store.php src/php/Rent/Cli/RentScout.php |
-| 30 | F25 compose recreate wedges and leaves the watcher down silently | M | todo | - | compose.yaml README.md |
+| 30 | F25 compose recreate wedges and leaves the watcher down silently | M | done | 38f64bb | tools/verify-deploy.sh tests/test-verify-deploy.sh README.md |
 | 31 | Deep — the five car MalformedText arms have no sabotage case | M | todo | - | tests/sabotage-check.sh |
-| 32 | Deep — field-map regex has no load-time compile check | S | todo | - | src/php/Rent/Config/ConfigLoader.php src/php/Rent/Config/FieldMap.php |
-| 33 | Deep — doc drift: WARN_FLAKY, card_separator_pattern refusals, 4 stale Core paths | M | todo | - | CLAUDE.md docs/OPEN-QUESTIONS.md |
-| 34 | Deep — plan track sections stale for Tracks 0 1 2-step0 4 and 6-A1/A2/A3 | M | todo | - | docs/plans/scout-unified-execution.plan.md |
+| 32 | Deep — field-map regex has no load-time compile check | S | done | 38f64bb | src/php/Rent/Config/FieldMap.php tests/php/Rent/Config/ConfigTest.php |
+| 33 | Deep — doc drift: WARN_FLAKY, card_separator_pattern refusals, 4 stale Core paths | M | done | 38f64bb | CLAUDE.md docs/OPEN-QUESTIONS.md |
+| 34 | Deep — plan track sections stale for Tracks 0 1 2-step0 4 and 6-A1/A2/A3 | M | done | 38f64bb | docs/plans/scout-unified-execution.plan.md |
 <!-- /progress-block -->
 ### Blocked
 
