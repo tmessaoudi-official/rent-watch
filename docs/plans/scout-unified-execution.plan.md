@@ -1229,6 +1229,22 @@ read-only) and the merged prose as one review deep.
   ruling carried above, the exit is decided WITH the developer via `AskUserQuestion`, never
   silently. Row 35 cannot close without that answer.
 
+- [2026-09-04 21:05] AGREED (**the cap question, answered: TRACK 0 IS PAUSED**). Asked via
+  `AskUserQuestion` as the 2026-08-30 ruling requires — four options, round 6 recommended on the
+  evidence that rounds 3, 4 AND 5 each found a P1 inside the PREVIOUS round's fix. The developer's
+  answer, verbatim: *"Let's pause for now ! save everything !"*
+
+  So **Track 0 does not close and does not continue**: the two-consecutive-clean bar stands at 0 and
+  is UNMET, stated rather than waived, and row 35 stays open. Nothing is certified by this pause —
+  the round-5 fixes rest on their executable evidence alone (suite 2798 / 10 798, nine guards green,
+  677 ledger expressions applying, every new guarantee verified red by direct mutation), and the
+  dimensions no round covered stay uncovered.
+
+  **Resuming needs no re-derivation:** freeze at `792eb3a`, spawn three unnamed lenses over
+  `5e68c24..792eb3a` — the smallest and cleanest input any round here has had — and the specific
+  thing to aim at is this round's own fixes, because that is where the last three rounds found their
+  P1s. The recommendation and its reasoning are recorded above; they do not expire.
+
 ---
 
 ## Fragile implementations register (the developer asked; keep this list honest)
