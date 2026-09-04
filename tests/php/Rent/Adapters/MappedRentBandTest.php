@@ -55,9 +55,7 @@ final class MappedRentBandTest extends TestCase
         // the code was right. Stating the limit is the honest version of the fix.
         yield 'the lowest stored history row' => [119];
         yield 'a stored row at 145' => [145];
-        yield 'a postcode read as a rent' => [95240];
         yield 'just under the low bound' => [199];
-        yield 'just over the high bound' => [20001];
     }
 
     #[DataProvider('implausibleRents')]
@@ -87,6 +85,51 @@ final class MappedRentBandTest extends TestCase
         // where many numbers compete; it does not transfer to a mapped value.
         yield 'a stored row at 290 — inside the band, and correctly so' => [290];
         yield 'a figure that would be a year in prose' => [2024];
+    }
+
+    /**
+     * THE UPPER BOUND MUST NOT REACH THE MAPPED PATH — it bypassed `max_rent_cc` (C2 round 4).
+     *
+     * `CriteriaEngine::disqualify()` guards the ceiling with `$rentCc !== null`. Nulling an
+     * over-band figure therefore SKIPS the ceiling: a 25 000 € flat was REJECTED before this band
+     * and MATCHED after it, and the push additionally said *"loyer non communiqué"* for a rent the
+     * portal had communicated. Proven by a review panel across two pinned worktrees, and the
+     * regression was DEPLOYED.
+     *
+     * The root cause is precise and worth keeping. In `EmailAlertSource::rentIn()` the band sits
+     * inside a loop over CANDIDATES, where "refused" means *keep looking* — one figure of many, and
+     * discarding a 95 000 costs nothing because the real rent is still on the next line.
+     * Transplanted onto a single MAPPED value it means *no rent at all*, which is a different
+     * statement with the opposite safety direction.
+     *
+     * So the mapped path keeps the FLOOR and drops the ceiling: below 200 is a figure read off the
+     * wrong thing and nulling it is safe, while above 20 000 the ceiling already rejects and is
+     * strictly better than silence.
+     *
+     * @return iterable<string, array{0: int}>
+     */
+    public static function aboveTheBand(): iterable
+    {
+        yield 'one euro over the scan band' => [20001];
+        yield 'the figure the panel used' => [25000];
+        yield 'an absurd figure the ceiling must still see' => [950000];
+        // A postcode read as a rent — the SCAN's own example, and it belongs here rather than in
+        // the rejected list. On a mapped field the portal labelled this its rent, so the honest
+        // answer is to hand `max_rent_cc` a figure it will reject, not to erase it and let the
+        // listing through with "loyer non communiqué".
+        yield 'a postcode, which the ceiling rejects rather than the band' => [95240];
+    }
+
+    #[DataProvider('aboveTheBand')]
+    public function testAnOverBandMappedRentIsKeptSoTheCeilingCanRejectIt(int $figure): void
+    {
+        $listing = $this->mapper()->map(['id' => 'a1', 'titre' => 'T3', 'loyer' => $figure]);
+
+        self::assertSame(
+            $figure,
+            $listing->rentCc,
+            'nulling it would skip max_rent_cc entirely — the flat would MATCH instead of being rejected',
+        );
     }
 
     #[DataProvider('plausibleRents')]

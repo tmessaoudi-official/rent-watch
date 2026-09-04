@@ -189,8 +189,12 @@ final readonly class ListingMapper
         // here with none, and the live store carries 7 price-history rows at 119–290 € to show for
         // it. The low end is the dangerous one: 95 € clears every ceiling with maximum headroom and
         // is notified, while 2024 € merely fails everything quietly.
-        $rent = Payload::plausibleRent(Payload::int($item, $map->rent));
-        $explicitHc = Payload::plausibleRent(Payload::int($item, $map->rentHc));
+        //
+        // `mappedRent()`, NOT `plausibleRent()`: the FLOOR transfers to a labelled value and the
+        // ceiling does not. Nulling an over-band figure skips `max_rent_cc`, which guards on
+        // `$rentCc !== null` — a 25 000 € flat MATCHED instead of being rejected, and it shipped.
+        $rent = Payload::mappedRent(Payload::int($item, $map->rent));
+        $explicitHc = Payload::mappedRent(Payload::int($item, $map->rentHc));
 
         if ($rent === null) {
             return [null, $explicitHc];
