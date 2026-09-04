@@ -82,10 +82,13 @@ final class CapCarPayloadShapeTest extends TestCase
     }
 
     /**
-     * THE BLOCKER, asserted rather than described: the subject names no vehicle.
+     * THE BLOCKER THAT WAS, asserted rather than described: the subject names no vehicle.
      *
      * `title_pattern` is applied to the subject, so no pattern over it can produce a per-card title.
-     * If a future adapter gains a per-segment reader, this assertion is what should change.
+     * Rows 37 + 38 (2026-09-05) gave the adapter the per-segment reader this docblock asked for —
+     * `facts_pattern` named groups, a composed title — and B1 shipped on it; the assertion stays
+     * because it is still TRUE and it is the reason the shipped block reads the title out of the
+     * labelled facts rather than out of the subject.
      */
     public function testTheSubjectCannotNameAnIndividualVehicle(): void
     {

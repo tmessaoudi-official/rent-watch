@@ -1324,6 +1324,27 @@ read-only) and the merged prose as one review deep.
   first line. `test-sabotage-applies` 712/712. What this does NOT do: B1/B2 config and fixtures are their own rows (9, 10),
   and `CapCarPayloadShapeTest`'s "the subject cannot name a vehicle" assertion changes in B1's
   commit, not this one.
+- [2026-09-05 02:10] RECORD (**ROW 9 — B1 CapCar IS LIVE IN CONFIG**, source #4 of the car
+  domain). Three captures scrubbed (the scrubber reported the address unrecoverable on all
+  three; a grep for the name finds nothing) and frozen — `2026-09-01-001-quatre-cartes-peugeot`,
+  `2026-09-02-001-quatre-cartes-kia`, the existing `2026-09-03-001-quatre-cartes` — so n=3 from
+  day one. The block: `from contact@capcar.fr`, `link_host` the FULL Brevo account subdomain
+  `cjbjibe.r.bh.d.sendibt3.com/tr/cl/` (adLinkIn matches by prefix; measured over 24 links, every
+  one starts with it), `subject_pattern`, `card_separator_pattern (?=Marque\x{00A0}:)`,
+  `link_after "Voir ce véhicule"`, `id_from content`, one `facts_pattern` with eight named groups,
+  `feed_silent_days 3` (one alert a day at 18:00). `family: dealer` — CapCar sells on mandate, a
+  fixed price per car. `CapCarFixtureTest` hand-reads all 12 cards (title composed, make/model
+  folded, U+202F prices, `Hybride rechargeable`/`Hybride essence`/`Hybride diesel` → hybride,
+  `Électrique` → electrique, `body` null because the template carries none), asserts 12 distinct
+  content ids that are sha1s and not tokens, 12 distinct CTA links none of which is a footer's
+  (the three footer tokens are read off the fixtures), no warning and no phantom, freshness
+  delegated. Offline proof:
+  `MAILBOX_DIR=tests/fixtures/car/capcar CAR_SCOUT_DB=$(mktemp -u) scout --domain=car doctor
+  --source=capcar` → **`ok · 12 annonces · 238 ms`**. One hand-read value was wrong on the first
+  run — the observedAt was written as if the Date header were +0200; it is UTC — and corrected
+  from the failure, not the other way round. **Config-only for the SOURCE, code-backed by rows
+  37+38; the deployed image predates both, so the live watcher needs a rebuild before it can read
+  this block** (a refused `id_from` on the old loader is a startup refusal, not a quiet skip).
 
 ---
 
@@ -2507,7 +2528,7 @@ tool/guard) and say which ones the fix covers.**
 | 6 | 6-A5 score-floor batching + weight recalibration | L | todo | - | src/php/Rent/Cli/DigestBatch.php config/rent/criteria.json |
 | 7 | 6-A6 SeLoger surface read out of a base64url tracking token | M | certified | 9ea9d77 test:2026-09-04 | src/php/Rent/Adapters/EmailAlertSource.php |
 | 8 | 6-A7 F28 one-shot victims report (read-only, gitignored output) | S | done | - | - |
-| 9 | 6-B1 CapCar email source | L | todo | - | config/car/sources.json |
+| 9 | 6-B1 CapCar email source | L | done | - | config/car/sources.json tests/php/Car/CapCarFixtureTest.php |
 | 10 | 6-B2 La Centrale email source | L | todo | - | config/car/sources.json |
 | 11 | 6-B3 Agorastore email source (optional third) | M | todo | - | config/car/sources.json |
 | 12 | 6-B4 AutoScout24 — no alert has ever arrived | M | blocked | - | config/car/sources.json |
@@ -2535,8 +2556,8 @@ tool/guard) and say which ones the fix covers.**
 | 34 | Deep — plan track sections stale for Tracks 0 1 2-step0 4 and 6-A1/A2/A3 | M | done | 38f64bb | docs/plans/scout-unified-execution.plan.md |
 | 35 | 6-C2 — the TWO CONSECUTIVE CLEAN rounds the bar requires; rounds 1-3 each found real defects, cap is 5 then ask | L | todo | - | src/php |
 | 36 | Processed alert emails are marked \Seen — run only, after the store recorded the source; doctor/dump stay read-only | M | done | 766edd7 | src/php/Adapters/Mail/ImapMailbox.php src/php/Adapters/Mail/Mailbox.php src/php/Rent/Cli/Pipeline.php src/php/Car/VehiclePipeline.php |
-| 37 | B-common — content-addressed identity for VehicleEmailSource (no-information floor, price out of the key, in-message duplicate announced) | M | done | - | src/php/Car/VehicleEmailSource.php src/php/Car/VehicleSourceLoader.php |
-| 38 | B-common — per-segment labelled field reader for VehicleEmailSource (the CapCar shape) | M | done | - | src/php/Car/VehicleEmailSource.php src/php/Car/VehicleSourceLoader.php |
+| 37 | B-common — content-addressed identity for VehicleEmailSource (no-information floor, price out of the key, in-message duplicate announced) | M | done | 7e1d54b | src/php/Car/VehicleEmailSource.php src/php/Car/VehicleSourceLoader.php |
+| 38 | B-common — per-segment labelled field reader for VehicleEmailSource (the CapCar shape) | M | done | 7e1d54b | src/php/Car/VehicleEmailSource.php src/php/Car/VehicleSourceLoader.php |
 | 39 | B3 prerequisite — a NARROW scrubber stripper for a base64 JSON-array identity blob, all refusal guarantees kept | M | todo | - | tools/scrub-eml.php tests/test-scrub-eml.sh |
 | 40 | F20 / Q39 — a repair route for a durably-excluded row: ruling (command vs stored distinction), then build | M | todo | - | src/php/Rent/Store/Store.php src/php/Rent/Cli/RentScout.php |
 | 41 | Round-5 P2 — a selector drifting onto a 5-digit field extracts cleanly and health stays ok: ruling (build vs accept), then build | M | todo | - | src/php/Rent/Adapters/ListingMapper.php |

@@ -1119,6 +1119,21 @@ covering 60 % of the fleet discriminates MORE, not less.
 > segment. The unknown-make sentinel applies on the facts path too. ParuVendu and leboncoin are
 > byte-identical (their fixture tests are the counterweight); 12 ledger cases pin the directions.
 >
+> **CAPCAR IS SOURCE #4 OF THE CAR DOMAIN (Track 6-B1, 2026-09-05), and the first built on the
+> mechanisms above.** `scout --domain=car doctor --source=capcar` against the frozen fixtures returns
+> **12 annonces, `ok`, ~240 ms**; prove a change offline with
+> `MAILBOX_DIR=tests/fixtures/car/capcar CAR_SCOUT_DB=$(mktemp -u) scout --domain=car doctor --source=capcar`.
+> One alert a day at 18:00, four labelled cards each, text/html only, n=3 from day one (three
+> captures frozen, `CapCarFixtureTest` hand-reads all twelve). Two things a reader of its block
+> needs: `link_host` is the FULL Brevo account subdomain (`cjbjibe.r.bh.d.sendibt3.com/tr/cl/`),
+> because `adLinkIn()` matches by prefix of the bare URL and `sendibt3.com` alone would match
+> nothing — a source yielding zero cards while reporting a healthy fetch; and a `_`-prefixed
+> comment on a PARAM lives inside `params`, not beside it — the source-level comment allow-list
+> is `_comment/_why/_source/_verified_at` plus a known top-level key, and the loader refuses the
+> rest (found by the first `doctor` run, not by reasoning). **Config-only for the source, but the
+> adapter code it rests on is baked into the image**: a deployed watcher older than `7e1d54b`
+> refuses the block at startup (`id_from` unknown to its loader) rather than skipping it.
+>
 > **A CAPTURE THAT SUCCEEDS IS NOT A CAPTURE THAT MEANS SOMETHING — the portal's own "I don't
 > know" token (Track 6-A4, 2026-09-02).** ParuVendu writes `/voiture-occasion/autres/autres/` when
 > it cannot name the marque. The pattern captured `autres` perfectly, so nothing read as a fault;

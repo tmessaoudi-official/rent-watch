@@ -38,6 +38,27 @@
         "facts_pattern": "~^\\h*[^\\n·]+·\\h*(?<year>\\d{4})\\h*·\\h*(?<km>\\d[\\d\\h]*)\\h*km\\h*·\\h*(?<fuel>[^\\n·]+?)\\h*$~mu"
       }
     },
+    "capcar": {
+      "_why": "Source #4 of the car domain (Track 6-B1, 2026-09-05). CapCar (capcar.fr) — a mandated-sale intermediary: daily at 18:00 the alert carries FOUR cars as a LABELLED BLOCK each (Marque / Modèle / Finition / Motorisation / Carburant / Boîte / Année / Kilométrage / Prix), text/html only. Three captures (09-01, 09-02, 09-03) are frozen under tests/fixtures/car/capcar/ and CapCarFixtureTest hand-reads all twelve cards. Every link is a per-recipient Brevo redirect on cjbjibe.r.bh.d.sendibt3.com/tr/cl/<token> — the account subdomain is stable, the token is not — so identity is CONTENT (title | year | km, price out), and the notification link is the redirect, which resolves to the car for the subscriber and expires with the mail (SeLoger's stated cost). NOT config-only: rows 37+38 gave the adapter facts groups and link_after for exactly this shape. No unknown-make sentinel: no capture shows one; add it the day CapCar writes one.",
+      "enabled": true,
+      "family": "dealer",
+      "type": "email_alert",
+      "_feed_silent_days": "3: one alert a day at 18:00 since 2026-09-01, so a two-day gap is a bursty weekend and three is a stopped feed — inside the 7-day IMAP window with four days of observability.",
+      "feed_silent_days": 3,
+      "params": {
+        "_link_host": "The FULL Brevo account subdomain, not sendibt3.com: adLinkIn() matches by prefix of the bare URL. Measured over 24 links in 3 captures — every one starts with it.",
+        "_link_after": "Every link in the message is on that host — the banner, each card's CTA, the footer's « Voir les véhicules dans mes critères » — and the lookahead separator leaves the footer inside the FOURTH card's segment, so the last host link there is the footer's. The card's link is the first host link after its own CTA.",
+        "_card_separator_pattern": "A zero-width lookahead on the first label, so the label stays inside the segment it starts and facts_pattern can begin at the block's first line. The label is `Marque` + U+00A0 + `:` — a literal `Marque :` with an ASCII space matches nothing at all (CapCarPayloadShapeTest pins the NBSP).",
+        "_facts_pattern": "ONE pattern over the labelled block, named groups make/model/version/fuel/gearbox/year/km/price. The title is composed `make model version` by the adapter; the price uses a U+202F thousands mark, which \\h admits. Motorisation is skipped on purpose (`8 5.5 kWh` for the Ami is not a fact this schema carries).",
+        "from": "contact@capcar.fr",
+        "link_host": "cjbjibe.r.bh.d.sendibt3.com/tr/cl/",
+        "subject_pattern": "~Nouvelle sélection de véhicules~u",
+        "card_separator_pattern": "~(?=Marque\\x{00A0}:)~u",
+        "link_after": "Voir ce véhicule",
+        "id_from": "content",
+        "facts_pattern": "~Marque\\x{00A0}:\\h*(?<make>[^\\n]+?)\\h*\\n\\s*Modèle\\x{00A0}:\\h*(?<model>[^\\n]+?)\\h*\\n\\s*Finition\\x{00A0}:\\h*(?<version>[^\\n]+?)\\h*\\n\\s*Motorisation\\x{00A0}:\\h*[^\\n]*\\n\\s*Carburant\\x{00A0}:\\h*(?<fuel>[^\\n]+?)\\h*\\n\\s*Boîte\\x{00A0}:\\h*(?<gearbox>[^\\n]+?)\\h*\\n\\s*Année\\x{00A0}:\\h*(?<year>\\d{4})\\h*\\n\\s*Kilométrage\\x{00A0}:\\h*(?<km>[\\d\\h]+?)\\h*\\n\\s*Prix\\x{00A0}:\\h*(?<price>[\\d\\h]+?)\\h*€~u"
+      }
+    },
     "autohero": {
       "_why": "Source #2, the one that proves the HTTP path. Measured 2026-08-27 and 2026-08-29: robots open, /fr/sitemap_search.xml lists ~3 400 lots as /fr/<make>-<model>/id/<uuid>/, and a lot page carries ONE application/ld+json block of @type Vehicle with price, brand, model, body, first registration (YYYY-MM), fuel, transmission, mileage ('136 278 KMT') and sku. A reseller: fixed price, delivered nationally, no location field at all — decision 6 is inert here by measurement.",
       "enabled": true,
