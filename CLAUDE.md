@@ -2200,6 +2200,21 @@ var/claude/                 Reports, review outputs — gitignored scratch (hand
   matched before assuming a real problem — reproduce with
   `tr '[:upper:]' '[:lower:]' < file | grep -oE '<pattern from the hook>'`. Reword prose to keep the
   tripwire credible; never weaken a pattern without a matching case in `tests/test-tenure-guard.sh`.
+
+  > **TWO THINGS THAT MAKE THE DIAGNOSIS ABOVE FAIL, both learned 2026-09-04 after three more
+  > firings in one session.** First, **the hook matches the EDIT PAYLOAD, not the file** — so
+  > re-running it against the file on disk can come back silent while the write was blocked, which
+  > reads as a phantom and wastes the next ten minutes. Second, `[^.]{0,80}` **spans newlines**, so
+  > the window reaches across a closing brace and a blank line into the NEXT function: one firing
+  > was an assertion message ending on *"never"* immediately before a docblock beginning *"A DOUBT
+  > IS CLEARED"*, two declarations apart. Neither is visible from the matched line.
+  >
+  > The reliable diagnosis is a SET DIFFERENCE of the pattern's matches over the whole file, before
+  > and after the write — `git show HEAD:<file>` against the working copy, both lowercased, both run
+  > through the hook's own regex in `python3` (`re.S`), printing only what is new. That names the
+  > match in one step. The three firings that session were `array $fields = []` in a test helper, a
+  > constant named `…CLEARING_CONFIDENCE` sitting inside the window of an `isExcluded()` call, and
+  > the cross-declaration one above. All three were reworded; no pattern was touched.
 - `ruff` **is** available in this container, and although the PHP side now has a `composer.json`
   there is still no Python manifest — so
   `.claude/hooks/lint-on-write.sh` is live and will report on `prototype/scout.py`. Those findings are
