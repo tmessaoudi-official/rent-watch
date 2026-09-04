@@ -403,4 +403,30 @@ final class Payload
 
         return (float) $raw;
     }
+
+    /**
+     * A figure that could be a monthly rent, or `null`.
+     *
+     * **THE ONE IMPLEMENTATION, called by both readers.** `EmailAlertSource` has had this band since
+     * the SeLoger price-drop fix — a card quoting `baissé de 100 €` alongside `1 100 €/mois` made the
+     * first-match reader return the REDUCTION — and the html/json path had none at all. Measured over
+     * the live store: **7 price-history rows at 119–290 €** came through `ListingMapper` unbanded.
+     *
+     * **THE LOW END IS THE DANGEROUS ONE.** A rent of 95 € clears every ceiling with maximum
+     * headroom, so it is scored, notified and written into the price history; 2024 € merely fails
+     * everything quietly. Which is why a band and not a floor-only check: `2024` from a date and
+     * `95240` from a postcode both parse as integers, and only their MAGNITUDE says otherwise.
+     *
+     * **BOUNDS INCLUSIVE, deliberately.** 200 € is a real rent for a parking space or a chambre and
+     * 20 000 € is a real one for a very large flat. Refusing a genuine figure at the boundary loses
+     * a listing silently, which is this project's worst failure direction; admitting one costs
+     * nothing, because every other filter still runs on it.
+     *
+     * It lives here rather than in either adapter because a second copy is how the two drift, and a
+     * rule applied to a subset of the surfaces it belongs on is this repo's named recurring defect.
+     */
+    public static function plausibleRent(?int $value): ?int
+    {
+        return $value !== null && $value >= 200 && $value <= 20000 ? $value : null;
+    }
 }

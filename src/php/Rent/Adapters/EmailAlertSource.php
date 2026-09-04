@@ -987,8 +987,14 @@ final readonly class EmailAlertSource implements CountsPatternMisses, FeedFreshn
                 // A plausibility band. Without it, `2024` from a date and `95240` from a postcode
                 // both parse as rents — and a rent of 2024 € would pass nothing while a rent of 95
                 // would pass everything with maximum headroom.
-                if ($value !== null && $value >= 200 && $value <= 20000) {
-                    return $value;
+                //
+                // The numbers moved to `Payload::plausibleRent()` on 2026-09-04 so the mapped path
+                // could share them rather than get a second copy: this band existed here and
+                // nowhere else, and `ListingMapper` let 7 stored history rows through at 119–290 €.
+                $banded = Payload::plausibleRent($value);
+
+                if ($banded !== null) {
+                    return $banded;
                 }
             }
         }

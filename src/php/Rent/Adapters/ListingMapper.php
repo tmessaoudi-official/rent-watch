@@ -184,8 +184,13 @@ final readonly class ListingMapper
      */
     private function rents(mixed $item, FieldMap $map): array
     {
-        $rent = Payload::int($item, $map->rent);
-        $explicitHc = Payload::int($item, $map->rentHc);
+        // BANDED, and until 2026-09-04 this path was not (Track 6-A3 half 3). `EmailAlertSource`
+        // has had the band since the SeLoger price-drop fix; the html and json sources went through
+        // here with none, and the live store carries 7 price-history rows at 119–290 € to show for
+        // it. The low end is the dangerous one: 95 € clears every ceiling with maximum headroom and
+        // is notified, while 2024 € merely fails everything quietly.
+        $rent = Payload::plausibleRent(Payload::int($item, $map->rent));
+        $explicitHc = Payload::plausibleRent(Payload::int($item, $map->rentHc));
 
         if ($rent === null) {
             return [null, $explicitHc];

@@ -4309,6 +4309,22 @@ run_sabotage "the pipeline sends a fixed confidence with the twin fact (the gate
   src/php/Rent/Cli/Pipeline.php \
   "s%\$seen\['source'\], \$seen\['bp'\]);%\$seen['source'], 100);%"
 
+# ── Track 6-A3 half 3: the rent band reaches the MAPPED path (2026-09-04) ───────────────────────
+#
+# `EmailAlertSource` has had a plausibility band since the SeLoger price-drop fix; the html and json
+# sources went through `ListingMapper` with none, and the live store carries 7 price-history rows at
+# 119–290 € to show for it. The LOW end is the dangerous one: 95 € clears every ceiling with maximum
+# headroom and is notified, while 2024 € merely fails everything quietly.
+run_sabotage "a mapped rent stops being banded (a figure read off the wrong thing is notified)" \
+  src/php/Rent/Adapters/ListingMapper.php \
+  "s%\$rent = Payload::plausibleRent(Payload::int(\$item, \$map->rent));%\$rent = Payload::int(\$item, \$map->rent);%"
+
+# ONE IMPLEMENTATION, not two copies of the same numbers. Give the email reader its own band back
+# and the two are free to drift — silently, on whichever side is not edited next.
+run_sabotage "the email reader carries its own copy of the band again (the two can drift)" \
+  src/php/Rent/Adapters/EmailAlertSource.php \
+  "s%\$banded = Payload::plausibleRent(\$value);%\$banded = (\$value !== null \&\& \$value >= 1 \&\& \$value <= 20000) ? \$value : null;%"
+
 # ── C2 round 2: every accepted `*_pattern` param compiles at load (2026-09-04) ──────────────────
 #
 # The eight keys were an inline literal and six had no test at all, so deleting `advertiser_pattern`
