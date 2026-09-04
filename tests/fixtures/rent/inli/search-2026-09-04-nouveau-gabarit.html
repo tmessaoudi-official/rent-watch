@@ -1,0 +1,2237 @@
+<!DOCTYPE html>
+<html >
+<head >
+
+    <script type="text/javascript">
+      window.MY_APP_CONFIG = {
+        googleApiEndpoint: 'https://maps.googleapis.com/maps/api/geocode/json',
+        googleApiKey: 'AIzaSyREDACTED-FIXTURE-PLACEHOLDER'
+      };
+      !(function (cfg){function e(){cfg.onInit&&cfg.onInit(n)}var x,w,D,t,E,n,C=window,O=document,b=C.location,q="script",I="ingestionendpoint",L="disableExceptionTracking",j="ai.device.";"instrumentationKey"[x="toLowerCase"](),w="crossOrigin",D="POST",t="appInsightsSDK",E=cfg.name||"appInsights",(cfg.name||C[t])&&(C[t]=E),n=C[E]||function(g){var f=!1,m=!1,h={initialize:!0,queue:[],sv:"8",version:2,config:g};function v(e,t){var n={},i="Browser";function a(e){e=""+e;return 1===e.length?"0"+e:e}return n[j+"id"]=i[x](),n[j+"type"]=i,n["ai.operation.name"]=b&&b.pathname||"_unknown_",n["ai.internal.sdkVersion"]="javascript:snippet_"+(h.sv||h.version),{time:(i=new Date).getUTCFullYear()+"-"+a(1+i.getUTCMonth())+"-"+a(i.getUTCDate())+"T"+a(i.getUTCHours())+":"+a(i.getUTCMinutes())+":"+a(i.getUTCSeconds())+"."+(i.getUTCMilliseconds()/1e3).toFixed(3).slice(2,5)+"Z",iKey:e,name:"Microsoft.ApplicationInsights."+e.replace(/-/g,"")+"."+t,sampleRate:100,tags:n,data:{baseData:{ver:2}},ver:undefined,seq:"1",aiDataContract:undefined}}var n,i,t,a,y=-1,T=0,S=["js.monitor.azure.com","js.cdn.applicationinsights.io","js.cdn.monitor.azure.com","js0.cdn.applicationinsights.io","js0.cdn.monitor.azure.com","js2.cdn.applicationinsights.io","js2.cdn.monitor.azure.com","az416426.vo.msecnd.net"],o=g.url||cfg.src,r=function(){return s(o,null)};function s(d,t){if((n=navigator)&&(~(n=(n.userAgent||"").toLowerCase()).indexOf("msie")||~n.indexOf("trident/"))&&~d.indexOf("ai.3")&&(d=d.replace(/(\/)(ai\.3\.)([^\d]*)$/,function(e,t,n){return t+"ai.2"+n})),!1!==cfg.cr)for(var e=0;e<S.length;e++)if(0<d.indexOf(S[e])){y=e;break}var n,i=function(e){var a,t,n,i,o,r,s,c,u,l;h.queue=[],m||(0<=y&&T+1<S.length?(a=(y+T+1)%S.length,p(d.replace(/^(.*\/\/)([\w\.]*)(\/.*)$/,function(e,t,n,i){return t+S[a]+i})),T+=1):(f=m=!0,s=d,!0!==cfg.dle&&(c=(t=function(){var e,t={},n=g.connectionString;if(n)for(var i=n.split(";"),a=0;a<i.length;a++){var o=i[a].split("=");2===o.length&&(t[o[0][x]()]=o[1])}return t[I]||(e=(n=t.endpointsuffix)?t.location:null,t[I]="https://"+(e?e+".":"")+"dc."+(n||"services.visualstudio.com")),t}()).instrumentationkey||g.instrumentationKey||"",t=(t=(t=t[I])&&"/"===t.slice(-1)?t.slice(0,-1):t)?t+"/v2/track":g.endpointUrl,t=g.userOverrideEndpointUrl||t,(n=[]).push((i="SDK LOAD Failure: Failed to load Application Insights SDK script (See stack for details)",o=s,u=t,(l=(r=v(c,"Exception")).data).baseType="ExceptionData",l.baseData.exceptions=[{typeName:"SDKLoadFailed",message:i.replace(/\./g,"-"),hasFullStack:!1,stack:i+"\nSnippet failed to load ["+o+"] -- Telemetry is disabled\nHelp Link: https://go.microsoft.com/fwlink/?linkid=2128109\nHost: "+(b&&b.pathname||"_unknown_")+"\nEndpoint: "+u,parsedStack:[]}],r)),n.push((l=s,i=t,(u=(o=v(c,"Message")).data).baseType="MessageData",(r=u.baseData).message='AI (Internal): 99 message:"'+("SDK LOAD Failure: Failed to load Application Insights SDK script (See stack for details) ("+l+")").replace(/\"/g,"")+'"',r.properties={endpoint:i},o)),s=n,c=t,JSON&&((u=C.fetch)&&!cfg.useXhr?u(c,{method:D,body:JSON.stringify(s),mode:"cors"}):XMLHttpRequest&&((l=new XMLHttpRequest).open(D,c),l.setRequestHeader("Content-type","application/json"),l.send(JSON.stringify(s)))))))},a=function(e,t){m||setTimeout(function(){!t&&h.core||i()},500),f=!1},p=function(e){var n=O.createElement(q),e=(n.src=e,t&&(n.integrity=t),n.setAttribute("data-ai-name",E),cfg[w]);return!e&&""!==e||"undefined"==n[w]||(n[w]=e),n.onload=a,n.onerror=i,n.onreadystatechange=function(e,t){"loaded"!==n.readyState&&"complete"!==n.readyState||a(0,t)},cfg.ld&&cfg.ld<0?O.getElementsByTagName("head")[0].appendChild(n):setTimeout(function(){O.getElementsByTagName(q)[0].parentNode.appendChild(n)},cfg.ld||0),n};p(d)}cfg.sri&&(n=o.match(/^((http[s]?:\/\/.*\/)\w+(\.\d+){1,5})\.(([\w]+\.){0,2}js)$/))&&6===n.length?(d="".concat(n[1],".integrity.json"),i="@".concat(n[4]),l=window.fetch,t=function(e){if(!e.ext||!e.ext[i]||!e.ext[i].file)throw Error("Error Loading JSON response");var t=e.ext[i].integrity||null;s(o=n[2]+e.ext[i].file,t)},l&&!cfg.useXhr?l(d,{method:"GET",mode:"cors"}).then(function(e){return e.json()["catch"](function(){return{}})}).then(t)["catch"](r):XMLHttpRequest&&((a=new XMLHttpRequest).open("GET",d),a.onreadystatechange=function(){if(a.readyState===XMLHttpRequest.DONE)if(200===a.status)try{t(JSON.parse(a.responseText))}catch(e){r()}else r()},a.send())):o&&r();try{h.cookie=O.cookie}catch(k){}function e(e){for(;e.length;)!function(t){h[t]=function(){var e=arguments;f||h.queue.push(function(){h[t].apply(h,e)})}}(e.pop())}var c,u,l="track",d="TrackPage",p="TrackEvent",l=(e([l+"Event",l+"PageView",l+"Exception",l+"Trace",l+"DependencyData",l+"Metric",l+"PageViewPerformance","start"+d,"stop"+d,"start"+p,"stop"+p,"addTelemetryInitializer","setAuthenticatedUserContext","clearAuthenticatedUserContext","flush"]),h.SeverityLevel={Verbose:0,Information:1,Warning:2,Error:3,Critical:4},(g.extensionConfig||{}).ApplicationInsightsAnalytics||{});return!0!==g[L]&&!0!==l[L]&&(e(["_"+(c="onerror")]),u=C[c],C[c]=function(e,t,n,i,a){var o=u&&u(e,t,n,i,a);return!0!==o&&h["_"+c]({message:e,url:t,lineNumber:n,columnNumber:i,error:a,evt:C.event}),o},g.autoExceptionInstrumented=!0),h}(cfg.cfg),(C[E]=n).queue&&0===n.queue.length?(n.queue.push(e),n.trackPageView({})):e();})({
+        src: "https://js.monitor.azure.com/scripts/b/ai.3.gbl.min.js",
+        // name: "appInsights", // Global SDK Instance name defaults to "appInsights" when not supplied
+        // ld: 0, // Defines the load delay (in ms) before attempting to load the sdk. -1 = block page load and add to head. (default) = 0ms load after timeout,
+        // useXhr: 1, // Use XHR instead of fetch to report failures (if available),
+        // dle: true, // Prevent the SDK from reporting load failure log
+        crossOrigin: "anonymous", // When supplied this will add the provided value as the cross origin attribute on the script tag
+        // onInit: null, // Once the application insights instance has loaded and initialized this callback function will be called with 1 argument -- the sdk instance (DON'T ADD anything to the sdk.queue -- As they won't get called)
+        // sri: false, // Custom optional value to specify whether fetching the snippet from integrity file and do integrity check
+        cfg: { // Application Insights Configuration
+          connectionString: "InstrumentationKey=0e350dbc-71af-4e97-956a-8b17dd0a3780;IngestionEndpoint=https://francecentral-1.in.applicationinsights.azure.com/;LiveEndpoint=https://francecentral.livediagnostics.monitor.azure.com/"
+      }});
+</script>
+  <title>Logements à prix maîtrisé Île-de-France (Région) | In'li</title>
+  <meta name="title" content="Logements &agrave; prix ma&icirc;tris&eacute; &Icirc;le-de-France (R&eacute;gion) | In'li" />
+<meta name="description" content="Retrouvez ici toutes nos offres de location de logement &agrave; prix ma&icirc;tris&eacute; sur le d&eacute;partement de &Icirc;le-de-France (R&eacute;gion), localisez nos biens sur la carte et filtrez par surface, nombre de pi&egrave;ces / chambres ou montant du loyer." />
+<meta name="robots" content="index, follow" />
+<meta property="og:title" content="Logements &agrave; prix ma&icirc;tris&eacute; &Icirc;le-de-France (R&eacute;gion) | In'li" />
+<meta property="og:description" content="Retrouvez ici toutes nos offres de location de logement &agrave; prix ma&icirc;tris&eacute; sur le d&eacute;partement de &Icirc;le-de-France (R&eacute;gion), localisez nos biens sur la carte et filtrez par surface, nombre de pi&egrave;ces / chambres ou montant du loyer." />
+
+  <link rel="canonical" href="https://www.inli.fr/locations/offres/ile-de-france-region_r:11" />
+    <meta http-equiv="x-ua-compatible" content="ie=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="icon" type="image/x-icon" href="/favicon.ico"/>
+  <link rel="apple-touch-icon" href="/favicon.ico"/>
+  <script type="text/javascript">
+  var tarteaucitronForceCDN = '/vendor/tarteaucitron/';
+</script>
+<script type="text/javascript" src="/vendor/tarteaucitron/tarteaucitron.js"></script>
+  <script type="text/javascript">
+
+    tarteaucitron.services.localizationhistory = {
+      "key": "localizationhistory",
+      "type": "other",
+      "name": "Localization History",
+      "needConsent": true,
+      "cookies": [],
+      "js": function () {
+        "use strict";
+        let expiration = new Date();
+        expiration.setFullYear(expiration.getFullYear() + 1);
+        document.cookie = 'accept_localization=true; expires=' + expiration.toUTCString();
+      },
+      "fallback": function () {
+        "use strict";
+        document.cookie = 'accept_localization=false; expires=Thu, 01 Jan 1970 00:00:01 GMT;';
+      }
+    };
+
+    var tarteaucitronCustomText = {
+      "privacyUrl": "Politique cookies",
+      "personalize": "Personnaliser mes choix de cookies",
+      "alertBigPrivacy": "In’li dépose des cookies afin de mesurer et d’analyser l’audience du site, de personnaliser son contenu selon votre navigation, de vous proposer sur le site du contenu multimédia via les services de partage de vidéo, réaliser du ciblage et afficher de la publicité personnalisée. Ses partenaire déposent également des cookies. Retrouvez la liste des partenaires ainsi que les finalités en <a class='link' href='/cookies'>cliquant ici</a>.",
+      "disclaimer": "Certains cookies ont pour finalité exclusive de permettre ou faciliter la communication électronique et d’autres sont strictement nécessaires à la fourniture d'un service de communication en ligne à votre demande expresse. Ces cookies ne sont pas soumis au recueil de votre consentement. En revanche, les autres cookies ne sont déposés par nous-mêmes ou nos partenaires sur votre équipement qui si vous les avez acceptés. Ces partenaires collecteront et utiliseront vos données de navigation pour des finalités qui leur sont propres, conformément à leur politique de confidentialité. Pour en savoir plus <a href='/cookies' class='link'>cliquer ici</a><br>" +
+        "<br>" +
+        "Votre consentement est valable pour le site www.inli.fr." +
+        "<br><br>" +
+        "Vous pourrez à tout moment revenir sur vos choix, retirer votre consentement en cliquant sur la rubrique « module de gestion des Cookies (lien) » présente en bas des pages du site.",
+      "title": "Module de gestion des Cookies",
+      "all": "Personnaliser mes choix de cookies"
+    };
+
+    tarteaucitron.init({
+      /* "privacyUrl": "/cookies", Privacy policy url */
+
+      "hashtag": "#tarteaucitron", /* Open the panel with this hashtag */
+      "cookieName": "tarteaucitron", /* Cookie name */
+
+      "orientation": "bottom", /* Banner position (top - bottom) */
+      "showAlertSmall": false, /* Show the small banner on bottom right */
+      "cookieslist": true, /* Show the cookie list */
+
+      "adblocker": false, /* Show a Warning if an adblocker is detected */
+      "AcceptAllCta" : true, /* Show the accept all button when highPrivacy on */
+      "highPrivacy": true, /* Disable auto consent */
+      "handleBrowserDNTRequest": false, /* If Do Not Track == 1, disallow all */
+
+      "removeCredit": true, /* Remove credit link */
+      "moreInfoLink": false, /* Show more info link */
+      "useExternalCss": false, /* If false, the tarteaucitron.css file will be loaded */
+
+      //"cookieDomain": ".my-multisite-domaine.fr", /* Shared cookie for multisite */
+
+      /* "readmoreLink": "/cookiespolicy" Change the default readmore link */
+    });
+
+    <!-- Matomo -->
+
+    (tarteaucitron.job = tarteaucitron.job || []).push('localizationhistory');
+    tarteaucitron.user.matomoId = 6;
+    tarteaucitron.user.matomoHost = 'https://inlietmoi.matomo.cloud/';
+    tarteaucitron.user.matomoCustomJSPath = '//cdn.matomo.cloud/inlietmoi.matomo.cloud/matomo.js';
+    (tarteaucitron.job = tarteaucitron.job || []).push('matomo');
+
+    <!-- End Matomo Code -->
+
+
+
+
+
+  </script>
+
+
+  <link rel="stylesheet" href="/build/app.0642f48f54f36ab0717065337cabbe36.css">
+                  <script src="/locations/js/routes"></script>
+          <script src="/js/environments"></script>
+          <style type="text/css">
+    ui-rgpd-modal { display: none;}
+  </style>
+      <script src="https://apis.google.com/js/platform.js"></script>
+    </head>
+<body>
+<div class="lock-overlay"></div>
+ ﻿<div id="candidacy-modal" class="modal-popup resp-alert-modal" >
+    <span class="close"></span>
+    <div class="alert-content resp-alert-content">
+        <div class="logo-container" style="text-align: center; margin-bottom: 10px;">
+            <img src="/images/logo-action-logement.png" alt="Logo Action Logement" style="max-height: 50px;">
+        </div>
+        <h5 class="demi-condensed">Valider votre identifiant Action Logement</h5>
+        <p id="candidacy-count">
+            🔔 Vous avez actuellement des candidatures en attente.
+        </p>
+        
+        <p class="alert-notice signup-link">
+                    </p>
+    </div>
+</div>          <header>
+  <a href="/"><img class="logo" src="/images/logo.png" alt="N°1 du logement intermédiaire en Ile-de-France"></a>
+  <nav class="menu-left ">
+    <ul>
+                         <li class="active no-display-480 no-display-768">
+              <a href="/login">
+                <svg width="14" height="16" viewBox="0 0 14 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path fill="currentColor"
+                        d="M9.78125 9.5C12.0938 9.5 14 11.4062 14 13.7188V14.5C14 15.3438 13.3125 16 12.5 16H1.5C0.65625 16 0 15.3438 0 14.5V13.7188C0 11.4062 1.875 9.5 4.1875 9.5C5.09375 9.5 5.5 10 7 10C8.46875 10 8.875 9.5 9.78125 9.5ZM12.5 14.5V13.7188C12.5 12.2188 11.2812 11 9.78125 11C9.3125 11 8.59375 11.5 7 11.5C5.375 11.5 4.65625 11 4.1875 11C2.6875 11 1.5 12.2188 1.5 13.7188V14.5H12.5ZM7 9C4.5 9 2.5 7 2.5 4.5C2.5 2.03125 4.5 0 7 0C9.46875 0 11.5 2.03125 11.5 4.5C11.5 7 9.46875 9 7 9ZM7 1.5C5.34375 1.5 4 2.875 4 4.5C4 6.15625 5.34375 7.5 7 7.5C8.625 7.5 10 6.15625 10 4.5C10 2.875 8.625 1.5 7 1.5Z" />
+                </svg>
+                <span class="medium">Mon espace client</span>
+              </a>
+            </li>
+            <li class="active display-480 display-768 no-display-1280">
+              <a href="/login">
+                <svg class="no-margin-right-480 no-margin-right-768" width="14" height="16" viewBox="0 0 14 16"
+                    fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path fill="currentColor"
+                        d="M9.78125 9.5C12.0938 9.5 14 11.4062 14 13.7188V14.5C14 15.3438 13.3125 16 12.5 16H1.5C0.65625 16 0 15.3438 0 14.5V13.7188C0 11.4062 1.875 9.5 4.1875 9.5C5.09375 9.5 5.5 10 7 10C8.46875 10 8.875 9.5 9.78125 9.5ZM12.5 14.5V13.7188C12.5 12.2188 11.2812 11 9.78125 11C9.3125 11 8.59375 11.5 7 11.5C5.375 11.5 4.65625 11 4.1875 11C2.6875 11 1.5 12.2188 1.5 13.7188V14.5H12.5ZM7 9C4.5 9 2.5 7 2.5 4.5C2.5 2.03125 4.5 0 7 0C9.46875 0 11.5 2.03125 11.5 4.5C11.5 7 9.46875 9 7 9ZM7 1.5C5.34375 1.5 4 2.875 4 4.5C4 6.15625 5.34375 7.5 7 7.5C8.625 7.5 10 6.15625 10 4.5C10 2.875 8.625 1.5 7 1.5Z" />
+                </svg>
+                <span class="medium no-display-480 no-display-768">Mon espace client</span>
+              </a>
+            </li>
+                    <li class="no-display-480 no-display-768">
+        <a href="/nous-contacter">
+          <span class="medium">Contact</span>
+        </a>
+      </li>
+      <li class="display-480 display-768 no-display-1280">
+        <a href="/nous-contacter">
+          <img class="contact-icon-768 contact-icon-480" alt="Contactez-nous" src="/images/contact.png">
+        </a>
+      </li>
+      <li class="burger-menu">
+        <a href="#">
+          <img alt="" src="/images/burger.png">
+        </a>
+      </li>
+    </ul>
+  </nav>
+</header>
+         ﻿
+      <aside>
+  <div class="close-icon">
+    <svg width="43" height="43" viewBox="0 0 43 43" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path d="M31.8196 10.6064L10.6064 31.8196" stroke="white" stroke-width="3" />
+      <path d="M31.8196 31.8203L10.6064 10.6071" stroke="white" stroke-width="3" />
+    </svg>
+  </div>
+  <ul>
+              <li>
+        <a href="/" target="_self" class="demi-condensed">Accueil</a>
+      </li>
+          <li>
+        <a href="___aide-conseils" target="_self" class="demi-condensed">Aide &amp; Conseils</a>
+      </li>
+          <li>
+        <a href="/infos" target="_self" class="demi-condensed">Infos</a>
+      </li>
+          <li>
+        <a href="/logements-a-prix-maitrise" target="_self" class="demi-condensed">Logement à prix maîtrisé</a>
+      </li>
+          <li>
+        <a href="/nous-contacter" target="_self" class="demi-condensed">Contactez-nous</a>
+      </li>
+      </ul>
+  <div class="menu-sites">
+    <h3 class="demi-condensed">NOS AUTRES SITES</h3>
+    <ul>
+      <li class="transition-animate">
+        <a href="https://inlietmoi.fr/?autoconnect=true" class="book-condensed">Mon espace client in'li & moi</a>
+      </li>
+      <li class="transition-animate">
+        <a href="https://inli.com" class="book-condensed">inli.com</a>
+      </li>
+      <li class="transition-animate">
+        <a href="https://actionlogement.fr" class="book-condensed">Action Logement</a>
+      </li>
+    </ul>
+  </div>
+  <div class="menu-pages-links">
+    <ul>
+                    <li>
+          <a href="/mentions-legales" target="_self">Mentions Légales</a>
+        </li>
+              <li>
+          <a href="/cgu" target="_self">Conditions Générales d&#039;Utilisation</a>
+        </li>
+              <li>
+          <a href="/politique_donneesperso" target="_self">Politique protection des données d&#039;in&#039;li, d&#039;in&#039;li Property Management, d&#039;in&#039;li AURA, d&#039;in&#039;li Grand Est, d&#039;in&#039;li Sud Ouest et d&#039;in&#039;li PACA</a>
+        </li>
+              <li>
+          <a href="/cookies" target="_self">Politique Cookies</a>
+        </li>
+          </ul>
+  </div>
+</aside>        
+    
+    <div class="container-lg site-container">
+        <div class="bordered-page-top"></div>
+        <form class="hero__content" method="get" id="autocompleteform" autocomplete="false" data-type="result-search">
+            
+<div class="sf" id="search-filters" data-type="rental">
+
+    <div class="sf-bar">
+        <div class="sf-bar__type" id="sf-type">
+            <button type="button" class="sf-bar__type-toggle demi-condensed" id="sf-type-toggle" aria-expanded="false" aria-haspopup="true">
+                Location
+                <svg class="sf-chevron" width="14" height="8" viewBox="0 0 14 8" fill="none" aria-hidden="true">
+                    <path d="M1 1l6 6 6-6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+            </button>
+            <ul class="sf-bar__type-menu" id="sf-type-menu">
+                <li><a class="book-condensed is-active" href="/locations/offres/">Location</a></li>
+                <li><a class="book-condensed" href="/achats/offres/">Achat</a></li>
+            </ul>
+        </div>
+
+        <div class="sf-bar__field" id="sf-bar-place">
+            <input id="navbar-search" type="text"
+                   value="Île-de-France (Région)"                   name="navbar-search" placeholder="Lieu" data-type="rental" class="navbar-search book-condensed">
+        </div>
+
+        <div class="sf-bar__field">
+            <input type="text" id="sf-bar-price" class="book-condensed sf-mirror" inputmode="numeric" autocomplete="off" placeholder="Loyer (jusqu'à)">
+            <span class="sf-bar__unit book-condensed">€</span>
+        </div>
+
+        <div class="sf-bar__field">
+            <input type="text" id="sf-bar-area" class="book-condensed sf-mirror" inputmode="numeric" autocomplete="off" placeholder="Surface (minimum)">
+            <span class="sf-bar__unit book-condensed">m²</span>
+        </div>
+
+        <button type="submit" class="sf-bar__submit" aria-label="Rechercher">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="2"/>
+                <path d="m21 21-4.3-4.3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+            </svg>
+        </button>
+    </div>
+
+    <button type="button" class="sf-mobile-bar" id="sf-mobile-bar">
+        <span class="sf-mobile-bar__text">
+            <span class="sf-mobile-bar__type demi-condensed">Location</span>
+            <span class="sf-mobile-bar__summary book-condensed" id="sf-mobile-summary"></span>
+        </span>
+        <span class="sf-mobile-bar__filters medium-condensed">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <path d="M4 7h10M18 7h2M4 17h2M10 17h10" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+                <circle cx="16" cy="7" r="2.2" stroke="currentColor" stroke-width="1.8"/>
+                <circle cx="8" cy="17" r="2.2" stroke="currentColor" stroke-width="1.8"/>
+            </svg>
+            Filtres<span class="sf-filter-badge" hidden></span>
+        </span>
+    </button>
+
+    <div class="sf-overlay" id="sf-overlay" hidden></div>
+
+    <aside class="sf-panel" id="sf-panel" role="dialog" aria-modal="true" aria-labelledby="sf-panel-title" hidden>
+        <div class="sf-panel__inner">
+            <div class="sf-panel__head">
+                <h2 id="sf-panel-title" class="demi-condensed">Filtres</h2>
+                <button type="button" class="sf-panel__close" id="sf-panel-close" aria-label="Fermer les filtres">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                        <path d="M5 5l14 14M19 5L5 19" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                    </svg>
+                </button>
+            </div>
+
+            <div class="sf-panel__body">
+                <div class="sf-segment">
+                    <a class="sf-segment__item demi-condensed is-active" href="/locations/offres/">Location</a>
+                    <a class="sf-segment__item demi-condensed" href="/achats/offres/">Achat</a>
+                </div>
+
+                <div class="sf-panel__place" id="sf-panel-place"></div>
+
+                <div class="sf-field">
+                    <span class="sf-field__label demi-condensed">Loyer</span>
+                    <div class="sf-field__inputs">
+                        <label class="sf-input">
+                            <span class="sf-input__hint book-condensed">Minimum</span>
+                            <span class="sf-input__box">
+                                <input type="text" class="price-min book-condensed" inputmode="numeric" autocomplete="off" placeholder="Min.">
+                                <span class="sf-input__unit book-condensed">€</span>
+                            </span>
+                        </label>
+                        <label class="sf-input">
+                            <span class="sf-input__hint book-condensed">Maximum</span>
+                            <span class="sf-input__box">
+                                <input type="text" class="price-max book-condensed" inputmode="numeric" autocomplete="off" placeholder="Max.">
+                                <span class="sf-input__unit book-condensed">€</span>
+                            </span>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="sf-field">
+                    <span class="sf-field__label demi-condensed">Surface</span>
+                    <div class="sf-field__inputs">
+                        <label class="sf-input">
+                            <span class="sf-input__hint book-condensed">Minimum</span>
+                            <span class="sf-input__box">
+                                <input type="text" class="range-min book-condensed" inputmode="numeric" autocomplete="off" placeholder="Min.">
+                                <span class="sf-input__unit book-condensed">m²</span>
+                            </span>
+                        </label>
+                        <label class="sf-input">
+                            <span class="sf-input__hint book-condensed">Maximum</span>
+                            <span class="sf-input__box">
+                                <input type="text" class="range-max book-condensed" inputmode="numeric" autocomplete="off" placeholder="Max.">
+                                <span class="sf-input__unit book-condensed">m²</span>
+                            </span>
+                        </label>
+                    </div>
+                </div>
+
+                <hr class="sf-sep">
+
+                <div class="sf-steppers">
+                    <div class="sf-stepper" data-stepper="room">
+                        <span class="sf-stepper__label demi-condensed">Pièces</span>
+                        <div class="sf-stepper__control">
+                            <button type="button" class="sf-stepper__btn" data-step="-1" aria-label="Moins de pièces">-</button>
+                            <span class="sf-stepper__value book-condensed" data-value="0">0</span>
+                            <button type="button" class="sf-stepper__btn" data-step="1" aria-label="Plus de pièces">+</button>
+                        </div>
+                    </div>
+                    <div class="sf-stepper" data-stepper="bedroom">
+                        <span class="sf-stepper__label demi-condensed">Chambres</span>
+                        <div class="sf-stepper__control">
+                            <button type="button" class="sf-stepper__btn" data-step="-1" aria-label="Moins de chambres">-</button>
+                            <span class="sf-stepper__value book-condensed" data-value="0">0</span>
+                            <button type="button" class="sf-stepper__btn" data-step="1" aria-label="Plus de chambres">+</button>
+                        </div>
+                    </div>
+                </div>
+
+                                    <hr class="sf-sep">
+
+                    <div class="sf-criterias">
+                        <span class="sf-field__label demi-condensed">Critères</span>
+                        <div class="sf-chips">
+                            <label class="sf-chip">
+                                <input type="checkbox" class="sf-criteria" data-param="elevator">
+                                <span class="sf-chip__inner book-condensed">
+                                    <svg width="22" height="22" viewBox="0 0 22 22" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                        <path stroke="currentColor" d="M17.4167 4.58333V17.4167H4.58333V4.58333H17.4167ZM17.4167 2.75H4.58333C3.575 2.75 2.75 3.575 2.75 4.58333V17.4167C2.75 18.425 3.575 19.25 4.58333 19.25H17.4167C18.425 19.25 19.25 18.425 19.25 17.4167V4.58333C19.25 3.575 18.425 2.75 17.4167 2.75ZM9.16667 16.5V12.8333H10.0833V10.5417C10.0833 9.53333 9.25833 8.70833 8.25 8.70833H7.33333C6.325 8.70833 5.5 9.53333 5.5 10.5417V12.8333H6.41667V16.5H9.16667ZM7.79167 7.79167C8.42417 7.79167 8.9375 7.27833 8.9375 6.64583C8.9375 6.01333 8.42417 5.5 7.79167 5.5C7.15917 5.5 6.64583 6.01333 6.64583 6.64583C6.64583 7.27833 7.15917 7.79167 7.79167 7.79167ZM16.5 10.0833L14.2083 6.41667L11.9167 10.0833H16.5ZM11.9167 11.9167L14.2083 15.5833L16.5 11.9167H11.9167Z"/>
+                                    </svg>
+                                    Ascenseur
+                                </span>
+                            </label>
+                            <label class="sf-chip">
+                                <input type="checkbox" class="sf-criteria" data-param="parking">
+                                <span class="sf-chip__inner book-condensed">
+                                    <svg width="21" height="21" viewBox="0 0 21 21" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                        <path stroke="currentColor" d="M10.0833 20.1667C4.52375 20.1667 0 15.6429 0 10.0833C0 4.52375 4.52375 0 10.0833 0C15.6429 0 20.1667 4.52375 20.1667 10.0833C20.1667 15.6429 15.6429 20.1667 10.0833 20.1667ZM10.0833 1.83333C5.53483 1.83333 1.83333 5.53483 1.83333 10.0833C1.83333 14.6327 5.53483 18.3333 10.0833 18.3333C14.6327 18.3333 18.3333 14.6327 18.3333 10.0833C18.3333 5.53483 14.6327 1.83333 10.0833 1.83333Z"/>
+                                        <path stroke="currentColor" d="M7.33333 15.5833C6.82733 15.5833 6.41667 15.1736 6.41667 14.6667V5.5C6.41667 4.994 6.82733 4.58333 7.33333 4.58333H11C13.0222 4.58333 14.6667 6.22783 14.6667 8.25C14.6667 10.2722 13.0222 11.9167 11 11.9167H8.25V14.6667C8.25 15.1736 7.83933 15.5833 7.33333 15.5833ZM8.25 10.0833H11C12.0111 10.0833 12.8333 9.26108 12.8333 8.25C12.8333 7.23892 12.0111 6.41667 11 6.41667H8.25V10.0833Z"/>
+                                    </svg>
+                                    Parking
+                                </span>
+                            </label>
+                            <label class="sf-chip">
+                                <input type="checkbox" class="sf-criteria" data-param="newHousing">
+                                <span class="sf-chip__inner book-condensed">
+                                    <svg width="22" height="22" viewBox="0 0 22 22" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                        <path stroke="currentColor" d="M8.87335 12.0908L11 10.4775L13.1175 12.0908L12.3109 9.47833L14.4375 7.79167H11.8342L11 5.21583L10.1659 7.79167H7.56252L9.68002 9.47833L8.87335 12.0908ZM18.3334 8.70833C18.3334 4.65667 15.0517 1.375 11 1.375C6.94835 1.375 3.66669 4.65667 3.66669 8.70833C3.66669 10.5692 4.36335 12.2558 5.50002 13.5483V20.625L11 18.7917L16.5 20.625V13.5483C17.6367 12.2558 18.3334 10.5692 18.3334 8.70833ZM11 3.20833C14.0342 3.20833 16.5 5.67417 16.5 8.70833C16.5 11.7425 14.0342 14.2083 11 14.2083C7.96585 14.2083 5.50002 11.7425 5.50002 8.70833C5.50002 5.67417 7.96585 3.20833 11 3.20833ZM11 16.9583L7.33335 17.8933V15.0517C8.41502 15.675 9.66169 16.0417 11 16.0417C12.3384 16.0417 13.585 15.675 14.6667 15.0517V17.8933L11 16.9583Z"/>
+                                    </svg>
+                                    Logement neuf
+                                </span>
+                            </label>
+                            <label class="sf-chip">
+                                <input type="checkbox" class="sf-criteria" data-param="meuble">
+                                <span class="sf-chip__inner book-condensed">
+                                    <svg width="28" height="26" viewBox="0 0 28 26" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                        <path fill="currentColor" stroke="currentColor" stroke-width="0.5" d="M27.2106 11.1273C26.9856 9.72784 25.88 8.64205 24.4888 8.45455C24.3588 8.44148 24.2278 8.4358 24.0974 8.43636V7.06818C24.0929 3.30455 21.0741 0.254545 17.3491 0.25H10.1509C6.42587 0.254545 3.40714 3.30455 3.40265 7.06818V8.43636C3.27218 8.4358 3.14115 8.44148 3.01125 8.45455C1.61998 8.64205 0.514384 9.72784 0.289441 11.1273C0.0408797 12.7 0.989575 14.2136 2.50288 14.6591V20.7045C2.50512 21.4568 3.10797 22.0659 3.85253 22.0682V24.7955C3.85253 25.0466 4.05385 25.25 4.30242 25.25H5.65207C5.85339 25.2494 6.02941 25.1142 6.08396 24.9182L6.88925 22.0682H20.6107L21.416 24.9182C21.4706 25.1142 21.6466 25.2494 21.8479 25.25H23.1976C23.4461 25.25 23.6475 25.0466 23.6475 24.7955V22.0682C24.392 22.0659 24.9949 21.4568 24.9971 20.7045V14.6591C26.5104 14.2136 27.4591 12.7 27.2106 11.1273ZM4.30242 7.06818C4.30523 3.80568 6.92187 1.16193 10.1509 1.15909H17.3491C20.5781 1.16193 23.1948 3.80568 23.1976 7.06818V8.56818C21.862 8.96648 20.9465 10.2068 20.9482 11.6136V13.0591C20.8036 13.0063 20.6518 12.9784 20.4983 12.9773H7.00173C6.8482 12.9784 6.69637 13.0063 6.55184 13.0591V11.6136C6.55353 10.2068 5.63801 8.96648 4.30242 8.56818V7.06818ZM20.9482 14.3409V16.6136H6.55184V14.3409C6.55184 14.0898 6.75316 13.8864 7.00173 13.8864H20.4983C20.7468 13.8864 20.9482 14.0898 20.9482 14.3409ZM5.31466 24.3409H4.7523V22.0682H5.95349L5.31466 24.3409ZM22.7477 24.3409H22.1853L21.5465 22.0682H22.7477V24.3409ZM24.4708 13.85C24.2548 13.8892 24.0979 14.0784 24.0974 14.3V20.7045C24.0974 20.9557 23.896 21.1591 23.6475 21.1591H3.85253C3.60397 21.1591 3.40265 20.9557 3.40265 20.7045V14.3C3.40265 14.0784 3.24519 13.8892 3.02924 13.85C1.80555 13.6426 0.979452 12.4727 1.18471 11.2358C1.34892 10.2472 2.13509 9.48409 3.11922 9.35909C3.21313 9.34602 3.30761 9.34034 3.40265 9.34091H3.40714C3.95488 9.33977 4.48406 9.54375 4.89176 9.91364C5.3737 10.3443 5.65095 10.9631 5.65207 11.6136V17.0682C5.65207 17.3193 5.85339 17.5227 6.10195 17.5227H21.398C21.6466 17.5227 21.8479 17.3193 21.8479 17.0682V11.6136C21.8491 10.9631 22.1263 10.3443 22.6082 9.91364C23.0907 9.47614 23.738 9.2733 24.3808 9.35909C25.3722 9.48864 26.1612 10.2619 26.3198 11.2591V11.2636C26.5132 12.4932 25.6866 13.6494 24.4708 13.85Z"/>
+                                    </svg>
+                                    Meublé
+                                </span>
+                            </label>
+                        </div>
+                    </div>
+                
+                <a href="#" data-target="alert-modal" class="sf-alert medium-condensed transition-animate modal-trigger">
+                    <svg width="16" height="19" viewBox="0 0 16 19" fill="currentColor" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                        <path d="M15.5586 13.0117C15.7695 13.2227 15.875 13.5039 15.875 13.75C15.8398 14.3477 15.418 14.875 14.7148 14.875H1.25C0.546875 14.875 0.125 14.3477 0.125 13.75C0.0898438 13.5039 0.195312 13.2227 0.40625 13.0117C1.07422 12.2734 2.375 11.1836 2.375 7.5625C2.375 4.85547 4.27344 2.67578 6.875 2.11328V1.375C6.875 0.777344 7.36719 0.25 8 0.25C8.59766 0.25 9.08984 0.777344 9.08984 1.375V2.11328C11.6914 2.67578 13.5898 4.85547 13.5898 7.5625C13.5898 11.1836 14.8906 12.2734 15.5586 13.0117ZM2.48047 13.1875H13.4844C12.7461 12.2383 11.9375 10.5859 11.9023 7.59766C11.9023 7.59766 11.9375 7.59766 11.9375 7.5625C11.9375 5.41797 10.1445 3.625 8 3.625C5.82031 3.625 4.0625 5.41797 4.0625 7.5625C4.0625 7.59766 4.0625 7.59766 4.0625 7.59766C4.02734 10.5859 3.21875 12.2383 2.48047 13.1875ZM8 18.25C6.73438 18.25 5.75 17.2656 5.75 16H10.2148C10.2148 17.2656 9.23047 18.25 8 18.25Z" fill="currentColor"/>
+                    </svg>
+                    Alerte
+                </a>
+            </div>
+
+            <div class="sf-panel__foot">
+                <a href="#" class="sf-reset book-condensed" id="sf-reset">Réinitialiser</a>
+                <button type="submit" class="btn btn-primary medium-condensed sf-submit">Rechercher</button>
+            </div>
+        </div>
+    </aside>
+</div>
+
+            <div id="favorite-modal" class="modal-popup favorite-modal-link">
+    <span class="close"></span>
+    <h5 class="demi-condensed">Ajouter aux favoris</h5>
+    <p>
+       Enregistrez vos annonces préférées dans la liste de vos favoris.
+    </p>
+        <div class="alert-signin">
+                            <p class="alert-notice">
+                    Pour ajouter aux favoris vous devez être connecté !
+                </p>
+                <a href="https://connect.inli.fr/Account/Register?backUrl=https://www.inli.fr" class="btn btn-secondary medium-condensed">Inscription</a>
+                <a href="/login" class="btn btn-primary medium-condensed">Connexion</a>
+                    </div>
+</div>
+
+            <div id="alert-modal" class="modal-popup resp-alert-modal">
+    <span class="close"></span>
+    <h5 class="demi-condensed">Créer une alerte</h5>
+    <p>
+        Recevez automatiquement par email les nouvelles annonces correspondant à vos critères de recherche.
+    </p>
+
+        <div class="alert-signin">
+                            <p class="alert-notice">
+                    Pour créer une alerte email, vous devez être connecté !
+                </p>
+                <a href="https://connect.inli.fr/Account/Register?backUrl=https://www.inli.fr" class="btn btn-secondary medium-condensed">Inscription</a>
+                <a href="/login" class="btn btn-primary medium-condensed">Connexion</a>
+                    </div>
+</div>
+        </form>
+    </div>
+        
+
+    <div class="container-lg">
+        <div class="featured-block ads-results">
+            <div class="sf-results-head">
+                <h5>201 logements</h5>
+                <div class="sf-results-actions">
+                    <a href="#" data-target="alert-modal" class="sf-action modal-trigger medium-condensed"><svg width="16" height="18" viewBox="0 0 16 19" fill="currentColor" aria-hidden="true"><path d="M15.5586 13.0117C15.7695 13.2227 15.875 13.5039 15.875 13.75C15.8398 14.3477 15.418 14.875 14.7148 14.875H1.25C0.546875 14.875 0.125 14.3477 0.125 13.75C0.0898438 13.5039 0.195312 13.2227 0.40625 13.0117C1.07422 12.2734 2.375 11.1836 2.375 7.5625C2.375 4.85547 4.27344 2.67578 6.875 2.11328V1.375C6.875 0.777344 7.36719 0.25 8 0.25C8.59766 0.25 9.08984 0.777344 9.08984 1.375V2.11328C11.6914 2.67578 13.5898 4.85547 13.5898 7.5625C13.5898 11.1836 14.8906 12.2734 15.5586 13.0117ZM2.48047 13.1875H13.4844C12.7461 12.2383 11.9375 10.5859 11.9023 7.59766C11.9023 7.59766 11.9375 7.59766 11.9375 7.5625C11.9375 5.41797 10.1445 3.625 8 3.625C5.82031 3.625 4.0625 5.41797 4.0625 7.5625C4.0625 7.59766 4.0625 7.59766 4.0625 7.59766C4.02734 10.5859 3.21875 12.2383 2.48047 13.1875ZM8 18.25C6.73438 18.25 5.75 17.2656 5.75 16H10.2148C10.2148 17.2656 9.23047 18.25 8 18.25Z"/></svg> Alerte</a>
+                    <button type="button" class="sf-action sf-open-filters medium-condensed"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h2M10 17h10" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><circle cx="16" cy="7" r="2.2" stroke="currentColor" stroke-width="1.8"/><circle cx="8" cy="17" r="2.2" stroke="currentColor" stroke-width="1.8"/></svg> Filtres<span class="sf-filter-badge" hidden></span></button>
+                </div>
+                                    <div class="order-ads tooltip-parent">
+                        <span class="tooltip-link">Trier par</span>
+                        <div class="tooltip">
+                            <ul id="sortOptions">
+                                <li class="book-condensed" data-val="priceAsc" data-order="priceWithCharges">Prix croissant</li>
+                                <li class="book-condensed" data-val="priceDesc" data-order="priceWithCharges">Prix décroissant</li>
+                                <li class="book-condensed" data-val="areaAsc" data-order="area">Surface croissante</li>
+                                <li class="book-condensed" data-val="areaDesc" data-order="area">Surface décroissante</li>
+                            </ul>
+                        </div>
+                    </div>
+                            </div>
+            
+            <div class="featured-items white-background">
+                                    
+
+                <div class="featured-item">
+                    <a href="/locations/offre/massy/PRV-321645">
+                    <div class="featured-images">
+                                                                                                                                                    <img src="https://prd-azr-photos-cdn-anb8asetcqb3ang2.a01.azurefd.net/idf/PRV%20321645/A-compressed%20%283%29-compressed.jpg" alt="MASSY" class="featured-image active"
+                                     loading="eager" fetchpriority="high" decoding="async">
+                                                                                                                            <img src="https://prd-azr-photos-cdn-anb8asetcqb3ang2.a01.azurefd.net/idf/PRV%20321645/B-compressed%20%283%29-compressed.jpg" alt="MASSY" class="featured-image "
+                                     loading="lazy" decoding="async">
+                                                                            <div class="featured-images-control">
+                                                            <span class="transition-animate active" data-control="1"></span>
+                                                            <span class="transition-animate " data-control="2"></span>
+                                                    </div>
+                                            </div>
+                    <div class="featured-price">
+                        <span class="demi-condensed">1 163 € </span><span class="book-condensed">cc</span>
+                                                                            <span class="featured-favorite">
+                                    <span data-target="favorite-modal" class="medium-condensed alert-link transition-animate modal-trigger">
+                                    <span class="featured-favorite">
+                                        <svg width="23" height="20" viewBox="0 0 23 20" fill="none"
+                                            xmlns="http://www.w3.org/2000/svg">
+                                            <path fill="currentColor"
+                                                d="M10.9357 19.2933C10.0046 18.4976 9.10715 17.75 8.31748 17.0923C5.98288 15.1477 4.02061 13.5111 2.66255 11.9095C1.16194 10.1397 0.5 8.5099 0.5 6.75591C0.5 5.02555 1.10638 3.4474 2.18831 2.30036C3.28196 1.141 4.78289 0.5 6.42523 0.5C7.6428 0.5 8.75305 0.873981 9.73744 1.61809C10.2368 1.99561 10.6931 2.46046 11.0981 3.00775C12.3071 2.46043 12.7633 1.9956 13.2627 1.61812C14.2471 0.87399 15.3574 0.5 16.5749 0.5C18.2171 0.5 19.7182 1.141 20.8118 2.30034C21.8938 3.44736 22.5 5.02551 22.5 6.75591C22.5 8.50993 21.8382 10.1397 20.3376 11.9094C18.9796 13.5111 17.0175 15.1475 14.6892 17.0869C13.8976 17.7461 12.9981 18.4954 12.0641 19.2937C11.9098 19.4257 11.7096 19.5 11.5 19.5C11.2904 19.5 11.0904 19.4257 10.9357 19.2933Z"
+                                                  stroke="#B0AAA3">
+                                            </path>
+                                        </svg>
+                                    </span>
+                                </span>
+                            </span>
+                                                                        </div>
+                    <div class="featured-details" style="
+                        display: -webkit-box;
+                        -webkit-box-orient: vertical;
+                        -webkit-line-clamp: 4;
+                        overflow: hidden;
+                        text-overflow: ellipsis;"
+                     >
+                        <span>
+                            3 pièces · 64 m²<br>
+                            Massy
+                            
+                                                    </span>
+                    </div>
+                    </a>
+                </div>
+
+                                    
+
+                <div class="featured-item">
+                    <a href="/locations/offre/vitry-sur-seine/PRV-240665">
+                    <div class="featured-images">
+                                                                                                                                                    <img src="https://prd-azr-photos-cdn-anb8asetcqb3ang2.a01.azurefd.net/idf/PRV%20240665/VITRY%20SUR%20SEINE%2004%20A-compressed.jpg" alt="VITRY SUR SEINE" class="featured-image active"
+                                     loading="lazy" decoding="async">
+                                                                                                                            <img src="https://prd-azr-photos-cdn-anb8asetcqb3ang2.a01.azurefd.net/idf/PRV%20240665/VITRY%20SUR%20SEINE%2004-compressed.jpg" alt="VITRY SUR SEINE" class="featured-image "
+                                     loading="lazy" decoding="async">
+                                                                            <div class="featured-images-control">
+                                                            <span class="transition-animate active" data-control="1"></span>
+                                                            <span class="transition-animate " data-control="2"></span>
+                                                    </div>
+                                            </div>
+                    <div class="featured-price">
+                        <span class="demi-condensed">1 069 € </span><span class="book-condensed">cc</span>
+                                                                            <span class="featured-favorite">
+                                    <span data-target="favorite-modal" class="medium-condensed alert-link transition-animate modal-trigger">
+                                    <span class="featured-favorite">
+                                        <svg width="23" height="20" viewBox="0 0 23 20" fill="none"
+                                            xmlns="http://www.w3.org/2000/svg">
+                                            <path fill="currentColor"
+                                                d="M10.9357 19.2933C10.0046 18.4976 9.10715 17.75 8.31748 17.0923C5.98288 15.1477 4.02061 13.5111 2.66255 11.9095C1.16194 10.1397 0.5 8.5099 0.5 6.75591C0.5 5.02555 1.10638 3.4474 2.18831 2.30036C3.28196 1.141 4.78289 0.5 6.42523 0.5C7.6428 0.5 8.75305 0.873981 9.73744 1.61809C10.2368 1.99561 10.6931 2.46046 11.0981 3.00775C12.3071 2.46043 12.7633 1.9956 13.2627 1.61812C14.2471 0.87399 15.3574 0.5 16.5749 0.5C18.2171 0.5 19.7182 1.141 20.8118 2.30034C21.8938 3.44736 22.5 5.02551 22.5 6.75591C22.5 8.50993 21.8382 10.1397 20.3376 11.9094C18.9796 13.5111 17.0175 15.1475 14.6892 17.0869C13.8976 17.7461 12.9981 18.4954 12.0641 19.2937C11.9098 19.4257 11.7096 19.5 11.5 19.5C11.2904 19.5 11.0904 19.4257 10.9357 19.2933Z"
+                                                  stroke="#B0AAA3">
+                                            </path>
+                                        </svg>
+                                    </span>
+                                </span>
+                            </span>
+                                                                        </div>
+                    <div class="featured-details" style="
+                        display: -webkit-box;
+                        -webkit-box-orient: vertical;
+                        -webkit-line-clamp: 4;
+                        overflow: hidden;
+                        text-overflow: ellipsis;"
+                     >
+                        <span>
+                            3 pièces · 62 m²<br>
+                            Vitry sur seine
+                            
+                                                    </span>
+                    </div>
+                    </a>
+                </div>
+
+                                    
+
+                <div class="featured-item">
+                    <a href="/locations/offre/les-ulis/PRV-054463">
+                    <div class="featured-images">
+                                                                                                                                                    <img src="https://prd-azr-photos-cdn-anb8asetcqb3ang2.a01.azurefd.net/idf/PRV%20054463/BURES%20LES%20ULIS%2005%201-compressed.jpg" alt="LES ULIS" class="featured-image active"
+                                     loading="lazy" decoding="async">
+                                                                                                                            <img src="https://prd-azr-photos-cdn-anb8asetcqb3ang2.a01.azurefd.net/idf/PRV%20054463/BURES%20LES%20ULIS%2005%202-compressed.jpg" alt="LES ULIS" class="featured-image "
+                                     loading="lazy" decoding="async">
+                                                                                                                            <img src="https://prd-azr-photos-cdn-anb8asetcqb3ang2.a01.azurefd.net/idf/PRV%20054463/BURES%20LES%20ULIS%2005-compressed.jpg" alt="LES ULIS" class="featured-image "
+                                     loading="lazy" decoding="async">
+                                                                            <div class="featured-images-control">
+                                                            <span class="transition-animate active" data-control="1"></span>
+                                                            <span class="transition-animate " data-control="2"></span>
+                                                            <span class="transition-animate " data-control="3"></span>
+                                                    </div>
+                                            </div>
+                    <div class="featured-price">
+                        <span class="demi-condensed">933 € </span><span class="book-condensed">cc</span>
+                                                                            <span class="featured-favorite">
+                                    <span data-target="favorite-modal" class="medium-condensed alert-link transition-animate modal-trigger">
+                                    <span class="featured-favorite">
+                                        <svg width="23" height="20" viewBox="0 0 23 20" fill="none"
+                                            xmlns="http://www.w3.org/2000/svg">
+                                            <path fill="currentColor"
+                                                d="M10.9357 19.2933C10.0046 18.4976 9.10715 17.75 8.31748 17.0923C5.98288 15.1477 4.02061 13.5111 2.66255 11.9095C1.16194 10.1397 0.5 8.5099 0.5 6.75591C0.5 5.02555 1.10638 3.4474 2.18831 2.30036C3.28196 1.141 4.78289 0.5 6.42523 0.5C7.6428 0.5 8.75305 0.873981 9.73744 1.61809C10.2368 1.99561 10.6931 2.46046 11.0981 3.00775C12.3071 2.46043 12.7633 1.9956 13.2627 1.61812C14.2471 0.87399 15.3574 0.5 16.5749 0.5C18.2171 0.5 19.7182 1.141 20.8118 2.30034C21.8938 3.44736 22.5 5.02551 22.5 6.75591C22.5 8.50993 21.8382 10.1397 20.3376 11.9094C18.9796 13.5111 17.0175 15.1475 14.6892 17.0869C13.8976 17.7461 12.9981 18.4954 12.0641 19.2937C11.9098 19.4257 11.7096 19.5 11.5 19.5C11.2904 19.5 11.0904 19.4257 10.9357 19.2933Z"
+                                                  stroke="#B0AAA3">
+                                            </path>
+                                        </svg>
+                                    </span>
+                                </span>
+                            </span>
+                                                                        </div>
+                    <div class="featured-details" style="
+                        display: -webkit-box;
+                        -webkit-box-orient: vertical;
+                        -webkit-line-clamp: 4;
+                        overflow: hidden;
+                        text-overflow: ellipsis;"
+                     >
+                        <span>
+                            3 pièces · 64 m²<br>
+                            Les ulis
+                            
+                                                    </span>
+                    </div>
+                    </a>
+                </div>
+
+                                    
+
+                <div class="featured-item">
+                    <a href="/locations/offre/colombes/PRV-384957">
+                    <div class="featured-images">
+                                                                                                                                                    <img src="https://prd-azr-photos-cdn-anb8asetcqb3ang2.a01.azurefd.net/idf/PRV%20384957/0%20Perspective%20Colombes%207052-compressed.jpg" alt="COLOMBES" class="featured-image active"
+                                     loading="lazy" decoding="async">
+                                                                                                                            <img src="https://prd-azr-photos-cdn-anb8asetcqb3ang2.a01.azurefd.net/idf/PRV%20384957/384957-compressed.jpg" alt="COLOMBES" class="featured-image "
+                                     loading="lazy" decoding="async">
+                                                                                                                            <img src="https://prd-azr-photos-cdn-anb8asetcqb3ang2.a01.azurefd.net/idf/PRV%20384957/7052-COLOMBES-Logement%20t%C3%A9moin-Photo%201-compressed.JPG" alt="COLOMBES" class="featured-image "
+                                     loading="lazy" decoding="async">
+                                                                            <div class="featured-images-control">
+                                                            <span class="transition-animate active" data-control="1"></span>
+                                                            <span class="transition-animate " data-control="2"></span>
+                                                            <span class="transition-animate " data-control="3"></span>
+                                                    </div>
+                                                    <span class="accroche-annonce">Terrasse</span>
+                                            </div>
+                    <div class="featured-price">
+                        <span class="demi-condensed">1 281 € </span><span class="book-condensed">cc</span>
+                                                                            <span class="featured-favorite">
+                                    <span data-target="favorite-modal" class="medium-condensed alert-link transition-animate modal-trigger">
+                                    <span class="featured-favorite">
+                                        <svg width="23" height="20" viewBox="0 0 23 20" fill="none"
+                                            xmlns="http://www.w3.org/2000/svg">
+                                            <path fill="currentColor"
+                                                d="M10.9357 19.2933C10.0046 18.4976 9.10715 17.75 8.31748 17.0923C5.98288 15.1477 4.02061 13.5111 2.66255 11.9095C1.16194 10.1397 0.5 8.5099 0.5 6.75591C0.5 5.02555 1.10638 3.4474 2.18831 2.30036C3.28196 1.141 4.78289 0.5 6.42523 0.5C7.6428 0.5 8.75305 0.873981 9.73744 1.61809C10.2368 1.99561 10.6931 2.46046 11.0981 3.00775C12.3071 2.46043 12.7633 1.9956 13.2627 1.61812C14.2471 0.87399 15.3574 0.5 16.5749 0.5C18.2171 0.5 19.7182 1.141 20.8118 2.30034C21.8938 3.44736 22.5 5.02551 22.5 6.75591C22.5 8.50993 21.8382 10.1397 20.3376 11.9094C18.9796 13.5111 17.0175 15.1475 14.6892 17.0869C13.8976 17.7461 12.9981 18.4954 12.0641 19.2937C11.9098 19.4257 11.7096 19.5 11.5 19.5C11.2904 19.5 11.0904 19.4257 10.9357 19.2933Z"
+                                                  stroke="#B0AAA3">
+                                            </path>
+                                        </svg>
+                                    </span>
+                                </span>
+                            </span>
+                                                                        </div>
+                    <div class="featured-details" style="
+                        display: -webkit-box;
+                        -webkit-box-orient: vertical;
+                        -webkit-line-clamp: 4;
+                        overflow: hidden;
+                        text-overflow: ellipsis;"
+                     >
+                        <span>
+                            3 pièces · 55.32 m²<br>
+                            Colombes
+                            
+                                                    </span>
+                    </div>
+                    </a>
+                </div>
+
+                                    
+
+                <div class="featured-item">
+                    <a href="/locations/offre/rueil-malmaison/PRV-309853">
+                    <div class="featured-images">
+                                                                                                                                                    <img src="https://prd-azr-photos-cdn-anb8asetcqb3ang2.a01.azurefd.net/idf/PRV%20309853/2010-FO-PhotosFA170118-539-compressed.jpg" alt="RUEIL MALMAISON" class="featured-image active"
+                                     loading="lazy" decoding="async">
+                                                                                                                            <img src="https://prd-azr-photos-cdn-anb8asetcqb3ang2.a01.azurefd.net/idf/PRV%20309853/FA170118-543-compressed.jpg" alt="RUEIL MALMAISON" class="featured-image "
+                                     loading="lazy" decoding="async">
+                                                                            <div class="featured-images-control">
+                                                            <span class="transition-animate active" data-control="1"></span>
+                                                            <span class="transition-animate " data-control="2"></span>
+                                                    </div>
+                                            </div>
+                    <div class="featured-price">
+                        <span class="demi-condensed">1 231 € </span><span class="book-condensed">cc</span>
+                                                                            <span class="featured-favorite">
+                                    <span data-target="favorite-modal" class="medium-condensed alert-link transition-animate modal-trigger">
+                                    <span class="featured-favorite">
+                                        <svg width="23" height="20" viewBox="0 0 23 20" fill="none"
+                                            xmlns="http://www.w3.org/2000/svg">
+                                            <path fill="currentColor"
+                                                d="M10.9357 19.2933C10.0046 18.4976 9.10715 17.75 8.31748 17.0923C5.98288 15.1477 4.02061 13.5111 2.66255 11.9095C1.16194 10.1397 0.5 8.5099 0.5 6.75591C0.5 5.02555 1.10638 3.4474 2.18831 2.30036C3.28196 1.141 4.78289 0.5 6.42523 0.5C7.6428 0.5 8.75305 0.873981 9.73744 1.61809C10.2368 1.99561 10.6931 2.46046 11.0981 3.00775C12.3071 2.46043 12.7633 1.9956 13.2627 1.61812C14.2471 0.87399 15.3574 0.5 16.5749 0.5C18.2171 0.5 19.7182 1.141 20.8118 2.30034C21.8938 3.44736 22.5 5.02551 22.5 6.75591C22.5 8.50993 21.8382 10.1397 20.3376 11.9094C18.9796 13.5111 17.0175 15.1475 14.6892 17.0869C13.8976 17.7461 12.9981 18.4954 12.0641 19.2937C11.9098 19.4257 11.7096 19.5 11.5 19.5C11.2904 19.5 11.0904 19.4257 10.9357 19.2933Z"
+                                                  stroke="#B0AAA3">
+                                            </path>
+                                        </svg>
+                                    </span>
+                                </span>
+                            </span>
+                                                                        </div>
+                    <div class="featured-details" style="
+                        display: -webkit-box;
+                        -webkit-box-orient: vertical;
+                        -webkit-line-clamp: 4;
+                        overflow: hidden;
+                        text-overflow: ellipsis;"
+                     >
+                        <span>
+                            2 pièces · 52.75 m²<br>
+                            Rueil malmaison
+                            
+                                                    </span>
+                    </div>
+                    </a>
+                </div>
+
+                                    
+
+                <div class="featured-item">
+                    <a href="/locations/offre/levallois-perret/PRV-215871">
+                    <div class="featured-images">
+                                                                                                                                                    <img src="https://prd-azr-photos-cdn-anb8asetcqb3ang2.a01.azurefd.net/idf/PRV%20215871/4122-FOEXT-LEVALLOIS%2003-874-compressed.jpg" alt="LEVALLOIS PERRET" class="featured-image active"
+                                     loading="lazy" decoding="async">
+                                                                            <div class="featured-images-control">
+                                                            <span class="transition-animate active" data-control="1"></span>
+                                                    </div>
+                                            </div>
+                    <div class="featured-price">
+                        <span class="demi-condensed">1 452 € </span><span class="book-condensed">cc</span>
+                                                                            <span class="featured-favorite">
+                                    <span data-target="favorite-modal" class="medium-condensed alert-link transition-animate modal-trigger">
+                                    <span class="featured-favorite">
+                                        <svg width="23" height="20" viewBox="0 0 23 20" fill="none"
+                                            xmlns="http://www.w3.org/2000/svg">
+                                            <path fill="currentColor"
+                                                d="M10.9357 19.2933C10.0046 18.4976 9.10715 17.75 8.31748 17.0923C5.98288 15.1477 4.02061 13.5111 2.66255 11.9095C1.16194 10.1397 0.5 8.5099 0.5 6.75591C0.5 5.02555 1.10638 3.4474 2.18831 2.30036C3.28196 1.141 4.78289 0.5 6.42523 0.5C7.6428 0.5 8.75305 0.873981 9.73744 1.61809C10.2368 1.99561 10.6931 2.46046 11.0981 3.00775C12.3071 2.46043 12.7633 1.9956 13.2627 1.61812C14.2471 0.87399 15.3574 0.5 16.5749 0.5C18.2171 0.5 19.7182 1.141 20.8118 2.30034C21.8938 3.44736 22.5 5.02551 22.5 6.75591C22.5 8.50993 21.8382 10.1397 20.3376 11.9094C18.9796 13.5111 17.0175 15.1475 14.6892 17.0869C13.8976 17.7461 12.9981 18.4954 12.0641 19.2937C11.9098 19.4257 11.7096 19.5 11.5 19.5C11.2904 19.5 11.0904 19.4257 10.9357 19.2933Z"
+                                                  stroke="#B0AAA3">
+                                            </path>
+                                        </svg>
+                                    </span>
+                                </span>
+                            </span>
+                                                                        </div>
+                    <div class="featured-details" style="
+                        display: -webkit-box;
+                        -webkit-box-orient: vertical;
+                        -webkit-line-clamp: 4;
+                        overflow: hidden;
+                        text-overflow: ellipsis;"
+                     >
+                        <span>
+                            3 pièces · 52 m²<br>
+                            Levallois perret
+                            
+                                                    </span>
+                    </div>
+                    </a>
+                </div>
+
+                                    
+
+                <div class="featured-item">
+                    <a href="/locations/offre/massy/441-20032-3019">
+                    <div class="featured-images">
+                                                                                                                                                    <img src="https://prd-azr-photos-cdn-anb8asetcqb3ang2.a01.azurefd.net/pm/441%2020032%203019/1.png" alt="MASSY" class="featured-image active"
+                                     loading="lazy" decoding="async">
+                                                                                                                            <img src="https://prd-azr-photos-cdn-anb8asetcqb3ang2.a01.azurefd.net/pm/441%2020032%203019/1-compressed.png" alt="MASSY" class="featured-image "
+                                     loading="lazy" decoding="async">
+                                                                                                                            <img src="https://prd-azr-photos-cdn-anb8asetcqb3ang2.a01.azurefd.net/pm/441%2020032%203019/20032%203019.jpg" alt="MASSY" class="featured-image "
+                                     loading="lazy" decoding="async">
+                                                                            <div class="featured-images-control">
+                                                            <span class="transition-animate active" data-control="1"></span>
+                                                            <span class="transition-animate " data-control="2"></span>
+                                                            <span class="transition-animate " data-control="3"></span>
+                                                    </div>
+                                            </div>
+                    <div class="featured-price">
+                        <span class="demi-condensed">1 175 € </span><span class="book-condensed">cc</span>
+                                                                            <span class="featured-favorite">
+                                    <span data-target="favorite-modal" class="medium-condensed alert-link transition-animate modal-trigger">
+                                    <span class="featured-favorite">
+                                        <svg width="23" height="20" viewBox="0 0 23 20" fill="none"
+                                            xmlns="http://www.w3.org/2000/svg">
+                                            <path fill="currentColor"
+                                                d="M10.9357 19.2933C10.0046 18.4976 9.10715 17.75 8.31748 17.0923C5.98288 15.1477 4.02061 13.5111 2.66255 11.9095C1.16194 10.1397 0.5 8.5099 0.5 6.75591C0.5 5.02555 1.10638 3.4474 2.18831 2.30036C3.28196 1.141 4.78289 0.5 6.42523 0.5C7.6428 0.5 8.75305 0.873981 9.73744 1.61809C10.2368 1.99561 10.6931 2.46046 11.0981 3.00775C12.3071 2.46043 12.7633 1.9956 13.2627 1.61812C14.2471 0.87399 15.3574 0.5 16.5749 0.5C18.2171 0.5 19.7182 1.141 20.8118 2.30034C21.8938 3.44736 22.5 5.02551 22.5 6.75591C22.5 8.50993 21.8382 10.1397 20.3376 11.9094C18.9796 13.5111 17.0175 15.1475 14.6892 17.0869C13.8976 17.7461 12.9981 18.4954 12.0641 19.2937C11.9098 19.4257 11.7096 19.5 11.5 19.5C11.2904 19.5 11.0904 19.4257 10.9357 19.2933Z"
+                                                  stroke="#B0AAA3">
+                                            </path>
+                                        </svg>
+                                    </span>
+                                </span>
+                            </span>
+                                                                        </div>
+                    <div class="featured-details" style="
+                        display: -webkit-box;
+                        -webkit-box-orient: vertical;
+                        -webkit-line-clamp: 4;
+                        overflow: hidden;
+                        text-overflow: ellipsis;"
+                     >
+                        <span>
+                            3 pièces · 64.44 m²<br>
+                            Massy
+                            
+                                                    </span>
+                    </div>
+                    </a>
+                </div>
+
+                                    
+
+                <div class="featured-item">
+                    <a href="/locations/offre/villejuif/441-20021-4001">
+                    <div class="featured-images">
+                                                                                                                                                    <img src="https://prd-azr-photos-cdn-anb8asetcqb3ang2.a01.azurefd.net/pm/441%2020021%204001/1.jpg" alt="VILLEJUIF" class="featured-image active"
+                                     loading="lazy" decoding="async">
+                                                                                                                            <img src="https://prd-azr-photos-cdn-anb8asetcqb3ang2.a01.azurefd.net/pm/441%2020021%204001/1-compressed.jpg" alt="VILLEJUIF" class="featured-image "
+                                     loading="lazy" decoding="async">
+                                                                                                                            <img src="https://prd-azr-photos-cdn-anb8asetcqb3ang2.a01.azurefd.net/pm/441%2020021%204001/2.jpg" alt="VILLEJUIF" class="featured-image "
+                                     loading="lazy" decoding="async">
+                                                                            <div class="featured-images-control">
+                                                            <span class="transition-animate active" data-control="1"></span>
+                                                            <span class="transition-animate " data-control="2"></span>
+                                                            <span class="transition-animate " data-control="3"></span>
+                                                    </div>
+                                            </div>
+                    <div class="featured-price">
+                        <span class="demi-condensed">1 700 € </span><span class="book-condensed">cc</span>
+                                                                            <span class="featured-favorite">
+                                    <span data-target="favorite-modal" class="medium-condensed alert-link transition-animate modal-trigger">
+                                    <span class="featured-favorite">
+                                        <svg width="23" height="20" viewBox="0 0 23 20" fill="none"
+                                            xmlns="http://www.w3.org/2000/svg">
+                                            <path fill="currentColor"
+                                                d="M10.9357 19.2933C10.0046 18.4976 9.10715 17.75 8.31748 17.0923C5.98288 15.1477 4.02061 13.5111 2.66255 11.9095C1.16194 10.1397 0.5 8.5099 0.5 6.75591C0.5 5.02555 1.10638 3.4474 2.18831 2.30036C3.28196 1.141 4.78289 0.5 6.42523 0.5C7.6428 0.5 8.75305 0.873981 9.73744 1.61809C10.2368 1.99561 10.6931 2.46046 11.0981 3.00775C12.3071 2.46043 12.7633 1.9956 13.2627 1.61812C14.2471 0.87399 15.3574 0.5 16.5749 0.5C18.2171 0.5 19.7182 1.141 20.8118 2.30034C21.8938 3.44736 22.5 5.02551 22.5 6.75591C22.5 8.50993 21.8382 10.1397 20.3376 11.9094C18.9796 13.5111 17.0175 15.1475 14.6892 17.0869C13.8976 17.7461 12.9981 18.4954 12.0641 19.2937C11.9098 19.4257 11.7096 19.5 11.5 19.5C11.2904 19.5 11.0904 19.4257 10.9357 19.2933Z"
+                                                  stroke="#B0AAA3">
+                                            </path>
+                                        </svg>
+                                    </span>
+                                </span>
+                            </span>
+                                                                        </div>
+                    <div class="featured-details" style="
+                        display: -webkit-box;
+                        -webkit-box-orient: vertical;
+                        -webkit-line-clamp: 4;
+                        overflow: hidden;
+                        text-overflow: ellipsis;"
+                     >
+                        <span>
+                            4 pièces · 83.61 m²<br>
+                            Villejuif
+                            
+                                                    </span>
+                    </div>
+                    </a>
+                </div>
+
+                                    
+
+                <div class="featured-item">
+                    <a href="/locations/offre/villejuif/441-20021-3030">
+                    <div class="featured-images">
+                                                                                                                                                    <img src="https://prd-azr-photos-cdn-anb8asetcqb3ang2.a01.azurefd.net/pm/441%2020021%203030/1.jpg" alt="VILLEJUIF" class="featured-image active"
+                                     loading="lazy" decoding="async">
+                                                                                                                            <img src="https://prd-azr-photos-cdn-anb8asetcqb3ang2.a01.azurefd.net/pm/441%2020021%203030/1-compressed.jpg" alt="VILLEJUIF" class="featured-image "
+                                     loading="lazy" decoding="async">
+                                                                                                                            <img src="https://prd-azr-photos-cdn-anb8asetcqb3ang2.a01.azurefd.net/pm/441%2020021%203030/2.jpg" alt="VILLEJUIF" class="featured-image "
+                                     loading="lazy" decoding="async">
+                                                                            <div class="featured-images-control">
+                                                            <span class="transition-animate active" data-control="1"></span>
+                                                            <span class="transition-animate " data-control="2"></span>
+                                                            <span class="transition-animate " data-control="3"></span>
+                                                    </div>
+                                            </div>
+                    <div class="featured-price">
+                        <span class="demi-condensed">1 253 € </span><span class="book-condensed">cc</span>
+                                                                            <span class="featured-favorite">
+                                    <span data-target="favorite-modal" class="medium-condensed alert-link transition-animate modal-trigger">
+                                    <span class="featured-favorite">
+                                        <svg width="23" height="20" viewBox="0 0 23 20" fill="none"
+                                            xmlns="http://www.w3.org/2000/svg">
+                                            <path fill="currentColor"
+                                                d="M10.9357 19.2933C10.0046 18.4976 9.10715 17.75 8.31748 17.0923C5.98288 15.1477 4.02061 13.5111 2.66255 11.9095C1.16194 10.1397 0.5 8.5099 0.5 6.75591C0.5 5.02555 1.10638 3.4474 2.18831 2.30036C3.28196 1.141 4.78289 0.5 6.42523 0.5C7.6428 0.5 8.75305 0.873981 9.73744 1.61809C10.2368 1.99561 10.6931 2.46046 11.0981 3.00775C12.3071 2.46043 12.7633 1.9956 13.2627 1.61812C14.2471 0.87399 15.3574 0.5 16.5749 0.5C18.2171 0.5 19.7182 1.141 20.8118 2.30034C21.8938 3.44736 22.5 5.02551 22.5 6.75591C22.5 8.50993 21.8382 10.1397 20.3376 11.9094C18.9796 13.5111 17.0175 15.1475 14.6892 17.0869C13.8976 17.7461 12.9981 18.4954 12.0641 19.2937C11.9098 19.4257 11.7096 19.5 11.5 19.5C11.2904 19.5 11.0904 19.4257 10.9357 19.2933Z"
+                                                  stroke="#B0AAA3">
+                                            </path>
+                                        </svg>
+                                    </span>
+                                </span>
+                            </span>
+                                                                        </div>
+                    <div class="featured-details" style="
+                        display: -webkit-box;
+                        -webkit-box-orient: vertical;
+                        -webkit-line-clamp: 4;
+                        overflow: hidden;
+                        text-overflow: ellipsis;"
+                     >
+                        <span>
+                            3 pièces · 55.16 m²<br>
+                            Villejuif
+                            
+                                                    </span>
+                    </div>
+                    </a>
+                </div>
+
+                                    
+
+                <div class="featured-item">
+                    <a href="/locations/offre/rueil-malmaison/PRV-337346">
+                    <div class="featured-images">
+                                                                                                                                                    <img src="https://prd-azr-photos-cdn-anb8asetcqb3ang2.a01.azurefd.net/idf/PRV%20337346/A.jpg" alt="RUEIL MALMAISON" class="featured-image active"
+                                     loading="lazy" decoding="async">
+                                                                                                                            <img src="https://prd-azr-photos-cdn-anb8asetcqb3ang2.a01.azurefd.net/idf/PRV%20337346/B.jpg" alt="RUEIL MALMAISON" class="featured-image "
+                                     loading="lazy" decoding="async">
+                                                                                                                            <img src="https://prd-azr-photos-cdn-anb8asetcqb3ang2.a01.azurefd.net/idf/PRV%20337346/C.jpg" alt="RUEIL MALMAISON" class="featured-image "
+                                     loading="lazy" decoding="async">
+                                                                            <div class="featured-images-control">
+                                                            <span class="transition-animate active" data-control="1"></span>
+                                                            <span class="transition-animate " data-control="2"></span>
+                                                            <span class="transition-animate " data-control="3"></span>
+                                                    </div>
+                                            </div>
+                    <div class="featured-price">
+                        <span class="demi-condensed">959 € </span><span class="book-condensed">cc</span>
+                                                                            <span class="featured-favorite">
+                                    <span data-target="favorite-modal" class="medium-condensed alert-link transition-animate modal-trigger">
+                                    <span class="featured-favorite">
+                                        <svg width="23" height="20" viewBox="0 0 23 20" fill="none"
+                                            xmlns="http://www.w3.org/2000/svg">
+                                            <path fill="currentColor"
+                                                d="M10.9357 19.2933C10.0046 18.4976 9.10715 17.75 8.31748 17.0923C5.98288 15.1477 4.02061 13.5111 2.66255 11.9095C1.16194 10.1397 0.5 8.5099 0.5 6.75591C0.5 5.02555 1.10638 3.4474 2.18831 2.30036C3.28196 1.141 4.78289 0.5 6.42523 0.5C7.6428 0.5 8.75305 0.873981 9.73744 1.61809C10.2368 1.99561 10.6931 2.46046 11.0981 3.00775C12.3071 2.46043 12.7633 1.9956 13.2627 1.61812C14.2471 0.87399 15.3574 0.5 16.5749 0.5C18.2171 0.5 19.7182 1.141 20.8118 2.30034C21.8938 3.44736 22.5 5.02551 22.5 6.75591C22.5 8.50993 21.8382 10.1397 20.3376 11.9094C18.9796 13.5111 17.0175 15.1475 14.6892 17.0869C13.8976 17.7461 12.9981 18.4954 12.0641 19.2937C11.9098 19.4257 11.7096 19.5 11.5 19.5C11.2904 19.5 11.0904 19.4257 10.9357 19.2933Z"
+                                                  stroke="#B0AAA3">
+                                            </path>
+                                        </svg>
+                                    </span>
+                                </span>
+                            </span>
+                                                                        </div>
+                    <div class="featured-details" style="
+                        display: -webkit-box;
+                        -webkit-box-orient: vertical;
+                        -webkit-line-clamp: 4;
+                        overflow: hidden;
+                        text-overflow: ellipsis;"
+                     >
+                        <span>
+                            Studio · 39.62 m²<br>
+                            Rueil malmaison
+                            
+                                                    </span>
+                    </div>
+                    </a>
+                </div>
+
+                                    
+
+                <div class="featured-item">
+                    <a href="/locations/offre/bois-d-arcy/PRV-343017">
+                    <div class="featured-images">
+                        
+                            <img src="/images/placeholder.png" class="featured-image active" alt="BOIS D ARCY"
+                                 loading="lazy" decoding="async">
+                                                <div class="featured-images-control">
+                                                            <span class="transition-animate active" data-control="1"></span>
+                                                            <span class="transition-animate " data-control="0"></span>
+                                                    </div>
+                                            </div>
+                    <div class="featured-price">
+                        <span class="demi-condensed">1 406 € </span><span class="book-condensed">cc</span>
+                                                                            <span class="featured-favorite">
+                                    <span data-target="favorite-modal" class="medium-condensed alert-link transition-animate modal-trigger">
+                                    <span class="featured-favorite">
+                                        <svg width="23" height="20" viewBox="0 0 23 20" fill="none"
+                                            xmlns="http://www.w3.org/2000/svg">
+                                            <path fill="currentColor"
+                                                d="M10.9357 19.2933C10.0046 18.4976 9.10715 17.75 8.31748 17.0923C5.98288 15.1477 4.02061 13.5111 2.66255 11.9095C1.16194 10.1397 0.5 8.5099 0.5 6.75591C0.5 5.02555 1.10638 3.4474 2.18831 2.30036C3.28196 1.141 4.78289 0.5 6.42523 0.5C7.6428 0.5 8.75305 0.873981 9.73744 1.61809C10.2368 1.99561 10.6931 2.46046 11.0981 3.00775C12.3071 2.46043 12.7633 1.9956 13.2627 1.61812C14.2471 0.87399 15.3574 0.5 16.5749 0.5C18.2171 0.5 19.7182 1.141 20.8118 2.30034C21.8938 3.44736 22.5 5.02551 22.5 6.75591C22.5 8.50993 21.8382 10.1397 20.3376 11.9094C18.9796 13.5111 17.0175 15.1475 14.6892 17.0869C13.8976 17.7461 12.9981 18.4954 12.0641 19.2937C11.9098 19.4257 11.7096 19.5 11.5 19.5C11.2904 19.5 11.0904 19.4257 10.9357 19.2933Z"
+                                                  stroke="#B0AAA3">
+                                            </path>
+                                        </svg>
+                                    </span>
+                                </span>
+                            </span>
+                                                                        </div>
+                    <div class="featured-details" style="
+                        display: -webkit-box;
+                        -webkit-box-orient: vertical;
+                        -webkit-line-clamp: 4;
+                        overflow: hidden;
+                        text-overflow: ellipsis;"
+                     >
+                        <span>
+                            4 pièces · 81.8 m²<br>
+                            Bois d arcy
+                            
+                                                    </span>
+                    </div>
+                    </a>
+                </div>
+
+                                    
+
+                <div class="featured-item">
+                    <a href="/locations/offre/st-germain-en-laye/PRV-323375">
+                    <div class="featured-images">
+                                                                                                                                                    <img src="https://prd-azr-photos-cdn-anb8asetcqb3ang2.a01.azurefd.net/idf/PRV%20323375/_MAU7335-ok-compressed-compressed.jpg" alt="ST GERMAIN EN LAYE" class="featured-image active"
+                                     loading="lazy" decoding="async">
+                                                                            <div class="featured-images-control">
+                                                            <span class="transition-animate active" data-control="1"></span>
+                                                    </div>
+                                            </div>
+                    <div class="featured-price">
+                        <span class="demi-condensed">1 171 € </span><span class="book-condensed">cc</span>
+                                                                            <span class="featured-favorite">
+                                    <span data-target="favorite-modal" class="medium-condensed alert-link transition-animate modal-trigger">
+                                    <span class="featured-favorite">
+                                        <svg width="23" height="20" viewBox="0 0 23 20" fill="none"
+                                            xmlns="http://www.w3.org/2000/svg">
+                                            <path fill="currentColor"
+                                                d="M10.9357 19.2933C10.0046 18.4976 9.10715 17.75 8.31748 17.0923C5.98288 15.1477 4.02061 13.5111 2.66255 11.9095C1.16194 10.1397 0.5 8.5099 0.5 6.75591C0.5 5.02555 1.10638 3.4474 2.18831 2.30036C3.28196 1.141 4.78289 0.5 6.42523 0.5C7.6428 0.5 8.75305 0.873981 9.73744 1.61809C10.2368 1.99561 10.6931 2.46046 11.0981 3.00775C12.3071 2.46043 12.7633 1.9956 13.2627 1.61812C14.2471 0.87399 15.3574 0.5 16.5749 0.5C18.2171 0.5 19.7182 1.141 20.8118 2.30034C21.8938 3.44736 22.5 5.02551 22.5 6.75591C22.5 8.50993 21.8382 10.1397 20.3376 11.9094C18.9796 13.5111 17.0175 15.1475 14.6892 17.0869C13.8976 17.7461 12.9981 18.4954 12.0641 19.2937C11.9098 19.4257 11.7096 19.5 11.5 19.5C11.2904 19.5 11.0904 19.4257 10.9357 19.2933Z"
+                                                  stroke="#B0AAA3">
+                                            </path>
+                                        </svg>
+                                    </span>
+                                </span>
+                            </span>
+                                                                        </div>
+                    <div class="featured-details" style="
+                        display: -webkit-box;
+                        -webkit-box-orient: vertical;
+                        -webkit-line-clamp: 4;
+                        overflow: hidden;
+                        text-overflow: ellipsis;"
+                     >
+                        <span>
+                            2 pièces · 58 m²<br>
+                            St germain en laye
+                            
+                                                    </span>
+                    </div>
+                    </a>
+                </div>
+
+                                    
+
+                <div class="featured-item">
+                    <a href="/locations/offre/alfortville/PRV-218100">
+                    <div class="featured-images">
+                                                                                                                                                    <img src="https://prd-azr-photos-cdn-anb8asetcqb3ang2.a01.azurefd.net/idf/PRV%20218100/_23A2928-compressed.jpg" alt="ALFORTVILLE" class="featured-image active"
+                                     loading="lazy" decoding="async">
+                                                                            <div class="featured-images-control">
+                                                            <span class="transition-animate active" data-control="1"></span>
+                                                    </div>
+                                            </div>
+                    <div class="featured-price">
+                        <span class="demi-condensed">1 322 € </span><span class="book-condensed">cc</span>
+                                                                            <span class="featured-favorite">
+                                    <span data-target="favorite-modal" class="medium-condensed alert-link transition-animate modal-trigger">
+                                    <span class="featured-favorite">
+                                        <svg width="23" height="20" viewBox="0 0 23 20" fill="none"
+                                            xmlns="http://www.w3.org/2000/svg">
+                                            <path fill="currentColor"
+                                                d="M10.9357 19.2933C10.0046 18.4976 9.10715 17.75 8.31748 17.0923C5.98288 15.1477 4.02061 13.5111 2.66255 11.9095C1.16194 10.1397 0.5 8.5099 0.5 6.75591C0.5 5.02555 1.10638 3.4474 2.18831 2.30036C3.28196 1.141 4.78289 0.5 6.42523 0.5C7.6428 0.5 8.75305 0.873981 9.73744 1.61809C10.2368 1.99561 10.6931 2.46046 11.0981 3.00775C12.3071 2.46043 12.7633 1.9956 13.2627 1.61812C14.2471 0.87399 15.3574 0.5 16.5749 0.5C18.2171 0.5 19.7182 1.141 20.8118 2.30034C21.8938 3.44736 22.5 5.02551 22.5 6.75591C22.5 8.50993 21.8382 10.1397 20.3376 11.9094C18.9796 13.5111 17.0175 15.1475 14.6892 17.0869C13.8976 17.7461 12.9981 18.4954 12.0641 19.2937C11.9098 19.4257 11.7096 19.5 11.5 19.5C11.2904 19.5 11.0904 19.4257 10.9357 19.2933Z"
+                                                  stroke="#B0AAA3">
+                                            </path>
+                                        </svg>
+                                    </span>
+                                </span>
+                            </span>
+                                                                        </div>
+                    <div class="featured-details" style="
+                        display: -webkit-box;
+                        -webkit-box-orient: vertical;
+                        -webkit-line-clamp: 4;
+                        overflow: hidden;
+                        text-overflow: ellipsis;"
+                     >
+                        <span>
+                            2 pièces · 57 m²<br>
+                            Alfortville
+                            
+                                                    </span>
+                    </div>
+                    </a>
+                </div>
+
+                                    
+
+                <div class="featured-item">
+                    <a href="/locations/offre/nanterre/PRV-279233">
+                    <div class="featured-images">
+                                                                                                                                                    <img src="https://prd-azr-photos-cdn-anb8asetcqb3ang2.a01.azurefd.net/idf/PRV%20279233/1.jpg" alt="NANTERRE" class="featured-image active"
+                                     loading="lazy" decoding="async">
+                                                                                                                            <img src="https://prd-azr-photos-cdn-anb8asetcqb3ang2.a01.azurefd.net/idf/PRV%20279233/2.jpg" alt="NANTERRE" class="featured-image "
+                                     loading="lazy" decoding="async">
+                                                                                                                            <img src="https://prd-azr-photos-cdn-anb8asetcqb3ang2.a01.azurefd.net/idf/PRV%20279233/2B.jpg" alt="NANTERRE" class="featured-image "
+                                     loading="lazy" decoding="async">
+                                                                            <div class="featured-images-control">
+                                                            <span class="transition-animate active" data-control="1"></span>
+                                                            <span class="transition-animate " data-control="2"></span>
+                                                            <span class="transition-animate " data-control="3"></span>
+                                                    </div>
+                                            </div>
+                    <div class="featured-price">
+                        <span class="demi-condensed">1 326 € </span><span class="book-condensed">cc</span>
+                                                                            <span class="featured-favorite">
+                                    <span data-target="favorite-modal" class="medium-condensed alert-link transition-animate modal-trigger">
+                                    <span class="featured-favorite">
+                                        <svg width="23" height="20" viewBox="0 0 23 20" fill="none"
+                                            xmlns="http://www.w3.org/2000/svg">
+                                            <path fill="currentColor"
+                                                d="M10.9357 19.2933C10.0046 18.4976 9.10715 17.75 8.31748 17.0923C5.98288 15.1477 4.02061 13.5111 2.66255 11.9095C1.16194 10.1397 0.5 8.5099 0.5 6.75591C0.5 5.02555 1.10638 3.4474 2.18831 2.30036C3.28196 1.141 4.78289 0.5 6.42523 0.5C7.6428 0.5 8.75305 0.873981 9.73744 1.61809C10.2368 1.99561 10.6931 2.46046 11.0981 3.00775C12.3071 2.46043 12.7633 1.9956 13.2627 1.61812C14.2471 0.87399 15.3574 0.5 16.5749 0.5C18.2171 0.5 19.7182 1.141 20.8118 2.30034C21.8938 3.44736 22.5 5.02551 22.5 6.75591C22.5 8.50993 21.8382 10.1397 20.3376 11.9094C18.9796 13.5111 17.0175 15.1475 14.6892 17.0869C13.8976 17.7461 12.9981 18.4954 12.0641 19.2937C11.9098 19.4257 11.7096 19.5 11.5 19.5C11.2904 19.5 11.0904 19.4257 10.9357 19.2933Z"
+                                                  stroke="#B0AAA3">
+                                            </path>
+                                        </svg>
+                                    </span>
+                                </span>
+                            </span>
+                                                                        </div>
+                    <div class="featured-details" style="
+                        display: -webkit-box;
+                        -webkit-box-orient: vertical;
+                        -webkit-line-clamp: 4;
+                        overflow: hidden;
+                        text-overflow: ellipsis;"
+                     >
+                        <span>
+                            2 pièces · 48 m²<br>
+                            Nanterre
+                            
+                                                    </span>
+                    </div>
+                    </a>
+                </div>
+
+                                    
+
+                <div class="featured-item">
+                    <a href="/locations/offre/villepinte/x3F-7746-1113L">
+                    <div class="featured-images">
+                                                                                                                                                    <img src="https://prd-azr-photos-cdn-anb8asetcqb3ang2.a01.azurefd.net/marketplace/x3F%207746%201113L/1%207746%201113L-compressed.jpg" alt="VILLEPINTE" class="featured-image active"
+                                     loading="lazy" decoding="async">
+                                                                                                                            <img src="https://prd-azr-photos-cdn-anb8asetcqb3ang2.a01.azurefd.net/marketplace/x3F%207746%201113L/2%20ddd9a00230fbf5eba2a47558f29746f7-compressed.jpg" alt="VILLEPINTE" class="featured-image "
+                                     loading="lazy" decoding="async">
+                                                                                                                            <img src="https://prd-azr-photos-cdn-anb8asetcqb3ang2.a01.azurefd.net/marketplace/x3F%207746%201113L/3%20aaffe26835066a3c504773a156d8658c-compressed.jpg" alt="VILLEPINTE" class="featured-image "
+                                     loading="lazy" decoding="async">
+                                                                            <div class="featured-images-control">
+                                                            <span class="transition-animate active" data-control="1"></span>
+                                                            <span class="transition-animate " data-control="2"></span>
+                                                            <span class="transition-animate " data-control="3"></span>
+                                                    </div>
+                                                    <span class="accroche-annonce">Pièce de vie exposé Sud</span>
+                                            </div>
+                    <div class="featured-price">
+                        <span class="demi-condensed">1 049 € </span><span class="book-condensed">cc</span>
+                                                                            <span class="featured-favorite">
+                                    <span data-target="favorite-modal" class="medium-condensed alert-link transition-animate modal-trigger">
+                                    <span class="featured-favorite">
+                                        <svg width="23" height="20" viewBox="0 0 23 20" fill="none"
+                                            xmlns="http://www.w3.org/2000/svg">
+                                            <path fill="currentColor"
+                                                d="M10.9357 19.2933C10.0046 18.4976 9.10715 17.75 8.31748 17.0923C5.98288 15.1477 4.02061 13.5111 2.66255 11.9095C1.16194 10.1397 0.5 8.5099 0.5 6.75591C0.5 5.02555 1.10638 3.4474 2.18831 2.30036C3.28196 1.141 4.78289 0.5 6.42523 0.5C7.6428 0.5 8.75305 0.873981 9.73744 1.61809C10.2368 1.99561 10.6931 2.46046 11.0981 3.00775C12.3071 2.46043 12.7633 1.9956 13.2627 1.61812C14.2471 0.87399 15.3574 0.5 16.5749 0.5C18.2171 0.5 19.7182 1.141 20.8118 2.30034C21.8938 3.44736 22.5 5.02551 22.5 6.75591C22.5 8.50993 21.8382 10.1397 20.3376 11.9094C18.9796 13.5111 17.0175 15.1475 14.6892 17.0869C13.8976 17.7461 12.9981 18.4954 12.0641 19.2937C11.9098 19.4257 11.7096 19.5 11.5 19.5C11.2904 19.5 11.0904 19.4257 10.9357 19.2933Z"
+                                                  stroke="#B0AAA3">
+                                            </path>
+                                        </svg>
+                                    </span>
+                                </span>
+                            </span>
+                                                                        </div>
+                    <div class="featured-details" style="
+                        display: -webkit-box;
+                        -webkit-box-orient: vertical;
+                        -webkit-line-clamp: 4;
+                        overflow: hidden;
+                        text-overflow: ellipsis;"
+                     >
+                        <span>
+                            3 pièces · 60.76 m²<br>
+                            Villepinte
+                            
+                                                    </span>
+                    </div>
+                    </a>
+                </div>
+
+                                    
+
+                <div class="featured-item">
+                    <a href="/locations/offre/clichy/PRV-386016">
+                    <div class="featured-images">
+                                                                                                                                                    <img src="https://prd-azr-photos-cdn-anb8asetcqb3ang2.a01.azurefd.net/idf/PRV%20386016/27047-CLICHY-Logement%20t%C3%A9moin%20T4-Photo%202-compressed.JPG" alt="CLICHY" class="featured-image active"
+                                     loading="lazy" decoding="async">
+                                                                                                                            <img src="https://prd-azr-photos-cdn-anb8asetcqb3ang2.a01.azurefd.net/idf/PRV%20386016/386016-compressed.jpg" alt="CLICHY" class="featured-image "
+                                     loading="lazy" decoding="async">
+                                                                                                                            <img src="https://prd-azr-photos-cdn-anb8asetcqb3ang2.a01.azurefd.net/idf/PRV%20386016/50%20Perspective%20Clichy%207047-compressed.jpg" alt="CLICHY" class="featured-image "
+                                     loading="lazy" decoding="async">
+                                                                            <div class="featured-images-control">
+                                                            <span class="transition-animate active" data-control="1"></span>
+                                                            <span class="transition-animate " data-control="2"></span>
+                                                            <span class="transition-animate " data-control="3"></span>
+                                                    </div>
+                                            </div>
+                    <div class="featured-price">
+                        <span class="demi-condensed">2 245 € </span><span class="book-condensed">cc</span>
+                                                                            <span class="featured-favorite">
+                                    <span data-target="favorite-modal" class="medium-condensed alert-link transition-animate modal-trigger">
+                                    <span class="featured-favorite">
+                                        <svg width="23" height="20" viewBox="0 0 23 20" fill="none"
+                                            xmlns="http://www.w3.org/2000/svg">
+                                            <path fill="currentColor"
+                                                d="M10.9357 19.2933C10.0046 18.4976 9.10715 17.75 8.31748 17.0923C5.98288 15.1477 4.02061 13.5111 2.66255 11.9095C1.16194 10.1397 0.5 8.5099 0.5 6.75591C0.5 5.02555 1.10638 3.4474 2.18831 2.30036C3.28196 1.141 4.78289 0.5 6.42523 0.5C7.6428 0.5 8.75305 0.873981 9.73744 1.61809C10.2368 1.99561 10.6931 2.46046 11.0981 3.00775C12.3071 2.46043 12.7633 1.9956 13.2627 1.61812C14.2471 0.87399 15.3574 0.5 16.5749 0.5C18.2171 0.5 19.7182 1.141 20.8118 2.30034C21.8938 3.44736 22.5 5.02551 22.5 6.75591C22.5 8.50993 21.8382 10.1397 20.3376 11.9094C18.9796 13.5111 17.0175 15.1475 14.6892 17.0869C13.8976 17.7461 12.9981 18.4954 12.0641 19.2937C11.9098 19.4257 11.7096 19.5 11.5 19.5C11.2904 19.5 11.0904 19.4257 10.9357 19.2933Z"
+                                                  stroke="#B0AAA3">
+                                            </path>
+                                        </svg>
+                                    </span>
+                                </span>
+                            </span>
+                                                                        </div>
+                    <div class="featured-details" style="
+                        display: -webkit-box;
+                        -webkit-box-orient: vertical;
+                        -webkit-line-clamp: 4;
+                        overflow: hidden;
+                        text-overflow: ellipsis;"
+                     >
+                        <span>
+                            4 pièces · 88.9 m²<br>
+                            Clichy
+                            
+                                                    </span>
+                    </div>
+                    </a>
+                </div>
+
+                                    
+
+                <div class="featured-item">
+                    <a href="/locations/offre/bondy/654-20076-3812">
+                    <div class="featured-images">
+                                                                                                                                                    <img src="https://prd-azr-photos-cdn-anb8asetcqb3ang2.a01.azurefd.net/pm/654%2020076%203812/0%20perspective%20bondy%206902%20%26%2020076.jpg" alt="BONDY" class="featured-image active"
+                                     loading="lazy" decoding="async">
+                                                                                                                            <img src="https://prd-azr-photos-cdn-anb8asetcqb3ang2.a01.azurefd.net/pm/654%2020076%203812/20076%203812_page-0001.jpg" alt="BONDY" class="featured-image "
+                                     loading="lazy" decoding="async">
+                                                                                                                            <img src="https://prd-azr-photos-cdn-anb8asetcqb3ang2.a01.azurefd.net/pm/654%2020076%203812/6902%20%26%2020076-BONDY-Logement%20t%C3%A9moin-Photo%201%20low.jpg" alt="BONDY" class="featured-image "
+                                     loading="lazy" decoding="async">
+                                                                            <div class="featured-images-control">
+                                                            <span class="transition-animate active" data-control="1"></span>
+                                                            <span class="transition-animate " data-control="2"></span>
+                                                            <span class="transition-animate " data-control="3"></span>
+                                                    </div>
+                                            </div>
+                    <div class="featured-price">
+                        <span class="demi-condensed">1 166 € </span><span class="book-condensed">cc</span>
+                                                                            <span class="featured-favorite">
+                                    <span data-target="favorite-modal" class="medium-condensed alert-link transition-animate modal-trigger">
+                                    <span class="featured-favorite">
+                                        <svg width="23" height="20" viewBox="0 0 23 20" fill="none"
+                                            xmlns="http://www.w3.org/2000/svg">
+                                            <path fill="currentColor"
+                                                d="M10.9357 19.2933C10.0046 18.4976 9.10715 17.75 8.31748 17.0923C5.98288 15.1477 4.02061 13.5111 2.66255 11.9095C1.16194 10.1397 0.5 8.5099 0.5 6.75591C0.5 5.02555 1.10638 3.4474 2.18831 2.30036C3.28196 1.141 4.78289 0.5 6.42523 0.5C7.6428 0.5 8.75305 0.873981 9.73744 1.61809C10.2368 1.99561 10.6931 2.46046 11.0981 3.00775C12.3071 2.46043 12.7633 1.9956 13.2627 1.61812C14.2471 0.87399 15.3574 0.5 16.5749 0.5C18.2171 0.5 19.7182 1.141 20.8118 2.30034C21.8938 3.44736 22.5 5.02551 22.5 6.75591C22.5 8.50993 21.8382 10.1397 20.3376 11.9094C18.9796 13.5111 17.0175 15.1475 14.6892 17.0869C13.8976 17.7461 12.9981 18.4954 12.0641 19.2937C11.9098 19.4257 11.7096 19.5 11.5 19.5C11.2904 19.5 11.0904 19.4257 10.9357 19.2933Z"
+                                                  stroke="#B0AAA3">
+                                            </path>
+                                        </svg>
+                                    </span>
+                                </span>
+                            </span>
+                                                                        </div>
+                    <div class="featured-details" style="
+                        display: -webkit-box;
+                        -webkit-box-orient: vertical;
+                        -webkit-line-clamp: 4;
+                        overflow: hidden;
+                        text-overflow: ellipsis;"
+                     >
+                        <span>
+                            3 pièces · 62.1 m²<br>
+                            Bondy
+                            
+                                                    </span>
+                    </div>
+                    </a>
+                </div>
+
+                                    
+
+                <div class="featured-item">
+                    <a href="/locations/offre/bondy/654-20076-1322">
+                    <div class="featured-images">
+                                                                                                                                                    <img src="https://prd-azr-photos-cdn-anb8asetcqb3ang2.a01.azurefd.net/pm/654%2020076%201322/0%20perspective%20bondy%206902%20%26%2020076.jpg" alt="BONDY" class="featured-image active"
+                                     loading="lazy" decoding="async">
+                                                                                                                            <img src="https://prd-azr-photos-cdn-anb8asetcqb3ang2.a01.azurefd.net/pm/654%2020076%201322/20076%201322_page-0001.jpg" alt="BONDY" class="featured-image "
+                                     loading="lazy" decoding="async">
+                                                                                                                            <img src="https://prd-azr-photos-cdn-anb8asetcqb3ang2.a01.azurefd.net/pm/654%2020076%201322/6902%20%26%2020076-BONDY-Logement%20t%C3%A9moin-Photo%201%20low.jpg" alt="BONDY" class="featured-image "
+                                     loading="lazy" decoding="async">
+                                                                            <div class="featured-images-control">
+                                                            <span class="transition-animate active" data-control="1"></span>
+                                                            <span class="transition-animate " data-control="2"></span>
+                                                            <span class="transition-animate " data-control="3"></span>
+                                                    </div>
+                                            </div>
+                    <div class="featured-price">
+                        <span class="demi-condensed">1 519 € </span><span class="book-condensed">cc</span>
+                                                                            <span class="featured-favorite">
+                                    <span data-target="favorite-modal" class="medium-condensed alert-link transition-animate modal-trigger">
+                                    <span class="featured-favorite">
+                                        <svg width="23" height="20" viewBox="0 0 23 20" fill="none"
+                                            xmlns="http://www.w3.org/2000/svg">
+                                            <path fill="currentColor"
+                                                d="M10.9357 19.2933C10.0046 18.4976 9.10715 17.75 8.31748 17.0923C5.98288 15.1477 4.02061 13.5111 2.66255 11.9095C1.16194 10.1397 0.5 8.5099 0.5 6.75591C0.5 5.02555 1.10638 3.4474 2.18831 2.30036C3.28196 1.141 4.78289 0.5 6.42523 0.5C7.6428 0.5 8.75305 0.873981 9.73744 1.61809C10.2368 1.99561 10.6931 2.46046 11.0981 3.00775C12.3071 2.46043 12.7633 1.9956 13.2627 1.61812C14.2471 0.87399 15.3574 0.5 16.5749 0.5C18.2171 0.5 19.7182 1.141 20.8118 2.30034C21.8938 3.44736 22.5 5.02551 22.5 6.75591C22.5 8.50993 21.8382 10.1397 20.3376 11.9094C18.9796 13.5111 17.0175 15.1475 14.6892 17.0869C13.8976 17.7461 12.9981 18.4954 12.0641 19.2937C11.9098 19.4257 11.7096 19.5 11.5 19.5C11.2904 19.5 11.0904 19.4257 10.9357 19.2933Z"
+                                                  stroke="#B0AAA3">
+                                            </path>
+                                        </svg>
+                                    </span>
+                                </span>
+                            </span>
+                                                                        </div>
+                    <div class="featured-details" style="
+                        display: -webkit-box;
+                        -webkit-box-orient: vertical;
+                        -webkit-line-clamp: 4;
+                        overflow: hidden;
+                        text-overflow: ellipsis;"
+                     >
+                        <span>
+                            5 pièces · 102.2 m²<br>
+                            Bondy
+                            
+                                                    </span>
+                    </div>
+                    </a>
+                </div>
+
+                                    
+
+                <div class="featured-item">
+                    <a href="/locations/offre/pantin/PRV-309418">
+                    <div class="featured-images">
+                                                                                                                                                    <img src="https://prd-azr-photos-cdn-anb8asetcqb3ang2.a01.azurefd.net/idf/PRV%20309418/00IMGP8943%20ok%20copie-compressed.jpg" alt="PANTIN" class="featured-image active"
+                                     loading="lazy" decoding="async">
+                                                                                                                            <img src="https://prd-azr-photos-cdn-anb8asetcqb3ang2.a01.azurefd.net/idf/PRV%20309418/12-07-23_10-09-14_S%C3%A9jours-compressed.jpg" alt="PANTIN" class="featured-image "
+                                     loading="lazy" decoding="async">
+                                                                                                                            <img src="https://prd-azr-photos-cdn-anb8asetcqb3ang2.a01.azurefd.net/idf/PRV%20309418/12-07-23_10-10-01_Cuisine-compressed.jpg" alt="PANTIN" class="featured-image "
+                                     loading="lazy" decoding="async">
+                                                                            <div class="featured-images-control">
+                                                            <span class="transition-animate active" data-control="1"></span>
+                                                            <span class="transition-animate " data-control="2"></span>
+                                                            <span class="transition-animate " data-control="3"></span>
+                                                    </div>
+                                            </div>
+                    <div class="featured-price">
+                        <span class="demi-condensed">1 320 € </span><span class="book-condensed">cc</span>
+                                                                            <span class="featured-favorite">
+                                    <span data-target="favorite-modal" class="medium-condensed alert-link transition-animate modal-trigger">
+                                    <span class="featured-favorite">
+                                        <svg width="23" height="20" viewBox="0 0 23 20" fill="none"
+                                            xmlns="http://www.w3.org/2000/svg">
+                                            <path fill="currentColor"
+                                                d="M10.9357 19.2933C10.0046 18.4976 9.10715 17.75 8.31748 17.0923C5.98288 15.1477 4.02061 13.5111 2.66255 11.9095C1.16194 10.1397 0.5 8.5099 0.5 6.75591C0.5 5.02555 1.10638 3.4474 2.18831 2.30036C3.28196 1.141 4.78289 0.5 6.42523 0.5C7.6428 0.5 8.75305 0.873981 9.73744 1.61809C10.2368 1.99561 10.6931 2.46046 11.0981 3.00775C12.3071 2.46043 12.7633 1.9956 13.2627 1.61812C14.2471 0.87399 15.3574 0.5 16.5749 0.5C18.2171 0.5 19.7182 1.141 20.8118 2.30034C21.8938 3.44736 22.5 5.02551 22.5 6.75591C22.5 8.50993 21.8382 10.1397 20.3376 11.9094C18.9796 13.5111 17.0175 15.1475 14.6892 17.0869C13.8976 17.7461 12.9981 18.4954 12.0641 19.2937C11.9098 19.4257 11.7096 19.5 11.5 19.5C11.2904 19.5 11.0904 19.4257 10.9357 19.2933Z"
+                                                  stroke="#B0AAA3">
+                                            </path>
+                                        </svg>
+                                    </span>
+                                </span>
+                            </span>
+                                                                        </div>
+                    <div class="featured-details" style="
+                        display: -webkit-box;
+                        -webkit-box-orient: vertical;
+                        -webkit-line-clamp: 4;
+                        overflow: hidden;
+                        text-overflow: ellipsis;"
+                     >
+                        <span>
+                            2 pièces · 54.1 m²<br>
+                            Pantin
+                            
+                                                    </span>
+                    </div>
+                    </a>
+                </div>
+
+                                    
+
+                <div class="featured-item">
+                    <a href="/locations/offre/nogent-sur-marne/PRV-383235">
+                    <div class="featured-images">
+                                                                                                                                                    <img src="https://prd-azr-photos-cdn-anb8asetcqb3ang2.a01.azurefd.net/idf/PRV%20383235/0%20Perspective%20Nogent%207042-compressed.png" alt="NOGENT SUR MARNE" class="featured-image active"
+                                     loading="lazy" decoding="async">
+                                                                                                                            <img src="https://prd-azr-photos-cdn-anb8asetcqb3ang2.a01.azurefd.net/idf/PRV%20383235/383235-compressed.jpg" alt="NOGENT SUR MARNE" class="featured-image "
+                                     loading="lazy" decoding="async">
+                                                                                                                            <img src="https://prd-azr-photos-cdn-anb8asetcqb3ang2.a01.azurefd.net/idf/PRV%20383235/7042-NOGENT-Logement%20t%C3%A9moin-Photo%201-compressed.jpg" alt="NOGENT SUR MARNE" class="featured-image "
+                                     loading="lazy" decoding="async">
+                                                                            <div class="featured-images-control">
+                                                            <span class="transition-animate active" data-control="1"></span>
+                                                            <span class="transition-animate " data-control="2"></span>
+                                                            <span class="transition-animate " data-control="3"></span>
+                                                    </div>
+                                                    <span class="accroche-annonce">Terrasse</span>
+                                            </div>
+                    <div class="featured-price">
+                        <span class="demi-condensed">1 407 € </span><span class="book-condensed">cc</span>
+                                                                            <span class="featured-favorite">
+                                    <span data-target="favorite-modal" class="medium-condensed alert-link transition-animate modal-trigger">
+                                    <span class="featured-favorite">
+                                        <svg width="23" height="20" viewBox="0 0 23 20" fill="none"
+                                            xmlns="http://www.w3.org/2000/svg">
+                                            <path fill="currentColor"
+                                                d="M10.9357 19.2933C10.0046 18.4976 9.10715 17.75 8.31748 17.0923C5.98288 15.1477 4.02061 13.5111 2.66255 11.9095C1.16194 10.1397 0.5 8.5099 0.5 6.75591C0.5 5.02555 1.10638 3.4474 2.18831 2.30036C3.28196 1.141 4.78289 0.5 6.42523 0.5C7.6428 0.5 8.75305 0.873981 9.73744 1.61809C10.2368 1.99561 10.6931 2.46046 11.0981 3.00775C12.3071 2.46043 12.7633 1.9956 13.2627 1.61812C14.2471 0.87399 15.3574 0.5 16.5749 0.5C18.2171 0.5 19.7182 1.141 20.8118 2.30034C21.8938 3.44736 22.5 5.02551 22.5 6.75591C22.5 8.50993 21.8382 10.1397 20.3376 11.9094C18.9796 13.5111 17.0175 15.1475 14.6892 17.0869C13.8976 17.7461 12.9981 18.4954 12.0641 19.2937C11.9098 19.4257 11.7096 19.5 11.5 19.5C11.2904 19.5 11.0904 19.4257 10.9357 19.2933Z"
+                                                  stroke="#B0AAA3">
+                                            </path>
+                                        </svg>
+                                    </span>
+                                </span>
+                            </span>
+                                                                        </div>
+                    <div class="featured-details" style="
+                        display: -webkit-box;
+                        -webkit-box-orient: vertical;
+                        -webkit-line-clamp: 4;
+                        overflow: hidden;
+                        text-overflow: ellipsis;"
+                     >
+                        <span>
+                            3 pièces · 64.29 m²<br>
+                            Nogent sur marne
+                            
+                                                    </span>
+                    </div>
+                    </a>
+                </div>
+
+                                    
+
+                <div class="featured-item">
+                    <a href="/locations/offre/nogent-sur-marne/PRV-383279">
+                    <div class="featured-images">
+                                                                                                                                                    <img src="https://prd-azr-photos-cdn-anb8asetcqb3ang2.a01.azurefd.net/idf/PRV%20383279/0%20Perspective%20Nogent%207042-compressed.png" alt="NOGENT SUR MARNE" class="featured-image active"
+                                     loading="lazy" decoding="async">
+                                                                                                                            <img src="https://prd-azr-photos-cdn-anb8asetcqb3ang2.a01.azurefd.net/idf/PRV%20383279/383279-compressed.jpg" alt="NOGENT SUR MARNE" class="featured-image "
+                                     loading="lazy" decoding="async">
+                                                                                                                            <img src="https://prd-azr-photos-cdn-anb8asetcqb3ang2.a01.azurefd.net/idf/PRV%20383279/7042-NOGENT-Logement%20t%C3%A9moin-Photo%201-compressed.jpg" alt="NOGENT SUR MARNE" class="featured-image "
+                                     loading="lazy" decoding="async">
+                                                                            <div class="featured-images-control">
+                                                            <span class="transition-animate active" data-control="1"></span>
+                                                            <span class="transition-animate " data-control="2"></span>
+                                                            <span class="transition-animate " data-control="3"></span>
+                                                    </div>
+                                                    <span class="accroche-annonce">Duplex / Terrasse</span>
+                                            </div>
+                    <div class="featured-price">
+                        <span class="demi-condensed">2 250 € </span><span class="book-condensed">cc</span>
+                                                                            <span class="featured-favorite">
+                                    <span data-target="favorite-modal" class="medium-condensed alert-link transition-animate modal-trigger">
+                                    <span class="featured-favorite">
+                                        <svg width="23" height="20" viewBox="0 0 23 20" fill="none"
+                                            xmlns="http://www.w3.org/2000/svg">
+                                            <path fill="currentColor"
+                                                d="M10.9357 19.2933C10.0046 18.4976 9.10715 17.75 8.31748 17.0923C5.98288 15.1477 4.02061 13.5111 2.66255 11.9095C1.16194 10.1397 0.5 8.5099 0.5 6.75591C0.5 5.02555 1.10638 3.4474 2.18831 2.30036C3.28196 1.141 4.78289 0.5 6.42523 0.5C7.6428 0.5 8.75305 0.873981 9.73744 1.61809C10.2368 1.99561 10.6931 2.46046 11.0981 3.00775C12.3071 2.46043 12.7633 1.9956 13.2627 1.61812C14.2471 0.87399 15.3574 0.5 16.5749 0.5C18.2171 0.5 19.7182 1.141 20.8118 2.30034C21.8938 3.44736 22.5 5.02551 22.5 6.75591C22.5 8.50993 21.8382 10.1397 20.3376 11.9094C18.9796 13.5111 17.0175 15.1475 14.6892 17.0869C13.8976 17.7461 12.9981 18.4954 12.0641 19.2937C11.9098 19.4257 11.7096 19.5 11.5 19.5C11.2904 19.5 11.0904 19.4257 10.9357 19.2933Z"
+                                                  stroke="#B0AAA3">
+                                            </path>
+                                        </svg>
+                                    </span>
+                                </span>
+                            </span>
+                                                                        </div>
+                    <div class="featured-details" style="
+                        display: -webkit-box;
+                        -webkit-box-orient: vertical;
+                        -webkit-line-clamp: 4;
+                        overflow: hidden;
+                        text-overflow: ellipsis;"
+                     >
+                        <span>
+                            5 pièces · 109.5 m²<br>
+                            Nogent sur marne
+                            
+                                                    </span>
+                    </div>
+                    </a>
+                </div>
+
+                                    
+
+                <div class="featured-item">
+                    <a href="/locations/offre/alfortville/PRV-218122">
+                    <div class="featured-images">
+                                                                                                                                                    <img src="https://prd-azr-photos-cdn-anb8asetcqb3ang2.a01.azurefd.net/idf/PRV%20218122/_23A2928%20%281%29-compressed.jpg" alt="ALFORTVILLE" class="featured-image active"
+                                     loading="lazy" decoding="async">
+                                                                            <div class="featured-images-control">
+                                                            <span class="transition-animate active" data-control="1"></span>
+                                                    </div>
+                                            </div>
+                    <div class="featured-price">
+                        <span class="demi-condensed">1 283 € </span><span class="book-condensed">cc</span>
+                                                                            <span class="featured-favorite">
+                                    <span data-target="favorite-modal" class="medium-condensed alert-link transition-animate modal-trigger">
+                                    <span class="featured-favorite">
+                                        <svg width="23" height="20" viewBox="0 0 23 20" fill="none"
+                                            xmlns="http://www.w3.org/2000/svg">
+                                            <path fill="currentColor"
+                                                d="M10.9357 19.2933C10.0046 18.4976 9.10715 17.75 8.31748 17.0923C5.98288 15.1477 4.02061 13.5111 2.66255 11.9095C1.16194 10.1397 0.5 8.5099 0.5 6.75591C0.5 5.02555 1.10638 3.4474 2.18831 2.30036C3.28196 1.141 4.78289 0.5 6.42523 0.5C7.6428 0.5 8.75305 0.873981 9.73744 1.61809C10.2368 1.99561 10.6931 2.46046 11.0981 3.00775C12.3071 2.46043 12.7633 1.9956 13.2627 1.61812C14.2471 0.87399 15.3574 0.5 16.5749 0.5C18.2171 0.5 19.7182 1.141 20.8118 2.30034C21.8938 3.44736 22.5 5.02551 22.5 6.75591C22.5 8.50993 21.8382 10.1397 20.3376 11.9094C18.9796 13.5111 17.0175 15.1475 14.6892 17.0869C13.8976 17.7461 12.9981 18.4954 12.0641 19.2937C11.9098 19.4257 11.7096 19.5 11.5 19.5C11.2904 19.5 11.0904 19.4257 10.9357 19.2933Z"
+                                                  stroke="#B0AAA3">
+                                            </path>
+                                        </svg>
+                                    </span>
+                                </span>
+                            </span>
+                                                                        </div>
+                    <div class="featured-details" style="
+                        display: -webkit-box;
+                        -webkit-box-orient: vertical;
+                        -webkit-line-clamp: 4;
+                        overflow: hidden;
+                        text-overflow: ellipsis;"
+                     >
+                        <span>
+                            3 pièces · 64 m²<br>
+                            Alfortville
+                            
+                                                    </span>
+                    </div>
+                    </a>
+                </div>
+
+                                    
+
+                <div class="featured-item">
+                    <a href="/locations/offre/villejuif/654-20081-10018">
+                    <div class="featured-images">
+                                                                                                                                                    <img src="https://prd-azr-photos-cdn-anb8asetcqb3ang2.a01.azurefd.net/pm/654%2020081%2010018/1-compressed.png" alt="VILLEJUIF" class="featured-image active"
+                                     loading="lazy" decoding="async">
+                                                                                                                            <img src="https://prd-azr-photos-cdn-anb8asetcqb3ang2.a01.azurefd.net/pm/654%2020081%2010018/20081%2010018-compressed.jpg" alt="VILLEJUIF" class="featured-image "
+                                     loading="lazy" decoding="async">
+                                                                                                                            <img src="https://prd-azr-photos-cdn-anb8asetcqb3ang2.a01.azurefd.net/pm/654%2020081%2010018/6855_Villejuif__01-compressed.JPG" alt="VILLEJUIF" class="featured-image "
+                                     loading="lazy" decoding="async">
+                                                                            <div class="featured-images-control">
+                                                            <span class="transition-animate active" data-control="1"></span>
+                                                            <span class="transition-animate " data-control="2"></span>
+                                                            <span class="transition-animate " data-control="3"></span>
+                                                    </div>
+                                                    <span class="accroche-annonce">F3 avec loggia</span>
+                                            </div>
+                    <div class="featured-price">
+                        <span class="demi-condensed">1 360 € </span><span class="book-condensed">cc</span>
+                                                                            <span class="featured-favorite">
+                                    <span data-target="favorite-modal" class="medium-condensed alert-link transition-animate modal-trigger">
+                                    <span class="featured-favorite">
+                                        <svg width="23" height="20" viewBox="0 0 23 20" fill="none"
+                                            xmlns="http://www.w3.org/2000/svg">
+                                            <path fill="currentColor"
+                                                d="M10.9357 19.2933C10.0046 18.4976 9.10715 17.75 8.31748 17.0923C5.98288 15.1477 4.02061 13.5111 2.66255 11.9095C1.16194 10.1397 0.5 8.5099 0.5 6.75591C0.5 5.02555 1.10638 3.4474 2.18831 2.30036C3.28196 1.141 4.78289 0.5 6.42523 0.5C7.6428 0.5 8.75305 0.873981 9.73744 1.61809C10.2368 1.99561 10.6931 2.46046 11.0981 3.00775C12.3071 2.46043 12.7633 1.9956 13.2627 1.61812C14.2471 0.87399 15.3574 0.5 16.5749 0.5C18.2171 0.5 19.7182 1.141 20.8118 2.30034C21.8938 3.44736 22.5 5.02551 22.5 6.75591C22.5 8.50993 21.8382 10.1397 20.3376 11.9094C18.9796 13.5111 17.0175 15.1475 14.6892 17.0869C13.8976 17.7461 12.9981 18.4954 12.0641 19.2937C11.9098 19.4257 11.7096 19.5 11.5 19.5C11.2904 19.5 11.0904 19.4257 10.9357 19.2933Z"
+                                                  stroke="#B0AAA3">
+                                            </path>
+                                        </svg>
+                                    </span>
+                                </span>
+                            </span>
+                                                                        </div>
+                    <div class="featured-details" style="
+                        display: -webkit-box;
+                        -webkit-box-orient: vertical;
+                        -webkit-line-clamp: 4;
+                        overflow: hidden;
+                        text-overflow: ellipsis;"
+                     >
+                        <span>
+                            3 pièces · 69.6 m²<br>
+                            Villejuif
+                            
+                                                    </span>
+                    </div>
+                    </a>
+                </div>
+
+                                    
+
+                <div class="featured-item">
+                    <a href="/locations/offre/villejuif/654-20081-10008">
+                    <div class="featured-images">
+                                                                                                                                                    <img src="https://prd-azr-photos-cdn-anb8asetcqb3ang2.a01.azurefd.net/pm/654%2020081%2010008/1-compressed.png" alt="VILLEJUIF" class="featured-image active"
+                                     loading="lazy" decoding="async">
+                                                                                                                            <img src="https://prd-azr-photos-cdn-anb8asetcqb3ang2.a01.azurefd.net/pm/654%2020081%2010008/20081%2010008-compressed.jpg" alt="VILLEJUIF" class="featured-image "
+                                     loading="lazy" decoding="async">
+                                                                                                                            <img src="https://prd-azr-photos-cdn-anb8asetcqb3ang2.a01.azurefd.net/pm/654%2020081%2010008/6855_Villejuif__01-compressed.JPG" alt="VILLEJUIF" class="featured-image "
+                                     loading="lazy" decoding="async">
+                                                                            <div class="featured-images-control">
+                                                            <span class="transition-animate active" data-control="1"></span>
+                                                            <span class="transition-animate " data-control="2"></span>
+                                                            <span class="transition-animate " data-control="3"></span>
+                                                    </div>
+                                                    <span class="accroche-annonce">F4 avec loggia</span>
+                                            </div>
+                    <div class="featured-price">
+                        <span class="demi-condensed">1 398 € </span><span class="book-condensed">cc</span>
+                                                                            <span class="featured-favorite">
+                                    <span data-target="favorite-modal" class="medium-condensed alert-link transition-animate modal-trigger">
+                                    <span class="featured-favorite">
+                                        <svg width="23" height="20" viewBox="0 0 23 20" fill="none"
+                                            xmlns="http://www.w3.org/2000/svg">
+                                            <path fill="currentColor"
+                                                d="M10.9357 19.2933C10.0046 18.4976 9.10715 17.75 8.31748 17.0923C5.98288 15.1477 4.02061 13.5111 2.66255 11.9095C1.16194 10.1397 0.5 8.5099 0.5 6.75591C0.5 5.02555 1.10638 3.4474 2.18831 2.30036C3.28196 1.141 4.78289 0.5 6.42523 0.5C7.6428 0.5 8.75305 0.873981 9.73744 1.61809C10.2368 1.99561 10.6931 2.46046 11.0981 3.00775C12.3071 2.46043 12.7633 1.9956 13.2627 1.61812C14.2471 0.87399 15.3574 0.5 16.5749 0.5C18.2171 0.5 19.7182 1.141 20.8118 2.30034C21.8938 3.44736 22.5 5.02551 22.5 6.75591C22.5 8.50993 21.8382 10.1397 20.3376 11.9094C18.9796 13.5111 17.0175 15.1475 14.6892 17.0869C13.8976 17.7461 12.9981 18.4954 12.0641 19.2937C11.9098 19.4257 11.7096 19.5 11.5 19.5C11.2904 19.5 11.0904 19.4257 10.9357 19.2933Z"
+                                                  stroke="#B0AAA3">
+                                            </path>
+                                        </svg>
+                                    </span>
+                                </span>
+                            </span>
+                                                                        </div>
+                    <div class="featured-details" style="
+                        display: -webkit-box;
+                        -webkit-box-orient: vertical;
+                        -webkit-line-clamp: 4;
+                        overflow: hidden;
+                        text-overflow: ellipsis;"
+                     >
+                        <span>
+                            4 pièces · 73.6 m²<br>
+                            Villejuif
+                            
+                                                    </span>
+                    </div>
+                    </a>
+                </div>
+
+                            </div>
+                            <a id="afficherCarte" href="#" class="btn btn-primary block-center medium-condensed sf-map-toggle">Carte</a>
+                        <div class="pagination book">
+  <div class="pagination book">
+        <a
+        class="disabled-page">
+        <svg width="7" height="13" viewBox="0 0 7 13" xmlns="http://www.w3.org/2000/svg">
+            <path fill="CurrentColor"
+                d="M6.31641 12.7109C6.17969 12.8477 5.98828 12.8477 5.85156 12.7109L0.109375 6.99609C0 6.85938 0 6.66797 0.109375 6.53125L5.85156 0.816406C5.98828 0.679688 6.17969 0.679688 6.31641 0.816406L6.86328 1.33594C6.97266 1.47266 6.97266 1.69141 6.86328 1.80078L1.91406 6.75L6.86328 11.7266C6.97266 11.8359 6.97266 12.0547 6.86328 12.1914L6.31641 12.7109Z" />
+        </svg>
+    </a>
+
+                            <a href="/locations/offres/ile-de-france-region_r:11?page=1" class="active">1</a>
+                                <a href="/locations/offres/ile-de-france-region_r:11?page=2" class="">2</a>
+                                                                                            <span>...</span>
+                                <a href="/locations/offres/ile-de-france-region_r:11?page=9" class="">9</a>
+            
+            <a
+                    href="/locations/offres/ile-de-france-region_r:11?page=2"
+                class="">
+        <svg width="7" height="13" viewBox="0 0 7 13" xmlns="http://www.w3.org/2000/svg">
+            <path fill="CurrentColor"
+                d="M0.65625 0.816406C0.792969 0.679688 0.984375 0.679688 1.12109 0.816406L6.86328 6.53125C6.97266 6.66797 6.97266 6.85938 6.86328 6.99609L1.12109 12.7109C0.984375 12.8477 0.792969 12.8477 0.65625 12.7109L0.109375 12.1914C0 12.0547 0 11.8359 0.109375 11.7266L5.05859 6.75L0.109375 1.80078C0 1.69141 0 1.47266 0.109375 1.33594L0.65625 0.816406Z" />
+        </svg>
+    </a>
+  </div>
+</div>
+
+        </div>
+
+                                    <input type="hidden" id="mapLocation" value="Île-de-France (Région)">
+        <span class="mode-full-map"><</span>
+        <div id="result-map" class="result-map"></div>
+    </div>
+
+
+    <footer>
+    <div class="social">
+    <h3 class="medium-condensed">Nous suivre</h3>
+    <div class="social-links">
+      <a href="https://www.linkedin.com/company/in-li" target="_blank">
+        <svg width="33" height="37" viewBox="0 0 33 37" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M16.0648 0L32.1297 8.25V28.75L16.0648 37L0 28.75V8.25L16.0648 0Z"
+                fill="currentColor" />
+          <path
+                  d="M10.2678 13.4363C11.5203 13.4363 12.5357 12.4432 12.5357 11.2181C12.5357 9.9931 11.5203 9 10.2678 9C9.01535 9 8 9.9931 8 11.2181C8 12.4432 9.01535 13.4363 10.2678 13.4363Z"
+                  fill="#159289" />
+          <path
+                  d="M11.9864 25.9999H8.54918C8.45173 25.9999 8.38086 25.9306 8.38086 25.8353V15.0738C8.38086 14.9785 8.45173 14.9092 8.54918 14.9092H11.9864C12.0838 14.9092 12.1547 14.9785 12.1547 15.0738V25.8266C12.1547 25.9219 12.0838 25.9999 11.9864 25.9999Z"
+                  fill="#159289" />
+          <path
+                  d="M25.0001 18.9822V25.264C25.0001 25.6713 24.6634 26.0005 24.2471 26.0005H21.9792C21.5629 26.0005 21.2262 25.6713 21.2262 25.264V20.0913C21.2262 19.0688 20.3758 18.2457 19.3393 18.2457C18.3028 18.2457 17.4524 19.0775 17.4524 20.0913V25.264C17.4524 25.6713 17.1157 26.0005 16.6994 26.0005H14.4227C14.0063 26.0005 13.6697 25.6713 13.6697 25.264V15.655C13.6697 15.2477 14.0063 14.9185 14.4227 14.9185H16.6905C17.1069 14.9185 17.4435 15.2477 17.4435 15.655V16.1315C18.2054 15.1698 19.4545 14.5459 20.8453 14.5459C22.936 14.5459 25.0001 16.0189 25.0001 18.9822Z"
+                  fill="#159289" />
+        </svg>
+      </a>
+      <a href="https://x.com/inli_officiel" target="_blank">
+        <svg width="33" height="37" viewBox="0 0 33 37" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M16.1945 0L32.2593 8.25V28.75L16.1945 37L0.129639 28.75V8.25L16.1945 0Z"
+                fill="currentColor" />
+          <path
+                  d="M18.7478 17.428L25.7444 10H23.0902L17.5991 15.8301L13.396 10H6.12964L13.483 20.1919L6.12964 28H8.78381L14.6317 21.7898L19.1133 28H26.3796L18.7478 17.428ZM9.87158 11.9088H12.4039L22.6377 26.0912H20.1054L9.87158 11.9088Z"
+                  fill="#159289" />
+        </svg>
+      </a>
+      <a href="https://www.youtube.com/channel/UC-c-yHh7lpHFdRhJGWq_t1A" target="_blank">
+        <svg width="33" height="37" viewBox="0 0 33 37" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M16.3241 0L32.3889 8.25V28.75L16.3241 37L0.259277 28.75V8.25L16.3241 0Z"
+                fill="currentColor" />
+          <path
+                  d="M24.295 11H8.99278C7.4831 11 6.25928 12.2203 6.25928 13.7257V23.2654C6.25928 24.7708 7.4831 25.9911 8.99278 25.9911H24.2861C25.7958 25.9911 27.0196 24.7708 27.0196 23.2654V13.7257C27.0285 12.2203 25.8047 11 24.295 11ZM19.1049 19.1591L14.8528 21.2791C14.3615 21.5285 13.7809 21.1722 13.7809 20.62V16.38C13.7809 15.8367 14.3615 15.4804 14.8528 15.7209L19.1049 17.8409C19.6409 18.1081 19.6409 18.883 19.1049 19.1591Z"
+                  fill="#159289" />
+        </svg>
+      </a>
+    </div>
+  </div>
+  <div class="footer-bottom">
+    <div class="footer-logo">
+      <img src="/images/logo-footer-white.png" alt="IN'LI Property Management">
+    </div>
+    <div class="footer-address-links">
+      <div class="footer-address">
+        <h5 class="demi-condensed">Siège social</h5>
+        <p>
+          Tour Ariane<br>
+          5, place de la Pyramide<br>
+          92088 Paris La Défense
+        </p>
+      </div>
+      <div class="footer-links display-flex-768">
+        <div class="footer-links-item">
+          <h5 class="demi-condensed">Plan du site</h5>
+          <ul>
+            <li><a target="_blank" href="https://inlietmoi.fr/?autoconnect=true">Mon espace client in'li & moi</a></li>
+            <li><a target="_blank" href="/logements-a-prix-maitrise">Logement à prix maitrisé</a></li>
+          </ul>
+        </div>
+        <div class="footer-links-item no-display-768">
+          <h5 class="demi-condensed">Autres sites</h5>
+          <ul>
+            <li><a target="_blank" href="https://inli.com">inli.com</a></li>
+            <li><a target="_blank" href="https://www.inli.com/nos-appels-doffres">Nos appels d'offres</a></li>
+            <li><a target="_blank" href="https://www.actionlogement.fr/">Groupe Action Logement</a></li>
+          </ul>
+        </div>
+      </div>
+    </div>
+    <div
+            class="footer-links-item footer-other-sites-768 footer-other-sites-480 no-display-1280 force-margin-bottom-40">
+      <h5 class="demi-condensed  force-margin-bottom-20">Autres sites</h5>
+      <ul class="footer-elements-li-768">
+        <li><a target="_blank" href="https://inli.com">inli.com</a></li>
+        <li><a target="_blank" href="https://www.inli.com/nos-appels-doffres">Nos appels d'offres</a></li>
+        <li><a target="_blank" href="https://www.actionlogement.fr/">Groupe Action Logement</a></li>
+      </ul>
+    </div>
+    <div class="copyright">
+      <p>
+        <a href="/">© 2025 in’li</a> - <a href="/mentions-legales">Mentions légales</a> - <a href="/cgu">CGU</a> - <a href="#" class="manage-cookies">Gestion des cookies</a> - <a href="/cookies">Politique cookies</a> - <a href="/politique_donneesperso">Données personnelles</a>
+      </p>
+    </div>
+  </div>
+</footer>  <script src="/vendor/browser-polyfill.min.js"></script>
+<script src="/build/app.86d8391d7b4af81c67e7.js"></script>
+  <script src='https://www.google.com/recaptcha/api.js' async defer></script>
+  <script type="text/javascript">
+    var previousForm = null;
+    function onCaptchaSubmit(returnKey) {
+      if (previousForm){
+        $(previousForm).find('.g-recaptcha .g-recaptcha-response').val(returnKey);
+        previousForm.submit();
+      }
+    }
+    $(document).on('submit','form', function(event){
+      if ($(this).find('.g-recaptcha').length <= 0) {
+        return;
+      }
+      event.preventDefault();
+      previousForm = this;
+      grecaptcha.execute();
+    });
+  </script>
+    <script type="text/javascript">
+        document.addEventListener("DOMContentLoaded", function () {
+            const bouton = document.getElementById("afficherCarte");
+            const positionOriginale = bouton.offsetTop;
+
+            window.addEventListener("scroll", function () {
+                if (window.scrollY + window.innerHeight < positionOriginale) {
+                    bouton.classList.add("afficher-carte-sticky");
+                } else {
+                    bouton.classList.remove("afficher-carte-sticky");
+                }
+            });
+        });
+        /*document.addEventListener("DOMContentLoaded", function () {
+            const featuredImages = document.querySelector(".featured-images");
+
+            // Create left arrow
+            const leftArrow = document.createElement("div");
+            leftArrow.innerHTML = '<img class="featured-previous" src="img/arrow-control.png" alt="">'; // Unicode for left arrow
+            leftArrow.classList.add("featured-arrow", "left-arrow");
+
+            // Create right arrow
+            const rightArrow = document.createElement("div");
+            rightArrow.innerHTML = '<img class="featured-next" src="img/arrow-control.png" alt="">'; // Unicode for right arrow
+            rightArrow.classList.add("featured-arrow", "right-arrow");
+
+            // Append arrows to featuredImages
+            featuredImages.appendChild(leftArrow);
+            featuredImages.appendChild(rightArrow);
+        });*/
+    </script>
+    <script type="text/javascript">
+        let map;
+        let activePopin = null;
+
+        let mapLoaded = false;
+        function loadGoogleMapsScript() {
+            if (mapLoaded) return;
+            mapLoaded = true;
+            window.ALENTOOR_LISTING = { markers: [{"id":"3054","lat":48.727616,"lng":2.282193,"price":"1163.11\u20ac","image":"https:\/\/prd-azr-photos-cdn-anb8asetcqb3ang2.a01.azurefd.net\/idf\/PRV%20321645\/A-compressed%20%283%29-compressed.jpg","description":"3p, 64m<sup>2<\/sup>","area":64,"address":"8 voie de Wissous B\u00e2t: B","city":"MASSY","postalCode":"91300","room":3,"type":"Appartement","link":"\/locations\/offre\/massy\/PRV-321645"},{"id":"4066","lat":48.782566,"lng":2.396769,"price":"1069.3\u20ac","image":"https:\/\/prd-azr-photos-cdn-anb8asetcqb3ang2.a01.azurefd.net\/idf\/PRV%20240665\/VITRY%20SUR%20SEINE%2004%20A-compressed.jpg","description":"3p, 62m<sup>2<\/sup>","area":62,"address":"7 Avenue du 11 Novembre 1918","city":"VITRY SUR SEINE","postalCode":"94400","room":3,"type":"Appartement","link":"\/locations\/offre\/vitry-sur-seine\/PRV-240665"},{"id":"4198","lat":48.683685,"lng":2.167361,"price":"932.97\u20ac","image":"https:\/\/prd-azr-photos-cdn-anb8asetcqb3ang2.a01.azurefd.net\/idf\/PRV%20054463\/BURES%20LES%20ULIS%2005%201-compressed.jpg","description":"3p, 64m<sup>2<\/sup>","area":64,"address":"32 rue des Berg\u00e8res","city":"LES ULIS","postalCode":"91940","room":3,"type":"Appartement","link":"\/locations\/offre\/les-ulis\/PRV-054463"},{"id":"2010","lat":48.862844,"lng":2.192339,"price":"1231.29\u20ac","image":"https:\/\/prd-azr-photos-cdn-anb8asetcqb3ang2.a01.azurefd.net\/idf\/PRV%20309853\/2010-FO-PhotosFA170118-539-compressed.jpg","description":"2p, 52.75m<sup>2<\/sup>","area":52.75,"address":"44 avenue de Fouilleuse","city":"RUEIL MALMAISON","postalCode":"92500","room":2,"type":"Appartement","link":"\/locations\/offre\/rueil-malmaison\/PRV-309853"},{"id":"4122","lat":48.898124,"lng":2.283797,"price":"1452.36\u20ac","image":"https:\/\/prd-azr-photos-cdn-anb8asetcqb3ang2.a01.azurefd.net\/idf\/PRV%20215871\/4122-FOEXT-LEVALLOIS%2003-874-compressed.jpg","description":"3p, 52m<sup>2<\/sup>","area":52,"address":"133 Rue du President Wilson","city":"LEVALLOIS PERRET","postalCode":"92300","room":3,"type":"Appartement","link":"\/locations\/offre\/levallois-perret\/PRV-215871"},{"id":"3065","lat":48.899329,"lng":2.078953,"price":"1171.37\u20ac","image":"https:\/\/prd-azr-photos-cdn-anb8asetcqb3ang2.a01.azurefd.net\/idf\/PRV%20323375\/_MAU7335-ok-compressed-compressed.jpg","description":"2p, 58m<sup>2<\/sup>","area":58,"address":"27 rue Jean Paul Lamare","city":"ST GERMAIN EN LAYE","postalCode":"78100","room":2,"type":"Appartement","link":"\/locations\/offre\/st-germain-en-laye\/PRV-323375"},[],{"id":"4229","lat":48.895592,"lng":2.21881,"price":"1325.68\u20ac","image":"https:\/\/prd-azr-photos-cdn-anb8asetcqb3ang2.a01.azurefd.net\/idf\/PRV%20279233\/1.jpg","description":"2p, 48m<sup>2<\/sup>","area":48,"address":"6 rue Salvador Allende","city":"NANTERRE","postalCode":"92000","room":2,"type":"Appartement","link":"\/locations\/offre\/nanterre\/PRV-279233"},{"id":"7047","lat":48.900475,"lng":2.315366,"price":"2244.65\u20ac","image":"https:\/\/prd-azr-photos-cdn-anb8asetcqb3ang2.a01.azurefd.net\/idf\/PRV%20386016\/27047-CLICHY-Logement%20t%C3%A9moin%20T4-Photo%202-compressed.JPG","description":"4p, 88.9m<sup>2<\/sup>","area":88.9,"address":"142\/144 Boulevard Victor Hugo","city":"CLICHY","postalCode":"92110","room":4,"type":"Appartement","link":"\/locations\/offre\/clichy\/PRV-386016"},{"id":"2007","lat":48.893024,"lng":2.417817,"price":"1319.98\u20ac","image":"https:\/\/prd-azr-photos-cdn-anb8asetcqb3ang2.a01.azurefd.net\/idf\/PRV%20309418\/00IMGP8943%20ok%20copie-compressed.jpg","description":"2p, 54.1m<sup>2<\/sup>","area":54.1,"address":"7 rue du Docteur Pellat","city":"PANTIN","postalCode":"93500","room":2,"type":"Appartement","link":"\/locations\/offre\/pantin\/PRV-309418"},[]] };
+
+            if (!document.getElementById("maplibre-gl-css")) {
+                const link = document.createElement("link");
+                link.id = "maplibre-gl-css";
+                link.rel = "stylesheet";
+                link.href = "https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css";
+                document.head.appendChild(link);
+            }
+            if (window.maplibregl) {
+                if (window.initResultMap) window.initResultMap("result-map");
+            } else {
+                const mlb = document.createElement("script");
+                mlb.src = "https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js";
+                mlb.onload = function () { if (window.initResultMap) window.initResultMap("result-map"); };
+                document.body.appendChild(mlb);
+            }
+        }
+
+        function initMap() {
+            const rawData = [{"id":"3054","lat":48.727616,"lng":2.282193,"price":"1163.11\u20ac","image":"https:\/\/prd-azr-photos-cdn-anb8asetcqb3ang2.a01.azurefd.net\/idf\/PRV%20321645\/A-compressed%20%283%29-compressed.jpg","description":"3p, 64m<sup>2<\/sup>","area":64,"address":"8 voie de Wissous B\u00e2t: B","city":"MASSY","postalCode":"91300","room":3,"type":"Appartement","link":"\/locations\/offre\/massy\/PRV-321645"},{"id":"4066","lat":48.782566,"lng":2.396769,"price":"1069.3\u20ac","image":"https:\/\/prd-azr-photos-cdn-anb8asetcqb3ang2.a01.azurefd.net\/idf\/PRV%20240665\/VITRY%20SUR%20SEINE%2004%20A-compressed.jpg","description":"3p, 62m<sup>2<\/sup>","area":62,"address":"7 Avenue du 11 Novembre 1918","city":"VITRY SUR SEINE","postalCode":"94400","room":3,"type":"Appartement","link":"\/locations\/offre\/vitry-sur-seine\/PRV-240665"},{"id":"4198","lat":48.683685,"lng":2.167361,"price":"932.97\u20ac","image":"https:\/\/prd-azr-photos-cdn-anb8asetcqb3ang2.a01.azurefd.net\/idf\/PRV%20054463\/BURES%20LES%20ULIS%2005%201-compressed.jpg","description":"3p, 64m<sup>2<\/sup>","area":64,"address":"32 rue des Berg\u00e8res","city":"LES ULIS","postalCode":"91940","room":3,"type":"Appartement","link":"\/locations\/offre\/les-ulis\/PRV-054463"},{"id":"2010","lat":48.862844,"lng":2.192339,"price":"1231.29\u20ac","image":"https:\/\/prd-azr-photos-cdn-anb8asetcqb3ang2.a01.azurefd.net\/idf\/PRV%20309853\/2010-FO-PhotosFA170118-539-compressed.jpg","description":"2p, 52.75m<sup>2<\/sup>","area":52.75,"address":"44 avenue de Fouilleuse","city":"RUEIL MALMAISON","postalCode":"92500","room":2,"type":"Appartement","link":"\/locations\/offre\/rueil-malmaison\/PRV-309853"},{"id":"4122","lat":48.898124,"lng":2.283797,"price":"1452.36\u20ac","image":"https:\/\/prd-azr-photos-cdn-anb8asetcqb3ang2.a01.azurefd.net\/idf\/PRV%20215871\/4122-FOEXT-LEVALLOIS%2003-874-compressed.jpg","description":"3p, 52m<sup>2<\/sup>","area":52,"address":"133 Rue du President Wilson","city":"LEVALLOIS PERRET","postalCode":"92300","room":3,"type":"Appartement","link":"\/locations\/offre\/levallois-perret\/PRV-215871"},{"id":"3065","lat":48.899329,"lng":2.078953,"price":"1171.37\u20ac","image":"https:\/\/prd-azr-photos-cdn-anb8asetcqb3ang2.a01.azurefd.net\/idf\/PRV%20323375\/_MAU7335-ok-compressed-compressed.jpg","description":"2p, 58m<sup>2<\/sup>","area":58,"address":"27 rue Jean Paul Lamare","city":"ST GERMAIN EN LAYE","postalCode":"78100","room":2,"type":"Appartement","link":"\/locations\/offre\/st-germain-en-laye\/PRV-323375"},[],{"id":"4229","lat":48.895592,"lng":2.21881,"price":"1325.68\u20ac","image":"https:\/\/prd-azr-photos-cdn-anb8asetcqb3ang2.a01.azurefd.net\/idf\/PRV%20279233\/1.jpg","description":"2p, 48m<sup>2<\/sup>","area":48,"address":"6 rue Salvador Allende","city":"NANTERRE","postalCode":"92000","room":2,"type":"Appartement","link":"\/locations\/offre\/nanterre\/PRV-279233"},{"id":"7047","lat":48.900475,"lng":2.315366,"price":"2244.65\u20ac","image":"https:\/\/prd-azr-photos-cdn-anb8asetcqb3ang2.a01.azurefd.net\/idf\/PRV%20386016\/27047-CLICHY-Logement%20t%C3%A9moin%20T4-Photo%202-compressed.JPG","description":"4p, 88.9m<sup>2<\/sup>","area":88.9,"address":"142\/144 Boulevard Victor Hugo","city":"CLICHY","postalCode":"92110","room":4,"type":"Appartement","link":"\/locations\/offre\/clichy\/PRV-386016"},{"id":"2007","lat":48.893024,"lng":2.417817,"price":"1319.98\u20ac","image":"https:\/\/prd-azr-photos-cdn-anb8asetcqb3ang2.a01.azurefd.net\/idf\/PRV%20309418\/00IMGP8943%20ok%20copie-compressed.jpg","description":"2p, 54.1m<sup>2<\/sup>","area":54.1,"address":"7 rue du Docteur Pellat","city":"PANTIN","postalCode":"93500","room":2,"type":"Appartement","link":"\/locations\/offre\/pantin\/PRV-309418"},[]];
+            const markersData = rawData.filter(item => item && item.lat && item.lng && item.price);
+            const defaultCenter = { lat: 48.8566, lng: 2.3522 };
+            map = new google.maps.Map(document.getElementById("result-map"), {
+                center: defaultCenter,
+                zoom: 6,
+            });
+
+            CustomMarker.prototype = Object.create(google.maps.OverlayView.prototype);
+            CustomMarker.prototype.constructor = CustomMarker;
+
+            function CustomMarker(markerData, map) {
+                Object.assign(this, markerData);
+                this.lat = parseFloat(markerData.lat);
+                this.lng = parseFloat(markerData.lng);
+                this.data = markerData;
+                this.div = null;
+                this.setMap(map);
+            }
+
+            CustomMarker.prototype.onAdd = function () {
+                const div = document.createElement("div");
+                div.className = "custom-marker";
+                div.innerHTML = `<span class="bold-condensed btn btn-secondary marker-btn">${Math.round(parseFloat(String(this.price).replace(/[€\s]/g, ''))).toLocaleString('fr-FR') + ' €'}</span>`;
+                div.style.position = "absolute";
+
+                div.addEventListener("click", (e) => {
+                    e.stopPropagation();
+                    if (activePopin) activePopin.setMap(null);
+                    activePopin = new CustomPopin(this, this.map);
+                    map.panTo(new google.maps.LatLng(this.lat, this.lng)); // Center on marker
+                });
+
+                this.div = div;
+                this.getPanes().overlayMouseTarget.appendChild(div);
+            };
+
+            CustomMarker.prototype.draw = function () {
+                const proj = this.getProjection();
+                if (!proj) return;
+                const pos = proj.fromLatLngToDivPixel(new google.maps.LatLng(this.lat, this.lng));
+                if (this.div) {
+                    const width = this.div.offsetWidth || 60;
+                    this.div.style.left = (pos.x - width / 2) + "px";
+                    this.div.style.top = (pos.y - 20) + "px";
+                }
+            };
+
+            CustomMarker.prototype.onRemove = function () {
+                if (this.div) {
+                    this.div.remove();
+                    this.div = null;
+                }
+            };
+
+            CustomPopin.prototype = Object.create(google.maps.OverlayView.prototype);
+            CustomPopin.prototype.constructor = CustomPopin;
+
+            function CustomPopin(data, map) {
+                this.lat = data.lat;
+                this.lng = data.lng;
+                this.data = data;
+                this.map = map;
+                this.div = null;
+                this.setMap(map);
+            }
+
+            CustomPopin.prototype.onAdd = function () {
+                const div = document.createElement("div");
+                div.className = "custom-popin";
+
+                const citiesWithArr = ['Paris', 'Marseille', 'Lyon'];
+
+                let cityLabel = this.data.city.charAt(0).toUpperCase() + this.data.city.slice(1).toLowerCase();
+
+                if (citiesWithArr.includes(cityLabel)) {
+                    const arrondissement = this.data.postalCode.slice(3, 5).replace(/^0/, '');
+
+                    if (arrondissement === '1') {
+                        cityLabel += ' 1er';
+                    } else {
+                        cityLabel += ` ${arrondissement}ème`;
+                    }
+                }
+                div.innerHTML = `
+            <div class="popin-bubble">
+                <span class="popin-close-map"></span>
+                <a href="${this.data.link}" class="featured-item featured-map">
+                    <div class="featured-images">
+                        <img src="${this.data.image}" class="featured-image" alt="">
+                    </div>
+                    <div class="featured-price">
+                        <span class="demi-condensed">${Math.round(parseFloat(String(this.data.price).replace(/[€\s]/g, ''))).toLocaleString('fr-FR') + ' €'}</span>
+                        <span class="book-condensed">cc</span>
+                    </div>
+                    <div class="featured-details">
+                        <span>${this.data.room} · pièces · ${this.data.area} m²<br>${cityLabel}</span>
+                    </div>
+                </a>
+                <div class="popin-triangle"></div>
+            </div>
+        `;
+                div.style.position = "absolute";
+                this.div = div;
+                this.getPanes().overlayMouseTarget.appendChild(div);
+                div.querySelector(".popin-close-map").addEventListener("click", (e) => {
+                    e.stopPropagation();
+                    if (activePopin) {
+                        activePopin.setMap(null);
+                        activePopin = null;
+                    }
+                });
+                div.querySelector(".featured-item").addEventListener("click", (e) => {
+                    e.stopPropagation();
+                    window.location.href = e.currentTarget.href;
+                });
+                div.querySelector(".featured-item").addEventListener("touchstart", (e) => {
+                    e.stopPropagation();
+                    window.location.href = e.currentTarget.href;
+                }, { passive: true });
+            };
+
+            CustomPopin.prototype.draw = function () {
+                const proj = this.getProjection();
+                if (!proj || !this.div) return;
+
+                const pos = proj.fromLatLngToDivPixel(new google.maps.LatLng(this.lat, this.lng));
+
+                const bubble = this.div.querySelector(".popin-bubble");
+                if (!bubble) return;
+
+                bubble.style.display = "block";
+                const width = bubble.offsetWidth;
+                const height = bubble.offsetHeight;
+                bubble.style.display = "";
+
+                this.div.style.left = (pos.x - width / 2) + "px";
+                this.div.style.top = (pos.y - height - 10) + "px";
+            };
+
+            CustomPopin.prototype.onRemove = function () {
+                if (this.div) {
+                    this.div.remove();
+                    this.div = null;
+                }
+            };
+
+            google.maps.event.addListener(map, "click", () => {
+                if (activePopin) {
+                    activePopin.setMap(null);
+                    activePopin = null;
+                }
+            });
+            const bounds = new google.maps.LatLngBounds();
+
+            if (markersData.length > 0) {
+                markersData.forEach((markerData) => {
+                    new CustomMarker(markerData, map);
+                    const latLng = new google.maps.LatLng(markerData.lat, markerData.lng);
+                    bounds.extend(latLng);
+                });
+
+                if (markersData.length === 1) {
+                    map.setCenter(bounds.getCenter());
+                    map.setZoom(14); // Adjust zoom level for single marker
+                } else {
+                    map.fitBounds(bounds);
+                    google.maps.event.addListenerOnce(map, "bounds_changed", function () {
+                        if (map.getZoom() > 15) {
+                            map.setZoom(15);
+                        }
+                    });
+                }
+            } else {
+                // No markers, fallback to geocode or default view
+                const locationString = document.getElementById("mapLocation").value;
+                if (locationString && !locationString.includes(",")) {
+                    const geocoder = new google.maps.Geocoder();
+                    geocoder.geocode({ address: locationString }, (results, status) => {
+                        if (status === "OK" && results[0]) {
+                            map.setCenter(results[0].geometry.location);
+                            map.setZoom(6);
+                        }
+                    });
+                }
+            }
+        }
+
+        let stickyEnabled = false;
+        let el, parent;
+        let startOffset, elHeight, originalWidth;
+        const MIN_WIDTH = 768;
+        function canUseSticky() {
+            return window.innerWidth >= MIN_WIDTH;
+        }
+
+        function computeMetrics() {
+            el.removeClass('fixed stop').css('width', '');
+
+            startOffset = parent.offset().top;
+            elHeight = 760;
+            originalWidth = el.outerWidth();
+
+            el.css('width', originalWidth);
+        }
+
+        $(window).on('scroll', function () {
+            if (!stickyEnabled || !canUseSticky()) return;
+
+            const scrollTop = $(window).scrollTop();
+            const parentTop = parent.offset().top;
+            const parentHeight = parent.outerHeight();
+            const parentBottom = parentTop + parentHeight;
+
+            if (scrollTop > startOffset - 50 && scrollTop + elHeight < parentBottom) {
+                el.removeClass('stop').addClass('fixed');
+            }
+            else if (scrollTop + elHeight >= parentBottom) {
+                el.removeClass('fixed').addClass('stop');
+            }
+            else {
+                el.removeClass('fixed stop');
+            }
+        });
+        $(window).on('resize', function () {
+            if (!el) return;
+
+            if (!canUseSticky()) {
+                stickyEnabled = false;
+                el.removeClass('fixed stop').css('width', '');
+            } else if (stickyEnabled) {
+                computeMetrics();
+            }
+        });
+        $(document).ready(function () {
+
+            $("#afficherCarte").on("click", function (e) {
+                e.preventDefault();
+                loadGoogleMapsScript();
+
+                const $wrapper = $(".featured-block, .result-map").parent();
+                $wrapper.toggleClass("split").removeClass("full-map");
+
+                const isMapVisible = $wrapper.hasClass("split");
+                $(this).text(isMapVisible ? "Liste" : "Carte");
+
+                if (isMapVisible && canUseSticky()) {
+                    setTimeout(function () {
+                        el = $('.split #result-map');
+                        parent = el.parent();
+                        stickyEnabled = true;
+                        computeMetrics();
+                    }, 0);
+                } else {
+                    stickyEnabled = false;
+                    $('#result-map').removeClass('fixed stop').css('width', '');
+                }
+
+                setTimeout(() => {
+                    if ($(".result-map").is(":visible")) {
+                        google.maps.event.trigger(map, "resize");
+                    }
+                }, 300);
+            });
+
+            $(".mode-full-map").on("click", function (e) {
+                e.preventDefault();
+                stickyEnabled = false;
+                $('#result-map').removeClass('fixed stop').css('width', '');
+                const $wrapper = $(".featured-block, .result-map").parent();
+                $wrapper.addClass("full-map");
+            });
+        });
+    </script>
+
+<span class="return-to-top"></span>
+<div class="cookies">
+    <div class="container-md-plus-fixed">
+        <!-- Default Banner -->
+        <div class="cookies-default">
+            <h3 class="demi-condensed">Nous espérons que vous aimez les cookies</h3>
+            <div class="cookies-infos">
+                <p>Certains cookies ont pour finalité exclusive de permettre ou faciliter la communication
+                    électronique et d’autres sont strictement nécessaires à la fourniture d’un service de
+                    communication en ligne à votre demande expresse. Ces cookies ne sont pas soumis au recueil de
+                    votre consentement. En revanche, les autres cookies ne sont déposés qui si vous les avez acceptés.
+                    Pour en savoir plus <a href="https://inli.fr/cookies">cliquer ici</a>.
+                    S'agissant des cookies exemptés de consentement, vous pouvez vous opposer à leur dépôt en vous rendant dans le module ≪ Paramètres des cookies ≫ puis en décochant l'option prévue à cet effet.
+                    Votre consentement est valable pour le site <a href="https://inli.fr">www.inli.fr</a>. Vous
+                    pourrez à tout moment revenir sur vos choix, retirer votre consentement en cliquant sur la
+                    rubrique “ Gestion des cookies ” présente en bas des pages du site</p>
+            </div>
+            <div class="cookies-actions">
+                <a href="#" class="medium-condensed btn btn-secondary btn-accept-all">Accepter tous les cookies</a>
+                <a href="#" class="medium-condensed btn btn-grey btn-necessary-only">Tout refuser</a>
+                <a href="#" class="cookie-link">Paramètres des cookies</a>
+            </div>
+        </div>
+
+        <!-- Custom Settings -->
+        <div class="cookies-customize" style="display: none;">
+            <h3 class="demi-condensed">
+                Module de gestion des Cookies
+            </h3>
+            <div class="cookies-infos" style="margin-bottom: 20px;">
+                <p>
+                    Certains cookies ont pour finalité exclusive de permettre ou faciliter la communication électronique et d'autres sont strictement nécessaires à la fourniture d'un service de communication en ligne à votre demande expresse. Ces cookies ne sont pas soumis au recueil de votre consentement.
+                    En revanche, les autres cookies ne sont installés que si vous les avez acceptés. Pour en savoir plus <a href="https://inli.fr/cookies">cliquer ici</a>. S'agissant des cookies exemptés de consentement, vous pouvez vous opposer à leut dépôt en vous rendant dans le module ≪ Paramètres des cookies ≫, puis en décochant l'option prévue à cet effet.
+                    <br><br>
+                    Votre consentement est valable pour le site www.inli.fr
+                    <br><br>
+                    Vous pourrez à tout moment revenir sur vos choix, retirer votre consentement en cliquant sur la rubrique ≪ Gestion des cookies ≫ présente en bas des pages du site.
+                </p>
+            </div>
+            <h3 class="demi-condensed with-link hide-cookies-param">
+                <a href="#" class="cookies-back"></a>Paramètres des cookies
+            </h3>
+            <div class="cookies-options">
+                <div>
+                    <h5 class="book-condensed">Fonctionnel</h5>
+                    <div class="form-element checkbox-group">
+                        <label class="checkbox-container disabled">
+                            &nbsp;
+                            <input type="checkbox" disabled checked id="basic-cookies-checkbox">
+                            <span class="checkmark"></span>
+                        </label>
+                    </div>
+                    <p>
+                        Cookies ayant pour finalité exclusive de permettre ou faciliter la communication électronique et ceux strictement nécessaires à la fourniture d'un service de communication en ligne à votre demande expresse.
+                    </p>
+                </div>
+                <div>
+                    <h5 class="book-condensed">Mesure d'audience</h5>
+                    <div class="form-element checkbox-group">
+                        <label class="checkbox-container">
+                            Matomo
+                            <input type="checkbox" checked id="matomo-checkbox">
+                            <span class="checkmark"></span>
+                        </label>
+                    </div>
+                    <p>Cookies nécessaires pour assurer le bon fonctionnement du site.</p>
+                    <p>Ce service peut déposer 4 cookies.</p>
+                    <p>
+                        Les cookies Matomo étant exemptés de consentement, sont déposés par défaut sur votre terminal. En décochant cette option, vous pouvez empêcher leur dépôt.
+                    </p>
+                </div>
+                <div>
+                    <h5 class="book-condensed">Autres</h5>
+                    <div class="form-element checkbox-group">
+                        <label class="checkbox-container">
+                            Historique de localisation
+                            <input type="checkbox" id="localization-checkbox">
+                            <span class="checkmark"></span>
+                        </label>
+                    </div>
+                    <p>Ce service peut déposer 2 cookies.</p>
+                </div>
+                <a href="#" class="btn btn-secondary medium-condensed apply-cookies">Appliquer</a>
+            </div>
+        </div>
+    </div>
+    <a href="#" class="close-band"></a>
+</div>
+<script>
+    (function(){
+        var s = document.createElement('script'),
+            e = !document.body ? document.querySelector('head') :
+                document.body;
+        s.src = 'https://eu.acsbapp.com/apps/app/dist/js/app.js';
+        s.async = true;
+        s.onload = function(){
+            acsbJS.init({
+                statementLink : '#',
+                footerHtml : '<a href="https://www.accessiway.fr/" target="_blank">AccessiWay. The Web Accessibility Solution</a>',
+                hideMobile : false,
+                hideTrigger : false,
+                language : 'fr',
+                position : 'right',
+                leadColor : '#980B3B',
+                triggerColor : '#EB275E',
+                triggerRadius : '50%',
+                triggerPositionX : 'right',
+                triggerPositionY : 'bottom',
+                triggerIcon : 'people',
+                triggerSize : 'medium',
+                triggerOffsetX : 20,
+                triggerOffsetY : 20,
+                mobile : {
+                    triggerSize : 'medium',
+                    triggerPositionX : 'right',
+                    triggerPositionY : 'bottom',
+                    triggerOffsetX : 10,
+                    triggerOffsetY : 10,
+                    triggerRadius : '50%'
+                }
+            });
+        };
+        e.appendChild(s);
+    }());
+</script></body>
+</html>

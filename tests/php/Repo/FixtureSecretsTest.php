@@ -136,6 +136,53 @@ final class FixtureSecretsTest extends TestCase
         self::assertStringNotContainsString('eyJ', $message, 'the raw bytes carry no recognisable token');
         self::assertSame(['JWT'], array_column(self::suspects($message), 0), 'a base64 body is decoded before looking');
     }
+
+    /**
+     * F18 — A PLAIN `grep` SILENTLY SKIPS FOUR OF THESE FIXTURES, AND A `/u` PATTERN WOULD TOO.
+     *
+     * All four PAP captures are Latin-1: `grep -c . <file>` prints nothing and exits 1 because grep
+     * calls them binary, while `grep -ac .` prints 145 and 281. So any grep-based *"N fixtures
+     * scanned, 0 hits"* sweep over this tree is unsound — it reports clean on exactly the files
+     * nobody re-read. That was raised as a METHOD warning about reviewers, and a warning is not a
+     * mechanism: this test is the mechanism.
+     *
+     * Three things are asserted, and the second is the one that will bite someone later. This guard
+     * reads BYTES — `file_get_contents` plus a non-`u` `preg_match` — so it is immune today. Add
+     * `u` to any pattern and PCRE refuses the whole subject as invalid UTF-8: `preg_match` returns
+     * `false`, which this code reads as *no match*, and every non-UTF-8 fixture goes silently
+     * unscanned. A credential guard that fails open on the files a reviewer's grep also skips is
+     * two blind spots stacked on the same files.
+     */
+    public function testTheGuardScansNonUtf8FixturesAndEveryPatternIsByteSafe(): void
+    {
+        // 1. the tree really does carry such fixtures — without this the rest is vacuous.
+        $nonUtf8 = array_values(array_filter(
+            self::fixtureProvider(),
+            static fn (array $row): bool => !mb_check_encoding((string) file_get_contents($row[0]), 'UTF-8'),
+        ));
+
+        self::assertNotSame([], $nonUtf8, 'no non-UTF-8 fixture found — this guarantee would be untested');
+
+        // 2. no pattern may carry the `u` modifier, which would turn those files into silent passes.
+        foreach (self::patterns() as $kind => $pattern) {
+            $modifiers = substr($pattern, (int) strrpos($pattern, '/') + 1);
+            self::assertStringNotContainsString(
+                'u',
+                $modifiers,
+                $kind . ' carries the `u` modifier. preg_match then returns false on a Latin-1 '
+                    . 'fixture — read here as "no match" — so every non-UTF-8 capture goes unscanned.',
+            );
+        }
+
+        // The mechanism, proven on this machine's PCRE rather than asserted: same needle, same
+        // haystack, and only the modifier differs.
+        $latin1 = "Objet : appartement \xE0 Milly-la-For\xEAt\r\nkey=AIzaSyLIVEKEY0123456789abcdefghij\r\n";
+        self::assertSame(1, preg_match('/AIzaSy[A-Za-z0-9_\-]{20,}/', $latin1), 'byte semantics find it');
+        self::assertFalse(@preg_match('/AIzaSy[A-Za-z0-9_\-]{20,}/u', $latin1), 'the `u` twin refuses the subject outright');
+
+        // 3. and the guard itself finds a planted secret in exactly that haystack.
+        self::assertSame(['Google API key'], array_column(self::suspects($latin1), 0));
+    }
     /**
      * THE TAIL LINE (round-3 panel). A 76-column body whose LAST line is shorter than the block
      * regex's floor was decoded WITHOUT that line — and the footer carrying the address is the last

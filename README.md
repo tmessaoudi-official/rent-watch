@@ -203,7 +203,19 @@ sqlite3 state/rent-watch.sqlite3 ".backup state/rent-watch.sqlite3.pre-<v>.$(dat
 docker compose up -d --remove-orphans   # --remove-orphans matters ONCE after 2026-08-30: the rent service was
                                         # renamed scout → rent-scout, and compose leaves the old container RUNNING
                                         # beside the new one otherwise — two rent watchers, every push twice
+bash tools/verify-deploy.sh             # and this is the step that says whether any of it landed
 ```
+
+**`up -d` printing `Started` is not a deployment, so check it.** Both watchers set
+`stop_grace_period: 5m` and the loop stops only after the pass in flight finishes, so a recreate can
+sit for minutes; compose renames the old container while it waits, and twice on 2026-08-31 that
+wedged — once failing outright on `Conflict. The container name … is already in use` with rent-scout
+left in `Created`, once sitting about thirteen minutes. **Neither announced anything**, because
+`docker compose ps` without `-a` omits a service that is not running: the failure renders as a
+shorter list. `tools/verify-deploy.sh` asserts the three things that output cannot show you — every
+declared service has a container and it is running, that container runs the *current* image rather
+than one from three deploys ago, and no hex-prefixed leftover is still holding a name that will kill
+the next recreate. It is read-only, and `tests/test-verify-deploy.sh` is its sabotage test.
 
 The rehearsal step is there because the seen-set is the one file this project documents as
 unrecoverable, and a schema migration is the only routine operation that rewrites it. `.backup` is
@@ -521,9 +533,23 @@ mailbox rather than a page. Subscribe a dedicated mailbox to the portal's own al
 message, and capture it:
 
 ```bash
+php tools/dump-eml.php <sender@portal> 5 var/claude/captures '<gmail label>'   # optional: several at once
 php tools/scrub-eml.php captured.eml tests/fixtures/rent/<portal>/alert.eml you@example.com
-MAILBOX_DIR=tests/fixtures/rent/<portal> php bin/scout --domain=rent doctor --source=<portal>   # force-runs a disabled source
+RENT_SCOUT_DB=$(mktemp -u) MAILBOX_DIR=tests/fixtures/rent/<portal> \
+  php bin/scout --domain=rent doctor --source=<portal>   # force-runs a disabled source
 ```
+
+The **throwaway `RENT_SCOUT_DB` is not optional**: `MAILBOX_DIR` swaps the mailbox and not the
+database, so a fixture-backed run otherwise writes its item count into the live store, where it
+joins the 7-day baseline every real run is judged against. That produced a `SOURCE_BROKEN` alert on
+a premise made entirely of fixture data.
+
+`tools/dump-eml.php` is the faster route to Gmail's *Download original* when several messages from
+one sender are needed at once. It is read-only at the protocol level (`EXAMINE`, `BODY.PEEK[]`), it
+**refuses to write anywhere under `tests/`** — its output is raw and carries the subscriber's
+identity, so the scrubber below is still owed — and its folder argument matters: an alert routed to
+a Gmail label is archived out of `INBOX`, where a search finds nothing and says so in words that
+read exactly like a portal that has sent nothing.
 
 `tools/scrub-eml.php` removes the subscriber's identity — the address, the bounce and reply tokens,
 the ESP feedback ids, the one-click unsubscribe token, every `qs=` tracking value — and **refuses to

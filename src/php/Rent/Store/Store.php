@@ -1767,7 +1767,12 @@ final readonly class Store
     public function pendingDigest(int $limit = self::DIGEST_BATCH): array
     {
         $statement = $this->pdo->prepare(
-            "SELECT dedup_key, source, external_id, url, title, rent_cc, evidence_json, signals_json
+            // `tenure` rides along so the drain can tell a §1 tenure doubt from a row digested for
+            // some other reason: the rollup title claims a regime only when EVERY entry earned it,
+            // and the store is the only place that fact survives a pass. Reading it costs nothing
+            // — it is a column on the row already being fetched — and it is a READ of what was
+            // judged, never a re-judgement (`scout digest` announces, it does not re-classify).
+            "SELECT dedup_key, source, external_id, url, title, rent_cc, evidence_json, signals_json, tenure
                FROM listings
               WHERE outcome = 'DIGEST' AND notified_at IS NULL
               ORDER BY seen_epoch ASC, dedup_key ASC
@@ -1776,7 +1781,7 @@ final readonly class Store
         $statement->bindValue(':limit', max(1, $limit), \PDO::PARAM_INT);
         $statement->execute();
 
-        /** @var list<array{dedup_key: string, source: string, external_id: string, url: ?string, title: string, rent_cc: ?int, evidence_json: ?string, signals_json: ?string}> $rows */
+        /** @var list<array{dedup_key: string, source: string, external_id: string, url: ?string, title: string, rent_cc: ?int, evidence_json: ?string, signals_json: ?string, tenure: ?string}> $rows */
         $rows = $statement->fetchAll(\PDO::FETCH_ASSOC);
 
         return $rows;

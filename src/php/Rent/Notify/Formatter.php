@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Scout\Rent\Notify;
 
 use Scout\Rent\Core\Department;
+use Scout\Rent\Core\DigestCause;
 use Scout\Rent\Core\RawListing;
 use Scout\Core\SourceHealth;
 use Scout\Core\SourceStatus;
@@ -176,10 +177,24 @@ final readonly class Formatter
                 . ($entry['verdict']->reasons === [] ? '' : ' — ' . $entry['verdict']->reasons[0]);
         }
 
+        // The regime clause is EARNED, not assumed. The bin has had two entrances since Track 1f —
+        // an undetermined tenure, and a rent that does not describe the surface it is quoted for —
+        // and a listing taking the second one is typically `LLI` at full confidence. A title
+        // speaking for every entry would then assert as undetermined a regime the classifier
+        // settled. One entry that did not earn the clause removes it for the batch: the entry
+        // bodies below still carry every reason, so the batch says less rather than something untrue.
+        $everyEntryIsATenureDoubt = $entries !== [] && array_reduce(
+            $entries,
+            static fn (bool $carry, array $entry): bool
+                => $carry && $entry['verdict']->digestCause === DigestCause::TENURE_UNDETERMINED,
+            true,
+        );
+
         return new Notification(
             kind: NotificationKind::DIGEST,
             priority: Priority::LOW,
-            title: 'À vérifier : ' . count($entries) . ' annonce(s) au régime indéterminé',
+            title: 'À vérifier : ' . count($entries) . ' annonce(s)'
+                . ($everyEntryIsATenureDoubt ? ' au régime indéterminé' : ''),
             reasons: $lines,
         );
     }

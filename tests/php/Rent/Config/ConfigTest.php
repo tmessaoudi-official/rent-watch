@@ -2070,6 +2070,74 @@ final class ConfigTest extends TestCase
         self::assertNotNull($sources['x']->detailMap);
     }
 
+    /**
+     * A FIELD-MAP CAPTURE REGEX THAT DOES NOT COMPILE IS REFUSED AT LOAD.
+     *
+     * `Selector::captureFrom()` applies it with `@preg_match`, which neither warns nor throws: a
+     * broken pattern returns `false`, is read as *no match*, and the field resolves to `null` for
+     * every item on every pass, for ever. The source keeps returning its usual count, no run fails,
+     * and `SourceHealth` stays green — the In'li `cp` shape, where one dead selector meant the
+     * source matched zero flats while reporting `ok`.
+     *
+     * A broken pattern is a STATE, not an event: every extraction fails for the same reason and no
+     * retry can change it, so it belongs with the load-time refusals rather than with the
+     * per-listing failures that are recorded and counted. `params` patterns have been compile-checked
+     * since round 1; the field maps are the other half of the same surface, and were not.
+     *
+     * The `_comment` half of the config is untouched by this: only a capture is compiled, and only
+     * one that is not a `prose:` reader — the reader check above already owns those.
+     */
+    public function testAFieldMapCaptureThatDoesNotCompileIsRefused(): void
+    {
+        $this->expectException(ConfigError::class);
+        $this->expectExceptionMessageMatches('/ne compile pas/');
+
+        ConfigLoader::sourcesFromArray(['sources' => ['x' => self::htmlSourceWithDetailMap([
+            'map' => ['ref' => '@href', 'url' => '@href', 'cp' => 'a@href => -(\\d{5}/'],
+        ])]]);
+    }
+
+    public function testABrokenCaptureInADetailMapIsRefusedToo(): void
+    {
+        // The detail map is the surface a session is most likely to widen by hand, and it feeds the
+        // description the tenure classifier reads — so a silent null there is §1-adjacent.
+        $this->expectException(ConfigError::class);
+        $this->expectExceptionMessageMatches('/ne compile pas/');
+
+        ConfigLoader::sourcesFromArray(['sources' => ['x' => self::htmlSourceWithDetailMap([
+            'detail_map' => ['description' => '.d => (unclosed'],
+        ])]]);
+    }
+
+    /**
+     * THE COUNTERWEIGHT. Without it the refusal is satisfied by rejecting every capture, which
+     * would break four shipped sources — so the shapes that are in `config/rent/sources.json` today
+     * must still load, `~` included, since `captureFrom()` delimits with `~` and escapes it.
+     */
+    public function testOrdinaryCapturesStillLoad(): void
+    {
+        $sources = ConfigLoader::sourcesFromArray(['sources' => ['x' => self::htmlSourceWithDetailMap([
+            'map' => [
+                'ref' => 'a@href => /([^/]+)$',
+                'url' => '@href',
+                'cp' => 'a@href => -(\\d{5})/',
+                'surface' => '.card => ([\\d.,]+)\\s*m',
+                'rooms' => '.card => (\\d+)\\s*pi[eè]ce',
+            ],
+            'detail_map' => ['description' => '.d => ^(.*)$', 'floor' => '.d => prose:floor'],
+        ])]]);
+
+        self::assertSame(['a@href => -(\\d{5})/'], $sources['x']->map->postcode);
+    }
+
+    /** The SHIPPED config must load — the guard cannot be allowed to reject the real tree. */
+    public function testEveryShippedFieldMapCaptureCompiles(): void
+    {
+        $sources = ConfigLoader::loadSources(self::ROOT . '/config/rent/sources.json');
+
+        self::assertNotSame([], $sources, 'the shipped sources must still load with the guard in place');
+    }
+
     /** @param array<string,mixed> $extra */
     private static function htmlSourceWithDetailMap(array $extra = []): array
     {

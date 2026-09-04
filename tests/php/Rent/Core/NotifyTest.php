@@ -18,6 +18,7 @@ use Scout\Core\Notify\NtfyChannel;
 use Scout\Core\Notify\Priority;
 use Scout\Core\Notify\SendmailTransport;
 use Scout\Core\Notify\SmtpTransport;
+use Scout\Rent\Core\DigestCause;
 use Scout\Rent\Core\RawListing;
 use Scout\Core\Redact;
 use Scout\Core\SourceHealth;
@@ -309,8 +310,8 @@ final class NotifyTest extends TestCase
         // What makes it a digest rather than a second notification stream — and the reason the
         // fail-closed rule can afford to send doubtful listings there at all.
         $n = (new Formatter())->digest([
-            ['listing' => $this->listing(['id' => 'a']), 'verdict' => Verdict::digest(['régime indéterminé'])],
-            ['listing' => $this->listing(['id' => 'b']), 'verdict' => Verdict::digest(['régime indéterminé'])],
+            ['listing' => $this->listing(['id' => 'a']), 'verdict' => Verdict::digest(['régime indéterminé'], DigestCause::TENURE_UNDETERMINED)],
+            ['listing' => $this->listing(['id' => 'b']), 'verdict' => Verdict::digest(['régime indéterminé'], DigestCause::TENURE_UNDETERMINED)],
         ]);
 
         self::assertSame(NotificationKind::DIGEST, $n->kind);

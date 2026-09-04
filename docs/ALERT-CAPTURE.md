@@ -58,6 +58,40 @@ later — a plain forward rewrites the headers and destroys exactly what we need
 mailbox *is* the corpus, and the awkward messages are the valuable ones — the message that reads
 strangely is the one that finds the defect.
 
+### Part A′ — several messages at once: `tools/dump-eml.php`
+
+The route above is the documented one and stays that way: it is the only one that works for a
+mailbox this repo's credentials cannot reach, and it needs nothing installed. `tools/dump-eml.php`
+exists for the case it makes expensive — several messages from one sender, needed together, to
+shape a source against.
+
+```bash
+php tools/dump-eml.php <from-address> [max] [out-dir] [folder]
+php tools/dump-eml.php no.reply@leboncoin.fr 5
+php tools/dump-eml.php support@agorastore.fr 2 var/claude/captures 'car-watch/portails'
+```
+
+It reads `IMAP_HOST` / `IMAP_USER` / `IMAP_PASSWORD` / `IMAP_PORT` from `.env`, and it is **read-only
+at the protocol level** — `EXAMINE` rather than `SELECT`, `BODY.PEEK[]` rather than `BODY[]` — the
+same two choices `ImapMailbox` makes, so no defect on this side can mark the developer's mail as
+read or otherwise modify a real mailbox.
+
+Three things to know before using it:
+
+- **Its output is RAW and therefore UNSCRUBBED.** It carries the subscriber's address and usually
+  their name. Part B is not optional afterwards; this tool is a faster Part A, never a shortcut past
+  Part B.
+- **It refuses to write anywhere under `tests/`**, and that refusal is the reason it can be used at
+  all — the one-step path from a mailbox to a committed fixture is how both of this repo's leaks
+  would happen again. The refusal covers the bare `tests`, a trailing slash, an absolute path, and
+  anything reaching back in through `..`; and an out-dir it cannot resolve is refused rather than
+  guessed at. `tests/test-dump-eml.sh` is the sabotage test for exactly that, and the tool had
+  neither docs nor test for its first weeks, which is what this section closes.
+- **The FOLDER argument matters and defaults to `INBOX`.** An alert routed to a Gmail label has been
+  archived out of the inbox, so a search there finds nothing and reports `aucun message` — which
+  reads exactly like a portal that has sent nothing. `IMAP_MAILBOX` / `CAR_IMAP_MAILBOX` in `.env`
+  name the folders the sources themselves read.
+
 ---
 
 ## Part B — scrubbing it

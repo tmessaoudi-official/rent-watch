@@ -178,7 +178,8 @@ final readonly class FieldMap
                 // can never run, and refused for the same reason.
                 $capture = strpos($path, '=>');
                 if ($capture !== false) {
-                    $reader = Prose::readerIn(substr($path, $capture + 2));
+                    $tail = substr($path, $capture + 2);
+                    $reader = Prose::readerIn($tail);
 
                     if ($reader !== null && !in_array($reader, Prose::readerNames(), true)) {
                         throw ConfigError::at(
@@ -189,6 +190,38 @@ final readonly class FieldMap
                                 $reader,
                                 Prose::READER_PREFIX,
                                 implode(', ' . Prose::READER_PREFIX, Prose::readerNames()),
+                            ),
+                        );
+                    }
+
+                    // A CAPTURE THAT IS NOT A READER IS A REGEX, AND IT MUST COMPILE.
+                    //
+                    // `Selector::captureFrom()` applies it with `@preg_match`, which neither warns
+                    // nor throws: a broken pattern returns `false`, is read as *no match*, and the
+                    // field resolves to `null` for every item on every pass, for ever. The source
+                    // keeps returning its usual count, no run fails, and `SourceHealth` stays green
+                    // — the In'li `cp` shape, where one dead selector meant a source matched zero
+                    // flats while reporting `ok`.
+                    //
+                    // A broken pattern is a STATE rather than an event: every extraction fails for
+                    // the same reason and no retry can change it, so it belongs with the load-time
+                    // refusals, not with the per-listing failures that are recorded and counted.
+                    // `params` patterns have been compile-checked since round 1; the field maps are
+                    // the other half of that same surface and had nothing.
+                    //
+                    // DELIMITED EXACTLY AS THE ADAPTER WILL DELIMIT IT — `~…~u`, with `~` escaped —
+                    // because a check that compiles a different string from the one that runs can
+                    // pass on a pattern the adapter then rejects, which is a guard that reads as a
+                    // second line of defence and is not one.
+                    $pattern = trim($tail);
+                    if ($reader === null && $pattern !== '' && @preg_match('~' . str_replace('~', '\~', $pattern) . '~u', '') === false) {
+                        throw ConfigError::at(
+                            $r->pointer() . '.' . $key . '[' . $i . ']',
+                            sprintf(
+                                'expression régulière invalide « %s » — elle ne compile pas, donc '
+                                . 'elle ne capturera jamais rien et le champ restera vide à chaque '
+                                . 'passe, sans qu’aucune exécution n’échoue',
+                                $pattern,
                             ),
                         );
                     }

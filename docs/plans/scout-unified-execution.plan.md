@@ -766,6 +766,130 @@ read-only) and the merged prose as one review deep.
   brief to the 100 % of everything ! not just this milestone or recent work !!"*. So `A5`/`B1`–`B3`
   are in THIS plan, and the done-when spans the product, the two on-hold tracks and the register.
 
+- [2026-09-04 09:30] RECORD (**REDEPLOYED FIRST**, before any P2 work): the deployed image was
+  `2026-09-02T12:33:31Z` and the newest `src/` commit `581cbce` was `2026-09-02T17:41:52Z`, so the
+  §1 P0 from round 1 — `3eca42f`, the flat the store holds as PLS being vetoed when the portal
+  re-advertises it under a new ad id — was **certified and unarmed in production for a day and a
+  half**, reachable on `bienici`, `leboncoin` and `pap`, the three link-keyed portals where a
+  re-advertisement mints a new `external_id`. Rebuilt, backed the seen-set up, rehearsed the
+  migration against a `.backup` copy (rent v12/WAL, unchanged), stopped, redeployed; image now
+  `2026-09-04T07:28:46Z`, both watchers up. **This is the third time the *green, pushed and
+  deployed are three different things* entry has been paid for**, and the interval was found by
+  the goal-brief's own stop condition rather than by anything in the tree.
+
+- [2026-09-04 10:05] RECORD (**C2 round-1 P2 batch — 8 of the 9 findings closed**; only COR-F5, the
+  twin doubt, remains). Each carries its own executable evidence and, where the guarantee is silent,
+  its own ledger case. Suite **2691 tests / 10 435 assertions** (from 2679),
+  `test-sabotage-applies` **656 expressions, all still applying** (from 651), drift
+  `P0=0 P1=0 P2=0`, every guard green.
+
+  - **COR-F4** — the surface reader had no LEFT anchor, so a digit mid-token beat the real figure
+    below it. **The lens graded this its softest finding, on the grounds that no real payload
+    carries `m2` in a path, and the store says otherwise.** Trialled through the real `prose()`
+    over all 2 579 stored evidence bodies: **4 rows change, every one a recovery**, and the poison
+    is Bien'ici's own photo host `d2m2j20yzublln.cloudfront.net` — `2m2` reads as 2 m². Four flats
+    of 41, 54, 65 and 59 m² are held at **2 m²**, so three were silently rejected by
+    `min_surface_m2: 50`. The distribution id is on every photo URL from that CDN, so it is
+    structural rather than four unlucky cards. **The measurement was almost recorded nine times too
+    large**: against the RAW body it changes 41 rows, but 37 are SeLoger tokens `9ea9d77`'s query
+    strip already closed — measuring a repair against the pre-repair baseline is this repo's own
+    *true number attached to an invented cause*, caught before it was written down.
+  - **COR-F3** — the *à vérifier* rollup title spoke for every entry while the bin had grown a
+    second entrance. A listing digested for an implausible rent-to-surface ratio is typically `LLI`
+    at full confidence, so announcing it *au régime indéterminé* asserts as doubtful a regime the
+    classifier settled. New `Core/DigestCause`, with **no default on `Verdict::digest()`** so a
+    future third route cannot inherit the §1 clause by omission; the clause is earned by every
+    entry or by none. The drain reads the cause off the STORED tenure (`pendingDigest()` now selects
+    it) rather than re-forming a verdict — `OTHER`, never naming the price branch, because the store
+    records that a row is not a tenure doubt and nothing about which route it was.
+  - **CMP-1** — the ntfy badge test used SINGLE-quoted `\u{}`, so it asserted a 21-byte ASCII
+    stand-in no production path can emit. Now double-quoted, and a ledger case strips non-ASCII in
+    `headerSafe()`: before the fix that sabotage was undetectable, because an ASCII stand-in
+    survives any header sanitiser.
+  - **F-R2 + F-R3 + CMP-2 (P2-3)** — `tools/dump-eml.php`, the tool that had no docs and no test.
+    Its "never under `tests/`" guard concatenated `realpath()`'s `false`, so `var/claude/captures`
+    on a tree without `var/claude` compared as the literal `/captures`: **vacuous on its own default
+    out-dir**. It now walks up to the deepest existing ancestor, folds `.` and `..`, and compares as
+    a prefix with its separator, so the bare `tests` and `tests/` are refused like anything beneath
+    it; an unresolvable destination is refused rather than guessed. And LOGIN is sent by a
+    **zero-argument closure**: PHP prints the first 15 characters of every call argument in an
+    uncaught trace, and nothing leaked only because the real `IMAP_USER` is long enough to eat the
+    budget first. `tests/test-dump-eml.sh` (17 checks) proves the trace mechanism on this machine's
+    own PHP first — an argument leaks, a `use` binding does not — then ties the tool to it.
+    **Its own docblock tripped its own structural grep**, which is why that check strips comment
+    lines: the documentation of a guarantee must not read as its violation.
+  - **CMP-2** — the frozen In'li payload was the OLD template, so the 2026-09-02 removal of the
+    card `cp` had **no coverage in either direction**: restoring `a@href => -(\d{5})/` extracts
+    cleanly from that capture and the whole suite stays green. A removal nothing can redden is a
+    removal that gets undone. Captured the current page (robots re-read first — unchanged,
+    `Disallow: /espace-membre/` only — HTTP 200, In'li's live Google Maps key replaced with the
+    documented placeholder before the file was written) and **APPENDED it** as
+    `search-2026-09-04-nouveau-gabarit.html`, following the PAP `nouveau-gabarit` precedent rather
+    than substituting: every existing assertion keeps its ground truth and the old template stays
+    available as the thing the new one is contrasted against. Measured on the two files: the old
+    carries **19** postcode-bearing hrefs and **0** of the new shape, the current **0** and **24**.
+    `InliCurrentTemplateTest` pins the contrast, the shipped map's empty `postcode`, the detail map
+    as its replacement, and the stated cost — an unhydrated card carries no postcode, so in region
+    mode it cannot match until hydrated. **It deliberately asserts no card COUNT**: a live search
+    page's inventory changes daily, and an exact count reddens on a quiet Tuesday rather than on a
+    defect.
+  - **CMP-4** — F19's row cited two line numbers that had moved twice in a fortnight. Re-cited by
+    SYMBOL, and the row now carries the drift as its own record.
+  - **F18** — the method warning about grep is a mechanism now, and the guard's own `u`-modifier
+    hole is closed with it. See the register row.
+  - **The ledger run itself taught two things worth more than the cases.** First, **a sabotage whose
+    mutation does not PARSE proves nothing in either direction**, and the ledger says so in those
+    words rather than counting it as undetected — the drain case dropped a closing parenthesis
+    (`$cause = (true` for `$cause = (true)`), so the suite never ran. `test-sabotage-applies` cannot
+    catch that: it checks an expression still MATCHES, not that its output compiles. Second, **a
+    case that times out is indistinguishable from one that is undetected**, and on this shared box
+    that is the commoner cause: an unrelated project's PHPUnit run pushed the load average to **27**
+    while this ran, and the `headerSafe` case sat at 256 s of a 300 s budget before passing. It was
+    detected on a longer budget. Check `uptime` before believing a lone timeout.
+  - **Deep row 32** — a field-map `=> regex` capture had no load-time compile check, while every
+    `params` pattern has had one since round 1. `Selector::captureFrom()` applies it with
+    `@preg_match`, so a broken pattern nulls the field for every item on every pass while the source
+    returns its usual count and `SourceHealth` stays green — the In'li `cp` shape. A broken pattern
+    is a STATE, so it throws at load. **Checked for the symmetric surface this repo keeps paying
+    for**: the car field map is plain dotted paths with no captures at all, and
+    `VehicleSourceLoader` already compile-checks its patterns and `item_url_pattern`, so there is no
+    second surface here — verified rather than assumed.
+
+- [2026-09-04 10:10] RECORD (B1–B3 inputs **verified present**, so those rows are buildable rather
+  than waiting): `tools/dump-eml.php` against the live mailbox returns three recent alerts for each
+  of `contact@capcar.fr` (09-01, 09-02, 09-03), `info@mail-alerte.lacentrale.fr` (09-03 ×2, 09-04)
+  and `support@agorastore.fr` (09-01, 09-02, 09-03). **CapCar is n=3, not the n=1 the B1 entry
+  warns about** — the second and third alerts are the regression tests that entry asked for. Two
+  shape facts measured while confirming, both of which change the build: **CapCar is HTML-ONLY**
+  (`text/html`, no `text/plain` alternative — the leboncoin shape, so `harvestHrefs()` is what makes
+  its links reachable at all), while La Centrale and Agorastore both carry a real `text/plain`
+  part. All three route every link through a per-recipient tracking host (`sendibt3.com`,
+  `clicks.mail-alerte.lacentrale.fr`, `email.alerts.agorastore.fr`), so all three are
+  content-keyed, and the scheme must be chosen BEFORE the source is first enabled — nothing
+  migrates a stored row between key schemes. The captures are raw in gitignored
+  `var/claude/captures/`; `tools/scrub-eml.php` is still owed before any becomes a fixture.
+
+- [2026-09-04 10:20] AGREED (**COR-F5's discriminator**, settling how the 2026-09-03 ruling is
+  built). The ruling is *a persisted UNDETERMINED twin doubt is cleared by POSITIVE EVIDENCE ONLY —
+  a tier-5 source default may never overwrite a recorded `UNKNOWN`, only a tier 1–4 signal can*. It
+  needs a mechanism, because `twin_tenure` carries a tenure and a source and **no tier and no
+  confidence**, so "positive evidence" is not readable from what is stored. Two options were
+  available: add a tier column, or gate on the INCOMING reading's confidence. **The gate is the
+  incoming confidence, at ≥ 60.** That is not a new number — it is §1's own fail-closed threshold,
+  the one that already sends a sub-0.6 classification to the digest — and it puts a tier-5 source
+  default (50) below the line while every tier-1/2 label (90) clears it. A tier column would be a
+  second encoding of the same fact, free to drift from the first. The confidence is already in
+  hand at the call site: `$twinReading` is seeded from a `Classification`, which carries
+  `confidenceBp`, and the fixed point copies the whole entry, so it propagates with the tenure it
+  belongs to rather than being recomputed.
+
+  **Precedence, stated in full so the three rules cannot be read as one:** an EXCLUDED incoming
+  reading always writes and is durable for the row's life (unchanged, developer ruling
+  2026-08-30); a recorded `UNKNOWN` is TIGHTENED by anything more restrictive without a confidence
+  bar; and only the *clearing* direction — `UNKNOWN` → eligible — is gated. So the change can only
+  ever make the store more careful, never less, which is the direction §1 requires and the reason
+  it is safe to land without re-opening the 2026-08-30 ruling.
+
 ---
 
 ## Fragile implementations register (the developer asked; keep this list honest)
@@ -802,7 +926,7 @@ read-only) and the merged prose as one review deep.
 | F11 | Startup refusal reachable only under `--watch` | *FIXED 2026-08-31* — it was also consumed above the `isDue()` test, so a restart inside the beat interval destroyed it unreported; `doctor` now reports it without consuming | round-4 fix commit |
 | F23 | SeLoger `Baisse de prix` yields an EMPTY title | **CLOSED 2026-09-01** (`d60a183`) — the pattern refused any candidate CONTAINING a `€`; it now refuses only one that IS a price. Measured over the store: 552 unchanged, 2 gained a title, 0 changed, 0 lost. Template frozen as fixtures 004/005 | — |
 | F24 | A SeLoger card with no `pièces` line has no title anchor at all | **CLOSED 2026-09-01 (T5B-9).** The captured card of that shape was already in the store — schema v7 keeps the card text, so no Gmail capture was needed: both empty-title rows are room rentals whose title line is present and readable, sitting between the price line and a `140 m²` line. `title_pattern` gained a SECOND ANCHOR on the surface line (`m²` and the ASCII `m2`, since 128 stored titles write it). Trialled over all 619 stored SeLoger cards before shipping: **617 unchanged, 2 gained, 0 changed, 0 LOST**, the two gained being exactly the victims — and both are now rejected through the SHIPPED criteria, asserted with the description held empty so `\bcolocation\b` cannot deliver the verdict the title is supposed to. **Confirmed LIVE on the deployed image the same day**: `doctor --source=seloger` over **405 live cards names no `title_pattern` miss at all** (the log lists only patterns whose miss count is non-zero), so the anchor read every one and never fell back to the subject. That is the post-deploy evidence F9 asks for, arriving on the first pass rather than waiting for the next room-rental alert. Was: **LIVE, and the remaining half of F10** — the anchor IS the `pièces` line, so a card stating no room count (a room rental, a parking, an atypical ad) yields `''` whatever the `€` rule does. Two such rows; both REJECTED, by the description-matching `exclude_patterns` rather than the title ones — luck rather than a guard. Needs a SECOND anchor, and a captured card of that shape to measure one against | closed — T5B-9; the second anchor ships |
-| F25 | `docker compose up -d` wedges on recreate and leaves a watcher DOWN | **LIVE, twice on 2026-08-31.** `stop_grace_period: 5m` + a renamed old container = the orchestration stalls; once it then failed outright on `Conflict. The container name … is already in use`. rent-scout was down ~13 min and nothing said so | see the redeploy note below |
+| F25 | `docker compose up -d` wedges on recreate and leaves a watcher DOWN | **LIVE, twice on 2026-08-31.** `stop_grace_period: 5m` + a renamed old container = the orchestration stalls; once it then failed outright on `Conflict. The container name … is already in use`. rent-scout was down ~13 min and nothing said so | **CLOSED 2026-09-04 — and the prose recipe was not the closure.** The redeploy note below has existed since 08-31 and the failure is precisely one a human reading `up -d`'s output cannot see, so a note is the wrong instrument. `tools/verify-deploy.sh` asserts the three things that output hides: every service compose declares has a container AND it is running (`ps -a`, because without `-a` a down service is simply absent — the silent-omission shape hard rule 2 is about, one layer into the deployment); that container runs the CURRENT image rather than one from three deploys ago (`src/` is baked in, so a green tree says nothing about what is executing); and no hex-prefixed leftover still holds a name, which is what kills the NEXT recreate rather than this one. Read-only. `tests/test-verify-deploy.sh` is its sabotage test — 7 cases through a stub `docker`, counterweight first, and a missing image exits 2 *"build it"* rather than 1 *"watcher down"*, because collapsing those two would make a forgotten build read as a broken watcher. **Its own first draft leaked state between cases** (`PS_ROWS=x out="$(run)"` with no command is an assignment list, not a temporary environment) so two cases passed on a failure they had not asked for, and a `${SERVICES:-…}` knob was inert against an empty value — both found by running it, both fixed. Wired into CI and pinned by `test-ci-workflow.sh`. Verified against the live deployment the same day |
 | F26 | A fixture-backed `doctor` writes its run into the LIVE store | **HIT 2026-09-01, and it is the DOCUMENTED workflow that does it.** `MAILBOX_DIR=` swaps the mailbox, not the database, so a fixture run's item count joins the 7-day baseline every live run is judged against — it made car `leboncoin` report `broken` on a 5-annonce premise made of fixtures. Fixed in CLAUDE.md: every documented offline proof now pairs with a throwaway DB | closed, guidance fixed |
 | F12 | Car heartbeat inside the pass closure | *FIXED 2026-08-31* — a throwing pass silenced the watcher entirely, the one state the beat exists to make visible | round-4 fix commit |
 | F13 | Scrubber `To:`/`Cc:` display name, and any base64 fold ≤19 columns | *FIXED 2026-08-31* — two committed fixtures had shipped the subscriber's real name; a 19-column fold was written and reported `scrubbed` with the address one `base64 -d` away | round-4 fix commit |
@@ -810,8 +934,8 @@ read-only) and the merged prose as one review deep.
 | F15 | The refusal note is consumed at beat-COMPOSE time, not on delivery | *FIXED `ec17b74`* — An undelivered beat destroys it, and the commonest refusal IS a channel misconfiguration — so the beat that should carry the note is the one most likely to fail | closed — `ec17b74`, commit verified in the tree 2026-09-02 |
 | F16 | Cron `--once` never clears the refusal note | *FIXED `ccc8498`* — `takeLastRefusal()` is called only in `watch()`, so `doctor` reports a fixed outage for ever while saying it will be carried on the next beat | closed — `ccc8498`, commit verified in the tree 2026-09-02 |
 | F17 | Car `doctor` has no `pendingRefusal` | *FIXED `4503834`* — The gap round 4 closed for rent is fully open on car (`grep -c pendingRefusal`: rent 3, car 0) | closed — `4503834`, commit verified in the tree 2026-09-02 |
-| F18 | A plain `grep` silently skips the Latin-1 PAP fixtures | `grep -c .` prints nothing and exits 0; `grep -ac .` prints 145. Any grep-based "N fixtures scanned, 0 hits" sweep is unsound on this tree — use a byte-level scanner | **OPEN — round 5, O6 (method)** |
-| F19 | A §1 guard inside `twinClassification()` covered by neither the suite nor the ledger | **CLOSED — verified 2026-09-01.** The ledger case exists: `tests/sabotage-check.sh:3756` mutates `Pipeline.php:329`'s `groupExcludedTenure($key)` to `null`. This row read FIXED *and* OPEN at once, which is the R6-8 breach; a session re-verified it from scratch because of that. *FIXED `43778bd`* — `Pipeline.php:829`'s `clusterClassification(..., groupExcludedTenure($key))` is the only thing reaching an excluded tenure on an ABSORBED SIBLING OF THE TWIN's cluster. Mutating it to `null` leaves all 2 339 tests green AND pushes the agency copy of a PLS flat (proven by execution). Round 4 added ledger cases for the twin fact's write-across and read-across; this third surface has none — the same "one of two surfaces" shape as the P0 it was fixing | closed — `43778bd`, commit verified in the tree 2026-09-02; the ledger case is `tests/sabotage-check.sh` |
+| F18 | A plain `grep` silently skips the Latin-1 PAP fixtures | `grep -c .` prints nothing and exits **1**; `grep -ac .` prints 145 on the two 08-26 captures and 281 on the two 08-31 ones (re-measured 2026-09-04 — the original cell said "exits 0", which is what makes the sweep read as *scanned, clean* rather than *not scanned*). Any grep-based "N fixtures scanned, 0 hits" sweep is unsound on this tree — use a byte-level scanner | **CLOSED 2026-09-04.** A method warning is not a mechanism, so it is one now: `FixtureSecretsTest::testTheGuardScansNonUtf8FixturesAndEveryPatternIsByteSafe` asserts the tree really carries non-UTF-8 fixtures (else the guarantee is untested), that **no credential pattern carries the `u` modifier** — with `u`, PCRE refuses a Latin-1 subject outright, `preg_match` returns `false`, this code reads that as *no match*, and every one of those files goes silently unscanned — and that a planted key in a Latin-1 haystack is still found. The `u`-versus-byte difference is proven on this machine's own PCRE rather than asserted. Two blind spots were stacked on the same four files; the guard's is closed and reviewers still owe `grep -a` |
+| F19 | A §1 guard inside `twinClassification()` covered by neither the suite nor the ledger | **CLOSED — verified 2026-09-01; citations repaired 2026-09-04 (C2 r1 CMP-4).** The ledger case exists: *"the pipeline veto reads only THIS pass's harvest (a missing sibling launders the flat)"* mutates the `groupExcludedTenure()` argument of `Pipeline::clusterClassification()` to `null`. **Cited by SYMBOL, not by line, and that is the finding this row now carries its own record of:** it named `tests/sabotage-check.sh:3756` and `Pipeline.php:829`, and by the time a lens checked them the case had moved to 3837 and then to 3874 in the same fortnight, while `clusterClassification` was at 335/418 rather than 829. Two of three citations stale, in a register whose stated purpose is that its cells match the tree, and against this repo's own rule that a symbol survives an edit above it while a line number does not. This row read FIXED *and* OPEN at once, which is the R6-8 breach; a session re-verified it from scratch because of that. *FIXED `43778bd`* — the judging loop's `clusterClassification($classification, groupExcludedTenure($sighting->dedupKey))` is the only thing reaching an excluded tenure on an ABSORBED SIBLING OF THE TWIN's cluster. Mutating it to `null` leaves all 2 339 tests green AND pushes the agency copy of a PLS flat (proven by execution). Round 4 added ledger cases for the twin fact's write-across and read-across; this third surface has none — the same "one of two surfaces" shape as the P0 it was fixing | closed — `43778bd`, commit verified in the tree 2026-09-02; the ledger case is `tests/sabotage-check.sh` |
 | **F20** | **Neither documented repair route for an over-merge/over-link actually works, and no command can re-open a durably-excluded row** | The judged verdict (carrying the group's or twin's excluded tenure) is written into the row's OWN `tenure`, which round 4 then made durable — so a veto is laundered into the row's own reading. `staleVerdicts()`/`pendingDigest()`/`replay` all skip it. Q39 corrected; the rejection reason also MISATTRIBUTES the PLS to "a previous reading of THIS listing" when it was read on the other track | **OPEN — round 5 correctness** |
 | F21 | An unrecognised `tenure` string silently releases a durable excluded reading | *FIXED `76251b4`* — it released the row's own reading, the group veto AND the twin veto together. `decodeTenure()` now refuses a non-empty value that does not decode; a NULL column still means nothing was said | closed |
 | F27 | **The extraction-miss signal reaches ONE adapter of five, across both domains** | **LIVE, and it is the fix for F3 landing on one of several symmetric surfaces — the repo's named recurring defect, committed by the fix for the finding that names it.** `grep -c PatternMiss`: `EmailAlertSource` 5, `HtmlSource` 0, `JsonSource` 0, `DetailHydrator` 0, `VehicleEmailSource` 0. So inli, cdc_habitat, cityloger, logirep and all three car sources count nothing — a silently-null CSS selector or JSON path is the same failure as a missed regex. Measured live: **13 of 99 ParuVendu rows carry `body`+`fuel`+`year`+`mileageKm` all null** (one `facts_pattern` miss, identical count on all four fields) while `doctor` reports `ok · 3 annonces`. Cityloger carries 9 null surfaces of 60, **two re-sighted today**, cause undecidable from the store | **CLOSED 2026-09-02** — car half `78ff21a`, rent half Track 6-A3. (The census in this cell names `JsonSource`, a file that does not exist; the class is `HttpJsonSource`, and its count was 0 too — an empty grep reading as a measured zero) |
@@ -878,6 +1002,15 @@ U5. Commit (`docs: unify all plans into scout-unified-execution.plan.md, archive
 
 ## Track 0 — Finish certifying `b8a1687` (before any Track 1 code except 1a)
 
+> **CLOSED. THIS SECTION IS A RECORD, NOT A TO-DO** (banner added 2026-09-04, Deep row 34). Its
+> three steps all ran: the filtered ledger, panel rounds 4 and 5 frozen at `b8a1687` and its fix
+> commits, and the developer's ruling at the outcome gate. Everything after it — Tracks 1 through 6
+> and the C2 round now in flight at `ede198e` — is downstream of that close. **Do not re-run these
+> steps.** Two numbers in them have also drifted and are kept verbatim rather than silently
+> refreshed, because the instruction they carry is the durable part: the filter selects *"6 of
+> 574"* labels and the ledger now holds **656**, so a future filtered run must re-derive its own
+> denominator before trusting any "0 undetected" — which is exactly what step 1 tells you to do.
+
 1. Filtered sabotage ledger, six cases (record said five; it is six — five added + one modified
    expression):
    ```
@@ -898,6 +1031,13 @@ U5. Commit (`docs: unify all plans into scout-unified-execution.plan.md, archive
 ---
 
 ## Track 1 — Defects found 2026-08-30/31 (own milestone, own certification, AFTER Track 0 closes)
+
+> **LANDED. THIS SECTION IS A RECORD, NOT A TO-DO** (banner added 2026-09-04, Deep row 34). Every
+> item below shipped and is inside the span C2 round 1 is reviewing (`7765997..ede198e`, 59 commits,
+> 39 touching `src`/`config`/`tests`). The sequencing paragraph that follows describes an ORDER that
+> has already been executed — read it as provenance for why the commits sit in that order, not as an
+> instruction to start. The one thing still owed from this track is **1f's `min_price_per_m2`
+> follow-through**, and even that is now only its digest-title half, closed 2026-09-04 as COR-F3.
 
 **Sequence within Track 1: Track 2 step 0 (the scrubber fix) lands as the FIRST commit of this
 milestone** — the 1g and 1h fixture captures depend on it, and it is a code commit (tool + test),
@@ -1069,7 +1209,15 @@ flat losses.
 The exhaustive candidate investigation lives in `docs/plans/archive/scout-rename-and-car-domain.plan.md`
 (dated 2026-08-26→29) — measurements stand, execute from here.
 
-0. **Scrubber fix FIRST (prerequisite for every new capture, incl. 1g/1h fixtures)**:
+0. **DONE — `c95ddb8` and the commits around it, and this step now has THREE layers rather than the
+   one it asks for** (banner 2026-09-04, Deep row 34). The `to` entry is in `$drop`;
+   `tests/test-scrub-eml.sh` exists and is 51 checks, wired into CI; and the guarantee was
+   afterwards found to be the wrong one — *"the address is absent"* passes on a file the address is
+   one `base64 -d` away from, so the scrubber now decodes base64url runs and quoted-printable
+   **before** it looks, and `FixtureSecretsTest` decodes QP and base64 bodies too. The two ParuVendu
+   fixtures were re-scrubbed. **History still carries the blobs** — hard rule 7's stated cost, the
+   developer's call. Kept verbatim below because the invocation line is still the one to copy.
+   ~~Scrubber fix FIRST (prerequisite for every new capture, incl. 1g/1h fixtures)~~:
    `tools/scrub-eml.php`'s `$drop` list contains `delivered-to` but not `to` — the `To:` header
    survives with only the address masked (and only when an address argument is passed at all;
    invoking without one exits 0 printing "scrubbed" while doing nothing). Add `to` to `$drop`;
@@ -1338,12 +1486,21 @@ Two findings that ARE real:
 
 ## Track 4 — Next milestone (design first, do not build blind)
 
+> **BOTH ITEMS SHIPPED. THIS SECTION IS A RECORD, NOT A TO-DO** (banner added 2026-09-04, Deep row
+> 34). Its gate — *"after Track 0 closes and Track 1 lands"* — was satisfied, and both items are
+> inside the span C2 round 1 is reviewing. The vehicle tripwire landed 2026-08-31 as ONE hook
+> covering both domains (22 checks in `tests/test-vehicle-guard.sh`, wired into CI); the store split
+> landed 2026-09-01 as `Core/RunStore` (`4d49eda`, `bdffa44`). What is worth carrying forward from
+> the split is not the plan but its scars, and they are recorded in `CLAUDE.md` § Gotchas: 39 of 607
+> ledger expressions went inert because they target code INSIDE moved method bodies and so name no
+> method, which the obvious "which expressions mention a moved method name?" query answered as **1**.
+
 After Track 0 closes and Track 1 lands:
 
 - `tests/test-vehicle-guard.sh` — the §1 tripwire (`tenure-guard.sh`) greps housing vocabulary
   only; the car domain's excluded-vehicle classifier has no tripwire. Same must-fire /
-  must-stay-silent halves as `tests/test-tenure-guard.sh`.
-- Generic-store split: `VehicleStore` composes the rent `Store` directly.
+  must-stay-silent halves as `tests/test-tenure-guard.sh`. **DONE 2026-08-31.**
+- Generic-store split: `VehicleStore` composes the rent `Store` directly. **DONE 2026-09-01.**
 
   **THE DESIGN PASS IS DONE (2026-09-01), AND IT SHRANK THE ITEM BY AN ORDER OF MAGNITUDE.** This
   entry used to read: *38 files reference the rent Store; **93 sabotage-ledger expressions** are
@@ -1678,7 +1835,16 @@ tool/guard) and say which ones the fix covers.**
 
 ### 6-A — live-risk fixes (first: A1 and A2 are live loss/risk today)
 
-- **A1 In'li degradation** (audit N1). 23 of 94 passes failed 2026-09-01 (20 s connection
+- **A1 In'li degradation** (audit N1) — **DONE `56437d9`.** Route (a) was taken, with the
+  counterweight run the entry demands: a SECOND, one-day window at a 20 % ratio beside the
+  seven-day 30 % one, because a source degrading over hours never moves a seven-day denominator.
+  It needs ≥ 20 runs in that day, so it stays deliberately inert on a sparse `--once` deployment
+  where one failure of four is 25 % and means nothing — a scope limit, not a hole, and asserted as
+  its own test. Measured against every other source rather than fitted to In'li: all the healthy
+  ones sat at 0.0 %, and In'li's own history would have fired on 09-01 and no earlier day.
+  Recovered to ~1.4 % afterwards. The five knobs are documented in `docs/OPEN-QUESTIONS.md`, whose
+  table had drifted and was re-derived from the code 2026-09-04.
+  ~~23 of 94 passes failed 2026-09-01~~ (20 s connection
   timeouts + one bare HTTP 302 on the index), climbing 2→11→12→23/day; health `ok` throughout
   because interleaved passes still return ~165 items. Investigate FIRST, fix second: read the
   302's `Location` once (one request, hard rule 5 posture unchanged), check whether the timeouts
@@ -1686,11 +1852,22 @@ tool/guard) and say which ones the fix covers.**
   decide between (a) a failure-RATE health signal (N% failed over 24 h — new verdict, needs its
   own counterweight run showing sources it does NOT fire on), (b) pacing changes, (c) nothing but
   the report. A timeout increase without measurement is the anti-bandaid gate's named case.
-- **A2 car loader allow-list** (audit N4/C1). Port the rent side's EMAIL_ALERT_PARAMS-style
+- **A2 car loader allow-list** (audit N4/C1) — **DONE `413f38e`.** The allow-list is per TYPE and
+  `UNREAD_PARAMS` is kept as its own list rather than deleted, so the day an adapter learns to read
+  one of those keys the compile-check is already there and only that line moves.
+  ~~Port the rent side's EMAIL_ALERT_PARAMS-style~~
   allow-list refusal to `VehicleSourceLoader`: any param key no car adapter reads is a
   `ConfigError` naming the file. The docblock already promises this; make it true. One
   table-driven test; also cover the ~21 untested car refusals while in the file (audit N10).
-- **A3 ListingMapper bundle** (F27b + audit N5 + N6). One pass over the one funnel: (1) instrument
+- **A3 ListingMapper bundle** (F27b + audit N5 + N6) — **HALVES 1 AND 2 DONE `2ab3245`; HALF 3 IS
+  THE ONLY PART OF TRACK 6-A STILL OPEN.** Half 1 answered the cityloger question with data and
+  found its real cause (a SCOPE miss: the page states `65 m2` on line 221, the selector opens at
+  268). Half 2 shipped with its §1 counterweight. **Half 3 — the rent plausibility band on mapped
+  rents — is genuinely open**, verified 2026-09-03 rather than assumed: the band lives in
+  `EmailAlertSource` and neither `ListingMapper` nor `Payload` carries one, so the 7 stored history
+  rows at 119–290 € that came through the html path are still unbanded. Deferred past the C2 panel
+  by developer ruling (2026-09-03) so the reviewed span stops growing.
+  ~~One pass over the one funnel~~: (1) instrument
   `ListingMapper` with `PatternMissLog` so inli/cdc_habitat/cityloger/logirep and `DetailHydrator`
   count null-yielding selectors/paths — this finally answers cityloger's 9-null-surfaces-of-60
   question with data; (2) make `$map->tenureField` actually read on the JSON path (it is inert
@@ -1726,6 +1903,19 @@ tool/guard) and say which ones the fix covers.**
   of "~7 REJECTs" was right by coincidence: 7 is the LOST count, and there are 13 rejects in all.
 
 ### 6-B — new car sources (payloads banked in Gmail; build offline)
+
+> **INPUTS RE-CENSUSED 2026-09-04 AND ALL THREE ARE PRESENT — plus two shape facts that change the
+> build.** `tools/dump-eml.php` against the live mailbox returns three recent alerts each for
+> CapCar (09-01, 09-02, 09-03), La Centrale (09-03 ×2, 09-04) and Agorastore (09-01, 09-02, 09-03).
+> **CapCar is n=3, not the n=1 its entry warns about**, so the regression tests that entry asks for
+> already exist. **CapCar is HTML-ONLY** — `text/html`, no `text/plain` alternative — which is the
+> leboncoin shape: every URL lives in an `href`, so `EmailMessage::harvestHrefs()` is what makes its
+> links reachable at all, and a config-only build would have produced a source with zero links and a
+> permanently quiet market. La Centrale and Agorastore both carry a real `text/plain` part. All
+> three route every link through a per-recipient tracking host (`sendibt3.com`,
+> `clicks.mail-alerte.lacentrale.fr`, `email.alerts.agorastore.fr`), so all three are content-keyed
+> — **and that must be settled before the first enabled pass**, because nothing migrates a stored
+> row between key schemes and switching later re-notifies the whole backlog.
 
 - **B1 CapCar** (`contact@capcar.fr`, first real alert 2026-09-01 18:00). Structured labelled
   fields per card (`Marque/Modèle/Finition/Motorisation/Carburant/Boîte/Année/Kilométrage/Prix`),
@@ -1821,7 +2011,38 @@ tool/guard) and say which ones the fix covers.**
 | 34 | Deep — plan track sections stale for Tracks 0 1 2-step0 4 and 6-A1/A2/A3 | M | todo | - | docs/plans/scout-unified-execution.plan.md |
 <!-- /progress-block -->
 ### Blocked
+
+- **Step 12 — 6-B4 AutoScout24.** Blocked on an INPUT no default can supply: the portal has never
+  sent a real alert. Mailbox-verified 2026-09-01 and again 2026-09-04 — only newsletters. The
+  likely future sender is `savedsearches@notifications.autoscout24.com`. The ruling is **wait, do
+  not build**: a source written against a payload nobody has seen is the blind-build this repo paid
+  four defects for on the day SeLoger's first real alert arrived, behind 1 886 green tests.
+
 ### Needs input
+
+- Nothing. **All three of B1–B3's inputs were re-censused on 2026-09-04 and are present** (three
+  recent alerts each for CapCar, La Centrale and Agorastore), so those rows are buildable rather
+  than waiting. The only outstanding input in the whole plan is B4's, above.
+
 ### Needs research
+
+- **Step 6 — A5's recalibration half.** The weights cannot be chosen from the desk: the ruling is to
+  re-judge the stored snapshots offline, measure the distribution per component, and put 2–3 options
+  to the developer with their concrete effect on their own recent matches. Every previous attempt to
+  PREDICT a yield here has been wrong — the 83-match measurement, the Cityloger zero, the widened
+  `brand_avoid` — so the research is a measurement, not a design.
+
 ### Fragile
+
+- See the **fragile implementations register** above; it is the maintained list. Rows still OPEN
+  there: F1b, F3, F6, F7, F8, F9, F20 and F26's guidance half.
+
 ### Known issues
+
+- **COR-F5** is the last open C2 round-1 finding: a persisted UNDETERMINED twin doubt can be cleared
+  by a third route's tier-5 source default. Ruled 2026-09-03, discriminator settled 2026-09-04
+  (gate the CLEARING direction on the incoming reading's confidence at ≥ 60, §1's own fail-closed
+  threshold), not yet built.
+- **The C2 freeze pointer `ede198e` is stale**, by its own stated test: `git log --oneline
+  ede198e..HEAD -- src config tests` is no longer empty. That is the expected consequence of closing
+  round-1 findings rather than a broken freeze — but round 2 needs a new freeze, which is step 25.

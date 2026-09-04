@@ -45,12 +45,71 @@ if ($from === '') {
     exit(2);
 }
 
-// Never into the fixture tree: a raw dump is unscrubbed by definition.
-$resolved = realpath(dirname($outDir)) . '/' . basename($outDir);
-if (str_contains($resolved, '/tests/')) {
+/**
+ * The absolute, canonical path an out-dir NAMES, whether or not it exists yet.
+ *
+ * `realpath()` answers `false` for a path that does not exist, and the first version of the guard
+ * below concatenated that `false` into a string — so `var/claude/captures` on a tree where
+ * `var/claude` has not been created evaluated as the literal `/captures`, and the check ran against
+ * a garbage path. That is the DEFAULT out-dir, so the guard was vacuous by default: the "passes
+ * vacuously" shape `scrub-eml.php` was fixed for a few commits earlier, repeated here.
+ *
+ * So walk UP to the deepest ancestor that does exist, canonicalise that, and re-append the tail.
+ * The walk terminates at `/`, which always resolves, so a fail-open is not reachable — and `..`
+ * and `.` are folded first, because a path may point back inside `tests/` through either.
+ */
+$resolveIntended = static function (string $path): ?string {
+    if ($path === '') {
+        return null;
+    }
+
+    $absolute = str_starts_with($path, '/') ? $path : (string) getcwd() . '/' . $path;
+
+    $parts = [];
+    foreach (explode('/', $absolute) as $segment) {
+        if ($segment === '' || $segment === '.') {
+            continue;
+        }
+        if ($segment === '..') {
+            array_pop($parts);
+            continue;
+        }
+        $parts[] = $segment;
+    }
+
+    $tail = [];
+    while ($parts !== []) {
+        $real = realpath('/' . implode('/', $parts));
+        if ($real !== false) {
+            return $tail === []
+                ? rtrim($real, '/')
+                : rtrim($real, '/') . '/' . implode('/', array_reverse($tail));
+        }
+        $tail[] = array_pop($parts);
+    }
+
+    return null;
+};
+
+// Never into the fixture tree: a raw dump is unscrubbed by definition — it carries the subscriber's
+// address and usually their name, and the one-step path from a mailbox to a committed fixture is
+// exactly how the two leaks this repo has already had would happen again. Compared as a PREFIX with
+// its separator, so the bare `tests` and `tests/` — which resolve with no trailing slash and slipped
+// straight through a `str_contains('/tests/')` check — are refused like any path beneath it.
+$intendedOutDir = $resolveIntended($outDir);
+$testsRoot = realpath(__DIR__ . '/../tests');
+
+if ($intendedOutDir === null || $testsRoot === false) {
+    fwrite(STDERR, "refus : impossible de résoudre le dossier de sortie — refus par défaut.\n");
+    exit(2);
+}
+
+if ($intendedOutDir === $testsRoot || str_starts_with($intendedOutDir, $testsRoot . '/')) {
     fwrite(STDERR, "refus : une capture brute n'est pas scrubée — elle ne va jamais sous tests/.\n");
     exit(2);
 }
+
+$outDir = $intendedOutDir;
 
 DotEnv::load(__DIR__ . '/../.env');
 
@@ -74,10 +133,13 @@ if ($sock === false) {
 stream_set_timeout($sock, 30);
 
 $tag = 0;
-/** @return list<string> */
-$cmd = static function (string $line) use ($sock, &$tag): array {
-    $t = 'a' . ++$tag;
-    fwrite($sock, "$t $line\r\n");
+
+/**
+ * Read one tagged response. Takes the TAG, never the command — see `$login`.
+ *
+ * @return list<string>
+ */
+$readTagged = static function (string $t) use ($sock): array {
     $out = [];
     while (($l = fgets($sock, 65536)) !== false) {
         $out[] = rtrim($l, "\r\n");
@@ -95,8 +157,35 @@ $cmd = static function (string $line) use ($sock, &$tag): array {
     return $out;
 };
 
+/** @return list<string> */
+$cmd = static function (string $line) use ($sock, &$tag, $readTagged): array {
+    $t = 'a' . ++$tag;
+    fwrite($sock, "$t $line\r\n");
+
+    return $readTagged($t);
+};
+
+/**
+ * LOGIN takes NO ARGUMENT, and that is the whole reason it is not `$cmd('LOGIN …')`.
+ *
+ * PHP ships `zend.exception_ignore_args = Off` and `zend.exception_string_param_max_len = 15`, so
+ * an uncaught trace prints the first 15 characters of every call argument. Passing the LOGIN line
+ * to `$cmd` puts `LOGIN "<user>" "<password>"` in that position, and the password is inside the
+ * budget as soon as the username is short. Nothing leaked today only because the real `IMAP_USER`
+ * is long enough to consume the 15 characters first — luck, not a guard, and this repo's own
+ * vocabulary for that.
+ *
+ * A closure's `use` bindings are not call arguments and do not appear in a trace, so reading the
+ * credentials from the enclosing scope removes the exposure rather than masking it afterwards.
+ */
+$login = static function () use ($sock, &$tag, $readTagged, $user, $pass): void {
+    $t = 'a' . ++$tag;
+    fwrite($sock, "$t LOGIN \"" . addcslashes($user, '"\\') . '" "' . addcslashes($pass, '"\\') . "\"\r\n");
+    $readTagged($t);
+};
+
 fgets($sock, 65536); // greeting
-$cmd('LOGIN "' . addcslashes($user, '"\\') . '" "' . addcslashes($pass, '"\\') . '"');
+$login();
 $cmd('EXAMINE "' . addcslashes($folder, '"\\') . '"');
 
 $search = $cmd('SEARCH FROM "' . addcslashes($from, '"\\') . '"');

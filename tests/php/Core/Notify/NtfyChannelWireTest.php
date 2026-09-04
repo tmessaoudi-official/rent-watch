@@ -97,11 +97,17 @@ final class NtfyChannelWireTest extends TestCase
             self::assertIsString($name);
             $port = (int) substr(strrchr(trim($name), ':') ?: ':0', 1);
 
-            (new NtfyChannel('t', 'http://127.0.0.1:' . $port, 5, badge: '\u{1F3E0} RENT \u{B7}', badgeTag: 'house'))
+            // DOUBLE-quoted, and that is the whole point of this test. PHP does not expand `\u{}`
+            // in a single-quoted string, so these three literals used to construct a 21-byte ASCII
+            // stand-in — `\u{1F3E0} RENT \u{B7}` verbatim — and asserted a wire title no production
+            // path can emit. The shipped badges are real emoji (`RentScout` `🏠 RENT ·`,
+            // `CarScout` `🚗 CAR ·`), so what needed proving is that a NON-ASCII badge survives
+            // `headerSafe()` and reaches the header intact.
+            (new NtfyChannel('t', 'http://127.0.0.1:' . $port, 5, badge: "\u{1F3E0} RENT \u{B7}", badgeTag: 'house'))
                 ->send(new Notification(
                     NotificationKind::MATCH,
                     Priority::HIGH,
-                    'seloger \u{B7} 44/100 — Sartrouville',
+                    "seloger \u{B7} 44/100 — Sartrouville",
                     ['score 44'],
                     null,
                 ));
@@ -116,7 +122,7 @@ final class NtfyChannelWireTest extends TestCase
         @unlink($transcriptPath);
 
         self::assertStringContainsString(
-            'Title: \u{1F3E0} RENT \u{B7} seloger \u{B7} 44/100 — Sartrouville',
+            "Title: \u{1F3E0} RENT \u{B7} seloger \u{B7} 44/100 — Sartrouville",
             $wire,
             'the badge leads the title, before the source name a phone would otherwise show first',
         );

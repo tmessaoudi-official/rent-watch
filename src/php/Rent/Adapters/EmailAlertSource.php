@@ -81,7 +81,13 @@ final readonly class EmailAlertSource implements CountsPatternMisses, FeedFreshn
         '~(\d[\d\h.,]{2,})\h*(?:€|EUR|euros?)~iu',
     ];
 
-    private const string SURFACE_PATTERN = '~(\d{1,4}(?:[.,]\d{1,2})?)\s*(?:m²|m2|m\^2)~iu';
+    // The left anchor is `ROOMS_PATTERN`'s, for the same reason and one alphabet later. A surface
+    // is a figure someone WROTE; a digit in the middle of a token — an image hash, a slug, a
+    // base64url run — is not, and `preg_match` is first-match-wins, so the first such run beats a
+    // real figure further down the card. The query is already stripped before the generic readers
+    // run (`9ea9d77`); the PATH is deliberately kept, because a `plai` path segment is a real §1
+    // signal while a campaign string is not — so the path is exactly where this still bit.
+    private const string SURFACE_PATTERN = '~(?<![A-Za-z0-9])(\d{1,4}(?:[.,]\d{1,2})?)\s*(?:m²|m2|m\^2)~iu';
 
     /**
      * THE `T3` BRANCH NEEDS A LEFT ANCHOR, and for a month it had only a right one (Track 1j).

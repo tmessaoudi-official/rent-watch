@@ -39,6 +39,7 @@ use Scout\Core\Notify\Priority;
 use Scout\Core\Pacer;
 use Scout\Rent\Core\RawListing;
 use Scout\Rent\Core\SourceProfile;
+use Scout\Rent\Core\DigestCause;
 use Scout\Rent\Core\Tenure;
 use Scout\Core\Redact;
 use Scout\Core\SourceStatus;
@@ -1239,9 +1240,20 @@ final readonly class RentScout
             /** @var list<string> $reasons */
             $reasons = $this->decodeSignals($row['signals_json']);
 
+            // WHY it is in the bin, read off the stored verdict rather than re-formed. A row whose
+            // tenure is `UNKNOWN` — or was never recorded at all — is the §1 landing zone proper;
+            // a row digested with its regime already settled took some other route in, and the
+            // rollup title must not announce it as undetermined. `OTHER` rather than naming the
+            // price branch: the store records that this is not a tenure doubt and says nothing
+            // about which route it was, so claiming one would be a verdict formed here.
+            $storedTenure = $row['tenure'];
+            $cause = ($storedTenure === null || $storedTenure === Tenure::UNKNOWN->value)
+                ? DigestCause::TENURE_UNDETERMINED
+                : DigestCause::OTHER;
+
             $entries[] = [
                 'listing' => $listing,
-                'verdict' => Verdict::digest($reasons),
+                'verdict' => Verdict::digest($reasons, $cause),
                 'key' => $row['dedup_key'],
                 'keys' => [$row['dedup_key']],
             ];

@@ -163,9 +163,20 @@ These are from the brief §5; **none has a weight yet**, and the weights are a d
 > scores 25 points lower. The preference survived the widening; it did not become uniform.
 
 **ANSWERED 2026-08-07 — the default applies.** F2 remains a hard filter; S2 (commute) ships with
-weight 0 and is inert until an IDFM key exists. `src/php/Rent/Enrich/Transit.php` is therefore NOT
-milestone-1 infrastructure. `config/rent/criteria.json` carries `commute.enabled: false` so turning it on
+weight 0 and is inert until an IDFM key exists. The transit layer is therefore NOT milestone-1
+infrastructure. `config/rent/criteria.json` carries `commute.enabled: false` so turning it on
 is one visible edit, not a code change.
+
+> **WHAT ACTUALLY SHIPPED, and the citation this paragraph carried was wrong from the day the code
+> landed (corrected 2026-09-04, Deep row 33).** There is no `src/php/Rent/Enrich/Transit.php` and
+> there never was: the layer is `Enrich/CommutePlanner` (the interface) and `Enrich/NavitiaCommute`
+> (the IDFM/PRIM implementation over the ordinary `HttpClient` seam), built 2026-08-26. The
+> *ruling* above stands unchanged — commute is still a clamped score component and never a
+> disqualifier, and it is still OFF in the committed config. What is no longer true is *"inert
+> until an IDFM key exists"*: the key exists, and the activation lives in the gitignored
+> `config/rent/criteria.local.json`, so commute is ON in production and OFF in CI, the fixtures and
+> the sabotage ledger. That asymmetry is deliberate and load-bearing — it is also the reason a
+> pipeline defect can pass 2 000+ tests and still fire on the deployed watcher's first pass.
 
 `spec/PROJECT_BRIEF.md` §0.1. F2 is a flat commune set. The alternative is *"≤ N minutes door-to-door
 to a named station"* via the IDFM/PRIM API, with commune as a score weight instead of a filter.
@@ -605,13 +616,25 @@ Spec §8 names two numbers (3 consecutive empty runs, a >70% drop below the roll
 are implemented as written. A review panel found four more failure shapes it does not name, and
 closing them needed thresholds the spec does not supply:
 
+> **RE-DERIVED FROM THE CODE 2026-09-04 (Deep row 33).** The table below had drifted in three ways
+> at once, and the third is the one that matters: it named a threshold the code does not use. All
+> five constants were cited on `Store::`, where the 2026-09-01 `Core/RunStore` split left only
+> `BUSY_TIMEOUT_MS`; `MIN_SPAN_FOR_NEVER_PRODUCED` was written as one day and has been **seven since
+> 2026-08-07**; and the dual-window flaky rule — the whole of Track 6-A1, added because a source
+> degrading over hours cannot move a seven-day ratio — was absent, so a reader tuning "the flaky
+> threshold" would have found one of the two. Cited by CLASS AND CONSTANT, which survive an edit
+> above them, and every value read out of `src/php/Core/RunStore.php` rather than recalled.
+
 | Constant | Value | What it decides |
 |---|---|---|
-| `Store::FLAKY_FAILURE_RATIO` | `0.3` | more than 30% of runs failing in the 7-day window ⇒ `WARN_FLAKY` |
-| `Store::MIN_RUNS_FOR_FLAKY` | `3` | below this many runs in the window, a failure *rate* means nothing |
-| `Store::MIN_SPAN_FOR_NEVER_PRODUCED` | `86400` (1 day) | how long a source must have been trying before "never produced an item" is read as a broken field map |
-| STALE's silence bound | `ROLLING_WINDOW_DAYS` (7 days) | no run in this long ⇒ the schedule itself has stopped |
-| `Store::BUSY_TIMEOUT_MS` | `5000` | how long a second writer waits before giving up |
+| `Core\RunStore::FLAKY_FAILURE_RATIO` | `0.3` | more than 30% of runs failing in the 7-day window ⇒ `WARN_FLAKY` |
+| `Core\RunStore::MIN_RUNS_FOR_FLAKY` | `3` | below this many runs in the window, a failure *rate* means nothing |
+| `Core\RunStore::FLAKY_SHORT_WINDOW_DAYS` | `1` | the SECOND, shorter window — a source degrading over hours never moves the seven-day ratio, so In'li's failure rate climbed for a day while `doctor` said `ok` |
+| `Core\RunStore::FLAKY_SHORT_FAILURE_RATIO` | `0.2` | more than 20% failing inside that day ⇒ `WARN_FLAKY`. Measured against every other source rather than fitted to the one that broke |
+| `Core\RunStore::MIN_RUNS_FOR_SHORT_FLAKY` | `20` | and it needs a DENSE window. At Q37 cadence a day holds ~100 passes; on a cron `--once` deployment it holds four, where one failure is 25% and means nothing. Deliberately inert there — the seven-day rule still covers it, which makes this a scope limit rather than a hole |
+| `Core\RunStore::MIN_SPAN_FOR_NEVER_PRODUCED` | `604800` (**7 days**, raised from one on 2026-08-07) | how long a source must have been trying before "never produced an item" is read as a broken field map. The one-day value false-accused a new source answering 200 with zero items at the 24-hour mark; Q23 had already written down that a week was the honest floor and kept the day anyway. Stated cost: a genuinely broken field map on a NEW source goes unremarked for a week — acceptable only because a source that used to produce and stops is caught in three runs by `EMPTY_RUNS_BEFORE_BROKEN`, the far commoner shape |
+| STALE's silence bound | `Core\RunStore::ROLLING_WINDOW_DAYS` (7 days) | no run in this long ⇒ the schedule itself has stopped |
+| `Core\RunStore::BUSY_TIMEOUT_MS` | `5000` | how long a second writer waits before giving up. The one constant still mirrored on `Rent\Store\Store`, which sets the same `PRAGMA busy_timeout` on its own handle |
 
 Three of the four shapes are the same class — a source that is not working and does not fail: one
 erroring on half its fetches (the streak counter resets on any success, and the BROKEN rule reads

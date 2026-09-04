@@ -4230,6 +4230,47 @@ run_sabotage "the sentinel is counted as an extraction miss (every named marque 
   src/php/Car/VehicleEmailSource.php \
   "s%if (\$sentinel !== null) {%if (\$sentinel !== null) { \$this->missed('make_model_unknown_pattern', false);%"
 
+# ── Track 6-C2 round 1, the P2 batch (2026-09-04) ─────────────────────────────────────────────
+#
+# COR-F4 — the surface reader had no LEFT ANCHOR, so a digit in the middle of a token beat the real
+# figure below it. The query strip closed one alphabet; the PATH is deliberately kept, and that is
+# where it still bit. Not hypothetical: Bien'ici's own photo host is `d2m2j20yzublln.cloudfront.net`
+# — `2m2` reads as 2 m² — and four stored flats of 41, 54, 65 and 59 m² are held at 2 m², three of
+# them silently rejected by `min_surface_m2: 50`. Silent over-rejection is the failure nothing can
+# see, because nothing arrives.
+run_sabotage "the surface reader loses its left anchor (a CDN host id becomes the surface)" \
+  src/php/Rent/Adapters/EmailAlertSource.php \
+  "s%private const string SURFACE_PATTERN = '~(?<!\[A-Za-z0-9\])%private const string SURFACE_PATTERN = '~%"
+
+# COR-F3 — the *à vérifier* rollup is §1's only landing zone, and its title spoke for every entry
+# while the bin had grown a SECOND entrance. A listing digested for an implausible rent-to-surface
+# ratio is typically `LLI` at full confidence: announcing it "au régime indéterminé" asserts as
+# doubtful a regime the classifier settled. The clause is earned by every entry or by none.
+run_sabotage "the digest title claims a regime the batch determined (the clause stops being earned)" \
+  src/php/Rent/Notify/Formatter.php \
+  "s%(\$everyEntryIsATenureDoubt ? ' au régime indéterminé' : '')%' au régime indéterminé'%"
+
+# THE COUNTERWEIGHT, failing the other way. Dropping the clause unconditionally is not the fix — it
+# is a quieter digest, not a truer one, and it would leave the §1 bin unnamed on the phone screen
+# where the decision to open it is made.
+run_sabotage "the regime clause is dropped even from a batch that earned it (quieter, not truer)" \
+  src/php/Rent/Notify/Formatter.php \
+  "s%(\$everyEntryIsATenureDoubt ? ' au régime indéterminé' : '')%''%"
+
+# AND THE DRAIN'S HALF. `scout digest` reads the store rather than the pass, so the cause has to
+# come off the stored verdict. Read every row as a tenure doubt and the title is confidently wrong
+# again on exactly the rows the price branch put there.
+run_sabotage "the digest drain calls every stored row a tenure doubt (the store's verdict ignored)" \
+  src/php/Rent/Cli/RentScout.php \
+  "s%\$cause = (\$storedTenure === null || \$storedTenure === Tenure::UNKNOWN->value)%\$cause = (true)%"
+
+# CMP-1 — the ntfy badge test used single-quoted `\\u{}`, so it asserted a 21-byte ASCII stand-in no
+# production path can emit. Now that it runs the real emoji, breaking `headerSafe()` must redden it.
+# Before the fix this sabotage was undetectable: the ASCII stand-in survives any header sanitiser.
+run_sabotage "headerSafe strips non-ASCII from a title (the shipped emoji badge never reaches the phone)" \
+  src/php/Core/Notify/NtfyChannel.php \
+  "s%return trim(preg_replace('~\[\\\\r\\\\n\]+~', ' ', \$value) ?? '');%return trim(preg_replace('~[^\\\\x20-\\\\x7E]+~', ' ', \$value) ?? '');%"
+
 printf '\n  %d sabotage(s) detected, %d undetected\n' "$pass" "$fail"
 
 if [[ -n "$_filter" ]]; then

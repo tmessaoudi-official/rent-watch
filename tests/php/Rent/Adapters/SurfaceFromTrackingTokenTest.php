@@ -174,6 +174,56 @@ final class SurfaceFromTrackingTokenTest extends TestCase
         self::assertSame(64.0, $listing->surfaceM2, 'the path is prose, the query is not');
     }
 
+    /**
+     * COR-F4 — the query strip closed one alphabet; the PATH is kept and had no left anchor at all.
+     *
+     * `9ea9d77` removed a URL's query and fragment before the generic readers run, and — correctly,
+     * per the ruled split this file's own counterweight asserts — KEPT the path. `ROOMS_PATTERN`
+     * additionally carries `(?<![A-Za-z0-9])` from Track 1j. `SURFACE_PATTERN` carried neither, and
+     * `preg_match` is first-match-wins, so a run inside a path segment still won over the real
+     * figure below it.
+     *
+     * **THE LENS GRADED THIS THE SOFTEST FINDING IN ITS REPORT — *no real payload is shown to carry
+     * `m2` in a path* — AND THE STORE SAYS OTHERWISE.** Trialled through the real `prose()` over all
+     * 2 579 stored evidence bodies: **4 rows change, every one a recovery**, and the poison is a
+     * CloudFront distribution id in Bien'ici's own photo host, `d2m2j20yzublln.cloudfront.net`. It
+     * reads `2 m²`. Four flats of 41, 54, 65 and 59 m² are stored at **2 m²**, so three of them were
+     * silently rejected by `min_surface_m2: 50` — silent over-rejection, the one failure mode
+     * nothing can see, because nothing arrives. Not a class-completeness fix: a live one.
+     *
+     * The distribution id is on every photo URL from that CDN, so this is structural rather than a
+     * run of bad luck in four cards.
+     *
+     * **The measurement was almost recorded nine times too large.** Applied to the RAW stored body
+     * it changes 41 rows — but 37 of those are SeLoger tokens already closed by `9ea9d77`'s query
+     * strip, which runs before any generic reader. Measuring a repair against the pre-repair
+     * baseline is this repo's own *true number attached to an invented cause*; the honest figure is
+     * the 4 above.
+     *
+     * Closed under this repo's standard — *a fix measured against one alphabet is not a fix against
+     * the class* — the standard that made `9ea9d77` necessary after `46262ee`'s anchor proved blind
+     * to base64url. Third time this first-match-wins scan has been poisoned by text nobody wrote
+     * for a reader.
+     *
+     * @return iterable<string, array{0: string}>
+     */
+    public static function poisonedPathSegments(): iterable
+    {
+        // CAPTURED, not invented — the live Bien'ici photo host, from four stored rows.
+        yield 'the live cloudfront id' => ['https://photo.bienici.com/photo/x_d2m2j20yzublln.cloudfront.net_287_661294'];
+        yield 'an image hash mid-path' => ['https://img.example.test/ph/a7m2c9/x.jpg'];
+        yield 'a slug carrying a run' => ['https://www.example.test/annonces/xa30m2b/detail'];
+    }
+
+    #[DataProvider('poisonedPathSegments')]
+    public function testASurfaceIsNeverReadOutOfTheMiddleOfAPathToken(string $url): void
+    {
+        // Above the prose, like every other case here: first-match-wins is half the defect.
+        $listing = $this->read("{$url}\n3 pièces . 64,25 m²\n");
+
+        self::assertSame(64.25, $listing->surfaceM2, "the run inside {$url} must not be read as a surface");
+    }
+
     /** Read one body through the real `fetch()`, on a source that configures no numeric pattern. */
     private function read(string $body, string $linkHost = 'seloger.com/annonces/', string $extra = ''): RawListing
     {

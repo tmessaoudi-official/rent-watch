@@ -76,6 +76,13 @@ check "runs the runner-fetch signature test" has "tests/test-fetch-phpunit.sh"
 check "runs the .env CLI test (bin/scout's loader is outside the PHP suite)" \
   has "tests/test-dotenv-cli.sh"
 check "runs the config/doc drift scan"       has "drift-scan.sh"
+# BOTH HALVES OF THE CAPTURE PATH, and the pair is the assertion. The scrubber decides what may be
+# committed; `dump-eml.php` decides what may be written at all, and it writes RAW. Wiring one and
+# not the other is the one-of-two-symmetric-surfaces shape, so both are pinned here rather than
+# left to whoever remembers.
+check "runs the fixture-scrubber test"       has "tests/test-scrub-eml.sh"
+check "runs the raw-capture tool test"       has "tests/test-dump-eml.sh"
+check "runs the deploy-verifier test"        has "tests/test-verify-deploy.sh"
 check "runs the sabotage apply-sweep"       has "tests/test-sabotage-applies.sh"
 # The gate that certified nothing for ~27 hours in 2026-08-22/23 — and would have gone on doing so
 # indefinitely, since nothing in its own output says it has. Without this step it can go vacuous —

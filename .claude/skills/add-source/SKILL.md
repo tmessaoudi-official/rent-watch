@@ -71,6 +71,20 @@ stop and say why config was not enough — a contract every source bypasses is n
 > default. All eight are compile-checked because `matchParam()` uses `@preg_match`, which neither
 > warns nor throws — a broken one is silent, and on `advertiser_pattern` the silence re-opens the
 > exact hole the registry closes.
+>
+> **AND SINCE 2026-09-04 THE FIELD MAPS ARE CHECKED TOO, which is the other half of that surface.**
+> A `map` or `detail_map` entry may carry a capture — `a@href => -(\d{5})/` — and that capture is a
+> regex, applied by `Selector::captureFrom()` with the same `@preg_match`. It had no load-time check
+> at all, so a broken one nulled its field for every item on every pass while the source returned
+> its usual count, no run failed and `SourceHealth` stayed green: the In'li `cp` shape, where one
+> dead selector meant a source matched zero flats while reporting `ok`. It is compiled with the
+> delimiter the adapter will actually use, because a guard that compiles a different string from the
+> one that runs is not a guard. A `=> prose:<reader>` capture is checked against the reader list
+> instead, and an unknown reader was already refused the same way.
+>
+> Both refusals `card_separator_pattern` used to bypass are keyed on EITHER separator now, not just
+> the literal one: the `mixed_tenure` §1 refusal above, and the one requiring a `link_host` on a
+> segmented link-keyed source — without which that source re-notifies its whole backlog for ever.
 
 Direct HTTP scraping of a private portal is opt-in only: `legal_risk: true`, disabled by default, and it
 must **refuse to run** without an explicit flag. No CAPTCHA solving, proxy rotation, fingerprint

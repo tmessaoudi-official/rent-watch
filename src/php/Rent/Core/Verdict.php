@@ -19,10 +19,12 @@ namespace Scout\Rent\Core;
 final readonly class Verdict
 {
     /**
-     * @param int|null     $score        0–100, or `null` when disqualified
-     * @param list<string> $reasons      human-readable, highest-value first — the notification body
-     * @param string|null  $disqualifier the single rule that rejected it, or `null`
-     * @param bool         $highPriority whether this earns an immediate high-priority push
+     * @param int|null          $score        0–100, or `null` when disqualified
+     * @param list<string>      $reasons      human-readable, highest-value first — the notification body
+     * @param string|null       $disqualifier the single rule that rejected it, or `null`
+     * @param bool              $highPriority whether this earns an immediate high-priority push
+     * @param DigestCause|null  $digestCause  why it landed in the *à vérifier* bin; `null` unless
+     *                                        the outcome is `DIGEST`
      */
     private function __construct(
         public Outcome $outcome,
@@ -30,6 +32,7 @@ final readonly class Verdict
         public array $reasons,
         public ?string $disqualifier,
         public bool $highPriority,
+        public ?DigestCause $digestCause = null,
     ) {}
 
     /**
@@ -45,16 +48,21 @@ final readonly class Verdict
     }
 
     /**
-     * Undetermined tenure. Goes to the "à vérifier" digest and only there.
+     * Goes to the "à vérifier" digest and only there.
      *
      * Carries the classifier's reasons so the digest entry says WHY it is doubtful — a digest of
      * bare links is one the developer stops opening.
      *
+     * **`$cause` has no default, deliberately.** The bin used to have one entrance and the rollup
+     * title spoke for every entry; it now has two, and a default would let a future third route
+     * inherit the §1 regime clause by omission — exactly the shape {@see DigestCause} exists to
+     * stop. Every caller states which bin this is.
+     *
      * @param list<string> $reasons
      */
-    public static function digest(array $reasons): self
+    public static function digest(array $reasons, DigestCause $cause): self
     {
-        return new self(Outcome::DIGEST, null, $reasons, null, false);
+        return new self(Outcome::DIGEST, null, $reasons, null, false, $cause);
     }
 
     /** @param list<string> $reasons */

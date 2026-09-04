@@ -1475,7 +1475,10 @@ health() -> SourceHealth
 
 **Adding a source must be config-only in the common case.** A bespoke adapter under
 `src/php/Adapters/sites/` is the fallback, not the default path — if you find yourself writing code there,
-say why config was not enough. Use the `/add-source` skill.
+say why config was not enough. Use the `/add-source` skill. **That directory does not exist**, and
+saying so is the point rather than a footnote: eight sources have been onboarded and not one has
+needed it, so the sentence above describes a door nobody has had to open. Create it when a source
+genuinely forces bespoke code, and treat having to as the finding.
 
 `prototype/scout.py` is **not the architecture.** It is superseded reference material. Findings *about*
 it are useful as a catalogue of what the real implementation must avoid, but "the prototype does it
@@ -1693,7 +1696,15 @@ bash tests/test-dotenv-cli.sh           # proves the .env loader the CLI actuall
 bash tests/test-backup-state.sh         # proves the seen-set backup produces a copy that READS
                                         #   BACK — a torn WAL copy opens without complaint, so `cp`
                                         #   is the wrong tool and its failure is found at restore
+bash tests/test-verify-deploy.sh        # proves the deploy verifier catches a watcher that is
+                                        #   DOWN, STALE or wedged — the three states `up -d`
+                                        #   printing "Started" does not distinguish
+bash tools/verify-deploy.sh             # run it AFTER every redeploy; read-only, needs docker
 tools/backup-state.sh                   # take one: state/backups/rent-watch.<stamp>.sqlite3
+bash tests/test-dump-eml.sh             # proves the RAW-capture tool never writes under tests/ and
+                                        #   never puts the IMAP password in a stack trace. Isolated:
+                                        #   the tool is copied beside a STUB autoloader, so no case
+                                        #   reads the real .env or reaches the network
 bash tests/test-scrub-eml.sh            # proves the scrubber refuses a RECOVERABLE address —
                                         #   it decodes base64url runs and quoted-printable before
                                         #   it looks, because "absent" is not "unrecoverable"
@@ -1865,6 +1876,16 @@ tests/fixtures/rent/pap/         The fourth portal's, and the first DIRECT-FROM-
 tools/scrub-eml.php         Turns a captured .eml into a committable fixture; REFUSES to write
                             while the address is RECOVERABLE — decoding base64url runs and
                             quoted-printable before it looks, not merely grepping for it
+tools/dump-eml.php          Pulls several RAW .eml from the alert mailbox when Gmail's own
+                            export is too slow — read-only at the protocol level (EXAMINE,
+                            BODY.PEEK), and its output is UNSCRUBBED by definition, so
+                            scrub-eml.php is still owed afterwards. It REFUSES to write
+                            anywhere under tests/, which is what makes it usable at all: the
+                            one-step path from a mailbox to a committed fixture is how both
+                            of this repo's leaks would happen again. That guard used to fail
+                            OPEN on the bare `tests` and on an unresolvable parent — the
+                            latter being the default out-dir's own shape on a fresh tree, so
+                            it was vacuous by default. Docs: docs/ALERT-CAPTURE.md Part A′
 tests/sabotage-check.sh     Proves the classifier suite detects a regression
 tests/test-tenure-guard.sh  Proves the §1 tripwire fires, and stays quiet on ordinary PHP
 tests/test-vehicle-guard.sh Same, for the CAR excluded set. ONE hook covers both domains:
@@ -1879,6 +1900,23 @@ tests/test-sabotage-applies.sh   Proves no sabotage expression has rotted into m
 tests/test-dotenv-cli.sh         Proves the .env loader behind every CLI verb
 tests/test-scrub-eml.sh          Proves the scrubber refuses a RECOVERABLE address — the
                                  must-strip, must-refuse and must-stay-quiet halves
+tests/test-dump-eml.sh           Proves the capture tool never writes under tests/ and never
+                                 puts the IMAP password in a stack trace. Isolated: the tool
+                                 is copied beside a STUB autoloader, so no case reads the
+                                 real .env or reaches the network. It proves the trace
+                                 mechanism on this machine's own PHP first — an argument
+                                 leaks, a use-binding does not — then ties the tool to it
+tools/verify-deploy.sh           Did the redeploy land? `up -d` printing Started is not a
+                                 deployment: a wedged recreate leaves a watcher in `Created`,
+                                 and `docker compose ps` without -a OMITS it, so the failure
+                                 renders as a shorter list. Asserts every declared service
+                                 has a RUNNING container, on the CURRENT image, with no
+                                 hex-prefixed leftover holding a name for the next recreate
+                                 to die on. Read-only
+tests/test-verify-deploy.sh      Its sabotage test — 7 cases through a stub `docker`,
+                                 counterweight first. A missing image exits 2 ("build it"),
+                                 never 1 ("watcher down"): collapsing those would make a
+                                 forgotten build read as a broken watcher
 tests/test-sabotage-baseline.sh  Proves the sabotage ledger judges its cases in a GREEN scratch tree
 tests/test-ci-workflow.sh   Proves ci.yml still wires every step this file claims CI runs
 tools/backup-state.sh       Backs up the seen-set — the one file this project calls
@@ -2031,6 +2069,19 @@ var/claude/                 Reports, review outputs — gitignored scratch (hand
   6-A6, on the first day it was answerable — and the plan predicted the wrong cause (it expected the
   positional repair the rooms reader got), which is why the query says *run it*, not *reason about
   it*.
+- **AND THE PATH HALF IS THE EIGHTH INSTANCE, closed 2026-09-04.** The query strip above closed one
+  alphabet; the PATH is deliberately KEPT — a `plai` path SEGMENT is a real social signal while a
+  campaign string is not — and `SURFACE_PATTERN` had no left anchor at all, so a digit in the middle
+  of a path token still beat the real figure below it (`preg_match` is first-match-wins).
+  `ROOMS_PATTERN` had carried `(?<![A-Za-z0-9])` since Track 1j; the surface branch had neither
+  guard. A review lens graded it the softest finding in its report, on the grounds that no real
+  payload carries `m2` in a path — **and the store disagreed**: Bien'ici's own photo host is
+  `d2m2j20yzublln.cloudfront.net`, `2m2` reads as 2 m², and four stored flats of 41, 54, 65 and
+  59 m² are held at **2 m²**, three of them silently rejected by `min_surface_m2: 50`. The
+  distribution id is on every photo URL from that CDN. **Measure a repair through the CURRENT
+  pipeline, never against the raw payload**: applied to the raw stored body the same anchor changes
+  41 rows, but 37 are SeLoger tokens the query strip already closed — a true number attached to a
+  cause that had already been fixed, which is the repo's named failure pointing backwards.
 - **Two tracks, ONE push (developer ruling, 2026-08-29).** The 2026-08-06 rule that a landlord's
   listing and its agency copy on SeLoger/Bien'ici are two findings STANDS — identities, groups and
   histories stay per track, `Dedup::duplicateReason()` still refuses across families — but 43 flats
@@ -2143,6 +2194,15 @@ var/claude/                 Reports, review outputs — gitignored scratch (hand
   there is still no Python manifest — so
   `.claude/hooks/lint-on-write.sh` is live and will report on `prototype/scout.py`. Those findings are
   known and deliberately unfixed: the prototype is kept verbatim as received.
+- **A LEDGER CASE THAT TIMES OUT READS AS "UNDETECTED", AND ON A LOADED BOX THAT IS THE COMMONEST
+  FALSE RED.** Each case runs under `timeout` (`SABOTAGE_SUITE_TIMEOUT`, default 300 s) and a suite
+  that never finished is counted as a loud FAILURE — correctly, since a hang is not a detection. But
+  the full suite takes ~88 s on an idle box, and this machine is shared: on 2026-09-04 a PHPUnit run
+  from an unrelated project (`/stack/projects/invoiceninja`) pushed the load average to **27** while
+  the ledger was running, and a case sat at 256 s of a 300 s budget with nothing wrong. Check
+  `uptime` and `ps -eo pid,etimes,args --sort=-etimes | grep phpunit` before believing a lone
+  timeout; re-run that case alone on a quiet box, or raise `SABOTAGE_SUITE_TIMEOUT`. Same class as
+  the JIT entry below — the harness broke, the guarantee did not.
 - **The local PHP's tracing JIT crashes the sabotage ledger nondeterministically.** `php` here is
   phpbrew's `8.5.9 (ZTS DEBUG)` with `opcache.jit=tracing` and `opcache.enable_cli=1`; under the
   ledger the suite dies mid-run with `zend_jit_trace.c … Assertion !p->op_array failed` (exit 134),

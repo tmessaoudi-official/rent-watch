@@ -112,6 +112,24 @@ jobs:
       - name: Fixture scrubber refuses a recoverable address
         run: bash tests/test-scrub-eml.sh
 
+      # ITS TWIN, AND WIRING IT HERE IS THE POINT. `dump-eml.php` is the other half of the capture
+      # path: the scrubber decides what may be committed, this decides what may be written at all,
+      # and it writes RAW — the subscriber's address, usually their name, every per-recipient token.
+      # Its "never under tests/" guard used to fail OPEN on the bare `tests` and on any out-dir whose
+      # parent did not exist, which was its own DEFAULT out-dir's shape on a fresh tree. A guard test
+      # that CI never runs is a guard nobody runs, and shipping one beside a wired twin is exactly
+      # the one-of-two-symmetric-surfaces defect this repo keeps paying for.
+      - name: Raw capture tool refuses the fixture tree and hides its password
+        run: bash tests/test-dump-eml.sh
+
+      # A watcher that is DOWN is worse than one that is stale: a stale watcher still pushes,
+      # wrongly, and a stopped one pushes nothing — which is exactly what a quiet market looks like.
+      # `docker compose ps` omits a non-running service without `-a`, so a wedged recreate announces
+      # itself as a shorter list. The verifier is read-only and its test drives it entirely through a
+      # stub `docker`, so this step needs no daemon and no containers.
+      - name: Deploy verifier catches a down, stale or wedged watcher
+        run: bash tests/test-verify-deploy.sh
+
       # The seen-set is the one file this project calls UNRECOVERABLE, and the README told operators
       # to back it up without saying how — so `cp` was the implied answer, and a byte copy of a live
       # WAL database is torn while opening without complaint. This proves the tool reads its own copy

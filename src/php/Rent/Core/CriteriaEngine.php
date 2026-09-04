@@ -93,7 +93,7 @@ final readonly class CriteriaEngine
                     . 'et cette source publie aussi du logement social'];
             }
 
-            return Verdict::digest($reasons);
+            return Verdict::digest($reasons, DigestCause::TENURE_UNDETERMINED);
         }
 
         // PRICE-PER-m² PLAUSIBILITY — Track 1f, and it is a SECOND route into the same landing zone
@@ -128,7 +128,10 @@ final readonly class CriteriaEngine
                     rtrim(rtrim(number_format((float) $listing->surfaceM2, 1, ',', ' '), '0'), ','),
                     $this->criteria->minPricePerM2,
                 ),
-            ]);
+                // NOT the §1 landing zone: this listing's tenure is determined — typically `LLI` at
+                // full confidence — and only its rent-to-surface ratio is in doubt. Announcing it
+                // under the regime clause would assert something the classifier already settled.
+            ], DigestCause::OTHER);
         }
 
         return $this->score($listing, $classification, $firstSeenAgeSeconds);
