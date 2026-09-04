@@ -292,9 +292,196 @@ final class FixtureSecretsTest extends TestCase
      *
      * @return list<array{0: string, 1: string}> [kind, hit]
      */
-    private static function suspects(string $content): array
+    /**
+     * A BASE64 RUN IN EITHER ALPHABET.
+     *
+     * This was `[A-Za-z0-9_\-]` — URL-safe ONLY — and that is the `%`-encoding P0 one alphabet
+     * over: `+` and `/` are the STANDARD alphabet's two extra characters, so a standard-encoded
+     * blob SPLIT on them, each fragment started off the 4-byte boundary, strict `base64_decode`
+     * returned garbage, and the guard read *nothing recoverable here*. A round-5 lens measured
+     * 3 of 50 realistic ESP-shaped captures written with exit 0 while the address stayed one
+     * `rawurldecode` and one realignment away. The real header survived on alignment luck.
+     *
+     * `strtr($run, '-_', '+/')` below is a no-op on a standard-alphabet run, so widening the class
+     * needs no second decode path.
+     */
+    //
+    // THE `/` IS ESCAPED, and it must be: these patterns are `/`-delimited, and PCRE does not
+    // exempt a character class from delimiter parsing. Unescaped, `preg_match_all` returns FALSE
+    // rather than 0 — which is not `=== 0`, so the guard skipped its `continue`, read an empty
+    // `$runs`, and found nothing at all while looking like it had scanned. Silent `false` from a
+    // preg call is the same shape as the `u`-modifier defect this file already pins.
+    private const string B64_RUN = '[A-Za-z0-9_+\\/\\-]';
+
+    /**
+     * ADDRESSES THAT ARE LEGITIMATELY IN THE FIXTURES — portals, and one placeholder.
+     *
+     * Keyed on the DOMAIN except where the domain is a consumer one, because the subscriber is on
+     * `gmail.com` and allow-listing that domain would switch this guard off for the one address it
+     * exists to catch. There, the whole address must be listed.
+     *
+     * @var list<string>
+     */
+    private const array PERMITTED_ADDRESSES = ['alertes@gmail.com', 'adresse@mail.com'];
+
+    /** @var list<string> */
+    private const array PERMITTED_DOMAINS = [
+        'example.invalid', 'example.test', 'example-portal.test',
+        'bienici.com', 'leboncoin.fr', 'alertes.seloger.com', 'pap.fr',
+        'paruvendu.fr', 'capcar.fr', 'mailjet.com',
+        // `mail.com` is NOT here on purpose: it is 1&1's CONSUMER provider, so allow-listing the
+        // domain would be the same mistake as allow-listing `gmail.com`. Its one occurrence is the
+        // French template placeholder `adresse@mail.com`, listed by full address above.
+    ];
+
+    /**
+     * NO COMMITTED FIXTURE CARRIES AN ADDRESS THAT IS NOT A PORTAL'S.
+     *
+     * `patterns()` holds CREDENTIAL shapes and deliberately no address shape — a blanket one fires
+     * on every portal sender in all 44 fixtures, and a guard that cries wolf 44 times is a guard
+     * somebody switches off. A round-5 lens found that the file's self-tests nonetheless present
+     * coverage its scope excludes: the class that actually leaked, three times, is an ADDRESS, and
+     * the `rawurldecode` repair was proven with a JWT proxy rather than with one.
+     *
+     * So the shape is an address whose domain is not a portal's — which is implementable precisely
+     * because the fixture set is small and enumerable, and which catches the real thing: the
+     * subscriber is on a consumer domain, so consumer domains are listed by full address.
+     *
+     * Every decoded form is scanned, not the raw bytes: the three real incidents were all one or
+     * more decodes deep.
+     */
+    #[\PHPUnit\Framework\Attributes\DataProvider('fixtureProvider')]
+    public function testNoFixtureCarriesANonPortalEmailAddress(string $path, string $label): void
     {
         $found = [];
+
+        foreach (self::allForms((string) file_get_contents($path)) as $text) {
+            if (preg_match_all('/[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}/', $text, $m) === 0) {
+                continue;
+            }
+
+            foreach ($m[0] as $address) {
+                $lower = strtolower($address);
+                $domain = substr($lower, (int) strrpos($lower, '@') + 1);
+
+                if (in_array($lower, self::PERMITTED_ADDRESSES, true) || in_array($domain, self::PERMITTED_DOMAINS, true)) {
+                    continue;
+                }
+
+                // MASKED in the failure message. A guard that prints the address it caught writes
+                // it into CI logs, which is the disclosure it exists to prevent.
+                $found[] = substr($lower, 0, 2) . '…@' . $domain;
+            }
+        }
+
+        self::assertSame(
+            [],
+            array_values(array_unique($found)),
+            $label . ' carries an address that is not a portal\'s. Scrub it — and note that scrubbing '
+            . 'fixes the tree and NOT the remote: a pushed blob stays reachable by its old sha.',
+        );
+    }
+
+    /**
+     * EACH DECODE IS PRESENT IN THE CASCADE, ASSERTED DIRECTLY — because the three self-tests above
+     * assert an OUTCOME, and an outcome can be reached by another route.
+     *
+     * Found while fixing something else, and it is the sharpest thing this round produced about my
+     * own work. Adding four-alignment decoding made the guard strictly more thorough — and made
+     * `testTheGuardSeesThroughPercentEncoding` VACUOUS: with four offsets a fragment of the RAW
+     * percent-encoded header decodes to text containing `eyJ` on its own, so deleting
+     * `rawurldecode` from the cascade left that test green. Measured both ways: offset 0 alone
+     * misses it, four offsets recover it. The repair for a P0 lost its guard to an improvement.
+     *
+     * An outcome assertion cannot defend against that, because every added capability gives the
+     * outcome one more way to be satisfied. This asserts the MECHANISM: each decoded form must be
+     * among the forms actually scanned. It cannot be satisfied by a second route, and it stays
+     * exact however many decoders are added later.
+     */
+    public function testEveryDecodedFormIsActuallyScanned(): void
+    {
+        $content = "X-Custom: " . rawurlencode(base64_encode('98986954~victim@example.invalid')) . "\r\n"
+            . "Subject: =?utf-8?B?dGVzdA==?=\r\n\r\nbody=20with=20soft=20breaks\r\n";
+
+        $forms = self::allForms($content);
+
+        self::assertContains($content, $forms, 'the raw bytes must be scanned');
+        self::assertContains(
+            quoted_printable_decode($content),
+            $forms,
+            'the quoted-printable form must be scanned — a portal folds its headers',
+        );
+        self::assertContains(
+            rawurldecode($content),
+            $forms,
+            'the percent-decoded form must be scanned. Its absence was a P0: a real X-Mailin-EID '
+            . 'carried the subscriber\'s address past this guard AND the scrubber into a pushed '
+            . 'commit, because `%` split the run and every fragment decoded to noise.',
+        );
+    }
+
+    /**
+     * EVERY FORM A FIXTURE'S BYTES CAN BE READ AS — one cascade, shared by both guards.
+     *
+     * Extracted 2026-09-04 so the credential scan and the address scan cannot decode differently.
+     * A guard that sees one encoding fewer than its sibling is this repo's named recurring defect,
+     * and the three real incidents were each one decode deeper than whatever was looking.
+     *
+     * @return list<string>
+     */
+    /**
+     * THE ADDRESS GUARD FIRES — and without this it only proves the FIXTURES are clean.
+     *
+     * A data-provider test that passes over 44 clean files says nothing about whether it would
+     * catch a dirty one, and "green because there is nothing to find" is indistinguishable from
+     * "green because it cannot look". That distinction has been the finding four times in this
+     * session alone; it is not a hypothetical.
+     *
+     * All three real shapes, because the three actual incidents were each one or more decodes
+     * deep: plain, base64-wrapped, and percent-encoded base64 — the `X-Mailin-EID` form that was
+     * committed AND pushed.
+     */
+    public function testTheAddressGuardCatchesAPlantedNonPortalAddress(): void
+    {
+        $planted = 'victim.person@gmail.com';
+
+        $shapes = [
+            'plain' => 'To: ' . $planted,
+            'base64' => 'X-Custom: ' . base64_encode('98986954~' . $planted . '~relay'),
+            'percent-encoded base64' => 'X-Custom: ' . rawurlencode(base64_encode('98986954~' . $planted . '~relay')),
+        ];
+
+        foreach ($shapes as $label => $content) {
+            $hits = [];
+
+            foreach (self::allForms($content) as $text) {
+                if (preg_match_all('/[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}/', $text, $m) === 0) {
+                    continue;
+                }
+                foreach ($m[0] as $address) {
+                    $lower = strtolower($address);
+                    $domain = substr($lower, (int) strrpos($lower, '@') + 1);
+
+                    if (in_array($lower, self::PERMITTED_ADDRESSES, true) || in_array($domain, self::PERMITTED_DOMAINS, true)) {
+                        continue;
+                    }
+                    $hits[] = $lower;
+                }
+            }
+
+            self::assertContains($planted, $hits, 'the address guard is blind to the ' . $label . ' shape');
+        }
+
+        // THE COUNTERWEIGHT: a portal's own sender must NOT be reported, or the guard cries wolf on
+        // all 44 fixtures and somebody switches it off — which is why `patterns()` carries no
+        // address shape in the first place.
+        $portal = 'ne-pas-repondre@alertes.seloger.com';
+        $domain = substr($portal, (int) strrpos($portal, '@') + 1);
+        self::assertContains($domain, self::PERMITTED_DOMAINS, 'a portal sender must be permitted');
+    }
+
+    private static function allForms(string $content): array
+    {
         // PERCENT-DECODED TOO, and its absence was a P0 (2026-09-04). `%` is outside the run class
         // below, so a percent-encoded base64 blob SPLITS: the surviving run starts two characters
         // late and strict-decodes to garbage, which reads as "nothing recoverable". A real
@@ -321,22 +508,47 @@ final class FixtureSecretsTest extends TestCase
             $next = [];
 
             foreach ($queue as $text) {
-                if (preg_match_all('/[A-Za-z0-9_\-]{16,}/', $text, $runs) === 0) {
+                if (preg_match_all('/' . self::B64_RUN . '{16,}/', $text, $runs) === 0) {
                     continue;
                 }
 
                 foreach ($runs[0] as $run) {
-                    $decoded = base64_decode(strtr($run . str_repeat('=', (4 - strlen($run) % 4) % 4), '-_', '+/'), true);
+                    // FOUR ALIGNMENTS, not one. base64 carries 3 bytes per 4 characters, so a run
+                    // that does not START on a 4-character boundary decodes to noise — and whether
+                    // it does is an accident of what preceded it in the file. The real
+                    // `X-Mailin-EID` header was readable at offset 0 purely by luck; a round-5
+                    // lens measured a live-shaped JWT recoverable at only 2 of 8 offsets.
+                    //
+                    // Widening the run class made this REQUIRED rather than merely better: with
+                    // `+` and `/` inside the class a run no longer stops at them, so the boundary
+                    // moved and the offset-0-only decode stopped finding what it used to.
+                    for ($offset = 0; $offset < 4; ++$offset) {
+                        $slice = substr($run, $offset);
 
-                    if ($decoded !== false && $decoded !== '') {
-                        $forms[] = $decoded;
-                        $next[] = $decoded;
+                        if (strlen($slice) < 16) {
+                            break;
+                        }
+
+                        $decoded = base64_decode(strtr($slice . str_repeat('=', (4 - strlen($slice) % 4) % 4), '-_', '+/'), true);
+
+                        if ($decoded !== false && $decoded !== '') {
+                            $forms[] = $decoded;
+                            $next[] = $decoded;
+                        }
                     }
                 }
             }
 
             $queue = $next;
         }
+
+        return $forms;
+    }
+
+    private static function suspects(string $content): array
+    {
+        $found = [];
+        $forms = self::allForms($content);
 
         foreach ($forms as $text) {
             foreach (self::patterns() as $kind => $pattern) {

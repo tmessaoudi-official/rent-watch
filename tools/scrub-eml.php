@@ -131,15 +131,35 @@ function recoverableForms(string $message): array
             // `rawurldecode`, NOT `urldecode`: the latter turns `+` into a space, which
             // would corrupt any run that is genuinely base64 rather than percent-encoded.
             $text = rawurldecode($text);
-            preg_match_all('~[A-Za-z0-9_\-]{16,}~', $text, $runs);
+
+            // BOTH ALPHABETS. This class was URL-safe only — `[A-Za-z0-9_\-]` — which is the
+            // percent-encoding P0 one alphabet over: `+` and `/` are the STANDARD alphabet's two
+            // extra characters, so a standard-encoded blob SPLIT on them, each fragment started off
+            // the 4-byte boundary, strict decoding returned garbage, and the tool reported
+            // `scrubbed` while the address stayed one decode away. A round-5 panel measured 3 of 50
+            // realistic ESP-shaped captures written with exit 0. `strtr` below is a no-op on a
+            // standard run, so one decode path still serves both.
+            preg_match_all('~[A-Za-z0-9_+/\-]{16,}~', $text, $runs);
 
             foreach ($runs[0] as $run) {
-                $padded = $run . str_repeat('=', (4 - strlen($run) % 4) % 4);
-                $decoded = base64_decode(strtr($padded, '-_', '+/'), true);
+                // FOUR ALIGNMENTS. base64 carries 3 bytes per 4 characters, so a run that does not
+                // START on a boundary decodes to noise — and whether it does is an accident of what
+                // preceded it in the file. The real `X-Mailin-EID` was readable at offset 0 by
+                // luck; a live-shaped JWT was measured recoverable at only 2 of 8 offsets.
+                for ($offset = 0; $offset < 4; ++$offset) {
+                    $slice = substr($run, $offset);
 
-                if ($decoded !== false && $decoded !== '') {
-                    $forms[] = $decoded;
-                    $next[] = $decoded;
+                    if (strlen($slice) < 16) {
+                        break;
+                    }
+
+                    $padded = $slice . str_repeat('=', (4 - strlen($slice) % 4) % 4);
+                    $decoded = base64_decode(strtr($padded, '-_', '+/'), true);
+
+                    if ($decoded !== false && $decoded !== '') {
+                        $forms[] = $decoded;
+                        $next[] = $decoded;
+                    }
                 }
             }
         }

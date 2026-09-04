@@ -544,6 +544,44 @@ mailin_status=0
 php "$repo/tools/scrub-eml.php" "$mailin" "$work/mailin.out.eml" "$address" \
   >"$work/mailin.log" 2>&1 || mailin_status=$?
 
+# ── THE SAME BLOB UNDER A HEADER THE TOOL DOES NOT KNOW (C2 round 5, resilience F3).
+#
+# `X-Mailin-EID` is on the tool's `$drop` list, so the case above is satisfied by removing the
+# header BY NAME: deleting `rawurldecode` left all 54 checks passing. A named drop is a good
+# defence and a bad test — it proves the LIST, not the mechanism, and the next ESP will use a
+# header nobody has listed. This case removes the list from the answer.
+#
+# WHAT IT DOES NOT PROVE, stated because a first version of it claimed otherwise and was wrong:
+# it does NOT isolate the percent-decode. Measured by deleting `rawurldecode` and re-running —
+# still green, on this shape and on two others built for the purpose. The tool refuses through
+# LAYERS, and two coarser ones fire first: an 80+ character opaque-run detector that never decodes
+# anything, and a direct base64 run scan that sees any blob `rawurlencode` left intact (it encodes
+# only `+`, `/` and `=`, so a base64 string containing none of them passes through unchanged).
+# Isolating the decode needs a payload short enough to slip the first and `+`-bearing enough to
+# defeat the second; a search over ~100 000 randomised realistic shapes produced none.
+#
+# The decode IS covered, by the `FixtureSecretsTest` twin, which is verified red without it. The
+# right conclusion is that the tool's decode layer is defence in depth rather than the last line
+# here — not that it is untested, and not that this case tests it.
+custom="$work/custom.eml"
+{
+  printf 'From: CapCar <contact@capcar.fr>\r\n'
+  printf 'Subject: alerte\r\n'
+  printf 'X-Custom-Tracking: %s\r\n' "$blob"
+  printf 'Content-Type: text/plain\r\n\r\n'
+  printf 'Marque : Renault\r\n'
+} > "$custom"
+
+custom_status=0
+php "$repo/tools/scrub-eml.php" "$custom" "$work/custom.out.eml" "$address" \
+  >"$work/custom.log" 2>&1 || custom_status=$?
+
+check "a percent-encoded blob under an UNKNOWN header is REFUSED, not written" \
+  test "$custom_status" -ne 0
+check "and nothing was written for it" \
+  bash -c '! test -f "'"$work/custom.out.eml"'"'
+
+
 check "a percent-encoded ESP header is handled, not silently kept" test "$mailin_status" -eq 0
 if [[ -f "$work/mailin.out.eml" ]]; then
   check "and X-Mailin-EID is gone from the output" \
