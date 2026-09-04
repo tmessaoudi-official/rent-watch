@@ -952,6 +952,72 @@ read-only) and the merged prose as one review deep.
     silent and briefly looked like a phantom — the reliable diagnosis is to diff the pattern's
     matches over the file before and after, not to re-run the hook.
 
+- [2026-09-04 12:56] RECORD (**C2 ROUND 2 RAN AND WAS NOT CLEAN — 0 P0, 2 P1, 5 P2, 5 P3; all
+  findings fixed in `5833b87`; the two-clean counter RESETS**). Three lenses, unnamed, each in its
+  own pinned worktree at `8fb9b64`. Suite **2732 / 10 610**, 667 sabotage expressions applying,
+  every guard green, drift `P0=0 P1=0 P2=0`. Full reports under `var/claude/c2-round2-*.md`.
+
+  **BOTH P1s WERE THIS SESSION'S OWN WORK, which is the panel doing exactly what it is for.**
+
+  - **A credential can reach a stack trace, on BOTH production paths.** PHP prints the first 15
+    characters of every string call ARGUMENT. `tools/dump-eml.php` was fixed for this in the SAME
+    span that left `ImapMailbox` and `SmtpTransport` standing — a correct rule applied to a subset
+    of the surfaces it belongs on, committed by the change that documented the threat model. The
+    resilience lens found the IMAP one and measured two characters escaping behind a three-character
+    username. **The SMTP one was found by following the finding's implication rather than fixing
+    only its instance, and it is worse**: the credential was `say()`'s only string argument, so the
+    whole budget went to it whatever the username — eleven characters, one `base64 -d` away.
+    Recorded in `var/claude/c2-round2-author-sweep.md` because a lens did not produce it.
+
+    **The fix needed TWO levels and the first was not enough.** Moving the credential out of the
+    helper's parameters left it in `fwrite`'s, and a trace prints built-in frames too; `@`
+    suppresses warnings and does nothing to the `TypeError` a closed stream raises. Both writes are
+    wrapped with the original DISCARDED — a `previous` carries the very trace being escaped. A
+    second draft then took the encoded value as the wrapper's own parameter, putting it straight
+    back; the shipped form passes a SELECTOR and reads the credential into a local. Two levels of
+    the same mistake in one sitting is a fair measure of how easy this is to get almost right.
+
+  - **The twin tie-break made the store non-deterministic, and that refutes the claim `eb5d971`
+    shipped under.** `twinClassification()`'s `$seen` loop replaced only on a STRICT rank increase,
+    so two ELIGIBLE twins tied and the FIRST ITERATED won — and that order is `Core\Pacer`'s
+    shuffle. Cosmetic while both wrote the same tenure; COR-F5 made the confidence decide whether
+    the store writes at all, and the tie then decided the outcome on identical input. The unsafe
+    direction is unreachable, so not a §1 breach — but *"can only ever make the store MORE careful"*
+    was wrong, and both COR-F5 tests use a single twin so nothing covered it.
+
+    **The pipeline-level test for it was written first and was wrong**: two same-family listings of
+    one flat are DUPLICATES, so `Dedup` absorbs one and the survivor reaches the agency copy as a
+    single twin — the tie never occurs, and the test passed in one order and failed in the other for
+    an unrelated reason. Driven at `twinClassification()` instead, where the tie lives.
+
+  - **The compile-check list could not catch its own finding, and neither could my first guard.**
+    Deleting `advertiser_pattern` — the §1-relevant key, feeding `Core/LandlordRegistry` — left the
+    whole suite and the whole ledger green. Promoted to a named constant with a reflection test, and
+    **measured: still green**, because a data provider reading `PATTERN_PARAMS` derives its CASES
+    from the list being deleted from, so seven of seven passed. The guard that bites is a SET
+    assertion against `EMAIL_ALERT_PARAMS` — two independent lists, neither derived from the other.
+    The reflection-guard trap in its purest form, caught by sabotaging my own guard.
+
+  Five more, each verified against the tree before acting on it: `verify-deploy` read only `src/`
+  while the image also bakes `bin/` and `composer.json` (latent — all five historic `bin/` commits
+  also touched `src/`); an unreachable daemon reported as a missing image, telling the operator to
+  build while the builder was down; `pendingDigest()`'s published `@return` omitted the `tenure`
+  column its own SELECT returns; `test-backup-state.sh` ran in CI unpinned while eleven siblings
+  were pinned; a truncated capture reported as a success; and `PacedSource` dropped the counting
+  capability it forwards `FeedFreshness` for, its own docblock's principle. That last one made the
+  escalation guard fire, correctly — a decorator satisfies it by DELEGATING, so the guard gained a
+  narrow exemption requiring the class to forward `patternMisses()` to the same inner, and it still
+  fires when a real adapter loses its escalation.
+
+  **And the enumeration of historic leaks was short by one**: `25d8839`, a Cityloger Google Maps key
+  across 34 commits, pushed. Scoped honestly — a browser-side key the landlord serves to every
+  visitor is hygiene, not exposure — and recorded because an enumeration inside the rule about the
+  leak surface should be right, and because *"scrubbing was a habit"* is the same cause as the other
+  two.
+
+  **RE-FREEZE for round 3: `5833b87`** — 82 commits since `7765997`, **49 touching code**. The
+  pointer's own test is empty and the tree is clean.
+
 ---
 
 ## Fragile implementations register (the developer asked; keep this list honest)
@@ -2123,8 +2189,8 @@ tool/guard) and say which ones the fix covers.**
 | 23 | 6-C2 P2 CMP-1 — ntfy badge test uses an ASCII stand-in | S | done | 38f64bb | tests/php/Core/Notify/NtfyChannelWireTest.php |
 | 24 | 6-C2 P2 CMP-4 — F19 register row cites two stale line numbers | S | done | 38f64bb | docs/plans/scout-unified-execution.plan.md |
 | 25 | 6-C2 re-freeze at the last P2 commit and re-measure the span | S | done | 8fb9b64 | docs/plans/scout-unified-execution.plan.md |
-| 26 | 6-C2 round 2 — MAXIMAL, weighted to RunStore LandlordRegistry and the unread tests | L | todo | - | src/php/Core/RunStore.php src/php/Rent/Core/LandlordRegistry.php |
-| 27 | 6-C2 round 3 — the second consecutive clean round the bar requires | L | todo | - | src/php |
+| 26 | 6-C2 round 2 — MAXIMAL, ran at 8fb9b64: 2 P1, 5 P2, 5 P3, all fixed | L | done | 5833b87 | src/php/Adapters/Mail/ImapMailbox.php src/php/Core/Notify/SmtpTransport.php src/php/Rent/Cli/Pipeline.php |
+| 27 | 6-C2 round 3 — round 2 had findings, so the two-clean count restarts here | L | todo | - | src/php |
 | 28 | F18 a plain grep silently skips the Latin-1 PAP fixtures | S | done | 38f64bb | tests/php/Repo/FixtureSecretsTest.php |
 | 29 | F20 the durable reading no longer claims where it was read | M | done | 526d246 | src/php/Rent/Cli/Pipeline.php docs/OPEN-QUESTIONS.md |
 | 30 | F25 compose recreate wedges and leaves the watcher down silently | M | done | 38f64bb | tools/verify-deploy.sh tests/test-verify-deploy.sh README.md |
