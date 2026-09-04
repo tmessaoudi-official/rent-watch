@@ -1528,17 +1528,26 @@ run_sabotage "a mailbox failure becomes an empty list instead of a source failur
   src/php/Adapters/Mail/FileMailbox.php \
   's%if (!is_dir(\$this->directory)) {%if (false) {%'
 
+# RETARGETED 2026-09-04, NOT REWRITTEN: the band moved from `EmailAlertSource` into
+# `Payload::plausibleRent()`, and these three kept `sed`ing the vanished literal — three expressions
+# reporting coverage they did not have, on exactly the guarantees the move was about. The code is
+# byte-identical in its new home, so each expression still matches there and nowhere else. This is
+# the SECOND time in two commits (see `081ab28`, the escalation extraction); the gate
+# `tests/test-sabotage-applies.sh` is what catches it, and it must be run after any code MOVE.
+# THE NUMBERS BECAME NAMED CONSTANTS in the same move, so retargeting the FILE was not enough —
+# a first pass did exactly that and all three stayed inert. An expression follows the code's shape,
+# not only its address.
 run_sabotage "the rent plausibility band is removed (a postcode parses as a rent)" \
-  src/php/Rent/Adapters/EmailAlertSource.php \
-  's%\$value >= 200 \&\& \$value <= 20000%$value !== null%'
+  src/php/Rent/Adapters/Payload.php \
+  's%\$value >= self::RENT_FLOOR \&\& \$value <= self::RENT_CEILING%$value !== null%'
 
 run_sabotage "only the band's 200 FLOOR is removed (an agency fee parses as a rent)" \
-  src/php/Rent/Adapters/EmailAlertSource.php \
-  's%\$value >= 200 \&\& %%'
+  src/php/Rent/Adapters/Payload.php \
+  's%\$value >= self::RENT_FLOOR \&\& %%'
 
 run_sabotage "only the band's 20000 CEILING is removed (a sale price parses as a rent)" \
-  src/php/Rent/Adapters/EmailAlertSource.php \
-  's% \&\& \$value <= 20000%%'
+  src/php/Rent/Adapters/Payload.php \
+  's% \&\& \$value <= self::RENT_CEILING%%'
 
 run_sabotage "SMTP permits plaintext credentials to a remote host" \
   src/php/Core/Notify/SmtpTransport.php \
@@ -1946,6 +1955,18 @@ run_sabotage "a live detail_map field is taken from the card only" \
 run_sabotage "mergedWith merges nothing, so the derived guard passes vacuously" \
   src/php/Rent/Core/RawListing.php \
   's%\([a-zA-Z]*\): $any($this->[a-zA-Z]*, $detail->[a-zA-Z]*),%\1: $this->\1,%g'
+
+# WHICH SIDE WINS WHEN BOTH HOLD A VALUE. Swapping the arguments is invisible to a merge with one
+# side empty — the guard tested exactly that shape and a round-5 lens proved the swap passed. The
+# rule is `$theirs ?? $mine`: the detail page is the better evidence, and it is what a `detail_map`
+# is fetched for.
+run_sabotage "the CARD beats the detail page when both state a value" \
+  src/php/Rent/Core/RawListing.php \
+  's%\$any = static fn (mixed \$mine, mixed \$theirs): mixed => \$theirs ?? \$mine;%$any = static fn (mixed $mine, mixed $theirs): mixed => $mine ?? $theirs;%'
+
+run_sabotage "the CARD's text beats the detail page's when both are non-empty" \
+  src/php/Rent/Core/RawListing.php \
+  "s%\$str = static fn (string \$mine, string \$theirs): string => \$theirs !== '' ? \$theirs : \$mine;%\$str = static fn (string \$mine, string \$theirs): string => \$mine !== '' ? \$mine : \$theirs;%"
 
 run_sabotage "an absent detail value overwrites what the card knew (rule 9)" \
   src/php/Rent/Core/RawListing.php \
@@ -4334,24 +4355,40 @@ run_sabotage "the pipeline sends a fixed confidence with the twin fact (the gate
   src/php/Rent/Cli/Pipeline.php \
   "s%\$seen\['source'\], \$seen\['bp'\]);%\$seen['source'], 100);%"
 
-# ── Track 6-A3 half 3: the rent band reaches the MAPPED path (2026-09-04) ───────────────────────
+# ── The MAPPED path carries NO band, and the guarantee INVERTED on 2026-09-04 ──────────────────
 #
-# `EmailAlertSource` has had a plausibility band since the SeLoger price-drop fix; the html and json
-# sources went through `ListingMapper` with none, and the live store carries 7 price-history rows at
-# 119–290 € to show for it. The LOW end is the dangerous one: 95 € clears every ceiling with maximum
-# headroom and is notified, while 2024 € merely fails everything quietly.
-run_sabotage "a mapped rent stops being banded (a figure read off the wrong thing is notified)" \
+# A band was added here that morning and removed the same day after failing on BOTH bounds. Every
+# downstream guard reads a rent as `!== null`, so on a single labelled value "outside the band" and
+# "not stated" are the same input: nulling does not reject the listing, it deletes the evidence the
+# guard needed.
+#
+#   - the CEILING skipped `max_rent_cc` (guarded `$rentCc !== null`): 25 000 € REJECT became MATCH,
+#     with the push saying "loyer non communiqué" about a rent the portal communicated. SHIPPED.
+#   - the FLOOR skipped the price-per-m² branch (`pricePerM2()` returns null on a null rent):
+#     {119 €, 60 m²} DIGEST became MATCH. Caught in review.
+#
+# So these two cases REINTRODUCE a band rather than remove one — the previous pair sabotaged the
+# band's presence and went inert when it was deleted. A guarantee that inverts needs its ledger
+# cases inverted with it; retargeting the file alone would have pinned the defect.
+run_sabotage "a FLOOR is reintroduced on the mapped path (the price-per-m2 branch is skipped)" \
   src/php/Rent/Adapters/ListingMapper.php \
-  "s%\$rent = Payload::mappedRent(Payload::int(\$item, \$map->rent));%\$rent = Payload::int(\$item, \$map->rent);%"
+  "s%\$rent = \$this->noted('rent', \$map->rent, Payload::int(\$item, \$map->rent));%\$rent = \$this->noted('rent', \$map->rent, Payload::int(\$item, \$map->rent)); \$rent = (\$rent !== null \&\& \$rent >= 200) ? \$rent : null;%"
 
-# THE CEILING BYPASS, and this was a shipped P1 (C2 round 4). `CriteriaEngine` guards `max_rent_cc`
-# with `$rentCc !== null`, so nulling an over-band figure SKIPS the ceiling: a 25 000 € flat was
-# rejected before the band reached the mapped path and MATCHED after it. The scan's upper bound is
-# safe only because refusing a candidate there means "keep looking"; on one labelled value it means
-# "no rent at all", which is the opposite safety direction.
-run_sabotage "the scan's upper bound is applied to a mapped rent again (max_rent_cc skipped)" \
+run_sabotage "a CEILING is reintroduced on the mapped path (max_rent_cc is skipped)" \
   src/php/Rent/Adapters/ListingMapper.php \
-  "s%Payload::mappedRent(Payload::int(\$item, \$map->rent))%Payload::plausibleRent(Payload::int(\$item, \$map->rent))%"
+  "s%\$rent = \$this->noted('rent', \$map->rent, Payload::int(\$item, \$map->rent));%\$rent = \$this->noted('rent', \$map->rent, Payload::int(\$item, \$map->rent)); \$rent = (\$rent !== null \&\& \$rent <= 20000) ? \$rent : null;%"
+
+# THE TIER-1 §1 SIGNAL, and the last configured key in `ListingMapper` counting nothing until C2
+# round 5 found it — independently, by two lenses. A dead `tenure_field` selector does not fail: the
+# key is absent, the classifier falls through to the SOURCE DEFAULT, and a mixed-stock portal judges
+# every listing by its most optimistic assumption while `SourceHealth` stays `ok`.
+run_sabotage "a dead tenure_field selector is counted by nobody (the tier-1 signal goes dark)" \
+  src/php/Rent/Adapters/ListingMapper.php \
+  "s%\$declared = \$this->noted('tenure_field', \$map->tenureField, Payload::string(\$item, \$map->tenureField));%\$declared = Payload::string(\$item, \$map->tenureField);%"
+
+run_sabotage "a dead rent selector is counted by nobody (max_rent_cc goes off for the source)" \
+  src/php/Rent/Adapters/ListingMapper.php \
+  "s%\$rent = \$this->noted('rent', \$map->rent, Payload::int(\$item, \$map->rent));%\$rent = Payload::int(\$item, \$map->rent);%"
 
 # ONE IMPLEMENTATION, not two copies of the same numbers. Give the email reader its own band back
 # and the two are free to drift — silently, on whichever side is not edited next.

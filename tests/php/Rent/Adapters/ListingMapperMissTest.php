@@ -71,6 +71,96 @@ final class ListingMapperMissTest extends TestCase
         return new ListingMapper($definitions[$name], $log);
     }
 
+    /**
+     * EVERY CONFIGURABLE FIELD IS COUNTED — derived from `FieldMap`, not from a list in this test.
+     *
+     * The signal shipped covering ten of the fourteen countable keys, and the four it missed were
+     * the four that matter most, which is not a coincidence: they are the ones read somewhere other
+     * than the constructor call in `map()`, so a reader scanning that call saw a complete set.
+     *
+     *   - `rent` and `rent_hc` are read in `rents()`. A dead rent selector nulls the rent, and
+     *     `CriteriaEngine::disqualify()` guards `max_rent_cc` with `$rentCc !== null` — so it
+     *     switches the rent ceiling OFF for the whole source. Nothing else moves: a nulled rent
+     *     does not drop the listing, so `item_count` is unchanged, no run fails, `SourceHealth`
+     *     stays `ok`.
+     *   - `url` is read in `url()`. Detail hydration needs it, so a death here stops every detail
+     *     page being read while the cards still map.
+     *   - `tenure_field` is read in `fields()`, and it is §1. It is the classifier's TIER-1 signal;
+     *     absent, the classifier falls through to the SOURCE DEFAULT, and a mixed-stock portal
+     *     judges every listing by its most optimistic assumption. Silently.
+     *
+     * Two lenses found this independently in C2 round 5. The guard is behavioural rather than a
+     * grep: every key is configured to a path that cannot resolve, and `total()` must name all of
+     * them. A fifteenth key added to `FieldMap` and instrumented by nobody fails HERE.
+     */
+    public function testEveryConfigurableFieldMapKeyIsCounted(): void
+    {
+        $properties = array_values(array_filter(
+            (new \ReflectionClass(\Scout\Rent\Config\FieldMap::class))->getConstructor()?->getParameters() ?? [],
+            static fn (\ReflectionParameter $p): bool => (string) $p->getType() === 'array',
+        ));
+        self::assertNotSame([], $properties, 'reflection found no field-map keys — the guard would pass vacuously');
+
+        // `ref` is the ONE deliberate exemption and it needs no counter: its absence THROWS a
+        // `SourceError` from `map()`, which is the loudest signal available. Counting it would add
+        // a key that can never reach 100 % without the run having already failed.
+        $countable = array_values(array_diff(
+            array_map(static fn (\ReflectionParameter $p): string => $p->getName(), $properties),
+            ['ref'],
+        ));
+
+        $map = ['ref' => 'id'];
+        foreach ($countable as $name) {
+            $map[self::CONFIG_KEYS[$name] ?? $name] = 'no_such_path_' . $name;
+        }
+        // Required by the loader whenever `rent` is mapped, and deliberately not a countable key:
+        // it is a declaration about the source, not a path that can fail to resolve.
+        $map['charges_included'] = true;
+
+        $log = new PatternMissLog();
+        $mapper = $this->mapper($map, $log);
+
+        // THREE items, because `total()` carries a floor of 3 calls — it speaks about a field only
+        // once it has had a fair chance to succeed. One item reports nothing and the assertion
+        // would have passed against an empty set, which is how a guard like this quietly guards
+        // nothing.
+        foreach (['a1', 'a2', 'a3'] as $id) {
+            $mapper->map(['id' => $id]);
+        }
+
+        $reported = $log->total();
+        sort($reported);
+        $expected = array_map(static fn (string $n): string => self::LOG_KEYS[$n] ?? $n, $countable);
+        sort($expected);
+
+        self::assertSame(
+            $expected,
+            $reported,
+            'a configurable field-map key is not routed through noted(). A dead selector on it is '
+            . 'then exactly as invisible as the missed PAP regex that PatternMissLog was built for.',
+        );
+    }
+
+    /**
+     * `FieldMap` property name → the key used in `config/rent/sources.json`.
+     *
+     * READ OFF `FieldMap::fromArray()` rather than guessed: `postcode` is configured as `cp`, which
+     * a first draft of this guard got wrong and was told so by a `ConfigError` rather than by a
+     * wrong result — the loud direction, and the reason the loader refuses unknown keys at all.
+     */
+    private const array CONFIG_KEYS = [
+        'postcode' => 'cp',
+        'rentHc' => 'rent_hc',
+        'tenureField' => 'tenure_field',
+    ];
+
+    /** `FieldMap` property name → the key `PatternMissLog` records it under. */
+    private const array LOG_KEYS = [
+        'postcode' => 'cp',
+        'rentHc' => 'rent_hc',
+        'tenureField' => 'tenure_field',
+    ];
+
     /** A configured path that yields nothing is a MISS, and something has to count it. */
     public function testAConfiguredPathThatYieldsNothingIsCounted(): void
     {

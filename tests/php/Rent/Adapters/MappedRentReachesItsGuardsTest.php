@@ -10,160 +10,189 @@ use PHPUnit\Framework\TestCase;
 use Scout\Rent\Adapters\ListingMapper;
 use Scout\Rent\Adapters\Payload;
 use Scout\Rent\Config\ConfigLoader;
+use Scout\Rent\Core\CriteriaEngine;
+use Scout\Rent\Core\Outcome;
+use Scout\Rent\Core\RawListing;
+use Scout\Rent\Core\SourceProfile;
+use Scout\Rent\Core\Tenure;
+use Scout\Rent\Core\TenureClassifier;
+use Scout\Rent\Core\Verdict;
 
 /**
- * TRACK 6-A3 HALF 3 — the rent plausibility band reaches the MAPPED path too.
+ * A MAPPED RENT REACHES EVERY GUARD THAT JUDGES IT, WHATEVER ITS SIZE.
  *
- * `EmailAlertSource` has had a band since the SeLoger price-drop fix: a figure outside 200–20 000 €
- * is not a rent. Without it `2024` from a date and `95240` from a postcode both parse as rents, and
- * the direction that hurts is the LOW one — **a rent of 95 € passes every ceiling with maximum
- * headroom**, so it is notified, whereas 2024 € merely fails everything quietly.
+ * Which is to say the mapped path applies no band — stated as what it BUYS rather than as what
+ * it lacks, because a round-5 lens read an earlier name (`MappedRentIsUnbandedTest`) as though
+ * it announced a gap. The absence is the mechanism; the guarantee is that nothing is erased
+ * before `max_rent_cc` and the price-per-m² floor have seen it.
  *
- * The html and json sources go through `ListingMapper` and had NO band. Measured over the live
- * store: **7 price-history rows at 119–290 €** came through that path unbanded.
+ * A band was added here on 2026-09-04 (Track 6-A3 half 3) and removed the same day, after failing
+ * twice on opposite bounds. The second failure was written by the fix for the first, which is why
+ * the reasoning is pinned by tests rather than left in a commit message.
  *
- * **STATED LIMIT, because a first draft of this test asserted otherwise and was wrong.** The band
- * is 200–20 000, so applying it here catches the rows BELOW 200 and leaves the 290 € one standing —
- * and that is correct rather than a shortfall: on a MAPPED field the value is the portal's own rent
- * field, where 290 € is a plausible chambre. The email path's band exists for a first-match SCAN
- * over prose, in which a year and a postcode compete with the rent; that argument does not transfer
- * to a value the portal labelled. Catching a mis-mapped 290 € needs evidence this band does not
- * have — the price-per-m² floor in `CriteriaEngine` is the mechanism that reaches it.
+ * ## WHY NULLING IS THE WRONG INSTRUMENT HERE
  *
- * ## ONE IMPLEMENTATION, NOT A SECOND COPY
+ * Every downstream guard reads a rent as `!== null`. On a SINGLE labelled value that makes
+ * *"outside the band"* and *"not stated"* the same input — so nulling does not reject a listing, it
+ * DELETES THE EVIDENCE the guard needed, and the listing proceeds with one fewer filter:
  *
- * The band moved to `Payload::plausibleRent()` and both readers call it. That is not tidiness: a
- * second copy is how the two drift, and this repo's whole recurring defect is a correct rule
- * applied to a subset of the surfaces it belongs on — three separate instances of it were found in
- * the certification rounds that preceded this change.
+ * | bound | guard disabled | measured effect |
+ * |---|---|---|
+ * | ceiling (20 000) | `max_rent_cc`, guarded `$rentCc !== null` | 25 000 € REJECT became MATCH, push saying *"loyer non communiqué"*. **Shipped** |
+ * | floor (200) | the price-per-m² branch, whose `pricePerM2()` returns null on a null rent | `{119 €, 60 m²}` DIGEST became MATCH. Caught in review |
  *
- * ## THE BOUNDS ARE INCLUSIVE, AND THAT IS THE SAFE DIRECTION
+ * The band belongs to `EmailAlertSource::rentIn()`, where it sits inside a loop over CANDIDATES:
+ * there *refused* means **keep looking**, and discarding one implausible figure costs nothing
+ * because the real rent is on the next line. Same numbers, opposite safety direction.
  *
- * 200 € IS a plausible rent (a parking space, a chambre) and 20 000 € IS one (a very large flat).
- * Refusing a real figure at the boundary loses a listing silently, which is the failure this
- * project cares about most; admitting one costs nothing, because every other filter still runs.
+ * ## THE MOTIVATING MEASUREMENT DID NOT SURVIVE RE-MEASUREMENT
+ *
+ * The band was justified by "7 price-history rows at 119–290 € came through unbanded". Re-read
+ * against the shipped floor, that set contains **one** row below 200 €, already digested on tenure
+ * — zero rows changed in either direction. The mechanism for a mis-mapped low rent is the
+ * price-per-m² floor, which the band switched off.
  */
 #[CoversClass(ListingMapper::class)]
 #[CoversClass(Payload::class)]
-final class MappedRentBandTest extends TestCase
+final class MappedRentReachesItsGuardsTest extends TestCase
 {
-    /** @return iterable<string, array{0: int}> */
-    public static function implausibleRents(): iterable
+    private const string CRITERIA = __DIR__ . '/../../../../config/rent/criteria.json';
+
+    /**
+     * @return iterable<string, array{0: int}>
+     */
+    public static function figuresOutsideTheScanBand(): iterable
     {
-        // MEASURED AGAINST THE SHIPPED BAND, not against the stored rows I wanted it to catch.
-        // A first draft listed 290 and 2024 here and both FAILED: they are inside 200–20 000, and
-        // the code was right. Stating the limit is the honest version of the fix.
         yield 'the lowest stored history row' => [119];
-        yield 'a stored row at 145' => [145];
-        yield 'just under the low bound' => [199];
-    }
-
-    #[DataProvider('implausibleRents')]
-    public function testAnImplausibleMappedRentIsNotARent(int $figure): void
-    {
-        $listing = $this->mapper()->map(['id' => 'a1', 'titre' => 'T3', 'loyer' => $figure]);
-
-        self::assertNull($listing->rentCc, $figure . ' € is not a rent — it is a figure read off the wrong thing');
-        self::assertNull($listing->rentHc);
+        yield 'just under the scan floor' => [199];
+        yield 'one euro over the scan ceiling' => [20001];
+        yield 'the figure the round-4 panel used' => [25000];
+        yield 'a postcode, if a selector ever drifted onto one' => [95240];
     }
 
     /**
-     * THE COUNTERWEIGHT, and without it the band is satisfied by refusing every rent — a source
-     * that matches nothing, which is indistinguishable from a quiet market.
-     *
-     * @return iterable<string, array{0: int}>
+     * A MAPPED RENT IS PASSED THROUGH WHATEVER ITS SIZE. The guards downstream do the judging.
      */
-    public static function plausibleRents(): iterable
-    {
-        yield 'the low boundary, inclusive' => [200];
-        yield 'an ordinary IdF rent' => [1150];
-        yield 'the shipped ceiling' => [1200];
-        yield 'the high boundary, inclusive' => [20000];
-        // Both of these were in the REJECT list of a first draft and belong here: a mapped field is
-        // the portal's own rent, so 2024 € is a large flat rather than a year, and 290 € is a real
-        // chambre. The email path's "a year parses as a rent" note is about a SCAN over prose,
-        // where many numbers compete; it does not transfer to a mapped value.
-        yield 'a stored row at 290 — inside the band, and correctly so' => [290];
-        yield 'a figure that would be a year in prose' => [2024];
-    }
-
-    /**
-     * THE UPPER BOUND MUST NOT REACH THE MAPPED PATH — it bypassed `max_rent_cc` (C2 round 4).
-     *
-     * `CriteriaEngine::disqualify()` guards the ceiling with `$rentCc !== null`. Nulling an
-     * over-band figure therefore SKIPS the ceiling: a 25 000 € flat was REJECTED before this band
-     * and MATCHED after it, and the push additionally said *"loyer non communiqué"* for a rent the
-     * portal had communicated. Proven by a review panel across two pinned worktrees, and the
-     * regression was DEPLOYED.
-     *
-     * The root cause is precise and worth keeping. In `EmailAlertSource::rentIn()` the band sits
-     * inside a loop over CANDIDATES, where "refused" means *keep looking* — one figure of many, and
-     * discarding a 95 000 costs nothing because the real rent is still on the next line.
-     * Transplanted onto a single MAPPED value it means *no rent at all*, which is a different
-     * statement with the opposite safety direction.
-     *
-     * So the mapped path keeps the FLOOR and drops the ceiling: below 200 is a figure read off the
-     * wrong thing and nulling it is safe, while above 20 000 the ceiling already rejects and is
-     * strictly better than silence.
-     *
-     * @return iterable<string, array{0: int}>
-     */
-    public static function aboveTheBand(): iterable
-    {
-        yield 'one euro over the scan band' => [20001];
-        yield 'the figure the panel used' => [25000];
-        yield 'an absurd figure the ceiling must still see' => [950000];
-        // A postcode read as a rent — the SCAN's own example, and it belongs here rather than in
-        // the rejected list. On a mapped field the portal labelled this its rent, so the honest
-        // answer is to hand `max_rent_cc` a figure it will reject, not to erase it and let the
-        // listing through with "loyer non communiqué".
-        yield 'a postcode, which the ceiling rejects rather than the band' => [95240];
-    }
-
-    #[DataProvider('aboveTheBand')]
-    public function testAnOverBandMappedRentIsKeptSoTheCeilingCanRejectIt(int $figure): void
+    #[DataProvider('figuresOutsideTheScanBand')]
+    public function testAMappedRentIsNeverErasedForBeingOutOfBand(int $figure): void
     {
         $listing = $this->mapper()->map(['id' => 'a1', 'titre' => 'T3', 'loyer' => $figure]);
 
         self::assertSame(
             $figure,
             $listing->rentCc,
-            'nulling it would skip max_rent_cc entirely — the flat would MATCH instead of being rejected',
+            'erasing it does not reject the listing — it removes the evidence the ceiling and the '
+            . 'price-per-m² floor each need, and both directions were proven to flip a verdict',
         );
-    }
-
-    #[DataProvider('plausibleRents')]
-    public function testAPlausibleMappedRentStillReads(int $figure): void
-    {
-        $listing = $this->mapper()->map(['id' => 'a1', 'titre' => 'T3', 'loyer' => $figure]);
-
-        self::assertSame($figure, $listing->rentCc);
     }
 
     /**
-     * ONE IMPLEMENTATION: the band the email path applies is the same callable, not a copy with the
-     * same numbers. Asserted so the two cannot drift — the failure would be silent on whichever
-     * side was not edited.
+     * THE FLOOR HALF, END TO END — and this is the case the band's own tests could not reach.
+     *
+     * `MappedRentBandTest` mapped only `titre` and `loyer`, so every listing it built had a null
+     * surface and null rooms. The price-per-m² branch needs both, so it could never fire: the tests
+     * were constructed inside the blind spot of the branch the band was disabling, which is why
+     * 2 757 of them stayed green while the regression was live.
      */
-    public function testTheEmailPathAndTheMappedPathShareOneBand(): void
+    public function testASubFloorRentStillReachesThePricePerM2Branch(): void
     {
-        // COMMENT LINES ARE STRIPPED FIRST, and this is the mirror of a trap already paid for once:
-        // the code's own docblock explains that the numbers moved to `Payload::plausibleRent()`, and
-        // a naive grep reads that sentence as the guarantee being met. Measured — the sabotage that
-        // gives the email reader its own inline band back came back UNDETECTED for exactly that
-        // reason. A structural assertion has to read the CODE.
-        $source = (string) file_get_contents(__DIR__ . '/../../../../src/php/Rent/Adapters/EmailAlertSource.php');
-        $lines = preg_split('/\R/', $source) ?: [];
-        $codeOnly = implode("\n", array_filter(
+        // 119 € for 60 m² is 1.98 €/m², far under the derived 5.50 floor.
+        $verdict = $this->judge(rentCc: 119, surfaceM2: 60.0, rooms: 3);
+
+        self::assertSame(Outcome::DIGEST, $verdict->outcome, 'a banded floor made this a MATCH');
+        self::assertNotSame(
+            [],
+            array_filter($verdict->reasons, static fn (string $r): bool => str_contains($r, '€/m²')),
+            'and it must say why, or the digest entry is a bare link',
+        );
+    }
+
+    /**
+     * THE CEILING HALF, END TO END — the regression that actually shipped.
+     */
+    public function testAnOverCeilingRentStillReachesTheRentCeiling(): void
+    {
+        self::assertSame(
+            Outcome::REJECT,
+            $this->judge(rentCc: 25000, surfaceM2: 80.0, rooms: 4)->outcome,
+            'a banded ceiling made this a MATCH',
+        );
+
+        // THE RENT IS THE ONLY THING REJECTING IT, isolated by varying that alone. A rejection
+        // carries NO reasons — hard rule 8, disqualifiers reject silently and are logged only — so
+        // the cause cannot be read off the verdict, and without this arm the assertion above is
+        // satisfied by any unrelated disqualifier and would still pass with the ceiling deleted.
+        self::assertSame(
+            Outcome::MATCH,
+            $this->judge(rentCc: 1150, surfaceM2: 80.0, rooms: 4)->outcome,
+            'the same flat under the ceiling must match, or the case above proves nothing about rent',
+        );
+    }
+
+    /**
+     * THE COUNTERWEIGHT. Without it this whole file is satisfied by deleting the band everywhere,
+     * and the scan — where "refused" means keep looking — genuinely needs both bounds.
+     */
+    public function testTheEmailScanStillBandsInBothDirections(): void
+    {
+        self::assertNull(Payload::plausibleRent(119), 'the scan floor must survive');
+        self::assertNull(Payload::plausibleRent(25000), 'and so must the scan ceiling');
+        self::assertSame(1150, Payload::plausibleRent(1150));
+
+        // Structural, and comment lines are stripped first: this file's own prose names
+        // `plausibleRent`, and a naive grep reads the documentation of a guarantee as the guarantee.
+        // A trap already paid for twice in this repo.
+        self::assertStringContainsString(
+            'Payload::plausibleRent(',
+            self::codeOf(__DIR__ . '/../../../../src/php/Rent/Adapters/EmailAlertSource.php'),
+            'the email reader must keep the band the scan needs',
+        );
+    }
+
+    /**
+     * AND THE MAPPED PATH MUST NOT GROW ONE BACK. Stated as code rather than as a comment, because
+     * the comment explaining this was in place when the band was added the second time.
+     */
+    public function testTheMappedPathCarriesNoBandAtAll(): void
+    {
+        $code = self::codeOf(__DIR__ . '/../../../../src/php/Rent/Adapters/ListingMapper.php');
+
+        self::assertStringNotContainsString('plausibleRent', $code, 'the scan band must not reach the mapped path');
+        self::assertStringNotContainsString('mappedRent', $code, 'nor a mapped variant of it');
+    }
+
+    private static function codeOf(string $path): string
+    {
+        $lines = preg_split('/\R/', (string) file_get_contents($path)) ?: [];
+
+        return implode("\n", array_filter(
             $lines,
             static fn (string $l): bool => preg_match('~^\s*(\*|/\*|//|#)~', $l) !== 1,
         ));
+    }
 
-        self::assertStringContainsString(
-            'Payload::plausibleRent(',
-            $codeOnly,
-            'the email reader must call the shared band rather than carry its own copy of the numbers',
+    private function judge(int $rentCc, float $surfaceM2, int $rooms): Verdict
+    {
+        $listing = new RawListing(
+            sourceName: 'seloger',
+            externalId: 'https://www.seloger.com/annonces/1',
+            title: 'Appartement',
+            description: 'Bel appartement proche gare.',
+            commune: 'Sartrouville',
+            postcode: '78500',
+            rentCc: $rentCc,
+            surfaceM2: $surfaceM2,
+            rooms: $rooms,
         );
+
+        // The REAL classifier rather than a fabricated Classification, so this cannot drift from
+        // what the pipeline actually feeds `judge()`.
+        $classification = (new TenureClassifier())->classify(
+            $listing,
+            new SourceProfile(name: 'seloger', defaultTenure: Tenure::LIBRE, mixedTenure: false),
+        );
+
+        return (new CriteriaEngine(ConfigLoader::loadCriteria(self::CRITERIA)))->judge($listing, $classification);
     }
 
     private function mapper(): ListingMapper

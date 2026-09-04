@@ -253,10 +253,58 @@ final class ListingSnapshotTest extends TestCase
             if (in_array($name, self::mergedParameters(), true)) {
                 $fromDetail = (new RawListing('s', 'e'))->mergedWith($rich);
                 self::assertSame($expected, $property->getValue($fromDetail), 'RawListing::$' . $name . ' is lost when the DETAIL holds it');
+
+                // AND WITH BOTH SIDES HOLDING A VALUE, the DETAIL must win. Neither case above can
+                // say so: each has one side empty, so `$any($mine, $theirs)` and a swapped
+                // `$any($theirs, $mine)` return the same answer, and a lens proved the swap passes.
+                // The rule is `$theirs ?? $mine` — the detail page is the better evidence — and this
+                // is the only shape that distinguishes it. Latent today, because no shipped
+                // `detail_map` maps a key the card also fills; the day one does, this decides the
+                // verdict.
+                if ($name !== 'fields') {
+                    $other = self::otherValue($expected);
+                    $contested = (new RawListing('s', 'e'))->mergedWith($rich)->mergedWith(
+                        self::listingWith($property->getName(), $other),
+                    );
+                    self::assertSame(
+                        $other,
+                        $property->getValue($contested),
+                        'RawListing::$' . $name . ' takes the CARD\'s value when both are present — the detail page is the better evidence',
+                    );
+                }
             }
         }
 
         self::assertSame([], $skipped, 'every constructor parameter must be exercised: ' . implode(', ', $skipped));
+    }
+
+    /**
+     * A value of the same type that is DISTINGUISHABLE from the one given.
+     *
+     * `fields` is excluded by the caller rather than handled here: it merges by spread, so "the
+     * detail wins" is a per-KEY statement, and the counterweight below already pins the spread.
+     */
+    private static function otherValue(mixed $value): mixed
+    {
+        return match (true) {
+            is_bool($value) => !$value,
+            is_int($value) => $value + 1,
+            is_float($value) => $value + 1.0,
+            is_string($value) => $value . '-detail',
+            default => $value,
+        };
+    }
+
+    /**
+     * A listing empty but for one property.
+     *
+     * Built by SPREADING a named argument rather than by reflection: `RawListing` is readonly, so
+     * `ReflectionProperty::setValue()` throws — and the spread needs no constructor list here, so
+     * a new parameter still arrives through `richListing()` as a red test rather than silently.
+     */
+    private static function listingWith(string $property, mixed $value): RawListing
+    {
+        return new RawListing('s', 'e', ...[$property => $value]);
     }
 
     /**
