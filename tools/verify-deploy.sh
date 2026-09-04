@@ -40,6 +40,15 @@ if ! command -v docker > /dev/null 2>&1; then
   exit 2
 fi
 
+# AN UNREACHABLE DAEMON IS NOT A MISSING IMAGE, and reporting it as one told the operator to build
+# while the thing that would do the building was down. Self-correcting within a step — the build
+# fails too — but this is a deploy-verification tool whose entire value is a diagnosis that can be
+# believed, and the F25 defect it exists for is precisely an absence rendered as the wrong cause.
+if ! docker info > /dev/null 2>&1; then
+  printf 'verify-deploy: le démon Docker est injoignable — rien de vérifiable (ce n%s est PAS une image manquante).\n' "'" >&2
+  exit 2
+fi
+
 current="$(docker image inspect "$IMAGE" --format '{{.Id}}' 2>/dev/null)"
 if [[ -z "$current" ]]; then
   printf "verify-deploy: l'image %s n'existe pas — construisez-la avant de déployer.\n" "$IMAGE" >&2
@@ -105,7 +114,13 @@ done
 # instance of the same shape ran seventeen hours. Green, pushed and deployed are three different
 # things, and only this line is about the third one.
 if git -C "$(pwd)" rev-parse --is-inside-work-tree > /dev/null 2>&1; then
-  newest_src_epoch="$(git log -1 --format=%ct -- src 2>/dev/null)"
+  # EVERY PATH THE IMAGE BAKES, not just src/ (C2 round 2). `Dockerfile:66-69` copies `src/`,
+  # `bin/` and `composer.json` into the runtime stage, and `bin/scout` is the ENTRYPOINT and the
+  # --domain dispatcher — a bin-only commit is exactly as stale as a src-only one, and this check
+  # said "l'image est postérieure" over it. Latent when found: all five historic `bin/` commits also
+  # touched `src/`. `config/` is deliberately NOT here — compose bind-mounts it, so a config change
+  # takes effect without a rebuild, and including it would report a stale image that is not stale.
+  newest_src_epoch="$(git log -1 --format=%ct -- src bin composer.json composer.lock 2>/dev/null)"
   image_iso="$(docker image inspect "$IMAGE" --format '{{.Created}}' 2>/dev/null)"
   image_epoch="$(date -d "$image_iso" +%s 2>/dev/null)"
 
@@ -114,12 +129,12 @@ if git -C "$(pwd)" rev-parse --is-inside-work-tree > /dev/null 2>&1; then
     # quietly, because a check that cannot run and does not say so is the vacuous-green shape.
     say "image vs code : indéterminable (historique git ou date d'image absente)"
   elif (( image_epoch < newest_src_epoch )); then
-    bad "l'image est ANTÉRIEURE au dernier commit de src/ — le watcher tourne du code périmé"
+    bad "l'image est ANTÉRIEURE au dernier commit de src/, bin/ ou composer.json — le watcher tourne du code périmé"
     printf '      image  %s\n      commit %s (%s)\n' \
-      "$image_iso" "$(git log -1 --format=%cI -- src)" "$(git log -1 --format=%h -- src)"
+      "$image_iso" "$(git log -1 --format=%cI -- src bin composer.json composer.lock)" "$(git log -1 --format=%h -- src bin composer.json composer.lock)"
     printf '      docker compose build && docker compose up -d --remove-orphans\n'
   else
-    good "l'image est postérieure au dernier commit de src/"
+    good "l'image est postérieure au dernier commit de src/, bin/ et composer.json"
   fi
 fi
 

@@ -222,9 +222,11 @@ final readonly class SmtpTransport implements MailTransport
     {
         $this->say($socket, 'AUTH LOGIN');
         $this->expect($socket, 334);
-        $this->say($socket, base64_encode($this->user));
+        // NOT `say($socket, base64_encode($this->user))` — see sayCredential(). The two credential
+        // lines are the only ones that must not travel as a call argument.
+        $this->sayUser($socket);
         $this->expect($socket, 334);
-        $this->say($socket, base64_encode($this->password));
+        $this->sayPassword($socket);
         // 235 = authenticated. Anything else and the server will echo the command it rejected, which
         // is why `$this->secrets()` carries the base64 form as well as the plaintext.
         $this->expect($socket, 235);
@@ -234,6 +236,84 @@ final readonly class SmtpTransport implements MailTransport
     private function say(mixed $socket, string $line): void
     {
         if (@fwrite($socket, $line . "\r\n") === false) {
+            throw new ChannelError('email', 'could not write to the SMTP connection', null, $this->secrets());
+        }
+    }
+
+    /**
+     * The two AUTH LOGIN lines, sent WITHOUT the credential becoming a call argument.
+     *
+     * PHP ships `zend.exception_ignore_args = Off` and `zend.exception_string_param_max_len = 15`,
+     * so an uncaught trace prints the first 15 characters of every string ARGUMENT. Measured on this
+     * runtime with the old `say($socket, base64_encode($this->password))`:
+     *
+     *     #1 ... Scout\Core\Notify\SmtpTransport->say(NULL, 'U3VwZXJTZWNyZXR...')
+     *     decoded prefix: SuperSecret
+     *
+     * **Eleven characters of the password, one `base64 -d` away — and this surface is WORSE than the
+     * IMAP one it was found beside.** `ImapMailbox` sent `LOGIN "<user>" "<password>"`, so a long
+     * username spent the budget before reaching the secret; here the credential was the ONLY string
+     * argument, so the whole budget went to it on every deployment whatever the username.
+     *
+     * Third of three surfaces with one shape: `tools/dump-eml.php` (fixed first), `ImapMailbox`
+     * (found by a review panel), and this one — found by asking what else the panel's question
+     * reaches rather than fixing only its instance. `$socket` stays an argument on purpose: a
+     * resource prints as `Resource id #N`, never its contents.
+     *
+     * `secrets()` masks the message; it cannot mask a frame argument, which is why this is
+     * structural rather than a redaction.
+     *
+     * @param resource $socket
+     */
+    private function sayUser(mixed $socket): void
+    {
+        $this->writeCredential($socket, password: false);
+    }
+
+    /** @param resource $socket */
+    private function sayPassword(mixed $socket): void
+    {
+        $this->writeCredential($socket, password: true);
+    }
+
+    /**
+     * THE WRITE ITSELF IS A FRAME, and the first version of this fix was one level short.
+     *
+     * Moving the credential out of `say()`'s argument list left it in `fwrite`'s, which is exactly
+     * as visible — a trace prints EVERY live frame's arguments, not only the ones in this codebase:
+     *
+     *     #0 SmtpTransport.php(278): fwrite(NULL, 'U3VwZXJTZWNyZXR...')
+     *
+     * `@` suppresses warnings and does nothing to a `TypeError`, which is what a null or closed
+     * stream raises. So the write is wrapped and the original discarded: a `ChannelError` thrown
+     * from HERE captures its trace at this line, where the credential is not an argument of any
+     * live frame. The discarded exception is not chained for the same reason — a `previous` carries
+     * its own trace, and that trace is the one being escaped.
+     *
+     * **Stated cost:** the underlying stream error is lost, so a failed AUTH write reports only
+     * that it could not be written. That is the trade this project already makes elsewhere for
+     * credentials — `secrets()` masks the message, and a masked diagnosis beats a leaked one.
+     *
+     * **`$password` is a SELECTOR, not the credential**, and the difference is the whole fix. A
+     * first draft took the encoded value as a parameter, which put it straight back on a frame —
+     * this one's — because the `ChannelError` below is constructed while that frame is still live.
+     * A local variable is not printed in a trace; a parameter is. Two levels of the same mistake in
+     * one sitting is a fair measure of how easy this is to get almost right.
+     *
+     * @param resource $socket
+     */
+    private function writeCredential(mixed $socket, bool $password): void
+    {
+        $line = base64_encode($password ? $this->password : $this->user) . "\r\n";
+        $written = false;
+
+        try {
+            $written = @fwrite($socket, $line);
+        } catch (\Throwable) {
+            $written = false;
+        }
+
+        if ($written === false) {
             throw new ChannelError('email', 'could not write to the SMTP connection', null, $this->secrets());
         }
     }

@@ -1551,6 +1551,15 @@ this way" is never authority, and extending it in place contradicts the brief.
    > a forward fix is the most a session can land. The asset is not the name — that is public as
    > the commit author on every commit — it is the LINKAGE of a person to a subscription and its
    > criteria. Treat "the tree is clean" and "the exposure is over" as different claims.
+   >
+   > **THERE IS A THIRD COMMITTED-THEN-SCRUBBED INCIDENT, and this note enumerated two** (C2 round
+   > 2, 2026-09-04). `25d8839 fix(fixtures): a live API key was committed, because scrubbing was a
+   > habit` — Cityloger's Google Maps key, reachable across 34 commits, `a00791e` → `8c16587`, and
+   > pushed. **Scoped honestly: that one is NOT a credential exposure.** The context is
+   > `tarteaucitron.user.googlemapsKey`, a browser-side key the landlord serves to every visitor;
+   > it is hygiene, and republishing somebody else's key is still not this repo's to decide. It is
+   > recorded because an enumeration inside the rule about the leak surface should be right, and
+   > because "scrubbing was a habit" is the same cause as the other two.
 8. **Hard disqualifiers and score are two different mechanisms.** Do not conflate them. Disqualifiers
    reject silently and are logged only. Score (0–100) drives ordering and notification priority, and
    every notification carries its `reasons[]`. A disqualifier applied before enrichment rejects on a
@@ -1928,10 +1937,15 @@ tools/verify-deploy.sh           Did the redeploy land? `up -d` printing Started
                                  same: "running, image courante" is true of a watcher whose
                                  image predates the fix by a day and a half, which is
                                  exactly what happened on 2026-09-04
-tests/test-verify-deploy.sh      Its sabotage test — 7 cases through a stub `docker`,
-                                 counterweight first. A missing image exits 2 ("build it"),
-                                 never 1 ("watcher down"): collapsing those would make a
-                                 forgotten build read as a broken watcher
+tests/test-verify-deploy.sh      Its sabotage test — every failure state driven through a
+                                 stub `docker`, counterweight FIRST. A missing image exits 2
+                                 ("build it"), never 1 ("watcher down"): collapsing those
+                                 would make a forgotten build read as a broken watcher.
+                                 NO CASE COUNT IS WRITTEN HERE, deliberately: this line said
+                                 "7 cases" and the very commit that added the eighth and
+                                 ninth left it standing, because it sat in the same hunk as
+                                 an untouched context line. Run it — the tally is its last
+                                 line. Same rule as the skills list further down
 tests/test-sabotage-baseline.sh  Proves the sabotage ledger judges its cases in a GREEN scratch tree
 tests/test-ci-workflow.sh   Proves ci.yml still wires every step this file claims CI runs
 tools/backup-state.sh       Backs up the seen-set — the one file this project calls
@@ -2274,6 +2288,14 @@ documented this left with `scripts/claude-bootstrap/` on 2026-08-18 — this lis
 ```
 CLAUDE.md                          This file — project scope, wins on any conflict
 .claude/settings.json              Allow-list permissions, defaultMode auto, hook wiring
+.claude/progress.json              Adapter for ~/.claude/bin/project-state.sh — what /progress,
+                                   /next and /goal-brief read. Names the test_cmd (the CORE
+                                   suite only; the ledger takes hours and is a nightly CI job,
+                                   and a `certified` marker needing a two-hour run is one
+                                   nobody produces), the required tools, the cursor files and
+                                   what to exclude. Without it `--record-test` dies and NO plan
+                                   step can ever reach the `certified` state — a row could say
+                                   `done` with a sha and never anything stronger
 .claude/hooks/tenure-guard.sh      PostToolUse tripwire on the §1 rule; exits 2 when it fires
 tests/test-tenure-guard.sh         Sabotage test FOR that hook — must-fire and must-stay-silent halves
 tests/test-vehicle-guard.sh        The CAR half. Found four defects in the patterns it tests,

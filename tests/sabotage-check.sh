@@ -4300,6 +4300,58 @@ run_sabotage "the pipeline sends a fixed confidence with the twin fact (the gate
   src/php/Rent/Cli/Pipeline.php \
   "s%\$seen\['source'\], \$seen\['bp'\]);%\$seen['source'], 100);%"
 
+# ── C2 round 2: every accepted `*_pattern` param compiles at load (2026-09-04) ──────────────────
+#
+# The eight keys were an inline literal and six had no test at all, so deleting `advertiser_pattern`
+# — the §1-relevant one, feeding `Core\LandlordRegistry` — left the whole suite and this whole
+# ledger green. `matchParam()` reads them with `@preg_match`: one that does not compile never
+# matches and never says so, and on that key the silence re-opens exactly the hole the registry
+# closes.
+#
+# THE PER-KEY TESTS ALONE CANNOT CATCH THIS. Their data provider reads the very list being deleted
+# from, so removing an entry removes its own case and seven of seven pass — measured. The guard that
+# bites is the SET assertion against `EMAIL_ALERT_PARAMS`, two independent lists neither derived
+# from the other.
+run_sabotage "a regex param drops off the compile-check list (a broken one then matches nothing, silently)" \
+  src/php/Rent/Config/ConfigLoader.php \
+  "0,/^        'advertiser_pattern',\$/s%^        'advertiser_pattern',\$%%"
+
+# ── C2 round 2: two eligible twins must not be separated by harvest order (2026-09-04) ──────────
+#
+# `twinClassification()`'s `$seen` loop replaced only on a STRICT rank increase, so two eligible
+# twins tied and the first ITERATED won — and that order is `Core\Pacer`'s shuffle. Cosmetic until
+# COR-F5 made the confidence decide whether the store writes at all; after it, the tie decided the
+# outcome on identical input. It refutes the claim COR-F5 shipped under, that the change could only
+# make the store more careful: it also made it non-deterministic, which is the failure the fixed
+# point above that method exists to remove.
+run_sabotage "an equal-rank twin tie stops breaking on confidence (the pacer decides again)" \
+  src/php/Rent/Cli/Pipeline.php \
+  "s%&& \$resolved\['bp'\] > \$seen\['bp'\]%\&\& false%"
+
+# ── C2 round 2: no credential may reach a stack trace (2026-09-04) ──────────────────────────────
+#
+# PHP prints the first 15 characters of every string ARGUMENT of every live frame. `dump-eml.php`
+# was fixed for this and BOTH production paths were left standing — the recurring defect of a
+# correct rule applied to a subset of its surfaces, committed by the change that documented the
+# threat model. A review panel found the IMAP one; the SMTP one was found by asking what else the
+# same question reached, and is worse: the credential was the only string argument, so the whole
+# budget went to it whatever the username.
+run_sabotage "the IMAP login goes back through the generic command helper (password on a frame)" \
+  src/php/Adapters/Mail/ImapMailbox.php \
+  "s%            \$this->login();%            \$this->command('LOGIN ' . self::quote(\$this->user) . ' ' . self::quote(\$this->password));%"
+
+run_sabotage "the SMTP password goes back to say() as an argument (base64, 11 chars recoverable)" \
+  src/php/Core/Notify/SmtpTransport.php \
+  "s%        \$this->sayPassword(\$socket);%        \$this->say(\$socket, base64_encode(\$this->password));%"
+
+# THE SECOND LEVEL, which the first draft of the fix missed. Moving the credential out of the
+# helper's parameter list leaves it in `fwrite`'s, and a trace prints built-in frames too; `@`
+# suppresses warnings and does nothing to the TypeError a closed stream raises. Remove the wrapper
+# and a closed socket puts the base64 credential straight back on the trace.
+run_sabotage "the SMTP credential write is unwrapped again (fwrite's own frame carries it)" \
+  src/php/Core/Notify/SmtpTransport.php \
+  "s%            \$written = @fwrite(\$socket, \$line);%            \$written = fwrite(\$socket, base64_encode(\$password ? \$this->password : \$this->user) . \"\\\\r\\\\n\");%"
+
 # ── F20: the durable reading may not claim a provenance the row does not carry (2026-09-04) ─────
 #
 # `listings.tenure` holds ONE value and no note of where it came from, while the judging loop writes

@@ -45,6 +45,38 @@ final class ConfigLoader
      * reads but this list omits is a refusal on a config that is correct — the opposite failure,
      * and a loud one, which is the safe direction.
      */
+    /**
+     * Every `params` key whose value is a REGEX and must therefore compile at load.
+     *
+     * **A NAMED CONSTANT, and read by reflection in `ConfigTest`, because the inline literal this
+     * replaced was untestable in the direction that matters** (C2 round 2, 2026-09-04). Six of its
+     * eight entries had no test at all and no ledger case touched the line, so deleting
+     * `advertiser_pattern` — the §1-relevant one, feeding `Core\LandlordRegistry` — left the whole
+     * suite and the whole ledger green. The car side already carried the cure:
+     * `Car\VehicleSourceLoader::PATTERN_PARAMS` plus a reflection test that fails when a key is
+     * added and not covered. This is that shape, ported.
+     *
+     * Why each one is here rather than merely nice to have: `matchParam()` reads them with
+     * `@preg_match`, which neither warns nor throws, so a pattern that does not compile matches
+     * nothing SILENTLY. On `advertiser_pattern` that silence re-opens the exact hole the registry
+     * closes — a card advertised by a bailleur is judged with the portal's `LIBRE` default again.
+     * On `subject_pattern` the failure is not an extraction but an ADMISSION: it decides which
+     * messages the source reads at all, and a dead one ingests every message from that sender,
+     * including on leboncoin the VEHICLE alerts sharing its sender, link host and card separator.
+     *
+     * @var list<string>
+     */
+    private const array PATTERN_PARAMS = [
+        'title_pattern',
+        'residence_pattern',
+        'commune_pattern',
+        'surface_pattern',
+        'rooms_pattern',
+        'card_separator_pattern',
+        'advertiser_pattern',
+        'subject_pattern',
+    ];
+
     private const array EMAIL_ALERT_PARAMS = [
         'from',
         'subject_pattern',
@@ -659,7 +691,7 @@ final class ConfigLoader
         // that does not compile matches nothing, `@preg_match` neither warns nor throws, and the
         // source silently ingests every message from its sender — including, on leboncoin, the
         // VEHICLE alerts that share its sender, its link host and its card separator.
-        foreach (['title_pattern', 'residence_pattern', 'commune_pattern', 'surface_pattern', 'rooms_pattern', 'card_separator_pattern', 'advertiser_pattern', 'subject_pattern'] as $patternKey) {
+        foreach (self::PATTERN_PARAMS as $patternKey) {
             $pattern = $params[$patternKey] ?? null;
 
             if ($pattern === null || $pattern === '') {

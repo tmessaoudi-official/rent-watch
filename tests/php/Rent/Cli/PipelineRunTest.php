@@ -8,6 +8,8 @@ use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use Scout\Rent\Adapters\Source;
 use Scout\Adapters\SourceError;
+use Scout\Rent\Core\Classification;
+use Scout\Rent\Core\Outcome;
 use Scout\Rent\Cli\Pipeline;
 use Scout\Rent\Config\ConfigLoader;
 use Scout\Rent\Config\Criteria;
@@ -838,6 +840,78 @@ final class PipelineRunTest extends TestCase
             Tenure::LLI,
             $store->twinTenure($store->dedupKey($agency))['tenure'] ?? null,
             'evidence still clears; only absence no longer does',
+        );
+    }
+
+    /**
+     * TWO ELIGIBLE TWINS MUST NOT BE SEPARATED BY HARVEST ORDER (C2 round 2, 2026-09-04).
+     *
+     * `twinClassification()` replaced `$seen` only on a STRICT rank increase, so two twins that are
+     * both eligible tied and the first iterated won — and that order is `Core\Pacer`'s shuffle.
+     * While both wrote the same tenure and only the `source` string differed, that was cosmetic.
+     * COR-F5 made the confidence decide whether the store writes at all, and the tie then decided
+     * the outcome on identical input: the weak twin leading left the flat in the digest, the strong
+     * one leading produced a push, same pass, same listings.
+     *
+     * A review panel found it, and it refutes the claim COR-F5 shipped under — that the change could
+     * only make the store MORE careful. It also made the store non-deterministic, which is the very
+     * failure the fixed point above `twinClassification()` exists to remove. Both COR-F5 tests use a
+     * single twin, so nothing covered this.
+     *
+     * @return iterable<string, array{0: bool}>
+     */
+    public static function twinOrders(): iterable
+    {
+        yield 'the weak twin harvested first' => [true];
+        yield 'the strong twin harvested first' => [false];
+    }
+
+    /**
+     * EXERCISED AT `twinClassification()` RATHER THAN THROUGH `runOnce()`, and the reason is the
+     * finding itself. A first draft built the two eligible twins as two institutional sources and
+     * ran a real pass — but two same-family listings of one flat are DUPLICATES, so `Dedup` absorbs
+     * one before clustering and the survivor reaches the agency copy as a SINGLE twin. The tie never
+     * occurs, and the test passed in one order and failed in the other for a completely different
+     * reason (survivorship), which would have been a test proving something other than what it says.
+     * The tie lives in this method's `$seen` loop, so that is where it is driven from.
+     */
+    #[DataProvider('twinOrders')]
+    public function testTheOutcomeDoesNotDependOnWhichEligibleTwinIsHarvestedFirst(bool $weakFirst): void
+    {
+        $store = $this->store();
+        [, $agency] = $this->twins();
+
+        // A recorded doubt on the agency row — the state the confidence gate reads.
+        $sighting = $store->record($agency, $agency->effectiveRentCc(), '2026-08-07T12:00:00+02:00');
+        $store->recordTwin($sighting->dedupKey, Tenure::UNKNOWN, 'cdc_habitat', 0);
+
+        $weak = $this->thirdRoute([], 'Bel appartement de 4 pieces de 88 m2.');
+        $strong = $this->directRoute(['financement' => 'LLI'], '4 pieces de 88 m2, logement intermediaire.');
+
+        $reading = [
+            spl_object_id($weak) => ['tenure' => Tenure::LLI, 'source' => 'inli', 'bp' => 50],
+            spl_object_id($strong) => ['tenure' => Tenure::LLI, 'source' => 'cdc_habitat', 'bp' => 90],
+        ];
+        $twins = $weakFirst
+            ? [['listing' => $weak, 'family' => 'institutional'], ['listing' => $strong, 'family' => 'institutional']]
+            : [['listing' => $strong, 'family' => 'institutional'], ['listing' => $weak, 'family' => 'institutional']];
+
+        $method = new \ReflectionMethod(Pipeline::class, 'twinClassification');
+        $method->invoke(
+            $this->pipeline($store, new Notifier([new RecordingChannel()])),
+            new Classification(Tenure::LIBRE, 50, [], Outcome::MATCH),
+            $sighting->dedupKey,
+            [$sighting->dedupKey],
+            $twins,
+            $reading,
+        );
+
+        // The STRONGEST reading decides, whichever order it arrived in. Asserted as the STORED fact,
+        // because that is what persists and what the next pass reads.
+        self::assertSame(
+            Tenure::LLI,
+            $store->twinTenure($sighting->dedupKey)['tenure'] ?? null,
+            'the evidence decides, not the pacer',
         );
     }
 

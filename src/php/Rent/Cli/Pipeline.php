@@ -973,7 +973,26 @@ final readonly class Pipeline
             if ($resolved === null) {
                 continue;
             }
-            if ($seen === null || $rank($resolved['tenure']) > $rank($seen['tenure'])) {
+            // THE TIE IS BROKEN ON CONFIDENCE, and before COR-F5 it did not need to be (C2 round 2).
+            //
+            // A strict `>` leaves two ELIGIBLE twins tied at rank 0, so the FIRST ITERATED won — and
+            // `$twinsOf` is built from `$clustered`, whose within-track order is `Core\Pacer`'s
+            // shuffle. That was cosmetic while both twins wrote the same tenure and only the `source`
+            // string differed. `eb5d971` made `bp` decide whether `recordTwin()` writes AT ALL, so
+            // the tie began deciding the outcome on identical input. Reproduced through the real
+            // method and the real store, with only the twin order differing: leading with the WEAK
+            // twin left the flat in the digest and the stored fact undetermined; leading with the
+            // strong one, on the same input, produced a push and an eligible stored fact.
+            //
+            // The unsafe direction is unreachable — the worst case is over-caution — so this is not
+            // a §1 breach. What it refuted is the claim `eb5d971` shipped under, that the change
+            // "can only ever make the store MORE careful": it also made the store NON-DETERMINISTIC,
+            // which is the failure the fixed point three hundred lines above exists to remove. A
+            // guarantee whose answer depends on the pacer's shuffle is not a guarantee, whichever
+            // way it errs.
+            if ($seen === null
+                || $rank($resolved['tenure']) > $rank($seen['tenure'])
+                || ($rank($resolved['tenure']) === $rank($seen['tenure']) && $resolved['bp'] > $seen['bp'])) {
                 // The SOURCE named is the twin actually in hand, not whatever distant node the
                 // reading propagated from: the notification tells the operator where to look, and a
                 // route they cannot see from here is not that.

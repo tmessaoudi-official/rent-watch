@@ -201,7 +201,9 @@ final class ImapMailbox implements Mailbox, MutableByDesign
         $this->connect();
 
         try {
-            $this->command('LOGIN ' . self::quote($this->user) . ' ' . self::quote($this->password));
+            // NOT `command('LOGIN …')` — see login()'s docblock. The line must never be a call
+            // argument, because PHP prints those in a stack trace and this one carries the password.
+            $this->login();
 
             // EXAMINE, not SELECT. Read-only at the PROTOCOL level, so no bug on this side can
             // modify the developer's mailbox.
@@ -493,6 +495,84 @@ final class ImapMailbox implements Mailbox, MutableByDesign
             throw new MailboxError('could not write to the IMAP connection');
         }
 
+        return $this->readTagged($tag);
+    }
+
+    /**
+     * LOGIN, sent WITHOUT the credential ever becoming a call argument (C2 round 2, 2026-09-04).
+     *
+     * PHP ships `zend.exception_ignore_args = Off` and `zend.exception_string_param_max_len = 15`,
+     * so an uncaught trace prints the first 15 characters of every string ARGUMENT. Passing
+     * `'LOGIN "user" "password"'` to {@see command()} put the credential in that position, and it was
+     * measured coming back out on this runtime:
+     *
+     *     #0 ... Scout\Adapters\Mail\ImapMailbox->command('LOGIN "ann" "Su...')
+     *
+     * Nothing leaked with the real `IMAP_USER` only because a long username spends the budget
+     * first. That is luck, not a guard, and this repo's own vocabulary for it.
+     *
+     * **This construction was removed from `tools/dump-eml.php` in the SAME span that left it here**
+     * — a correct rule applied to a subset of the surfaces it belongs on, which is this repo's named
+     * recurring defect, committed by the change that documented the threat model. A review panel
+     * found it; `Core\Notify\SmtpTransport` was the third surface, found by asking what else the
+     * same question reaches.
+     *
+     * Object properties are NOT printed in a trace — only call arguments are — so reading the
+     * credential from `$this` is the whole fix. The CR/LF check runs BEFORE {@see quote()} for the
+     * same reason: `quote()` throws on a CR or LF, and it would throw with the password as its own
+     * argument. Pre-validated, it cannot throw, so its frame is already gone by the time anything
+     * else does.
+     */
+    private function login(): void
+    {
+        if ($this->socket === null) {
+            throw new MailboxError('not connected');
+        }
+
+        foreach ([$this->user, $this->password] as $credential) {
+            if (preg_match('~[\r\n]~', $credential) === 1) {
+                throw new MailboxError('a CR or LF in an IMAP argument cannot be quoted — refusing to send it');
+            }
+        }
+
+        $tag = sprintf('A%04d', ++$this->tag);
+        $line = $tag . ' LOGIN ' . self::quote($this->user) . ' ' . self::quote($this->password) . "\r\n";
+
+        // THE WRITE ITSELF IS A FRAME. Keeping the line out of `command()`'s parameter list is not
+        // enough — it is then `fwrite`'s argument, and a trace prints every LIVE frame's arguments,
+        // built-ins included. `@` suppresses warnings and does nothing to the `TypeError` a closed
+        // stream raises. So the write is wrapped and the original discarded: the `MailboxError`
+        // below captures its trace here, where nothing live holds the credential. Not chained, for
+        // the same reason — a `previous` carries the trace being escaped.
+        //
+        // Stated cost: the underlying stream error is lost on this one call, so a failed LOGIN write
+        // reports only that it could not be written. The same trade `secrets()` already makes.
+        $written = false;
+
+        try {
+            $written = @fwrite($this->socket, $line);
+        } catch (\Throwable) {
+            $written = false;
+        }
+
+        if ($written === false) {
+            throw new MailboxError('could not write to the IMAP connection');
+        }
+
+        $this->readTagged($tag);
+    }
+
+    /**
+     * Read until the completion line for `$tag`.
+     *
+     * Split out of {@see command()} so {@see login()} can share it without routing the credential
+     * through a call argument. The TAG is the only thing that crosses the boundary, and a tag is
+     * not a secret.
+     *
+     * @return list<string> every untagged line, in order
+     */
+    private function readTagged(string $tag): array
+    {
         $lines = [];
 
         while (true) {

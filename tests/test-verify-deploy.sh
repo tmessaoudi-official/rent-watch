@@ -56,6 +56,10 @@ case "$1 ${2:-}" in
     esac ;;
   "ps -a")
     printf '%b' "${STUB_LEFTOVERS:-}" ;;
+  "info ")
+    # An unreachable daemon is a DIFFERENT answer from a missing image, and reporting it as one
+    # sent the operator to build while the builder was down.
+    exit "${STUB_DAEMON_DOWN:-0}" ;;
   *) exit 0 ;;
 esac
 STUB
@@ -67,7 +71,7 @@ chmod +x "$TMP/bin/docker"
 # not asked for. A test proving something other than what it says is the trap this repo names most
 # often; here it was introduced by the test for the guard against exactly that class.
 reset_case() {
-  unset PS_ROWS SERVICES LEFTOVERS STALE_CONTAINER IMAGE_MISSING IMAGE_CREATED
+  unset PS_ROWS SERVICES LEFTOVERS STALE_CONTAINER IMAGE_MISSING IMAGE_CREATED DAEMON_DOWN
 }
 
 run() {
@@ -79,6 +83,7 @@ run() {
   STUB_STALE_CONTAINER="${STALE_CONTAINER:-__none__}" \
   STUB_IMAGE_MISSING="${IMAGE_MISSING:-0}" \
   STUB_IMAGE_CREATED="${IMAGE_CREATED:-2099-01-01T00:00:00Z}" \
+  STUB_DAEMON_DOWN="${DAEMON_DOWN:-0}" \
     bash "$ROOT/tools/verify-deploy.sh" 2>&1
 }
 
@@ -179,6 +184,16 @@ if [[ $code -eq 2 && "$out" == *"aucun service"* ]]; then
   ok "zero services is a refusal, never a vacuous green"
 else
   ko "zero services is a refusal, never a vacuous green" "exit=$code out=$out"
+fi
+
+# ── 7. A DOWNED DAEMON IS NOT A MISSING IMAGE. Both exit 2, so the exit code alone cannot tell them
+#    apart — the MESSAGE is the finding, because "build it" is the wrong instruction when the thing
+#    that would build it is the thing that is down.
+reset_case; PS_ROWS="$healthy" DAEMON_DOWN=1 out="$(run)"; code=$?
+if [[ $code -eq 2 && "$out" == *"injoignable"* && "$out" != *"construisez-la"* ]]; then
+  ok "an unreachable daemon says so, and does NOT tell the operator to build"
+else
+  ko "an unreachable daemon says so, and does NOT tell the operator to build" "exit=$code out=$out"
 fi
 
 printf '\n  %d passed, %d failed\n\n' "$pass" "$fail"

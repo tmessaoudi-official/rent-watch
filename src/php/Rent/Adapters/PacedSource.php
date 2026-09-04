@@ -10,6 +10,8 @@ use Scout\Core\SourceHealth;
 use Scout\Rent\Core\SourceProfile;
 use Scout\Rent\Core\Tenure;
 use Scout\Adapters\FeedFreshness;
+use Scout\Core\CountsPatternMisses;
+use Scout\Core\PatternMissLog;
 
 /**
  * Wraps a source so that {@see fetch()} cannot happen faster than the Q37 ruling permits.
@@ -31,7 +33,7 @@ use Scout\Adapters\FeedFreshness;
  * all of them. A decorator handed its own private pacer would pace nothing useful, which is why
  * `PacedSource::wrapAll()` exists and is the only intended way to build these.
  */
-final readonly class PacedSource implements FeedFreshness, Source
+final readonly class PacedSource implements CountsPatternMisses, FeedFreshness, Source
 {
     public function __construct(
         private Source $inner,
@@ -92,6 +94,28 @@ final readonly class PacedSource implements FeedFreshness, Source
     public function newestFeedItemAt(): ?string
     {
         return $this->inner instanceof FeedFreshness ? $this->inner->newestFeedItemAt() : null;
+    }
+
+    /**
+     * Forwarded for the same reason, and it was NOT (C2 round 2, 2026-09-04).
+     *
+     * The docblock above states the principle and this class then dropped the other capability
+     * gated the same way — `RentScout` and `CarScout` both test `instanceof CountsPatternMisses`
+     * before printing the extraction-miss report. No live consequence today, because both gates sit
+     * in `doctor()`, which builds its sources UNWRAPPED; the moment either read a paced source the
+     * report would have gone silent on every source at once, which is F27's shape exactly.
+     *
+     * **An inner that does not count yields an EMPTY log, not a refusal**, and that is deliberate:
+     * the consumers skip zero-miss entries, so an empty log prints precisely what a non-counting
+     * source prints today. Forwarding therefore cannot make anything noisier — it can only stop a
+     * counting source from going quiet behind the decorator.
+     *
+     * The interface's promise — that `reset()` runs at the start of every fetch — is the inner's to
+     * keep, and {@see fetch()} delegates to it unchanged.
+     */
+    public function patternMisses(): PatternMissLog
+    {
+        return $this->inner instanceof CountsPatternMisses ? $this->inner->patternMisses() : new PatternMissLog();
     }
 
     public function name(): string

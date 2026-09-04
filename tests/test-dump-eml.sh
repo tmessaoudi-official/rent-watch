@@ -8,7 +8,7 @@
 # without both.
 #
 #   1. It never writes under `tests/`. The one-step path from a mailbox to a committed fixture is
-#      exactly how the two leaks this repo has already had would happen again, and the second line
+#      exactly how the committed-then-scrubbed incidents this repo has already had would happen again, and the second line
 #      of defence (`FixtureSecretsTest`) scans `tests/fixtures` only — so a raw capture landing at
 #      `tests/` top level or in a new `tests/<dir>/` is missed by that too.
 #   2. The IMAP password never reaches a stack trace.

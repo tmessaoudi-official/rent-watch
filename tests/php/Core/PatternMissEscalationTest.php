@@ -118,6 +118,34 @@ final class PatternMissEscalationTest extends TestCase
             self::assertIsArray($lines);
             $body = implode('', array_slice($lines, $method->getStartLine() - 1, $method->getEndLine() - $method->getStartLine() + 1));
 
+            // A DECORATOR SATISFIES THIS BY DELEGATING, and inlining an escalation in one would be
+            // the defect rather than the fix: `PacedSource::health()` returns the inner's, and that
+            // inner is itself in this same implementor set and checked by this same loop. Adding
+            // `escalate()` here would escalate a second time on a verdict already escalated —
+            // precisely the "two verbatim inline copies" that extracting `escalate()` removed.
+            //
+            // The exemption is NARROW and cannot be used to opt a real adapter out: the class must
+            // ALSO forward `patternMisses()` to the same inner, which is what makes it a decorator
+            // rather than a counter that forgot to report. Both conditions are read from the source,
+            // not declared.
+            $misses = new \ReflectionMethod($class, 'patternMisses');
+            $missesFile = $misses->getFileName();
+            self::assertIsString($missesFile);
+            $missesLines = file($missesFile);
+            self::assertIsArray($missesLines);
+            $missesBody = implode('', array_slice(
+                $missesLines,
+                $misses->getStartLine() - 1,
+                $misses->getEndLine() - $misses->getStartLine() + 1,
+            ));
+
+            $delegates = str_contains($body, '$this->inner->health(')
+                && str_contains($missesBody, '$this->inner->patternMisses()');
+
+            if ($delegates) {
+                continue;
+            }
+
             self::assertStringContainsString(
                 '->escalate(',
                 $body,

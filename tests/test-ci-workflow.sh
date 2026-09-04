@@ -83,6 +83,11 @@ check "runs the config/doc drift scan"       has "drift-scan.sh"
 check "runs the fixture-scrubber test"       has "tests/test-scrub-eml.sh"
 check "runs the raw-capture tool test"       has "tests/test-dump-eml.sh"
 check "runs the deploy-verifier test"        has "tests/test-verify-deploy.sh"
+# The twelfth shell gate, and the only one that was RUN by ci.yml without being pinned here — so a
+# deletion from the workflow would have gone unnoticed by the very test whose subject is that the
+# workflow still wires what this repo claims (C2 round 2). The seen-set is the one file this project
+# calls unrecoverable; its backup tool's guard is not one to lose quietly.
+check "runs the seen-set backup test"        has "tests/test-backup-state.sh"
 check "runs the sabotage apply-sweep"       has "tests/test-sabotage-applies.sh"
 # The gate that certified nothing for ~27 hours in 2026-08-22/23 — and would have gone on doing so
 # indefinitely, since nothing in its own output says it has. Without this step it can go vacuous —

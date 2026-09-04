@@ -1819,7 +1819,8 @@ final readonly class Store
      * reasoning and the reason widening the query is refused. The reachable cause of a NULL
      * snapshot here is a listing whose payload could not be JSON-encoded.
      *
-     * @return list<array{dedup_key: string, source: string, external_id: string, url: ?string, title: string, rent_cc: ?int, evidence_json: ?string, signals_json: ?string}>
+     * @return list<array{dedup_key: string, source: string, external_id: string, url: ?string,
+     *     title: string, rent_cc: ?int, evidence_json: ?string, signals_json: ?string, tenure: ?string}>
      */
     public function pendingDigest(int $limit = self::DIGEST_BATCH): array
     {

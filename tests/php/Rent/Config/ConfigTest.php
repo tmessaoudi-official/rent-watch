@@ -485,6 +485,113 @@ final class ConfigTest extends TestCase
         self::assertTrue($sources['demo']->requiresScrapingOptIn());
     }
 
+    /**
+     * EVERY REGEX PARAM COMPILES AT LOAD, AND THE LIST IS READ BY REFLECTION (C2 round 2).
+     *
+     * The eight keys were an inline literal inside `loadSources()`, and **six of them had no test at
+     * all**: deleting `advertiser_pattern` — the §1-relevant one, feeding `Core\LandlordRegistry` —
+     * left the whole suite and the whole sabotage ledger green. A key added tomorrow and covered by
+     * nobody would be exactly as invisible.
+     *
+     * So the list is a named constant and this test reads it rather than restating it. A ninth entry
+     * that does not compile-check fails HERE, which is the property the car side already had
+     * (`VehicleSourceLoader::PATTERN_PARAMS` plus its own reflection guard) and the rent side did
+     * not — the same one-of-two-symmetric-surfaces shape this repo keeps paying for.
+     *
+     * The refusal matters because `matchParam()` uses `@preg_match`: a pattern that does not compile
+     * neither warns nor throws, it simply never matches. On `advertiser_pattern` that silence
+     * re-opens the hole the registry closes; on `subject_pattern` it is not an extraction failure at
+     * all but an ADMISSION one — the source then reads every message from its sender.
+     *
+     * @return iterable<string, array{0: string}>
+     */
+    public static function regexParams(): iterable
+    {
+        $r = new \ReflectionClass(ConfigLoader::class);
+        /** @var list<string> $keys */
+        $keys = $r->getConstant('PATTERN_PARAMS');
+
+        self::assertNotSame([], $keys, 'PATTERN_PARAMS is empty — the compile check would cover nothing');
+
+        foreach ($keys as $key) {
+            yield $key => [$key];
+        }
+    }
+
+    /**
+     * THE LIST IS ANCHORED TO AN INDEPENDENT ONE, and without this the guard cannot catch its own
+     * finding.
+     *
+     * A data provider that reads `PATTERN_PARAMS` derives its CASES from the list being sabotaged:
+     * delete `advertiser_pattern` and the provider simply yields seven cases instead of eight, all
+     * green. Measured — the deletion the round-2 lens demonstrated was still silent with the
+     * per-key tests in place, which is the reflection-guard trap in its purest form.
+     *
+     * So the set is pinned against `EMAIL_ALERT_PARAMS`, the allow-list of every key an adapter
+     * actually reads, filtered to those whose value is a pattern by NAME. Two independent lists,
+     * neither derived from the other: dropping a key from either side now fails here.
+     */
+    public function testEveryPatternKeyTheAdaptersAcceptIsAlsoCompileChecked(): void
+    {
+        $r = new \ReflectionClass(ConfigLoader::class);
+        /** @var list<string> $checked */
+        $checked = $r->getConstant('PATTERN_PARAMS');
+        /** @var list<string> $accepted */
+        $accepted = $r->getConstant('EMAIL_ALERT_PARAMS');
+
+        $shouldBeChecked = array_values(array_filter(
+            $accepted,
+            static fn (string $k): bool => str_ends_with($k, '_pattern'),
+        ));
+
+        sort($shouldBeChecked);
+        $actual = $checked;
+        sort($actual);
+
+        self::assertSame(
+            $shouldBeChecked,
+            $actual,
+            'every accepted `*_pattern` param must compile at load — `matchParam()` uses @preg_match, '
+                . 'so one that does not compile never matches and never says so',
+        );
+    }
+
+    #[DataProvider('regexParams')]
+    public function testEveryRegexParamIsCompileCheckedAtLoad(string $key): void
+    {
+        $this->expectException(ConfigError::class);
+        $this->expectExceptionMessageMatches('/ne compile pas/');
+
+        ConfigLoader::sourcesFromArray(self::minimalSource([
+            'family' => 'private',
+            'type' => 'email_alert',
+            // `mixed_tenure: false` and a `link_host` are not incidental: on a MIXED source
+            // `card_separator_pattern` is refused by the §1 segmentation guard BEFORE anything is
+            // compiled, and a segmented link-keyed source without a `link_host` is refused too.
+            // Both refusals are round-1 fixes doing their job; this test is about a different one.
+            'mixed_tenure' => false,
+            // `(unclosed` compiles nowhere, in any delimiter.
+            'params' => ['from' => 'alerts@portal.test', 'link_host' => 'portal.test/annonce/', $key => '~(unclosed~'],
+        ]));
+    }
+
+    /**
+     * THE COUNTERWEIGHT: a pattern that DOES compile still loads. Without it the assertion above is
+     * satisfied by refusing every value of those keys, which would break four shipped sources.
+     */
+    #[DataProvider('regexParams')]
+    public function testAValidRegexParamStillLoads(string $key): void
+    {
+        $sources = ConfigLoader::sourcesFromArray(self::minimalSource([
+            'family' => 'private',
+            'type' => 'email_alert',
+            'mixed_tenure' => false,
+            'params' => ['from' => 'alerts@portal.test', 'link_host' => 'portal.test/annonce/', $key => '~^\d{2}$~'],
+        ]));
+
+        self::assertSame('~^\d{2}$~', $sources['demo']->params[$key] ?? null);
+    }
+
     public function testEmailAlertIngestionIsNotGated(): void
     {
         // Hard rule 4: email-alert ingestion is the PRIMARY path for a private portal, not a

@@ -17,8 +17,8 @@ declare(strict_types=1);
  *
  * The output is RAW and therefore UNSCRUBBED — it carries the subscriber's address, and usually
  * their name. It writes to `var/claude/captures/` (gitignored) and REFUSES to write anywhere under
- * `tests/`, because the one-step path from a mailbox to a committed fixture is exactly how the two
- * leaks this repo has already had would happen again. Run `tools/scrub-eml.php` on the result.
+ * `tests/`, because the one-step path from a mailbox to a committed fixture is exactly how the
+ * committed-then-scrubbed incidents this repo has already had would happen again. Run `tools/scrub-eml.php` on the result.
  *
  * Usage:
  *   php tools/dump-eml.php <from-address> [max] [out-dir] [folder]
@@ -93,7 +93,7 @@ $resolveIntended = static function (string $path): ?string {
 
 // Never into the fixture tree: a raw dump is unscrubbed by definition — it carries the subscriber's
 // address and usually their name, and the one-step path from a mailbox to a committed fixture is
-// exactly how the two leaks this repo has already had would happen again. Compared as a PREFIX with
+// exactly how the committed-then-scrubbed incidents this repo has already had would happen again. Compared as a PREFIX with
 // its separator, so the bare `tests` and `tests/` — which resolve with no trailing slash and slipped
 // straight through a `str_contains('/tests/')` check — are refused like any path beneath it.
 $intendedOutDir = $resolveIntended($outDir);
@@ -237,8 +237,24 @@ foreach ($ids as $id) {
         $date = $ts === false ? 'inconnue' : date('Y-m-d', $ts);
     }
 
+    // A SHORT READ IS NOT A CAPTURE (C2 round 2, 2026-09-04). The loop above `break`s on a failed or
+    // empty `fread`, and the write then happened regardless with `file_put_contents`'s return value
+    // unchecked — so a truncated `.eml` was written and reported as a normal capture. That matters
+    // more here than a lost byte count would elsewhere: a truncated alert still PARSES, it simply
+    // carries fewer cards, so it becomes a fixture that quietly under-represents the payload and
+    // every assertion written against it is measured on the wrong ground truth.
+    if (strlen($raw) !== $need) {
+        fwrite(STDERR, sprintf("  #%d : lecture tronquée (%d octets sur %d) — non écrit\n", $id, strlen($raw), $need));
+        continue;
+    }
+
     $path = rtrim($outDir, '/') . "/$date-imap-$id.eml";
-    file_put_contents($path, $raw);
+
+    if (@file_put_contents($path, $raw) !== strlen($raw)) {
+        fwrite(STDERR, "  #$id : écriture incomplète ou impossible — $path\n");
+        continue;
+    }
+
     printf("  #%-6d %8d octets  %s\n", $id, strlen($raw), $path);
 }
 
