@@ -255,11 +255,85 @@ final class RentScoutDigestTest extends TestCase
         );
     }
 
-    private function seedDigestRow(string $root, RawListing $listing): string
+    /**
+     * THE DRAIN MUST READ WHY THE ROW IS IN THE BIN, NOT ASSUME IT.
+     *
+     * Until Track 1f the *à vérifier* bin had one entrance and the rollup title could speak for
+     * every entry. The price-per-m² plausibility branch opened a second: a listing digested because
+     * its rent and its surface do not describe the same dwelling is typically `LLI` at FULL
+     * confidence, its regime as settled as it gets. Announcing it *"au régime indéterminé"* asserts
+     * as doubtful something the classifier decided.
+     *
+     * `scout digest` reads the STORE rather than the pass, so the cause has to come off the stored
+     * verdict — which is why `pendingDigest()` now selects `tenure`. This is the test that
+     * `DigestTitleTest` cannot be: that one hands the formatter verdicts built by hand, and the
+     * sabotage ledger proved the gap by making the drain call every row a tenure doubt and watching
+     * the whole suite stay green.
+     */
+    public function testTheRollupDropsTheRegimeClauseWhenARowsTenureWasDetermined(): void
+    {
+        $root = $this->tempRoot();
+        $this->seedDigestRow($root, $this->digestListing('A-1'));                    // a real doubt
+        $this->seedDigestRow($root, $this->digestListing('A-2'), tenure: 'LLI');     // the price branch
+
+        $result = $this->scout($root, ['digest'], $this->delivering());
+
+        self::assertSame(0, $result['code'], $result['err']);
+        self::assertStringContainsString('2 annonce(s)', $result['out']);
+        self::assertStringNotContainsString(
+            'régime indéterminé',
+            $result['out'],
+            'one entry whose regime IS determined removes the clause for the batch — the entry '
+                . 'bodies still carry every reason, so it says less rather than something untrue',
+        );
+    }
+
+    /**
+     * THE COUNTERWEIGHT, and without it the assertion above is satisfied by deleting the clause.
+     * A batch that is nothing but tenure doubts must still be named as one: the digest is §1's only
+     * landing zone, and the title is what decides whether it is opened on a phone at all.
+     */
+    public function testARollupOfPureTenureDoubtsKeepsTheRegimeClause(): void
+    {
+        $root = $this->tempRoot();
+        $this->seedDigestRow($root, $this->digestListing('A-1'));
+        $this->seedDigestRow($root, $this->digestListing('A-2'));
+
+        $result = $this->scout($root, ['digest'], $this->delivering());
+
+        self::assertSame(0, $result['code'], $result['err']);
+        self::assertStringContainsString('2 annonce(s)', $result['out']);
+        self::assertStringContainsString('régime indéterminé', $result['out']);
+    }
+
+    private function digestListing(string $id): RawListing
+    {
+        return new RawListing(
+            sourceName: 'cdc_habitat',
+            externalId: $id,
+            title: 'Appartement T4',
+            description: 'Logement conventionné',
+            commune: 'Sartrouville',
+            postcode: '78500',
+            rentCc: 1450,
+            surfaceM2: 88.0,
+            rooms: 4,
+        );
+    }
+
+    private function seedDigestRow(string $root, RawListing $listing, string $tenure = 'UNKNOWN'): string
     {
         $store = Store::open($root . '/state/rent-watch.sqlite3');
         $sighting = $store->record($listing, $listing->effectiveRentCc(), self::NOW);
-        $store->recordVerdict($sighting->dedupKey, 'UNKNOWN', 0, ['aucun signal de régime'], $listing);
+        // `$tenure` defaults to UNKNOWN — the §1 landing zone proper. Pass a DETERMINED tenure to
+        // seed the other entrance: a row digested with its regime already settled.
+        $store->recordVerdict(
+            $sighting->dedupKey,
+            $tenure,
+            $tenure === 'UNKNOWN' ? 0 : 90,
+            [$tenure === 'UNKNOWN' ? 'aucun signal de régime' : 'loyer implausible pour la surface annoncée'],
+            $listing,
+        );
         $store->recordOutcome($sighting->dedupKey, 'DIGEST');
 
         return $sighting->dedupKey;

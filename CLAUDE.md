@@ -1341,6 +1341,16 @@ Concretely, when working in this repo:
 - If the classifier's confidence is `< 0.6` **and** the source is known to mix social and intermediate
   stock → tenure is `UNKNOWN`, and the listing goes to the low-priority *"à vérifier"* digest. It must
   **never** be emitted as a match.
+- **THE DIGEST HAS TWO ENTRANCES NOW, AND ITS TITLE MAY ONLY CLAIM THE ONE EVERY ENTRY EARNED.**
+  Track 1f's price-per-m² plausibility branch sends a listing whose rent and surface do not describe
+  the same dwelling — typically `LLI` at FULL confidence — into the same bin, so the rollup title
+  *"N annonce(s) au régime indéterminé"* asserted as doubtful a regime the classifier had settled.
+  `Core/DigestCause` is the discriminator and `Verdict::digest()` takes it with **no default**, so a
+  third route cannot inherit the §1 clause by omission. One entry that did not earn the clause
+  removes it for the whole batch: the entry bodies still carry every reason, so it says less rather
+  than something untrue. `scout digest` reads the cause off the STORED tenure — never re-forming a
+  verdict — and answers `OTHER` rather than naming the price branch, because the store records that
+  a row is not a tenure doubt and nothing about which route it was.
 - Bias every ambiguous decision toward *not notifying*. A missed listing is annoying; a
   social-housing false positive makes the tool untrustworthy, which is worse.
 - Never weaken a classifier test to make a change pass. If a fixture goes red, the classifier

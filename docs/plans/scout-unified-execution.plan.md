@@ -837,15 +837,22 @@ read-only) and the merged prose as one review deep.
     SYMBOL, and the row now carries the drift as its own record.
   - **F18** — the method warning about grep is a mechanism now, and the guard's own `u`-modifier
     hole is closed with it. See the register row.
-  - **The ledger run itself taught two things worth more than the cases.** First, **a sabotage whose
-    mutation does not PARSE proves nothing in either direction**, and the ledger says so in those
-    words rather than counting it as undetected — the drain case dropped a closing parenthesis
-    (`$cause = (true` for `$cause = (true)`), so the suite never ran. `test-sabotage-applies` cannot
-    catch that: it checks an expression still MATCHES, not that its output compiles. Second, **a
-    case that times out is indistinguishable from one that is undetected**, and on this shared box
-    that is the commoner cause: an unrelated project's PHPUnit run pushed the load average to **27**
-    while this ran, and the `headerSafe` case sat at 256 s of a 300 s budget before passing. It was
-    detected on a longer budget. Check `uptime` before believing a lone timeout.
+  - **THE LEDGER EARNED ITS KEEP ON THIS BATCH, AND THE WAY IT DID IS THE POINT.** The drain case
+    was written with a closing parenthesis missing (`$cause = (true` for `$cause = (true)`), so the
+    mutation did not parse and the ledger reported *"this proves nothing either way"* rather than
+    counting it undetected. `test-sabotage-applies` cannot catch that — it checks an expression
+    still MATCHES, never that its output compiles. **Fixed, the case then came back UNDETECTED: the
+    suite stayed green with every stored row called a tenure doubt.** `DigestTitleTest` hands the
+    formatter verdicts built by hand, so nothing exercised the drain deriving the cause from the
+    STORED tenure — a real gap in this batch's own work, invisible to 2 691 green tests, found
+    because a mutation that could not run was fixed rather than dropped.
+    `RentScoutDigestTest::testTheRollupDropsTheRegimeClauseWhenARowsTenureWasDetermined` closes it,
+    with its counterweight beside it.
+
+    Second lesson, smaller: **a case that times out is indistinguishable from one that is
+    undetected**, and on this shared box that is the commoner cause. An unrelated project's PHPUnit
+    run pushed the load average to **27** while this ran, and the `headerSafe` case sat at 256 s of
+    a 300 s budget; it was detected on a longer one. Check `uptime` before believing a lone timeout.
   - **Deep row 32** — a field-map `=> regex` capture had no load-time compile check, while every
     `params` pattern has had one since round 1. `Selector::captureFrom()` applies it with
     `@preg_match`, so a broken pattern nulls the field for every item on every pass while the source
@@ -1961,6 +1968,46 @@ tool/guard) and say which ones the fix covers.**
   One panel for one backlog is the
   economize ruling's shape; run by the REVIEWING session, not the executor.
 
+  > **ROUND 2's BRIEFING — written 2026-09-04, before the round, so it cannot be shaped by what the
+  > round finds.** Round 1 returned 2 P0, 4 P1, 9 P2 and 5 P3; the P0/P1s landed as
+  > `be8eba7..081ab28` and the P2 batch as the 2026-09-04 commits. Round 2 is therefore **not a
+  > re-run**: it reviews a span that has grown by the fixes, and the bar is two CONSECUTIVE fully
+  > clean rounds, so round 2 finding anything at all resets the counter and round 3 becomes round
+  > 2 again.
+  >
+  > **Freeze first (step 25), and re-measure the span** — the `ede198e` pointer is stale by its own
+  > stated test and every number quoted above (59 commits, 39 touching code) is measured at that
+  > commit. Do not carry those numbers forward; re-derive them at the new freeze.
+  >
+  > **Weight the round at what round 1 did NOT read**, which its own reports name rather than leave
+  > to be guessed: `src/php/Core/RunStore.php` (+950, the whole extracted store — the correctness
+  > lens did not open it), `Core/PatternMissLog` and `CountsPatternMisses`, `DetailHydrator`,
+  > `HtmlSource`, `HttpJsonSource`, `Car/VehicleStore`, `Car/Cli/CarScout`, `ImapMailbox`,
+  > `NtfyChannel`, `ChannelFactory`, and ~25 changed test files. Two claims round 1 left explicitly
+  > **unverified** belong in scope by name: whether the `4d49eda`/`bdffa44` store split left any
+  > sabotage expression orphaned (its `test-sabotage-applies` run was killed at 143 by the
+  > reviewer's own poll timeout and never finished — it has since been run clean at 656/656, so
+  > this is a re-check rather than an open question), and the `RunStore` flaky-window arithmetic.
+  >
+  > **And put THIS batch in scope explicitly.** Nine of its own findings were closed by the session
+  > that is briefing the round, which is exactly the author-bias shape the charters exist to
+  > refute: the new `Core/DigestCause`, the `Verdict::digest()` signature change and its five call
+  > sites, `pendingDigest()` growing a column, the `SURFACE_PATTERN` anchor (measured to change 4
+  > stored rows and claimed to lose none), `FieldMap`'s new load-time compile check, and
+  > `tools/verify-deploy.sh`. Name the commit and the claim; let the lens refute it.
+  >
+  > **Local hazards to brief, all previously paid for:** `difft` makes `git diff` silently empty
+  > (use `git --no-pager -c core.pager=cat diff --no-ext-diff`); `/bin/grep` is ugrep, so `\|` in a
+  > `SABOTAGE_FILTER` is LITERAL and skips every case while exiting 0; the tracing JIT kills the
+  > ledger at exit 134 (`PHP_INI_SCAN_DIR` workaround, keeping the original scan dir or `iconv`
+  > disappears); this box is SHARED and a neighbour's test run took the load average to 27 on
+  > 2026-09-04, which turns a 300 s ledger budget into a false red; and a fixture-backed `doctor`
+  > writes into the LIVE store unless paired with a throwaway `RENT_SCOUT_DB`.
+  >
+  > **Spawn UNNAMED**, each lens in its own pinned `git worktree` copied with `cp -a` and with
+  > `vendor/` copied rather than symlinked, and do not edit the tree while a round is running — the
+  > ledger says so itself when it sees a dirty tree, and this session proved the warning is real.
+
 ### 6-D — rulings: ALL RESOLVED 2026-09-01 (see Decisions Log) — F30 drop is one config edit
 (land it with A-cluster work); the rest are embedded in A5/A7 and the T5B-7 config line.
 
@@ -2046,3 +2093,13 @@ tool/guard) and say which ones the fix covers.**
 - **The C2 freeze pointer `ede198e` is stale**, by its own stated test: `git log --oneline
   ede198e..HEAD -- src config tests` is no longer empty. That is the expected consequence of closing
   round-1 findings rather than a broken freeze — but round 2 needs a new freeze, which is step 25.
+- **The car domain's `MalformedText` arms disagree with each other, and only one of the two
+  directions is safe** (measured 2026-09-04 while scoping step 31). `VehicleClassifier::classify()`
+  fails CLOSED — unfoldable text returns `REJECT` with *"texte illisible"*. But
+  `VehicleCriteria::excludedBy()` and `bodyRankOf()` fail OPEN: they catch `MalformedText` and
+  return `null`, which for `excludedBy()` means *no user exclusion fired*. That is unreachable
+  today, and only for a reason nobody has written down — `VehicleScorer::judge()` returns on the
+  classification's `REJECT` before it ever calls `excludedBy()`, so a malformed listing never
+  reaches the fail-open arm. **The dependency is real, undocumented, and one edit from being
+  false**: weaken the classifier's catch arm and every user exclusion silently stops firing on the
+  same listings. Step 31's sabotage cases should pin the ORDER, not just each arm.
