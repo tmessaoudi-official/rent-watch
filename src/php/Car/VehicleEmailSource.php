@@ -243,6 +243,8 @@ final readonly class VehicleEmailSource implements AcknowledgesMessages, CountsP
         // groups (their fixture tests are the proof).
         $body = $fuel = null;
         $year = $km = null;
+        /** @var array<string, string> $facts the last match's named groups, empty when nothing matched */
+        $facts = [];
         $factsMake = $factsModel = $factsVersion = $factsGearbox = $factsTitle = null;
         $factsPrice = null;
         $factsHasPrice = false;
@@ -433,7 +435,19 @@ final readonly class VehicleEmailSource implements AcknowledgesMessages, CountsP
         // **Stated cost:** two identical cars — same title, same year, same mileage — share one
         // identity, and on a portal that truncates the title (La Centrale, ~28 characters) the
         // mileage is all that separates two `RENAULT KANGOO II EXPRESS p...`.
-        if ($this->definition->param('id_from') === 'content') {
+        // A `ref` GROUP IS A REAL ID (Track 6-B3, 2026-09-05). An auction house prints its lot
+        // reference on every card (`011218-259`, `014684-S-4361`) while its links are Mailgun
+        // redirects; a stated id beats a hash of facts, and it needs no describing fact beside it —
+        // three of five Agorastore cards carry no year and no mileage, and the floor would drop
+        // them for lack of evidence that the ref already supplies. The title must still be there:
+        // a ref alone is a row nobody can read.
+        $ref = isset($facts['ref']) ? trim((string) $facts['ref']) : '';
+        if ($this->definition->param('id_from') === 'content' && $ref !== '') {
+            if ($title === '') {
+                return null;
+            }
+            $id = $ref;
+        } elseif ($this->definition->param('id_from') === 'content') {
             if ($title === '' || ($year === null && $km === null)) {
                 return null;
             }

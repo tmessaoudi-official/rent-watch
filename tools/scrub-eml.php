@@ -277,6 +277,11 @@ $drop = [
     // carries the recipient address in clear; it is FOLDED across continuation lines every ~64
     // columns, which is why this tool reported `scrubbed` on it — see recoverableForms().
     'x-msfbl',
+    // MAILGUN, added 2026-09-05 (Track 6-B3). `X-Mailgun-Sid` is base64 of the JSON array
+    // `["<list id>","<subscriber address>","<subscriber id>"]` — the address in clear one decode
+    // away. Measured on three Agorastore captures: the header is the ONLY place the address
+    // survives (24 zlib-compressed `/c/eJ…` tracking blobs per message inflate to none of it).
+    'x-mailgun-sid',
 ];
 
 $eol = str_contains($raw, "\r\n") ? "\r\n" : "\n";
@@ -401,6 +406,17 @@ $message = preg_replace_callback(
 ) ?? $message;
 
 $hexSeq = 0;
+/**
+ * ONE PLACEHOLDER PER DISTINCT VALUE, and this map is why a scrubbed multipart message still
+ * parses (2026-09-05, Track 6-B3). Mailgun writes a 60-hex MIME boundary; it occurs four times —
+ * the `boundary=` parameter and three delimiter lines — and a per-OCCURRENCE sequence turned them
+ * into four different strings, so `EmailMessage::parse()` found no part at all: body 0 bytes,
+ * links 0, on a file the tool reported `scrubbed`. Every earlier fixture had a non-hex boundary,
+ * which is the only reason this never showed. Same value in, same placeholder out.
+ *
+ * @var array<string, string> $hexMap
+ */
+$hexMap = [];
 $message = preg_replace_callback(
     // `(?<!=)` IS LOAD-BEARING, and its absence corrupted every link it touched (round-5 panel,
     // 2026-08-31). A quoted-printable escape is `=3D`, and `3` and `D` are HEX — so the run happily
@@ -416,14 +432,18 @@ $message = preg_replace_callback(
     // is a hex character, so the ordinary `(?<![0-9a-fA-F])` blocked the real value from starting
     // and the analytics hex went unscrubbed entirely. Measured both ways against the suite.
     '~(?:(?<![0-9a-fA-F])|(?<==[0-9a-fA-F]{2}))(?<!=)(?:[0-9a-fA-F]|=\r?\n){24,}(?![0-9a-fA-F])~',
-    static function (array $m) use (&$hexSeq, $unfold, $refold): string {
+    static function (array $m) use (&$hexSeq, &$hexMap, $unfold, $refold): string {
         $flat = $unfold($m[0]);
         if (preg_match('~^[0-9a-fA-F]{24,}$~', $flat) !== 1) {
             return $m[0];
         }
-        ++$hexSeq;
+        $key = strtolower($flat);
+        if (!isset($hexMap[$key])) {
+            ++$hexSeq;
+            $hexMap[$key] = str_pad(substr('f0f0f0f0', 0, 8) . $hexSeq, strlen($flat), '0');
+        }
 
-        return $refold(str_pad(substr('f0f0f0f0', 0, 8) . $hexSeq, strlen($flat), '0'), $m[0]);
+        return $refold($hexMap[$key], $m[0]);
     },
     $message,
 ) ?? $message;

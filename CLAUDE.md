@@ -1154,6 +1154,24 @@ covering 60 % of the fleet discriminates MORE, not less.
 > already seen is the same defect with a later date.* Scrub, then run the guard, then commit —
 > never the first two alone.
 >
+> **AGORASTORE IS SOURCE #6 (Track 6-B3, 2026-09-05), THE FIRST AUCTION, AND A STATED LOT
+> REFERENCE IS ITS IDENTITY.** `scout --domain=car doctor --source=agorastore` against the three
+> frozen captures returns **12 annonces, `ok`, ~25 ms**. No price on any card (an auction has none
+> until it closes), no year or mileage except inside free-text titles — deliberately NOT read out
+> of them, which would be the first-match scan this adapter exists to avoid — so the price ceiling
+> never fires and most lots score `année inconnue` / `kilométrage inconnu` (hard rule 9). What every
+> card DOES carry is a per-lot reference, and the facts `ref` group makes it the identity: a stated
+> id beats a hash of facts, and it waives the year/km floor, because three of five lots state
+> neither and the ref already supplies the evidence the floor exists to demand; a ref with an empty
+> title is still not a card. Two scrubber defects surfaced on these captures and both are fixed with
+> a case each in `tests/test-scrub-eml.sh`: `X-Mailgun-Sid` (base64 of a JSON array carrying the
+> address — dropped by name; the 24 zlib tracking blobs per message inflate to none of it, measured)
+> and the opaque-hex replacer numbering each OCCURRENCE, which turned Mailgun's 60-hex MIME
+> boundary into four different strings so the scrubbed file parsed to an EMPTY body with zero
+> links while the tool reported `scrubbed` — a fixture that exercises nothing, the quietest failure
+> a fixture can have. One placeholder per distinct value now. **Always parse a scrubbed capture
+> back and compare its link count with the raw one** before committing it.
+>
 > **A CAPTURE THAT SUCCEEDS IS NOT A CAPTURE THAT MEANS SOMETHING — the portal's own "I don't
 > know" token (Track 6-A4, 2026-09-02).** ParuVendu writes `/voiture-occasion/autres/autres/` when
 > it cannot name the marque. The pattern captured `autres` perfectly, so nothing read as a fault;

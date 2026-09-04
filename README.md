@@ -589,7 +589,7 @@ byte-identical. Every ruling it implements is in
 `docs/plans/archive/scout-rename-and-car-domain.plan.md`; the build record is
 `docs/plans/archive/car-domain-first-slice.plan.md`.
 
-Five sources, each built against a real payload:
+Six sources, each built against a real payload:
 
 - **ParuVendu** (`email_alert`) — the portal's saved-search mail, ~every two hours. **It samples its
   feed**: each message carries THREE cards for the tens or hundreds its subject counts (stated
@@ -622,6 +622,14 @@ Five sources, each built against a real payload:
   apart. Content identity is what makes a car re-sent the next morning ONE car: the three frozen
   captures carry nine cards for six cars, and `LaCentraleFixtureTest` asserts both numbers. Same
   offline proof: `MAILBOX_DIR=tests/fixtures/car/lacentrale CAR_SCOUT_DB=$(mktemp -u) php bin/scout --domain=car doctor --source=lacentrale`.
+- **Agorastore** (`email_alert`, source #6, 2026-09-05) — the first **auction** source: public bodies'
+  fleet vehicles, one daily alert listing the matching lots. **No price on any card** (an auction has
+  none until it closes), no year or mileage except inside a free-text title, and a real per-lot
+  reference (`011218-259`) that IS the identity — the facts `ref` group, which waives the year/km
+  floor because a stated id is evidence enough. Stated costs: the price ceiling never fires and the
+  age and mileage components are unscored on most lots. Three captures, twelve lots hand-read in
+  `AgorastoreFixtureTest`; offline proof:
+  `MAILBOX_DIR=tests/fixtures/car/agorastore CAR_SCOUT_DB=$(mktemp -u) php bin/scout --domain=car doctor --source=agorastore`.
 
 What never surfaces: `VEI`, `VGE` / procédure VE, gagé / opposition, pour pièces, épave, sans carte
 grise, CT non fourni / non roulant — and `accidenté`, réparé or not, a risk-appetite ruling and the
@@ -635,7 +643,7 @@ carries one marque under two spellings. An unlisted make earns the share; a list
 an **unextracted** make earns none either and says `marque inconnue — hors score`, which is the arm
 every other unknown component here takes.
 No email source states a location and Autohero delivers nationally, so the geography filter is
-inert on all five by measurement.
+inert on all six by measurement.
 
 ```bash
 docker compose run --rm car-scout doctor                  # sources, seen-set, channels

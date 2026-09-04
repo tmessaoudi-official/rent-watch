@@ -248,6 +248,56 @@ final class VehicleEmailContentIdentityTest extends TestCase
         self::assertNotSame($a->externalId, $b->externalId, 'stated cost of a truncated title: two identical-titled cars are told apart by their mileage — and by nothing else');
     }
 
+    // ── the Agorastore shape: a stated lot REFERENCE is the identity ─────────────────────────
+
+    /** @return array<string, string> */
+    private static function agorastoreParams(): array
+    {
+        return [
+            'from' => 'support@auction.test',
+            'link_host' => 'email.alerts.auction.test/c/',
+            'card_separator_pattern' => '~\n(?=[^\n\[]+\n\[https?://\S+\]\n\[https?://\S+\]\n\d{6}-)~u',
+            'id_from' => 'content',
+            // title line, two links, then `<ref> <TITLE IN CAPITALS>` — year and km optional inside the title.
+            'facts_pattern' => '~^\h*(?<title>[^\n\[]+?)\h*\n\[https?://\S+\]\n\[https?://\S+\]\n(?<ref>\d{6}-[A-Z0-9-]+)\h+[^\n]+~mu',
+        ];
+    }
+
+    private static function auctionMessage(): string
+    {
+        $body = "Bonjour,\n\nVotre recherche : Voiture\n[https://email.alerts.auction.test/c/HDR]\n\n"
+            . "Fiat Punto 1.3 Multijet - 2013 - 212669km - DB714WD\n[https://email.alerts.auction.test/c/A1]\n[https://email.alerts.auction.test/c/A2]\n011218-259 FIAT PUNTO 1.3 MULTIJET - 2013 - 212669KM - DB714WD\n[https://email.alerts.auction.test/c/A3]\n\n"
+            . "Voiture - Mercedes - CLK\n[https://email.alerts.auction.test/c/B1]\n[https://email.alerts.auction.test/c/B2]\n014684-S-4361 VOITURE - MERCEDES - CLK\n[https://email.alerts.auction.test/c/B3]\n\n"
+            . "Se désabonner\n[https://email.alerts.auction.test/c/UNSUB]\n";
+
+        return "From: Auction <support@auction.test>\r\nDate: Mon, 01 Sep 2026 10:12:00 +0200\r\nSubject: Nouveaux articles\r\n\r\n" . str_replace("\n", "\r\n", $body);
+    }
+
+    public function testAStatedLotReferenceIsTheIdentityEvenWithNoYearAndNoMileage(): void
+    {
+        $cars = $this->fetch(self::agorastoreParams(), self::auctionMessage());
+
+        self::assertCount(2, $cars, 'the CLK card states no year and no km and is still a car: its ref is the evidence');
+        [$punto, $clk] = $cars;
+        self::assertSame('011218-259', $punto->externalId, 'the lot reference, not a hash');
+        self::assertSame('Fiat Punto 1.3 Multijet - 2013 - 212669km - DB714WD', $punto->title);
+        self::assertSame('014684-S-4361', $clk->externalId);
+        self::assertSame('Voiture - Mercedes - CLK', $clk->title);
+        self::assertNull($clk->year);
+        self::assertNull($clk->mileageKm);
+        self::assertNull($clk->priceEur, 'an auction states no price — unknown, never zero');
+    }
+
+    public function testARefWithNoTitleIsNotACard(): void
+    {
+        $params = self::agorastoreParams();
+        $params['facts_pattern'] = '~^\h*(?<title>)\n?\[https?://\S+\]\n\[https?://\S+\]\n(?<ref>\d{6}-[A-Z0-9-]+)\h+[^\n]+~mu';
+        $raw = "From: Auction <support@auction.test>\r\nDate: Mon, 01 Sep 2026 10:12:00 +0200\r\nSubject: Nouveaux articles\r\n\r\n"
+            . "[https://email.alerts.auction.test/c/A1]\r\n[https://email.alerts.auction.test/c/A2]\r\n011218-259 FIAT PUNTO\r\n[https://email.alerts.auction.test/c/A3]\r\n";
+
+        self::assertSame([], $this->fetch($params, $raw), 'a ref alone is a row nobody can read');
+    }
+
     // ── furniture under link identity ────────────────────────────────────────────────────────
 
     /**

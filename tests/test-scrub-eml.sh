@@ -666,5 +666,74 @@ check "and nothing was written for it" \
   bash -c '! test -f "'"$work/foldcustom.out.eml"'"'
 check "and the refusal names the recoverable address" grep -qi 'recoverable' "$work/foldcustom.log"
 
+# ── MAILGUN'S SUBSCRIBER HEADER: the Agorastore shape (Track 6-B3, 2026-09-05) ────────────────────
+# `X-Mailgun-Sid` is base64 of `["<list>","<address>","<id>"]`. The generic run scan already REFUSED
+# it (round 4 of Track 2 measured that, and a blanket "strip any run that decodes to the needle" was
+# reverted for silencing five refusal guarantees); what was missing is the NARROW answer — drop the
+# header by name — so that a clean Agorastore fixture can exist at all.
+sid_blob="$(printf '%s' "[\"2698d\",\"${address}\",\"00c81\"]" | base64 | tr -d '\n')"
+mailgun="$work/mailgun.eml"
+{
+  printf 'From: Agorastore <support@agorastore.fr>\r\n'
+  printf 'Subject: alerte\r\n'
+  printf 'X-Mailgun-Sid: %s\r\n' "$sid_blob"
+  printf 'Content-Type: text/plain\r\n\r\n'
+  printf 'Fiat Punto 1.3 Multijet - 2013 - 212669km - DB714WD\r\n'
+} > "$mailgun"
+mailgun_status=0
+php "$repo/tools/scrub-eml.php" "$mailgun" "$work/mailgun.out.eml" "$address" >"$work/mailgun.log" 2>&1 || mailgun_status=$?
+
+check "a Mailgun subscriber-id header is handled, not silently kept" test "$mailgun_status" -eq 0
+if [[ -f "$work/mailgun.out.eml" ]]; then
+  check "and X-Mailgun-Sid is gone from the output" \
+    bash -c '! grep -aqi "^X-Mailgun-Sid:" "'"$work/mailgun.out.eml"'"'
+  check "and the address is NOT recoverable by base64 from the output" \
+    php -r '$r = file_get_contents($argv[1]); $a = $argv[2];
+            preg_match_all("~[A-Za-z0-9_/+=-]{16,}~", $r, $m); $forms = [$r];
+            foreach ($m[0] as $run) { for ($o = 0; $o < 4; $o++) { $d = base64_decode(strtr(substr($run, $o), "-_", "+/"), false); if ($d !== false) { $forms[] = $d; } } }
+            foreach ($forms as $f) { if (str_contains($f, $a)) { exit(1); } } exit(0);' \
+    "$work/mailgun.out.eml" "$address"
+else
+  check "and X-Mailgun-Sid is gone from the output" false
+  check "and the address is NOT recoverable by base64 from the output" false
+fi
+
+# ── A HEX MIME BOUNDARY MUST SURVIVE AS ONE VALUE (Track 6-B3, 2026-09-05) ────────────────────────
+# Mailgun's boundary is 60 hex characters, occurring four times. The opaque-hex replacer numbered
+# each OCCURRENCE, so the four became four different strings and `EmailMessage::parse()` found no
+# part at all — body 0 bytes, links 0 — on a file the tool reported `scrubbed`. Every earlier
+# fixture had a non-hex boundary, which is the only reason this never showed.
+hexbound="b7d1c7691c5e395bb5ef236d7a521dec21ade45cd55dd7ebd0f3a4ec5ff8"
+multipart="$work/multipart.eml"
+{
+  printf 'From: Agorastore <support@agorastore.fr>\r\n'
+  printf 'To: <%s>\r\n' "$address"
+  printf 'Subject: alerte\r\n'
+  printf 'MIME-Version: 1.0\r\n'
+  printf 'Content-Type: multipart/alternative;\r\n boundary="%s"\r\n\r\n' "$hexbound"
+  printf -- '--%s\r\nContent-Type: text/plain; charset="utf-8"\r\n\r\n' "$hexbound"
+  printf 'Fiat Punto 1.3 Multijet\r\n[https://email.alerts.agorastore.fr/c/abc]\r\n\r\n'
+  printf -- '--%s\r\nContent-Type: text/html; charset="utf-8"\r\n\r\n' "$hexbound"
+  printf '<p>Fiat Punto <a href="https://email.alerts.agorastore.fr/c/abc">lot</a></p>\r\n\r\n'
+  printf -- '--%s--\r\n' "$hexbound"
+} > "$multipart"
+multipart_status=0
+php "$repo/tools/scrub-eml.php" "$multipart" "$work/multipart.out.eml" "$address" >"$work/multipart.log" 2>&1 || multipart_status=$?
+
+check "a multipart message with a hex boundary is scrubbed, not refused" test "$multipart_status" -eq 0
+if [[ -f "$work/multipart.out.eml" ]]; then
+  check "the boundary is ONE value after scrubbing (delimiters still delimit)" \
+    php -r '$r = file_get_contents($argv[1]);
+            preg_match("~boundary=\"([^\"]+)\"~", $r, $b); $declared = $b[1] ?? "";
+            $count = $declared === "" ? 0 : substr_count($r, "--" . $declared);
+            exit($count === 3 ? 0 : 1);' "$work/multipart.out.eml"
+  check "and the parser still finds the listing link in the scrubbed message" \
+    php -r 'require $argv[2]; $m = Scout\Adapters\Mail\EmailMessage::parse(file_get_contents($argv[1]));
+            exit(count($m->links) >= 1 && $m->body !== "" ? 0 : 1);' "$work/multipart.out.eml" "$repo/vendor/autoload.php"
+else
+  check "the boundary is ONE value after scrubbing (delimiters still delimit)" false
+  check "and the parser still finds the listing link in the scrubbed message" false
+fi
+
 printf '\n  %d passed, %d failed\n\n' "$pass" "$fail"
 [[ "$fail" -eq 0 ]]

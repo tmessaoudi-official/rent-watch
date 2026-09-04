@@ -1777,6 +1777,10 @@ run_sabotage "the unknown-make sentinel skips the facts path (Autres earns the w
   src/php/Car/VehicleEmailSource.php \
   's%if (\$make !== null \&\& preg_match(\$sentinel, \$make) === 1) {%if (\$factsMake === null \&\& \$make !== null \&\& preg_match(\$sentinel, \$make) === 1) {%'
 
+run_sabotage "a stated lot reference is ignored (an auction card with no year and no km is dropped, the rest re-keyed on a hash)" \
+  src/php/Car/VehicleEmailSource.php \
+  "s%if (\\\$this->definition->param('id_from') === 'content' \\&\\& \\\$ref !== '') {%if (false) {%"
+
 run_sabotage "the facts gearbox is ignored (a labelled Automatique scores as unstated)" \
   src/php/Car/VehicleEmailSource.php \
   's%gearbox: \$factsGearbox ?? self::gearboxFromTitle(\$title),%gearbox: self::gearboxFromTitle(\$title),%'

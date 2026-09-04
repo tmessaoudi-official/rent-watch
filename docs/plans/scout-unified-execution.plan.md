@@ -1367,6 +1367,26 @@ read-only) and the merged prose as one review deep.
   `doctor` → **`ok · 9 annonces · 43 ms`**. `PERMITTED_DOMAINS` gained `lacentrale.fr` and — not a
   domain — `2x.png`, the portal's retina asset names that match the address shape. Row 39
   (Agorastore's base64 JSON-array blob in the BODY) is a different shape and stays open.
+- [2026-09-05 04:30] RECORD (**ROWS 11 + 39 — B3 Agorastore IS LIVE IN CONFIG, source #6, and
+  row 39's narrow answer turned out to be a header drop**). Measured first: the JSON-array blob is
+  not in the body at all — it is Mailgun's `X-Mailgun-Sid` HEADER, and the 24 zlib-compressed
+  `/c/eJ…` tracking blobs per message inflate to no address (0 of 24). So the narrow stripper is a
+  by-name drop, beside `x-mailin-eid` and `x-msfbl`, with a case in `test-scrub-eml.sh`. A SECOND
+  scrubber defect showed on the first scrubbed capture: it parsed to an EMPTY body with zero links.
+  Cause measured: Mailgun's MIME boundary is 60 hex characters, and the opaque-hex replacer numbered
+  each OCCURRENCE, turning four copies of one boundary into four strings. One placeholder per
+  distinct value now (a memo map), with a multipart case asserting the boundary stays one value and
+  the parser still finds the link. Adapter: a facts `ref` group is the identity under
+  `id_from: content` and waives the year/km floor (a stated id is the evidence), never the title
+  requirement; ledger case verified red by mutation. Block: `family: auction`, `from
+  support@agorastore.fr`, a lookahead separator on the card's shape, facts `title` + `ref`, no
+  price/year/km groups — the stated costs are in the `_why`. Three captures scrubbed WITH THE NAME
+  NEEDLES (the greeting is `Bonjour M. <name>`), parsed back (24/21/21 links, as raw), frozen;
+  `AgorastoreFixtureTest` hand-reads all twelve lots, twelve distinct references; offline `doctor`
+  → **`ok · 12 annonces · 25 ms`**. `PERMITTED_DOMAINS` gained `agorastore.fr` and
+  `alerts.agorastore.fr`. **The lesson worth the most: parse a scrubbed capture back and compare
+  the link count with the raw before committing it** — `scrubbed` is a statement about what left
+  the file, not about what the parser can still read.
 
 ---
 
@@ -2550,9 +2570,9 @@ tool/guard) and say which ones the fix covers.**
 | 6 | 6-A5 score-floor batching + weight recalibration | L | todo | - | src/php/Rent/Cli/DigestBatch.php config/rent/criteria.json |
 | 7 | 6-A6 SeLoger surface read out of a base64url tracking token | M | certified | 9ea9d77 test:2026-09-04 | src/php/Rent/Adapters/EmailAlertSource.php |
 | 8 | 6-A7 F28 one-shot victims report (read-only, gitignored output) | S | done | - | - |
-| 9 | 6-B1 CapCar email source | L | done | - | config/car/sources.json tests/php/Car/CapCarFixtureTest.php |
-| 10 | 6-B2 La Centrale email source | L | done | - | config/car/sources.json tests/php/Car/LaCentraleFixtureTest.php tools/scrub-eml.php |
-| 11 | 6-B3 Agorastore email source (optional third) | M | todo | - | config/car/sources.json |
+| 9 | 6-B1 CapCar email source | L | done | 618b065 | config/car/sources.json tests/php/Car/CapCarFixtureTest.php |
+| 10 | 6-B2 La Centrale email source | L | done | 21117b7 | config/car/sources.json tests/php/Car/LaCentraleFixtureTest.php tools/scrub-eml.php |
+| 11 | 6-B3 Agorastore email source (optional third) | M | done | - | config/car/sources.json tests/php/Car/AgorastoreFixtureTest.php |
 | 12 | 6-B4 AutoScout24 — no alert has ever arrived | M | blocked | - | config/car/sources.json |
 | 13 | 6-C1 register and docs say what the tree says | M | done | ede198e | docs/plans/scout-unified-execution.plan.md |
 | 14 | 6-C2 r1 F2 (P0) — both segmentation guards read both separator keys | M | certified | be8eba7 test:2026-09-04 | src/php/Rent/Config/ConfigLoader.php tests/php/Rent/Config/ConfigTest.php |
@@ -2580,7 +2600,7 @@ tool/guard) and say which ones the fix covers.**
 | 36 | Processed alert emails are marked \Seen — run only, after the store recorded the source; doctor/dump stay read-only | M | done | 766edd7 | src/php/Adapters/Mail/ImapMailbox.php src/php/Adapters/Mail/Mailbox.php src/php/Rent/Cli/Pipeline.php src/php/Car/VehiclePipeline.php |
 | 37 | B-common — content-addressed identity for VehicleEmailSource (no-information floor, price out of the key, in-message duplicate announced) | M | done | 7e1d54b | src/php/Car/VehicleEmailSource.php src/php/Car/VehicleSourceLoader.php |
 | 38 | B-common — per-segment labelled field reader for VehicleEmailSource (the CapCar shape) | M | done | 7e1d54b | src/php/Car/VehicleEmailSource.php src/php/Car/VehicleSourceLoader.php |
-| 39 | B3 prerequisite — a NARROW scrubber stripper for a base64 JSON-array identity blob, all refusal guarantees kept | M | todo | - | tools/scrub-eml.php tests/test-scrub-eml.sh |
+| 39 | B3 prerequisite — a NARROW scrubber stripper for a base64 JSON-array identity blob, all refusal guarantees kept | M | done | - | tools/scrub-eml.php tests/test-scrub-eml.sh |
 | 40 | F20 / Q39 — a repair route for a durably-excluded row: ruling (command vs stored distinction), then build | M | todo | - | src/php/Rent/Store/Store.php src/php/Rent/Cli/RentScout.php |
 | 41 | Round-5 P2 — a selector drifting onto a 5-digit field extracts cleanly and health stays ok: ruling (build vs accept), then build | M | todo | - | src/php/Rent/Adapters/ListingMapper.php |
 | 42 | Register + Known-issues bookkeeping — F1b, F3, F6 closers; three stale bullets | S | done | - | docs/plans/scout-unified-execution.plan.md |

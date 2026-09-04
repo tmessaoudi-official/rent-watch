@@ -82,6 +82,25 @@
         "facts_pattern": "~^\\h*(?<title>[^\\n(]+?)\\h*\\n\\h*\\(\\h*https?://\\S+\\h*\\)\\h*\\n\\h*La Centrale\\h+(?<km>[\\d\\h]+?)\\h*km\\h*\\n\\h*\\(\\h*https?://\\S+\\h*\\)\\h*\\n\\h*(?<price>[\\d\\h]+?)\\h*€~mu"
       }
     },
+    "agorastore": {
+      "_why": "Source #6 of the car domain (Track 6-B3, 2026-09-05), the optional third of Track 6-B and the first AUCTION source. Agorastore sells public bodies' fleet vehicles at auction; its daily alert (`support@agorastore.fr`, ~08:15) lists the lots matching the saved search as `TITLE / [link] / [link] / <LOT REF> TITLE IN CAPITALS / [link]` — NO price (an auction has none until it closes), no year and no mileage except where the seller typed them into the title (`Fiat Punto 1.3 Multijet - 2013 - 212669km - DB714WD`). Identity is the LOT REFERENCE (`011218-259`, `014684-S-4361`), a real per-lot id printed on every card, read by the facts `ref` group — rows 37+38 prefer a stated id over a hash and waive the year/km floor for it, which matters here because most lots state neither. STATED COSTS: the price ceiling never fires (unknown is not over the ceiling, hard rule 9), the age and mileage components are unscored on most lots, and a lot is a bid, not a listed price — the push says `prix inconnu`. Three captures frozen; AgorastoreFixtureTest hand-reads all twelve lots. The scrubber learned TWO things on them: drop Mailgun's `X-Mailgun-Sid` (base64 of a JSON array carrying the address — the ONLY place it survives; the 24 zlib tracking blobs per message inflate to none of it), and keep a hex MIME boundary as ONE placeholder (a per-occurrence sequence had turned Mailgun's 60-hex boundary into four strings and the scrubbed file parsed to an empty body).",
+      "enabled": true,
+      "family": "auction",
+      "type": "email_alert",
+      "_feed_silent_days": "3: one alert a day since 2026-09-01, inside the 7-day window with four days of observability.",
+      "feed_silent_days": 3,
+      "params": {
+        "from": "support@agorastore.fr",
+        "_link_host": "Every link is a Mailgun redirect on email.alerts.agorastore.fr/c/<zlib blob>; the card's own is the LAST host link of its segment — the one after the lot-reference line.",
+        "link_host": "email.alerts.agorastore.fr/c/",
+        "subject_pattern": "~correspondant à votre alerte~u",
+        "_card_separator_pattern": "A zero-width lookahead on the shape of a card — a title line, two bracketed links, then a lot reference — so the header (greeting, criteria line, one link) and the tail (support address, unsubscribe) stay out of every card's segment.",
+        "card_separator_pattern": "~\\n(?=\\h*[^\\n\\[]+\\h*\\n\\h*\\[https?://\\S+\\]\\h*\\n\\h*\\[https?://\\S+\\]\\h*\\n\\h*\\d{6}-)~u",
+        "id_from": "content",
+        "_facts_pattern": "The title line and the lot reference two links below it. No price, year or km group: the template carries none as a field, and reading them out of free-text titles would be the first-match scan this adapter exists to avoid.",
+        "facts_pattern": "~^\\h*(?<title>[^\\n\\[]+?)\\h*\\n\\h*\\[https?://\\S+\\]\\h*\\n\\h*\\[https?://\\S+\\]\\h*\\n\\h*(?<ref>\\d{6}-[A-Z0-9-]+)\\h+[^\\n]+~mu"
+      }
+    },
     "autohero": {
       "_why": "Source #2, the one that proves the HTTP path. Measured 2026-08-27 and 2026-08-29: robots open, /fr/sitemap_search.xml lists ~3 400 lots as /fr/<make>-<model>/id/<uuid>/, and a lot page carries ONE application/ld+json block of @type Vehicle with price, brand, model, body, first registration (YYYY-MM), fuel, transmission, mileage ('136 278 KMT') and sku. A reseller: fixed price, delivered nationally, no location field at all — decision 6 is inert here by measurement.",
       "enabled": true,

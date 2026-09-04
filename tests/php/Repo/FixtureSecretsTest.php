@@ -329,6 +329,7 @@ final class FixtureSecretsTest extends TestCase
         'example.invalid', 'example.test', 'example-portal.test',
         'bienici.com', 'leboncoin.fr', 'alertes.seloger.com', 'pap.fr',
         'paruvendu.fr', 'capcar.fr', 'mailjet.com', 'mail-alerte.lacentrale.fr', 'lacentrale.fr',
+        'agorastore.fr', 'alerts.agorastore.fr',
         // NOT a domain: La Centrale's HTML names its retina assets `text1@2x.png`, `stars@2x.png`,
         // which match the address shape above. Listed so the guard stays quiet on asset names
         // rather than widened to skip anything ending in an image extension.
