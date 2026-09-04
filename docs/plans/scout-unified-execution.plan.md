@@ -2062,6 +2062,25 @@ tool/guard) and say which ones the fix covers.**
   > **Spawn UNNAMED**, each lens in its own pinned `git worktree` copied with `cp -a` and with
   > `vendor/` copied rather than symlinked, and do not edit the tree while a round is running — the
   > ledger says so itself when it sees a dirty tree, and this session proved the warning is real.
+  >
+  > ### THE RE-FREEZE (step 25) — measured 2026-09-04, replacing every number above
+  >
+  > **The freeze point is `526d246`.** It is the last commit touching `src`/`config`/`tests`; the two
+  > commits after it are docs-only, which the pointer's own test confirms rather than assumes:
+  > `git log --oneline 526d246..HEAD -- src config tests` is empty. The deferral ruling still holds,
+  > so A3 half 3, A5 and B1–B3 stay unbuilt until the round closes and the span stops growing here.
+  >
+  > | | at `ede198e` (stale) | at `526d246` |
+  > |---|---|---|
+  > | commits since `7765997` | 59 | **76** |
+  > | of those touching `src`/`config`/`tests` | 39 | **47** |
+  > | code commits since `ede198e` | — | **8** |
+  >
+  > Those eight are the whole delta the previous pointer missed: `be8eba7` and `3eca42f` (the two
+  > round-1 P0s), `581cbce` and `081ab28` (the P1 and its ledger retargeting), then this session's
+  > `38f64bb`, `95337fa`, `eb5d971` and `526d246`. **Quote the new numbers, not the old ones** — the
+  > 59/39 pair is measured at a commit the round is no longer frozen at, and carrying it forward is
+  > the exact drift the pointer's self-test exists to catch.
 
 ### 6-D — rulings: ALL RESOLVED 2026-09-01 (see Decisions Log) — F30 drop is one config edit
 (land it with A-cluster work); the rest are embedded in A5/A7 and the T5B-7 config line.
