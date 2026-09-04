@@ -2081,9 +2081,9 @@ tool/guard) and say which ones the fix covers.**
 | 26 | 6-C2 round 2 — MAXIMAL, weighted to RunStore LandlordRegistry and the unread tests | L | todo | - | src/php/Core/RunStore.php src/php/Rent/Core/LandlordRegistry.php |
 | 27 | 6-C2 round 3 — the second consecutive clean round the bar requires | L | todo | - | src/php |
 | 28 | F18 a plain grep silently skips the Latin-1 PAP fixtures | S | done | 38f64bb | tests/php/Repo/FixtureSecretsTest.php |
-| 29 | F20 no command can re-open a durably-excluded row | M | todo | - | src/php/Rent/Store/Store.php src/php/Rent/Cli/RentScout.php |
+| 29 | F20 the durable reading no longer claims where it was read | M | done | 526d246 | src/php/Rent/Cli/Pipeline.php docs/OPEN-QUESTIONS.md |
 | 30 | F25 compose recreate wedges and leaves the watcher down silently | M | done | 38f64bb | tools/verify-deploy.sh tests/test-verify-deploy.sh README.md |
-| 31 | Deep — the five car MalformedText arms have no sabotage case | M | todo | - | tests/sabotage-check.sh |
+| 31 | Deep — the five car MalformedText arms have no sabotage case | M | done | 526d246 | tests/php/Car/VehicleMalformedTextTest.php tests/sabotage-check.sh |
 | 32 | Deep — field-map regex has no load-time compile check | S | done | 38f64bb | src/php/Rent/Config/FieldMap.php tests/php/Rent/Config/ConfigTest.php |
 | 33 | Deep — doc drift: WARN_FLAKY, card_separator_pattern refusals, 4 stale Core paths | M | done | 38f64bb | CLAUDE.md docs/OPEN-QUESTIONS.md |
 | 34 | Deep — plan track sections stale for Tracks 0 1 2-step0 4 and 6-A1/A2/A3 | M | done | 38f64bb | docs/plans/scout-unified-execution.plan.md |
