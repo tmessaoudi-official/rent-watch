@@ -238,11 +238,80 @@ final class ListingSnapshotTest extends TestCase
 
             self::assertSame($expected, $property->getValue($decoded), 'RawListing::$' . $name . ' is lost by decode()');
 
-            $merged = $rich->mergedWith(new RawListing('s', 'e'));
-            self::assertSame($expected, $property->getValue($merged), 'RawListing::$' . $name . ' is lost by mergedWith()');
+            // BOTH DIRECTIONS, because production runs the one this test originally did not.
+            // `DetailHydrator` calls `$card->mergedWith($detail)`, and merging a RICH card with an
+            // EMPTY detail makes every `$any($mine, $theirs)` take `$mine` — so mutating a field to
+            // `$this->x` was invisible and 2 753 tests stayed green (C2 round 4).
+            $fromCard = $rich->mergedWith(new RawListing('s', 'e'));
+            self::assertSame($expected, $property->getValue($fromCard), 'RawListing::$' . $name . ' is lost when the card holds it');
+
+            // THE ARGUMENT DIRECTION, for the merged fields only. A receiver-only field
+            // (`sourceName`, `observedAt`, `advertiser`…) is deliberately NOT taken from the detail
+            // page and would fail here for the right reason; which fields those are is DERIVED
+            // below rather than listed, so a field silently dropped out of `$any` cannot exempt
+            // itself from this assertion by disappearing from it.
+            if (in_array($name, self::mergedParameters(), true)) {
+                $fromDetail = (new RawListing('s', 'e'))->mergedWith($rich);
+                self::assertSame($expected, $property->getValue($fromDetail), 'RawListing::$' . $name . ' is lost when the DETAIL holds it');
+            }
         }
 
         self::assertSame([], $skipped, 'every constructor parameter must be exercised: ' . implode(', ', $skipped));
+    }
+
+    /**
+     * The parameters `mergedWith()` actually combines, read out of its own body.
+     *
+     * Derived rather than listed, and that is the whole point: a listed set would be edited in the
+     * same breath as the code, so dropping a field out of `$any(...)` — the exact C2 round-4
+     * mutation — would silently drop it from the assertion too. Read from the source, the field
+     * leaves the merged set and the guard below notices.
+     *
+     * @return list<string>
+     */
+    private static function mergedParameters(): array
+    {
+        $source = (string) file_get_contents(__DIR__ . '/../../../../src/php/Rent/Core/RawListing.php');
+        $body = substr($source, (int) strpos($source, 'public function mergedWith('));
+
+        // `fields` is merged by SPREAD rather than by a helper, so the pattern covers both forms.
+        // Matching only the helpers would have parked a genuinely-merged field in the receiver-only
+        // list, where a later regression could not be told from the exemption.
+        preg_match_all('~(\w+):\s*(?:\$(?:any|str)\(|\[\.\.\.\$this->)~', $body, $matches);
+
+        return $matches[1];
+    }
+
+    /**
+     * THE COUNTERWEIGHT: the merged set must not shrink to nothing, and the receiver-only fields
+     * must be exactly the ones that are receiver-only ON PURPOSE.
+     *
+     * Without this, deleting every `$any(` from `mergedWith()` would empty the derived set and the
+     * argument-direction assertion above would pass vacuously on a method that merges nothing.
+     */
+    public function testTheReceiverOnlyFieldsAreExactlyTheOnesThatAreDeliberate(): void
+    {
+        $all = array_map(
+            static fn (\ReflectionParameter $p): string => $p->getName(),
+            (new \ReflectionClass(RawListing::class))->getConstructor()?->getParameters() ?? [],
+        );
+
+        $receiverOnly = array_values(array_diff($all, self::mergedParameters()));
+        sort($receiverOnly);
+
+        self::assertSame(
+            // `sourceName`/`externalId` are the card's identity; `observedAt` must not re-date an
+            // old card to the pass that hydrated it; `advertiser` must never be armed from page
+            // furniture (a §1-relevant verdict change); `detailRead` is hardcoded true because
+            // reaching the method IS the detail page having been read.
+            // `proseAbsent` is a property of the SOURCE, so both sides always agree — written as
+            // the card's to say which one is meant. It is here rather than merged for that reason,
+            // not by omission.
+            ['advertiser', 'detailRead', 'externalId', 'observedAt', 'proseAbsent', 'sourceName'],
+            $receiverOnly,
+            'a field stopped being merged from the detail page. If that is deliberate, say so here '
+            . 'and give the reason; if it is not, it is the C2 round-4 defect returning.',
+        );
     }
 
     /**

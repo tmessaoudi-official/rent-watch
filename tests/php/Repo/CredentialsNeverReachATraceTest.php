@@ -154,7 +154,15 @@ final class CredentialsNeverReachATraceTest extends TestCase
      */
     public function testTheEntrypointSuppressesEveryArgumentInEveryTrace(): void
     {
-        $entrypoint = (string) file_get_contents(__DIR__ . '/../../../bin/scout');
+        // COMMENT LINES ARE STRIPPED, and their absence made this assertion vacuous (C2 round 4):
+        // commenting the line OUT left the whole file green while the guarantee was dead. This same
+        // file strips comments in two other assertions and names the trap — and it was still made
+        // here, which is why the behavioural halves below are the ones that carry the weight.
+        $lines = preg_split('/\R/', (string) file_get_contents(__DIR__ . '/../../../bin/scout')) ?: [];
+        $entrypoint = implode("\n", array_filter(
+            $lines,
+            static fn (string $l): bool => preg_match('~^\s*(//|#|\*|/\*)~', $l) !== 1,
+        ));
 
         self::assertStringContainsString(
             "ini_set('zend.exception_ignore_args', '1');",

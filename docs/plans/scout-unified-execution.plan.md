@@ -2283,11 +2283,11 @@ tool/guard) and say which ones the fix covers.**
 | 24 | 6-C2 P2 CMP-4 — F19 register row cites two stale line numbers | S | done | 38f64bb | docs/plans/scout-unified-execution.plan.md |
 | 25 | 6-C2 re-freeze at the last P2 commit and re-measure the span | S | done | 6001b01 | docs/plans/scout-unified-execution.plan.md |
 | 26 | 6-C2 round 2 — MAXIMAL, ran at 8fb9b64: 2 P1, 5 P2, 5 P3, all fixed | L | certified | 5833b87 test:2026-09-04 | src/php/Adapters/Mail/ImapMailbox.php src/php/Core/Notify/SmtpTransport.php src/php/Rent/Cli/Pipeline.php |
-| 27 | 6-C2 round 3 — ran at 5833b87: 2 P1, 4 P2, 5 P3, all fixed | L | certified | 909c159 test:2026-09-04 | bin/scout src/php/Rent/Core/ListingSnapshot.php tests/sabotage-check.sh |
+| 27 | 6-C2 round 3 — ran at 5833b87: 2 P1, 4 P2, 5 P3, all fixed | L | done | 909c159 | bin/scout src/php/Rent/Core/ListingSnapshot.php tests/sabotage-check.sh |
 | 28 | F18 a plain grep silently skips the Latin-1 PAP fixtures | S | certified | 38f64bb test:2026-09-04 | tests/php/Repo/FixtureSecretsTest.php |
 | 29 | F20 the durable reading no longer claims where it was read | M | certified | 526d246 test:2026-09-04 | src/php/Rent/Cli/Pipeline.php docs/OPEN-QUESTIONS.md |
 | 30 | F25 compose recreate wedges and leaves the watcher down silently | M | done | 38f64bb | tools/verify-deploy.sh tests/test-verify-deploy.sh README.md |
-| 31 | Deep — the five car MalformedText arms have no sabotage case | M | certified | 526d246 test:2026-09-04 | tests/php/Car/VehicleMalformedTextTest.php tests/sabotage-check.sh |
+| 31 | Deep — the five car MalformedText arms have no sabotage case | M | done | 526d246 | tests/php/Car/VehicleMalformedTextTest.php tests/sabotage-check.sh |
 | 32 | Deep — field-map regex has no load-time compile check | S | certified | 38f64bb test:2026-09-04 | src/php/Rent/Config/FieldMap.php tests/php/Rent/Config/ConfigTest.php |
 | 33 | Deep — doc drift: WARN_FLAKY, card_separator_pattern refusals, 4 stale Core paths | M | done | 38f64bb | CLAUDE.md docs/OPEN-QUESTIONS.md |
 | 34 | Deep — plan track sections stale for Tracks 0 1 2-step0 4 and 6-A1/A2/A3 | M | done | 38f64bb | docs/plans/scout-unified-execution.plan.md |

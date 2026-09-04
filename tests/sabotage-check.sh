@@ -1922,6 +1922,31 @@ run_sabotage "a source may declare prose_absent while mapping a description" \
   src/php/Rent/Config/ConfigLoader.php \
   's%if ($proseAbsent && $map->description !== \[\]) {%if (false) {%'
 
+# THE MERGE WAS TESTED IN ONE DIRECTION ONLY, and production runs the other (C2 round 4).
+# `DetailHydrator` calls `$card->mergedWith($detail)`; the guard merged a RICH card with an EMPTY
+# detail, so every `$any($mine, $theirs)` took `$mine` and a field rewritten to `$this->x` left all
+# 2 753 tests green. Two live `detail_map` fields are covered by fixtures; every other one — and
+# every field added tomorrow — was exposed. Two arms rather than one: the fixture-covered field
+# would have gone red anyway and would have hidden that the guard itself was blind.
+run_sabotage "a merged field is taken from the card only, so the detail page is never read" \
+  src/php/Rent/Core/RawListing.php \
+  's%bedrooms: $any($this->bedrooms, $detail->bedrooms),%bedrooms: $this->bedrooms,%'
+
+run_sabotage "a live detail_map field is taken from the card only" \
+  src/php/Rent/Core/RawListing.php \
+  's%hasElevator: $any($this->hasElevator, $detail->hasElevator),%hasElevator: $this->hasElevator,%'
+
+# THE COUNTERWEIGHT to the guard above, which DERIVES the merged set from this method's own body:
+# emptying the set would satisfy the direction assertion vacuously, on a method merging nothing.
+# THE MUTATION MUST PARSE. A first version cut the expression mid-argument-list, leaving
+# `rentCc: $this->NOPE_rentCc, $detail->rentCc),` — a stray argument and an unbalanced paren, so
+# `RawListing` failed to LOAD and the run reported `Errors, Assertions: 0`. That is a parse error
+# wearing a detection's clothes, and the ledger would rightly call it "proves nothing either way".
+# This form rewrites each line whole and leaves valid code that merges nothing.
+run_sabotage "mergedWith merges nothing, so the derived guard passes vacuously" \
+  src/php/Rent/Core/RawListing.php \
+  's%\([a-zA-Z]*\): $any($this->[a-zA-Z]*, $detail->[a-zA-Z]*),%\1: $this->\1,%g'
+
 run_sabotage "an absent detail value overwrites what the card knew (rule 9)" \
   src/php/Rent/Core/RawListing.php \
   's%static fn (mixed $mine, mixed $theirs): mixed => $theirs ?? $mine%static fn (mixed $mine, mixed $theirs): mixed => $theirs%'
@@ -4317,7 +4342,16 @@ run_sabotage "the pipeline sends a fixed confidence with the twin fact (the gate
 # headroom and is notified, while 2024 € merely fails everything quietly.
 run_sabotage "a mapped rent stops being banded (a figure read off the wrong thing is notified)" \
   src/php/Rent/Adapters/ListingMapper.php \
-  "s%\$rent = Payload::plausibleRent(Payload::int(\$item, \$map->rent));%\$rent = Payload::int(\$item, \$map->rent);%"
+  "s%\$rent = Payload::mappedRent(Payload::int(\$item, \$map->rent));%\$rent = Payload::int(\$item, \$map->rent);%"
+
+# THE CEILING BYPASS, and this was a shipped P1 (C2 round 4). `CriteriaEngine` guards `max_rent_cc`
+# with `$rentCc !== null`, so nulling an over-band figure SKIPS the ceiling: a 25 000 € flat was
+# rejected before the band reached the mapped path and MATCHED after it. The scan's upper bound is
+# safe only because refusing a candidate there means "keep looking"; on one labelled value it means
+# "no rent at all", which is the opposite safety direction.
+run_sabotage "the scan's upper bound is applied to a mapped rent again (max_rent_cc skipped)" \
+  src/php/Rent/Adapters/ListingMapper.php \
+  "s%Payload::mappedRent(Payload::int(\$item, \$map->rent))%Payload::plausibleRent(Payload::int(\$item, \$map->rent))%"
 
 # ONE IMPLEMENTATION, not two copies of the same numbers. Give the email reader its own band back
 # and the two are free to drift — silently, on whichever side is not edited next.
