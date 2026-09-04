@@ -328,7 +328,11 @@ final class FixtureSecretsTest extends TestCase
     private const array PERMITTED_DOMAINS = [
         'example.invalid', 'example.test', 'example-portal.test',
         'bienici.com', 'leboncoin.fr', 'alertes.seloger.com', 'pap.fr',
-        'paruvendu.fr', 'capcar.fr', 'mailjet.com',
+        'paruvendu.fr', 'capcar.fr', 'mailjet.com', 'mail-alerte.lacentrale.fr', 'lacentrale.fr',
+        // NOT a domain: La Centrale's HTML names its retina assets `text1@2x.png`, `stars@2x.png`,
+        // which match the address shape above. Listed so the guard stays quiet on asset names
+        // rather than widened to skip anything ending in an image extension.
+        '2x.png',
         // `mail.com` is NOT here on purpose: it is 1&1's CONSUMER provider, so allow-listing the
         // domain would be the same mistake as allow-listing `gmail.com`. Its one occurrence is the
         // French template placeholder `adresse@mail.com`, listed by full address above.
@@ -418,6 +422,46 @@ final class FixtureSecretsTest extends TestCase
             . 'carried the subscriber\'s address past this guard AND the scrubber into a pushed '
             . 'commit, because `%` split the run and every fragment decoded to noise.',
         );
+
+        $folded = "X-MSFBL: abcdefghijklmnop\r\n\tqrstuvwxyz012345\r\n\t6789ABCDEFGHIJKL\r\n\r\nbody\r\n";
+        self::assertContains(
+            "X-MSFBL: abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKL\r\n\r\nbody\r\n",
+            self::allForms($folded),
+            'the header-UNFOLDED form must be scanned — a base64 blob folded across continuation lines '
+            . 'is N fragments to the run scan, and an address straddling a fold is in none of them '
+            . '(La Centrale X-MSFBL, 2026-09-05)',
+        );
+    }
+
+    /**
+     * THE LA CENTRALE SHAPE, planted: the address STRADDLES a header fold, so no fragment decodes
+     * to it and only unfolding first can see it. Verified red without the unfolded form.
+     */
+    public function testTheAddressGuardSeesAnAddressStraddlingAHeaderFold(): void
+    {
+        $planted = 'victim.person@gmail.com';
+        $blob = rtrim(strtr(base64_encode('r=fbl-1|k=0123456789abcdefghijklmnopqrs|' . $planted . '|c=1'), '+/', '-_'), '=');
+        $content = 'X-Custom-Loop: ' . implode("\r\n\t", str_split($blob, 60)) . "\r\n\r\nbody\r\n";
+
+        // No single fragment carries the whole address — the premise the test rests on.
+        foreach (str_split($blob, 60) as $fragment) {
+            for ($offset = 0; $offset < 4; ++$offset) {
+                $decoded = (string) base64_decode(strtr(substr($fragment, $offset), '-_', '+/'));
+                self::assertStringNotContainsString($planted, $decoded, 'the premise: the fold splits the address');
+            }
+        }
+
+        $hits = [];
+        foreach (self::allForms($content) as $text) {
+            if (preg_match_all('/[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}/', $text, $m) === 0) {
+                continue;
+            }
+            foreach ($m[0] as $address) {
+                $hits[] = strtolower($address);
+            }
+        }
+
+        self::assertContains($planted, $hits, 'the address guard is blind to a header fold');
     }
 
     /**
@@ -491,8 +535,14 @@ final class FixtureSecretsTest extends TestCase
         //
         // `rawurldecode`, NOT `urldecode`: the latter turns `+` into a space and would corrupt a run
         // that is genuinely base64.
-        $forms = [$content, quoted_printable_decode($content), rawurldecode($content)];
-        foreach ([$content, quoted_printable_decode($content), rawurldecode($content)] as $text) {
+        // HEADER FOLDING TOO (2026-09-05). A base64 blob folded across RFC 5322 continuation lines
+        // (`\r\n` + SP/TAB) is N fragments to the run scan, and an address straddling a fold is in
+        // none of them. A real La Centrale `X-MSFBL` header carried the subscriber's address past
+        // the scrubber that way; THIS guard caught it — by luck, one fragment happening to decode
+        // to the local part — one commit before a push. Joined continuation lines can only reveal.
+        $headersUnfolded = (string) preg_replace('~\r?\n[ \t]+~', '', $content);
+        $forms = [$content, quoted_printable_decode($content), rawurldecode($content), $headersUnfolded, quoted_printable_decode($headersUnfolded)];
+        foreach ([$content, quoted_printable_decode($content), rawurldecode($content), $headersUnfolded] as $text) {
             foreach (self::base64Blocks($text) as $block) {
                 $forms[] = $block;
             }

@@ -1134,6 +1134,26 @@ covering 60 % of the fleet discriminates MORE, not less.
 > adapter code it rests on is baked into the image**: a deployed watcher older than `7e1d54b`
 > refuses the block at startup (`id_from` unknown to its loader) rather than skipping it.
 >
+> **LA CENTRALE IS SOURCE #5 (Track 6-B2, 2026-09-05), AND ITS FIXTURES ARE THE ONES THE SCRUBBER
+> PASSED WITH THE ADDRESS STILL IN THEM.** `scout --domain=car doctor --source=lacentrale` against the
+> three frozen captures returns **9 annonces, `ok`, ~45 ms**; the block is config-only over rows
+> 37+38 (`card_separator "Détails"`, `id_from content`, one `facts_pattern` with title/km/price,
+> `make_model_source: title` because the title's first word is the make). No year on the card, so
+> the age component is unscored on every La Centrale car (hard rule 9: unknown, never 0). **The
+> leak**: every capture carries an `X-MSFBL` feedback-loop header whose base64 payload holds the
+> subscriber's address, FOLDED across RFC 5322 continuation lines every ~64 columns. Neither the
+> scrubber's run scan nor its quoted-printable decode crosses a fold (a QP soft break ends in `=`,
+> a header fold does not), so every fragment decoded to noise and the tool reported `scrubbed` on
+> two of the three; `FixtureSecretsTest` caught them one commit before a push — by the luck of one
+> 64-character fragment decoding to the local part. Both now scan a header-UNFOLDED form, the tool
+> drops `X-MSFBL` by name, and the case in `tests/test-scrub-eml.sh` puts the address ASTRIDE the
+> fold on purpose: with it inside line 1 a fragment decoded to it alone and the case passed before
+> the fix. Verified red by removing the unfolded form from each guard. **This is the fourth
+> encoding the scrubber learned from a real capture** (JWT, outer base64, percent-encoding,
+> folding), and the rule the file already carries: *a check that only understands the encodings
+> already seen is the same defect with a later date.* Scrub, then run the guard, then commit —
+> never the first two alone.
+>
 > **A CAPTURE THAT SUCCEEDS IS NOT A CAPTURE THAT MEANS SOMETHING — the portal's own "I don't
 > know" token (Track 6-A4, 2026-09-02).** ParuVendu writes `/voiture-occasion/autres/autres/` when
 > it cannot name the marque. The pattern captured `autres` perfectly, so nothing read as a fault;

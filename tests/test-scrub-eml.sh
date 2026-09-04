@@ -598,5 +598,73 @@ else
   check "and the address is NOT recoverable by rawurldecode + base64" false
 fi
 
+# ── A FOLDED HEADER: the La Centrale leak of 2026-09-05 ──────────────────────────────────────────
+#
+# RFC 5322 folds a long header across continuation lines (`\r\n` + TAB). Microsoft's feedback-loop
+# header `X-MSFBL` is one base64 blob folded every ~76 columns, and its payload carries the
+# recipient address. Neither the quoted-printable decode nor the run scan crosses a fold, so every
+# fragment decoded to noise, the scrubber reported `scrubbed`, and `FixtureSecretsTest` caught the
+# file — by luck: one 64-character fragment happened to sit on a boundary that decoded to the local
+# part. The blob must be unfolded BEFORE the run scan, and `X-MSFBL` must be dropped by name.
+#
+# Two halves again: the known header is DROPPED; the same blob under an UNKNOWN header is REFUSED —
+# the second is the one that proves the unfolding rather than the list.
+fold_header() {
+  # $1 = header name, $2 = value; folded at 60 columns with a TAB continuation, as a real MTA does.
+  printf '%s: ' "$1"
+  printf '%s' "$2" | fold -w 60 | sed '2,$s/^/\t/' | sed 's/$/\r/'
+  printf '\n'
+}
+# The address STRADDLES the first fold (the padding puts its first byte at base64 column ~56 of a
+# 60-column line), so no single fragment decodes to it and no fragment is long enough for the
+# opaque-run detector: only unfolding first can see it. Measured — with the address inside line 1
+# a fragment decoded to it on its own and the case passed before the fix.
+fbl_blob="$(printf '%s' "$(b64url "r=fbl-1|k=0123456789abcdefghijklmnopqrs|${address}|c=1|m=<3bd70a6e@example.test>")")"
+
+msfbl="$work/msfbl.eml"
+{
+  printf 'From: La Centrale <info@mail-alerte.lacentrale.fr>\r\n'
+  printf 'Subject: alerte\r\n'
+  fold_header 'X-MSFBL' "$fbl_blob"
+  printf 'Content-Type: text/plain\r\n\r\n'
+  printf 'LEXUS UX\r\n'
+} > "$msfbl"
+msfbl_status=0
+php "$repo/tools/scrub-eml.php" "$msfbl" "$work/msfbl.out.eml" "$address" >"$work/msfbl.log" 2>&1 || msfbl_status=$?
+
+check "a FOLDED feedback-loop header (X-MSFBL) is handled, not silently kept" test "$msfbl_status" -eq 0
+if [[ -f "$work/msfbl.out.eml" ]]; then
+  check "and X-MSFBL is gone from the output" \
+    bash -c '! grep -aqi "^X-MSFBL:" "'"$work/msfbl.out.eml"'"'
+  check "and the address is NOT recoverable after unfolding + base64" \
+    php -r '$r = file_get_contents($argv[1]); $a = $argv[2];
+            $u = preg_replace("~\r?\n[ \t]+~", "", $r);
+            $forms = [$r, $u];
+            foreach ([$r, $u] as $f) { preg_match_all("~[A-Za-z0-9_/+=-]{16,}~", $f, $m);
+              foreach ($m[0] as $run) { for ($o = 0; $o < 4; $o++) { $d = base64_decode(strtr(substr($run, $o), "-_", "+/"), false); if ($d !== false) { $forms[] = $d; } } } }
+            foreach ($forms as $f) { if (str_contains($f, $a)) { exit(1); } } exit(0);' \
+    "$work/msfbl.out.eml" "$address"
+else
+  check "and X-MSFBL is gone from the output" false
+  check "and the address is NOT recoverable after unfolding + base64" false
+fi
+
+foldcustom="$work/foldcustom.eml"
+{
+  printf 'From: La Centrale <info@mail-alerte.lacentrale.fr>\r\n'
+  printf 'Subject: alerte\r\n'
+  fold_header 'X-Custom-Loop' "$fbl_blob"
+  printf 'Content-Type: text/plain\r\n\r\n'
+  printf 'LEXUS UX\r\n'
+} > "$foldcustom"
+foldcustom_status=0
+php "$repo/tools/scrub-eml.php" "$foldcustom" "$work/foldcustom.out.eml" "$address" >"$work/foldcustom.log" 2>&1 || foldcustom_status=$?
+
+check "the same blob FOLDED under an UNKNOWN header is REFUSED (the unfolding, not the list)" \
+  test "$foldcustom_status" -ne 0
+check "and nothing was written for it" \
+  bash -c '! test -f "'"$work/foldcustom.out.eml"'"'
+check "and the refusal names the recoverable address" grep -qi 'recoverable' "$work/foldcustom.log"
+
 printf '\n  %d passed, %d failed\n\n' "$pass" "$fail"
 [[ "$fail" -eq 0 ]]

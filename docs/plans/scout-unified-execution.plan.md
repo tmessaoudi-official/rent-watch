@@ -1345,6 +1345,28 @@ read-only) and the merged prose as one review deep.
   from the failure, not the other way round. **Config-only for the SOURCE, code-backed by rows
   37+38; the deployed image predates both, so the live watcher needs a rebuild before it can read
   this block** (a refused `id_from` on the old loader is a startup refusal, not a quiet skip).
+- [2026-09-05 03:20] RECORD (**ROW 10 — B2 La Centrale IS LIVE IN CONFIG, source #5 — and the
+  scrubber learned a fourth encoding on the way**). B1 redeployed first (`618b065`,
+  `verify-deploy` clean). Then: the two clean La Centrale captures were scrubbed, copied in, and
+  **`FixtureSecretsTest` refused the first one** — a Gmail address, base64-encoded inside the
+  `X-MSFBL` feedback-loop header and FOLDED across continuation lines, which the scrubber had
+  passed with `scrubbed`. Root cause measured: a header fold (`\r\n` + TAB) splits the base64 run
+  and the quoted-printable decode does not unfold headers, so every fragment decoded to noise; the
+  guard caught it only because one 64-char fragment happened to decode to the local part. The
+  fixtures came straight back out of the tree. Fix, tests first: `tests/test-scrub-eml.sh` gained
+  a folded `X-MSFBL` case (must be dropped and unrecoverable after unfolding) and the same blob
+  folded under an UNKNOWN header (must be REFUSED — the unfolding, not the list); the first
+  version of that case passed BEFORE the fix because the address sat inside line 1 and a fragment
+  decoded to it, so the blob is padded to put the address ASTRIDE the fold. `tools/scrub-eml.php`
+  scans a header-unfolded form and drops `x-msfbl`; `FixtureSecretsTest::allForms()` scans the
+  same form, with a mechanism assertion and a planted-straddling-address self-test. **Both fixes
+  verified red by mutation** (remove the unfolded form: scrubber 3 fail, guard 2 fail). With the
+  corrected tool all THREE captures scrub clean — the 09-04 one that had been refused was refused
+  for that same header — so B2 ships n=3: `LaCentraleFixtureTest` hand-reads nine cards, six
+  identities (Kangoo, X4 and 3008 each re-sent behind fresh tokens), no year on any card, offline
+  `doctor` → **`ok · 9 annonces · 43 ms`**. `PERMITTED_DOMAINS` gained `lacentrale.fr` and — not a
+  domain — `2x.png`, the portal's retina asset names that match the address shape. Row 39
+  (Agorastore's base64 JSON-array blob in the BODY) is a different shape and stays open.
 
 ---
 
@@ -2529,7 +2551,7 @@ tool/guard) and say which ones the fix covers.**
 | 7 | 6-A6 SeLoger surface read out of a base64url tracking token | M | certified | 9ea9d77 test:2026-09-04 | src/php/Rent/Adapters/EmailAlertSource.php |
 | 8 | 6-A7 F28 one-shot victims report (read-only, gitignored output) | S | done | - | - |
 | 9 | 6-B1 CapCar email source | L | done | - | config/car/sources.json tests/php/Car/CapCarFixtureTest.php |
-| 10 | 6-B2 La Centrale email source | L | todo | - | config/car/sources.json |
+| 10 | 6-B2 La Centrale email source | L | done | - | config/car/sources.json tests/php/Car/LaCentraleFixtureTest.php tools/scrub-eml.php |
 | 11 | 6-B3 Agorastore email source (optional third) | M | todo | - | config/car/sources.json |
 | 12 | 6-B4 AutoScout24 — no alert has ever arrived | M | blocked | - | config/car/sources.json |
 | 13 | 6-C1 register and docs say what the tree says | M | done | ede198e | docs/plans/scout-unified-execution.plan.md |

@@ -59,6 +59,29 @@
         "facts_pattern": "~Marque\\x{00A0}:\\h*(?<make>[^\\n]+?)\\h*\\n\\s*Modèle\\x{00A0}:\\h*(?<model>[^\\n]+?)\\h*\\n\\s*Finition\\x{00A0}:\\h*(?<version>[^\\n]+?)\\h*\\n\\s*Motorisation\\x{00A0}:\\h*[^\\n]*\\n\\s*Carburant\\x{00A0}:\\h*(?<fuel>[^\\n]+?)\\h*\\n\\s*Boîte\\x{00A0}:\\h*(?<gearbox>[^\\n]+?)\\h*\\n\\s*Année\\x{00A0}:\\h*(?<year>\\d{4})\\h*\\n\\s*Kilométrage\\x{00A0}:\\h*(?<km>[\\d\\h]+?)\\h*\\n\\s*Prix\\x{00A0}:\\h*(?<price>[\\d\\h]+?)\\h*€~u"
       }
     },
+    "lacentrale": {
+      "_why": "Source #5 of the car domain (Track 6-B2, 2026-09-05; measured 2026-08-31, Track 2 step 3). La Centrale's saved-search alert, ~twice a day, in TWO subject templates from one sender (`NNN nouveaux véhicules correspondent à votre recherche` and `🚗 Votre prochaine voiture est peut-être ici…`), each carrying THREE cards for the hundreds its subject counts — F7, THE TRUNCATION COST: the subject says 924 or 1199 and the message carries 3, so this source is ~99.7 % blind to its own feed and FEED_SILENT (message date) stays green through it. Stated, not fixable from here: polling stays REFUSED BY RULING (DataDome, hard rule 5). A card is `TITLE / La Centrale N km / P €` on separate lines, each followed by a per-recipient tracking redirect on clicks.mail-alerte.lacentrale.fr/f/a/<token>~~/… — no listing id anywhere, so identity is CONTENT (title | km; NO year on the card, the floor is satisfied by the mileage). The title is TRUNCATED at ~28 characters (`RENAULT KANGOO II EXPRESS p...`), so two same-titled cars are told apart by their mileage and by nothing else — a stated cost of the key. Three captures frozen (both templates). THE SCRUBBER PASSED THE FIRST TWO WITH THE ADDRESS STILL IN THEM: the `X-MSFBL` feedback-loop header carries it base64-encoded and FOLDED across continuation lines, which neither the tool nor the run scan crossed — `FixtureSecretsTest` caught it one commit before a push, the tool now unfolds headers before it looks and drops X-MSFBL by name, and the third capture, refused for that same header, scrubs clean too.",
+      "enabled": true,
+      "family": "portal",
+      "type": "email_alert",
+      "_feed_silent_days": "3, as ruled (Track 2 step 3): two alerts a day since 2026-08-27, so three days of nothing is a stopped feed, inside the 7-day window with four days of observability.",
+      "feed_silent_days": 3,
+      "params": {
+        "_from": "The FULL alert sender. `lacentrale.fr` alone would admit the same house's mail-marketing and mail-rachat senders, which carry no cards and would count toward this source's health.",
+        "from": "info@mail-alerte.lacentrale.fr",
+        "link_host": "clicks.mail-alerte.lacentrale.fr/f/a/",
+        "_subject_pattern": "Both alert templates, deliberately. Picking one would silently halve the feed; the marketing sender is already excluded by `from`.",
+        "subject_pattern": "~nouveaux véhicules correspondent|Votre prochaine voiture~u",
+        "_card_separator": "`Détails` ends each card. The segment that follows starts with the PREVIOUS card's Détails link, which is harmless here: the card's link is the LAST host link of its own segment (the price line's), and the tail segment after the last card carries only the unsubscribe furniture — no facts, so it is not a card.",
+        "card_separator": "Détails",
+        "id_from": "content",
+        "_make_model_pattern": "The title's first word IS the make on every card (`LEXUS UX`, `PEUGEOT 3008 II`, `RENAULT KANGOO II EXPRESS p...`) and the redirect carries nothing, so the haystack is the facts-derived TITLE — the ordering rows 37+38 fixed. Without it every La Centrale car would score 0 on the brand component (Track 1d) and rank ten points under an identical car from a source that states its make.",
+        "make_model_pattern": "~^(\\S+)\\h+(\\S+)~u",
+        "make_model_source": "title",
+        "_facts_pattern": "title / km / price on three lines, each followed by a parenthesised redirect. No year group: the template states none, and `null` is unknown (hard rule 9) — the age component goes unscored.",
+        "facts_pattern": "~^\\h*(?<title>[^\\n(]+?)\\h*\\n\\h*\\(\\h*https?://\\S+\\h*\\)\\h*\\n\\h*La Centrale\\h+(?<km>[\\d\\h]+?)\\h*km\\h*\\n\\h*\\(\\h*https?://\\S+\\h*\\)\\h*\\n\\h*(?<price>[\\d\\h]+?)\\h*€~mu"
+      }
+    },
     "autohero": {
       "_why": "Source #2, the one that proves the HTTP path. Measured 2026-08-27 and 2026-08-29: robots open, /fr/sitemap_search.xml lists ~3 400 lots as /fr/<make>-<model>/id/<uuid>/, and a lot page carries ONE application/ld+json block of @type Vehicle with price, brand, model, body, first registration (YYYY-MM), fuel, transmission, mileage ('136 278 KMT') and sku. A reseller: fixed price, delivered nationally, no location field at all — decision 6 is inert here by measurement.",
       "enabled": true,

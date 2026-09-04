@@ -54,8 +54,17 @@ declare(strict_types=1);
  */
 function recoverableForms(string $message): array
 {
+    // HEADER FOLDING FIRST (2026-09-05). RFC 5322 folds a long header across continuation lines
+    // (`\r\n` + SP/TAB), and a base64 blob folded that way is N fragments to the run scan below:
+    // each decodes to noise or to a slice of the payload, and the ADDRESS straddling a fold is in
+    // none of them. A real La Centrale `X-MSFBL` header carried the subscriber's address that way
+    // past this tool — `scrubbed`, exit 0 — and only `FixtureSecretsTest` stopped the commit, by
+    // the luck of one fragment decoding to the local part. The quoted-printable decode does NOT
+    // unfold headers: QP soft breaks end in `=`, a header fold does not. Joining continuation lines
+    // can only REVEAL text, never hide it, so the joined form is scanned beside the raw one.
+    $headersUnfolded = (string) preg_replace('~\r?\n[ \t]+~', '', $message);
     $unfolded = quoted_printable_decode($message);
-    $forms = [$unfolded];
+    $forms = [$unfolded, $headersUnfolded, quoted_printable_decode($headersUnfolded)];
 
     // Runs are taken from the UNFOLDED text as well as the raw: quoted-printable breaks a line
     // every 76 columns with a trailing `=`, straight through the middle of a token, so a run
@@ -67,8 +76,8 @@ function recoverableForms(string $message): array
     // and the old check reported `scrubbed` on a file the address was one `base64 -d` away from
     // (review panel, 2026-08-30). Every block of base64 lines is decoded whole and scanned like the
     // text it is — including the base64url runs INSIDE it, which is where a JWT payload lives.
-    $texts = [$message, $unfolded];
-    foreach ([$message, $unfolded] as $text) {
+    $texts = [$message, $unfolded, $headersUnfolded];
+    foreach ([$message, $unfolded, $headersUnfolded] as $text) {
         // A run of lines that are PURELY base64 alphabet, at ANY width, gated only on the total
         // decoded length below.
         //
@@ -263,6 +272,11 @@ $drop = [
     // `<n>~<subscriber address>~<message-id>~<relay>` in clear text. It survived this
     // scrubber AND `FixtureSecretsTest` into a pushed commit.
     'x-mailin-eid', 'x-sib-id', 'x-mailin-client',
+    // MICROSOFT FEEDBACK-LOOP, added 2026-09-05 after a leak caught by `FixtureSecretsTest` one
+    // commit before it would have been pushed. `X-MSFBL` is `<hash>|<base64 blob>` and the blob
+    // carries the recipient address in clear; it is FOLDED across continuation lines every ~64
+    // columns, which is why this tool reported `scrubbed` on it — see recoverableForms().
+    'x-msfbl',
 ];
 
 $eol = str_contains($raw, "\r\n") ? "\r\n" : "\n";
