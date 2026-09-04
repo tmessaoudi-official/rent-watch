@@ -2065,20 +2065,22 @@ tool/guard) and say which ones the fix covers.**
   >
   > ### THE RE-FREEZE (step 25) — measured 2026-09-04, replacing every number above
   >
-  > **The freeze point is `526d246`.** It is the last commit touching `src`/`config`/`tests`; the two
-  > commits after it are docs-only, which the pointer's own test confirms rather than assumes:
-  > `git log --oneline 526d246..HEAD -- src config tests` is empty. The deferral ruling still holds,
+  > **The freeze point is `8fb9b64`** (moved from `526d246` when the deploy verifier gained its
+  > image-age check — a small addition made deliberately BEFORE the round rather than after it, so
+  > the span stops growing once the round starts). It is the last commit touching
+  > `src`/`config`/`tests`, and the pointer's own test confirms it rather than assuming:
+  > `git log --oneline 8fb9b64..HEAD -- src config tests` is empty, and the tree is clean. The deferral ruling still holds,
   > so A3 half 3, A5 and B1–B3 stay unbuilt until the round closes and the span stops growing here.
   >
-  > | | at `ede198e` (stale) | at `526d246` |
+  > | | at `ede198e` (stale) | at `8fb9b64` |
   > |---|---|---|
-  > | commits since `7765997` | 59 | **76** |
-  > | of those touching `src`/`config`/`tests` | 39 | **47** |
-  > | code commits since `ede198e` | — | **8** |
+  > | commits since `7765997` | 59 | **80** |
+  > | of those touching `src`/`config`/`tests` | 39 | **48** |
+  > | code commits since `ede198e` | — | **9** |
   >
-  > Those eight are the whole delta the previous pointer missed: `be8eba7` and `3eca42f` (the two
+  > Those nine are the whole delta the previous pointer missed: `be8eba7` and `3eca42f` (the two
   > round-1 P0s), `581cbce` and `081ab28` (the P1 and its ledger retargeting), then this session's
-  > `38f64bb`, `95337fa`, `eb5d971` and `526d246`. **Quote the new numbers, not the old ones** — the
+  > `38f64bb`, `95337fa`, `eb5d971`, `526d246` and `8fb9b64`. **Quote the new numbers, not the old ones** — the
   > 59/39 pair is measured at a commit the round is no longer frozen at, and carrying it forward is
   > the exact drift the pointer's self-test exists to catch.
 
@@ -2120,7 +2122,7 @@ tool/guard) and say which ones the fix covers.**
 | 22 | 6-C2 P2 CMP-2 — the frozen In'li fixture is the old template | M | done | 38f64bb | tests/fixtures/rent/inli/search-2026-09-04-nouveau-gabarit.html tests/php/Rent/Adapters/InliCurrentTemplateTest.php |
 | 23 | 6-C2 P2 CMP-1 — ntfy badge test uses an ASCII stand-in | S | done | 38f64bb | tests/php/Core/Notify/NtfyChannelWireTest.php |
 | 24 | 6-C2 P2 CMP-4 — F19 register row cites two stale line numbers | S | done | 38f64bb | docs/plans/scout-unified-execution.plan.md |
-| 25 | 6-C2 re-freeze at the last P2 commit and re-measure the span | S | todo | - | docs/plans/scout-unified-execution.plan.md |
+| 25 | 6-C2 re-freeze at the last P2 commit and re-measure the span | S | done | 8fb9b64 | docs/plans/scout-unified-execution.plan.md |
 | 26 | 6-C2 round 2 — MAXIMAL, weighted to RunStore LandlordRegistry and the unread tests | L | todo | - | src/php/Core/RunStore.php src/php/Rent/Core/LandlordRegistry.php |
 | 27 | 6-C2 round 3 — the second consecutive clean round the bar requires | L | todo | - | src/php |
 | 28 | F18 a plain grep silently skips the Latin-1 PAP fixtures | S | done | 38f64bb | tests/php/Repo/FixtureSecretsTest.php |
