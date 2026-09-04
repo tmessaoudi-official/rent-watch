@@ -318,6 +318,22 @@ final readonly class CarScout
     /** @param list<VehicleSource> $sources */
     private function watch(VehiclePipeline $pipeline, array $sources, VehicleStore $store, Notifier $notifier, bool $verbose): int
     {
+        // THE CAR DOMAIN PACES AT PASS LEVEL AND HAS NO `PacedSource` DECORATOR, which the rent
+        // domain does (C2 round 3, 2026-09-04 — recorded as a stated residual rather than fixed).
+        //
+        // The `Pacer` below gives both domains the same Q37 cadence: the interval, the jitter and
+        // the shuffle. What the rent side additionally has is `Rent\Adapters\PacedSource`, applying
+        // the 5 s between distinct hosts and 60 s per host. Its absence here has NO live consequence,
+        // and the reason is specific rather than reassuring: the only car source that makes an
+        // outbound web request is `SitemapVehicleSource`, and it rate-limits itself between detail
+        // fetches (`rate_limit_ms`, `usleep`); every car email source answers `host(): null`, which
+        // is the contract's own way of saying it issues no web request and is never delayed.
+        //
+        // **The condition under which this becomes a real gap is worth naming**: a SECOND car source
+        // that returns a host and does not carry its own limiter. At that point the two would share
+        // no inter-host spacing, which is hard rule 5's territory — and the fix is to lift
+        // `PacedSource` into `Scout\Adapters` over a shared source contract, not to write a car twin
+        // of it, because two decorators is how one of them drifts.
         $loop = null;
         $pacer = new Pacer(
             clock: static fn (): float => hrtime(true) / 1_000_000_000.0,

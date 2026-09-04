@@ -10,6 +10,33 @@ declare(strict_types=1);
  * arguments so a test can assert on REAL stdout rather than on a description of it.
  */
 
+// NO ARGUMENT REACHES A STACK TRACE FROM THIS PROCESS (C2 round 3, 2026-09-04).
+//
+// PHP ships `zend.exception_ignore_args = Off`, so an uncaught trace prints the first 15 characters
+// of every string ARGUMENT of every live frame — this codebase's and the built-ins' alike. Three
+// surfaces were repaired one at a time (`tools/dump-eml.php`, `ImapMailbox::login()`,
+// `SmtpTransport::writeCredential()`) and a review panel then found a FOURTH that no per-site fix
+// had reached: the CONSTRUCTOR. Each parameter carries its own 15-character budget there, so the
+// username no longer spends it first and the password arrives in CLEAR TEXT, measured:
+//
+//     #0 …: Scout\Adapters\Mail\ImapMailbox->__construct('imap.example.ne...',
+//        'annette-the-sub...', 'SuperSecretPass...', 'INBOX', '993')
+//
+// Fifteen characters, against the two that made the IMAP call site a finding. It is latent — three
+// `(int)` casts on the port keep the binding from raising — but "latent behind a cast nobody
+// asserts" is this repo's own definition of luck rather than a guard.
+//
+// **This line is the structural answer, and it is here rather than at a fourth call site because
+// the per-site pattern had already been shown to miss one.** It covers every surface at once,
+// including the ones nobody has enumerated. The per-site fixes stay: they hold for code reached
+// outside this executable — `tools/`, the test suite, a future entrypoint — which this line cannot.
+//
+// **Stated cost: traces from the deployed watcher lose ALL argument information**, which is real
+// debugging value given up. It is the right trade here because this project already redacts its
+// diagnostics on purpose (`Core\Redact`, `MailboxError`, `ChannelError::secrets()`), and because a
+// credential in a container log is not recoverable once written.
+ini_set('zend.exception_ignore_args', '1');
+
 $autoload = __DIR__ . '/../vendor/autoload.php';
 
 if (!is_file($autoload)) {

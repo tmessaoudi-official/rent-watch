@@ -271,4 +271,53 @@ final class VehicleEmailPatternMissTest extends TestCase
             $store,
         ];
     }
+
+    /**
+     * EVERY `*_pattern` KEY A CAR ADAPTER ACCEPTS IS ALSO COMPILE-CHECKED (C2 round 3, 2026-09-04).
+     *
+     * The rent side gained this anchor in round 2, and the docblock justifying it claimed the car
+     * side ALREADY had the property. **It did not, and a review panel proved it**: `READ_PARAMS` —
+     * the car allow-list — is read by no test at all, and the existing reflection guard in this file
+     * is anchored to the four COUNTED keys, with `subject_pattern` and `make_model_unknown_pattern`
+     * explicitly subtracted and `seller_pattern`/`postcode_pattern` subtracted as `UNREAD_PARAMS`.
+     * Four of eight, not eight. A ninth `*_pattern` key added to `READ_PARAMS` and forgotten in
+     * `PATTERN_PARAMS` loaded uncompilable and silent with 382 tests green.
+     *
+     * Two independent lists, neither derived from the other: dropping a key from either side fails
+     * here. `matchParam()` reads these with `@preg_match`, so one that does not compile never
+     * matches, never warns and never throws.
+     *
+     * A claim that a cure exists is not a cure. This is the cure.
+     */
+    public function testEveryPatternKeyTheCarAdaptersAcceptIsAlsoCompileChecked(): void
+    {
+        $r = new \ReflectionClass(VehicleSourceLoader::class);
+        /** @var list<string> $checked */
+        $checked = $r->getConstant('PATTERN_PARAMS');
+        /** @var array<string,list<string>> $accepted */
+        $accepted = $r->getConstant('READ_PARAMS');
+
+        $shouldBeChecked = [];
+        foreach ($accepted as $keys) {
+            foreach ($keys as $key) {
+                if (str_ends_with($key, '_pattern')) {
+                    $shouldBeChecked[$key] = true;
+                }
+            }
+        }
+
+        // `seller_pattern` and `postcode_pattern` are compile-checked while no adapter reads them —
+        // `UNREAD_PARAMS` keeps them deliberately, so the check is already there the day one is
+        // wired up. That is a superset, not a gap, so the assertion is one-directional: everything
+        // ACCEPTED must be CHECKED, and checking more than that is the safe direction.
+        $missing = array_values(array_diff(array_keys($shouldBeChecked), $checked));
+        sort($missing);
+
+        self::assertSame(
+            [],
+            $missing,
+            'a car params key ends in _pattern, is accepted by an adapter, and is never compiled: '
+                . 'it would match nothing, silently, on every message',
+        );
+    }
 }

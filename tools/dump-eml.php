@@ -180,7 +180,25 @@ $cmd = static function (string $line) use ($sock, &$tag, $readTagged): array {
  */
 $login = static function () use ($sock, &$tag, $readTagged, $user, $pass): void {
     $t = 'a' . ++$tag;
-    fwrite($sock, "$t LOGIN \"" . addcslashes($user, '"\\') . '" "' . addcslashes($pass, '"\\') . "\"\r\n");
+    $line = "$t LOGIN \"" . addcslashes($user, '"\\') . '" "' . addcslashes($pass, '"\\') . "\"\r\n";
+
+    // THE WRITE ITSELF IS A FRAME, and this was the ONE surface of three left at level 1 — the
+    // production classes were wrapped and the tool that taught them the lesson was not (C2 round 3).
+    // Keeping the credential out of the closure's parameter list leaves it in `fwrite`'s, and a
+    // trace prints built-in frames too; `@` suppresses warnings and does nothing to the `TypeError`
+    // a closed stream raises. The original is DISCARDED rather than chained, because a `previous`
+    // carries the trace being escaped.
+    try {
+        $written = @fwrite($sock, $line);
+    } catch (\Throwable) {
+        $written = false;
+    }
+
+    if ($written === false) {
+        fwrite(STDERR, "connexion IMAP : écriture impossible pendant LOGIN\n");
+        exit(1);
+    }
+
     $readTagged($t);
 };
 

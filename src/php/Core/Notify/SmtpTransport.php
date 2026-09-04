@@ -222,7 +222,7 @@ final readonly class SmtpTransport implements MailTransport
     {
         $this->say($socket, 'AUTH LOGIN');
         $this->expect($socket, 334);
-        // NOT `say($socket, base64_encode($this->user))` — see sayCredential(). The two credential
+        // NOT `say($socket, base64_encode($this->user))` — see writeCredential(). The two credential
         // lines are the only ones that must not travel as a call argument.
         $this->sayUser($socket);
         $this->expect($socket, 334);

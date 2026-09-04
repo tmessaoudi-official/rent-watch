@@ -1960,7 +1960,10 @@ tools/fetch-phpunit.sh      Fetches the runner; pinned SHA-256, refuses to insta
 tools/phpunit.phar          Test runner (gitignored — see README § Getting started)
 var/claude/                 Reports, review outputs — gitignored scratch (handoffs are the
                             global PreCompact hook's job, not the repo's)
-.claude/                    Project skills, reviewer agents, hooks, settings
+.claude/                    Project skills, reviewer agents, hooks, settings, and
+                            progress.json — the adapter ~/.claude/bin/project-state.sh reads
+                            (test_cmd, requires, cursor files). Without it `--record-test`
+                            dies and no plan step can reach the `certified` state at all
 .github/workflows/ci.yml    CI — suite+guards every push/PR, sabotage ledger nightly+dispatch
 ```
 

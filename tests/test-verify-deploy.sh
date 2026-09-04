@@ -141,9 +141,9 @@ reset_case; PS_ROWS="$healthy" out="$(PATH="$TMP/bin:$PATH" \
   STUB_STALE_CONTAINER='__none__' STUB_IMAGE_MISSING=0 STUB_IMAGE_CREATED='2001-01-01T00:00:00Z' \
   bash "$ROOT/tools/verify-deploy.sh" 2>&1)"; code=$?
 if [[ $code -eq 1 && "$out" == *"ANTÉRIEURE au dernier commit"* ]]; then
-  ok "an image older than the newest src/ commit is a failure, not a green deploy"
+  ok "an image older than its newest build input is a failure, not a green deploy"
 else
-  ko "an image older than the newest src/ commit is a failure, not a green deploy" "exit=$code out=$out"
+  ko "an image older than its newest build input is a failure, not a green deploy" "exit=$code out=$out"
 fi
 
 # THE COUNTERWEIGHT: an image built after the code passes, or the check is satisfied by always
@@ -153,10 +153,10 @@ reset_case; PS_ROWS="$healthy" out="$(PATH="$TMP/bin:$PATH" \
   STUB_SERVICES='rent-scout\ncar-scout\n' STUB_PS_ROWS="$healthy" STUB_LEFTOVERS='' \
   STUB_STALE_CONTAINER='__none__' STUB_IMAGE_MISSING=0 STUB_IMAGE_CREATED='2099-01-01T00:00:00Z' \
   bash "$ROOT/tools/verify-deploy.sh" 2>&1)"; code=$?
-if [[ $code -eq 0 && "$out" == *"postérieure au dernier commit"* ]]; then
-  ok "an image built after the newest src/ commit passes"
+if [[ $code -eq 0 && "$out" == *"postérieure à toutes ses entrées"* ]]; then
+  ok "an image built after every build input passes"
 else
-  ko "an image built after the newest src/ commit passes" "exit=$code out=$out"
+  ko "an image built after every build input passes" "exit=$code out=$out"
 fi
 
 # ── 4. The leftover is not this deploy's failure, it is the next one's: it holds the name that makes

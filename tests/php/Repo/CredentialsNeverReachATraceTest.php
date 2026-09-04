@@ -138,6 +138,70 @@ final class CredentialsNeverReachATraceTest extends TestCase
     }
 
     /**
+     * THE CONSTRUCTOR IS A SURFACE NO PER-SITE FIX REACHED, and it leaks the most of any of them.
+     *
+     * Three call sites were repaired one at a time and a review panel then found this one. Each
+     * constructor parameter carries its OWN 15-character budget, so the username no longer spends
+     * it first and the password arrives in clear text — fifteen characters, against the two that
+     * made `ImapMailbox::login()` a finding. Latent, because three `(int)` casts on the port keep
+     * the binding from raising; "latent behind a cast nobody asserts" is this repo's own definition
+     * of luck rather than a guard.
+     *
+     * The answer is structural and lives at the entrypoint: `bin/scout` sets
+     * `zend.exception_ignore_args=1`, which removes EVERY argument from EVERY frame in that process
+     * — including surfaces nobody has enumerated. Asserted here in both directions, because a guard
+     * that only checks the line is present cannot show the line does anything.
+     */
+    public function testTheEntrypointSuppressesEveryArgumentInEveryTrace(): void
+    {
+        $entrypoint = (string) file_get_contents(__DIR__ . '/../../../bin/scout');
+
+        self::assertStringContainsString(
+            "ini_set('zend.exception_ignore_args', '1');",
+            $entrypoint,
+            'bin/scout must suppress trace arguments before anything can throw',
+        );
+
+        // WITHOUT it — this process — the constructor leaks. Without this half the assertion above
+        // is satisfied by a line that does nothing on some future runtime.
+        $leaked = $this->constructorTrace(false);
+        self::assertStringContainsString(
+            substr(self::PASSWORD, 0, 15),
+            $leaked,
+            'the constructor surface is real on this runtime, which is why the entrypoint sets the flag',
+        );
+
+        // WITH it, the same construction prints no arguments at all.
+        $suppressed = $this->constructorTrace(true);
+        self::assertStringNotContainsString(self::PASSWORD, $suppressed);
+        self::assertStringNotContainsString(substr(self::PASSWORD, 0, 15), $suppressed);
+        self::assertStringContainsString('__construct()', $suppressed, 'the frame is there, its arguments are not');
+    }
+
+    /**
+     * Construct `ImapMailbox` from a STRICT-TYPES caller with a mistyped port, in a subprocess.
+     *
+     * A subprocess because `zend.exception_ignore_args` is process-wide and this suite runs without
+     * it; strict types because the production call sites are strict, and it is the binding failure
+     * that raises with the arguments still on the frame.
+     */
+    private function constructorTrace(bool $suppress): string
+    {
+        $probe = sys_get_temp_dir() . '/scout-ctor-' . bin2hex(random_bytes(6)) . '.php';
+        $strict = $probe . '.strict.php';
+
+        file_put_contents($strict, "<?php\ndeclare(strict_types=1);\ntry { new Scout\\Adapters\\Mail\\ImapMailbox('h', 'annette-the-subscriber', '" . self::PASSWORD . "', 'INBOX', '993'); }\ncatch (Throwable \$e) { echo \$e->getTraceAsString(); }\n");
+        file_put_contents($probe, "<?php\n" . ($suppress ? "ini_set('zend.exception_ignore_args', '1');\n" : '') . "require '" . __DIR__ . "/../../../vendor/autoload.php';\nrequire '" . $strict . "';\n");
+
+        try {
+            return (string) shell_exec(escapeshellarg(PHP_BINARY) . ' ' . escapeshellarg($probe) . ' 2>&1');
+        } finally {
+            @unlink($probe);
+            @unlink($strict);
+        }
+    }
+
+    /**
      * THE STRUCTURAL HALF, tying the code to the mechanism above so the shape cannot return.
      *
      * Comment lines are stripped first: both classes DOCUMENT the construction they no longer use,

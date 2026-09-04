@@ -1670,8 +1670,15 @@ final readonly class Store
         //
         // THE BAR IS §1'S OWN FAIL-CLOSED THRESHOLD, not a new number: below 0.6 a classification
         // on a mixed-stock source is already `UNKNOWN`. A tier-5 default sits at 50 and is refused;
-        // every tier-1/2 label is 90 and clears. Encoding a TIER on the row instead would be a
-        // second copy of the same fact, free to drift from the first.
+        // a tier-1 structured field and a tier-2 explicit label are 90 and clear.
+        //
+        // **IT IS NOT A TIER TEST AND MUST NOT BE READ AS ONE** — this comment said "every tier-1/2
+        // label is 90 and clears" as though those were the only tiers that pass, and a review panel
+        // measured a tier-3 PROCEDURAL signal clearing at 80. That is correct rather than a hole: a
+        // `commission d'attribution` is evidence, and evidence is what the ruling asks for. It is
+        // also exactly why the gate reads CONFIDENCE and not a tier — the tier is not stored, and
+        // the question is how strongly the reading is held, not what rank produced it. Encoding a
+        // tier on the row would be a second copy of the same fact, free to drift from the first.
         //
         // ONLY THE RESOLVING DIRECTION IS GATED. Tightening — eligible to `UNKNOWN`, anything to an
         // excluded regime — needs no bar and is unaffected, and the durable rule above still runs

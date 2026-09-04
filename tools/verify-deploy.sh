@@ -114,13 +114,20 @@ done
 # instance of the same shape ran seventeen hours. Green, pushed and deployed are three different
 # things, and only this line is about the third one.
 if git -C "$(pwd)" rev-parse --is-inside-work-tree > /dev/null 2>&1; then
-  # EVERY PATH THE IMAGE BAKES, not just src/ (C2 round 2). `Dockerfile:66-69` copies `src/`,
-  # `bin/` and `composer.json` into the runtime stage, and `bin/scout` is the ENTRYPOINT and the
-  # --domain dispatcher — a bin-only commit is exactly as stale as a src-only one, and this check
-  # said "l'image est postérieure" over it. Latent when found: all five historic `bin/` commits also
-  # touched `src/`. `config/` is deliberately NOT here — compose bind-mounts it, so a config change
-  # takes effect without a rebuild, and including it would report a stale image that is not stale.
-  newest_src_epoch="$(git log -1 --format=%ct -- src bin composer.json composer.lock 2>/dev/null)"
+  # EVERY INPUT THE IMAGE IS BUILT FROM, derived from the RECIPE rather than from a line range.
+  #
+  # Round 2 widened this from `src` alone to `src bin composer.json`, reading `Dockerfile:66-69`.
+  # Round 3 showed that citation was the bug: reading four lines of a recipe is not reading the
+  # recipe. `COPY tests/fixtures/rent/fixture_demo/` is baked too, `composer.lock` drives the vendor
+  # stage, and a change to the `Dockerfile` or `.dockerignore` changes the image while touching none
+  # of the paths it copies. Re-derive this list with `grep -nE '^(COPY|ADD)' Dockerfile` whenever
+  # that file changes; a line-number citation is what drifted.
+  #
+  # `config/` is deliberately EXCLUDED even though it is copied: `compose.yaml` bind-mounts it, so
+  # the mount wins at runtime and a config change takes effect without a rebuild. Including it would
+  # report a stale image that is not stale — the false-alarm direction, which trains an operator to
+  # ignore the check.
+  newest_src_epoch="$(git log -1 --format=%ct -- src bin composer.json composer.lock Dockerfile .dockerignore tests/fixtures/rent/fixture_demo 2>/dev/null)"
   image_iso="$(docker image inspect "$IMAGE" --format '{{.Created}}' 2>/dev/null)"
   image_epoch="$(date -d "$image_iso" +%s 2>/dev/null)"
 
@@ -129,12 +136,12 @@ if git -C "$(pwd)" rev-parse --is-inside-work-tree > /dev/null 2>&1; then
     # quietly, because a check that cannot run and does not say so is the vacuous-green shape.
     say "image vs code : indéterminable (historique git ou date d'image absente)"
   elif (( image_epoch < newest_src_epoch )); then
-    bad "l'image est ANTÉRIEURE au dernier commit de src/, bin/ ou composer.json — le watcher tourne du code périmé"
+    bad "l'image est ANTÉRIEURE au dernier commit d'une entrée du Dockerfile — le watcher tourne du code périmé"
     printf '      image  %s\n      commit %s (%s)\n' \
-      "$image_iso" "$(git log -1 --format=%cI -- src bin composer.json composer.lock)" "$(git log -1 --format=%h -- src bin composer.json composer.lock)"
+      "$image_iso" "$(git log -1 --format=%cI -- src bin composer.json composer.lock Dockerfile .dockerignore tests/fixtures/rent/fixture_demo)" "$(git log -1 --format=%h -- src bin composer.json composer.lock Dockerfile .dockerignore tests/fixtures/rent/fixture_demo)"
     printf '      docker compose build && docker compose up -d --remove-orphans\n'
   else
-    good "l'image est postérieure au dernier commit de src/, bin/ et composer.json"
+    good "l'image est postérieure à toutes ses entrées de build"
   fi
 fi
 

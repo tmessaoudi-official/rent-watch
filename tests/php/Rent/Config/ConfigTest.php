@@ -494,9 +494,19 @@ final class ConfigTest extends TestCase
      * nobody would be exactly as invisible.
      *
      * So the list is a named constant and this test reads it rather than restating it. A ninth entry
-     * that does not compile-check fails HERE, which is the property the car side already had
-     * (`VehicleSourceLoader::PATTERN_PARAMS` plus its own reflection guard) and the rent side did
-     * not — the same one-of-two-symmetric-surfaces shape this repo keeps paying for.
+     * that does not compile-check fails HERE.
+     *
+     * **THIS DOCBLOCK CLAIMED THE CAR SIDE ALREADY HAD THAT PROPERTY, AND IT DID NOT** (C2 round 3).
+     * `VehicleSourceLoader::READ_PARAMS` was read by no test at all, and the car reflection guard is
+     * anchored to the four COUNTED keys — `subject_pattern` and `make_model_unknown_pattern` are
+     * explicitly subtracted, `seller_pattern` and `postcode_pattern` are subtracted as
+     * `UNREAD_PARAMS`. Four of eight. A review panel added a ninth key to the car allow-list and
+     * loaded it uncompilable and silent with 382 tests green.
+     *
+     * So the sentence describing the one-of-two-symmetric-surfaces shape was itself an instance of
+     * it: a cure asserted for a surface that had none. The car anchor now exists —
+     * `VehicleEmailPatternMissTest::testEveryPatternKeyTheCarAdaptersAcceptIsAlsoCompileChecked` —
+     * and this cites it rather than assuming it.
      *
      * The refusal matters because `matchParam()` uses `@preg_match`: a pattern that does not compile
      * neither warns nor throws, it simply never matches. On `advertiser_pattern` that silence
@@ -553,6 +563,30 @@ final class ConfigTest extends TestCase
             $actual,
             'every accepted `*_pattern` param must compile at load — `matchParam()` uses @preg_match, '
                 . 'so one that does not compile never matches and never says so',
+        );
+
+        // THE NAME SUFFIX IS A CONVENTION, NOT AN ANCHOR — both round-3 lenses reached this from
+        // opposite directions. A regex param called something else escapes the filter above and the
+        // list it is compared against. `matchParam()` is the real funnel: every key it is handed IS
+        // applied as a regex, whatever it is named, so the literals at its call sites are read out
+        // of the adapter's source and required to be compile-checked. That is an anchor rather than
+        // a habit, and it holds for a key named `trim` as readily as for one named `trim_pattern`.
+        $adapter = (string) file_get_contents(self::ROOT . '/src/php/Rent/Adapters/EmailAlertSource.php');
+        self::assertSame(
+            1,
+            preg_match_all("~matchParam\('([a-z_]+)'~", $adapter, $m) > 0 ? 1 : 0,
+            'the matchParam call sites must be readable — the anchor depends on them',
+        );
+
+        $applied = array_values(array_unique($m[1]));
+        sort($applied);
+        $notChecked = array_values(array_diff($applied, $checked));
+
+        self::assertSame(
+            [],
+            $notChecked,
+            'a params key is applied as a REGEX by matchParam() and is not compile-checked — the '
+                . 'name-suffix filter above cannot see it, which is why this reads the funnel instead',
         );
     }
 

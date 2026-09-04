@@ -4348,9 +4348,20 @@ run_sabotage "the SMTP password goes back to say() as an argument (base64, 11 ch
 # helper's parameter list leaves it in `fwrite`'s, and a trace prints built-in frames too; `@`
 # suppresses warnings and does nothing to the TypeError a closed stream raises. Remove the wrapper
 # and a closed socket puts the base64 credential straight back on the trace.
-run_sabotage "the SMTP credential write is unwrapped again (fwrite's own frame carries it)" \
+#
+# THE MUTATION IS THE CATCH, NOT THE WRITE, and the first version of this case got that wrong — it
+# replaced only the line INSIDE the `try`, so the `catch` survived, the `TypeError` was still
+# swallowed and the code was still safe. The case FAILED as an undetected regression against code
+# that had not regressed, and `ci.yml` opens a GitHub issue on a red nightly ledger: a scheduled
+# alarm for a non-defect, which is hard rule 2 read backwards. Found by a review panel; the author's
+# own run never saw it, because that case was one of two the machine SIGKILLed at exit 137 under the
+# load of three concurrent reviewers.
+#
+# `test-sabotage-applies.sh` was green throughout, and correctly: an expression that APPLIES is not
+# one that MODELS the defect. Only running the ledger answers that.
+run_sabotage "the SMTP credential write stops swallowing the raise (fwrite's own frame carries it)" \
   src/php/Core/Notify/SmtpTransport.php \
-  "s%            \$written = @fwrite(\$socket, \$line);%            \$written = fwrite(\$socket, base64_encode(\$password ? \$this->password : \$this->user) . \"\\\\r\\\\n\");%"
+  "s%        } catch (\\\\Throwable) {%        } catch (\\\\Throwable \$e) { throw \$e;%"
 
 # ── F20: the durable reading may not claim a provenance the row does not carry (2026-09-04) ─────
 #

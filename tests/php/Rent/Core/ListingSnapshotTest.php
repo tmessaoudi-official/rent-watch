@@ -158,6 +158,94 @@ final class ListingSnapshotTest extends TestCase
     }
 
     /**
+     * Every constructor parameter given a value DISTINGUISHABLE from its default.
+     *
+     * Built by hand rather than by reflection so a new parameter appears here as a red test rather
+     * than as an automatically-satisfied one — the guard below asserts nothing was skipped, and a
+     * generated fixture would quietly generate the new field too and prove nothing about the
+     * readers.
+     */
+    private function richListing(): RawListing
+    {
+        return new RawListing(
+            sourceName: 'cdc_habitat',
+            externalId: 'c1',
+            title: 'Appartement T4',
+            description: 'Logement intermediaire, 88 m2.',
+            fields: ['financement' => 'LLI'],
+            url: 'https://cdc.test/c1',
+            commune: 'Sartrouville',
+            postcode: '78500',
+            rentCc: 1450,
+            rentHc: 1300,
+            charges: 150,
+            surfaceM2: 88.0,
+            rooms: 4,
+            bedrooms: 3,
+            floor: 2,
+            hasElevator: true,
+            detailRead: true,
+            commuteMinutes: 68,
+            observedAt: '2026-09-04T09:00:00+00:00',
+            advertiser: 'CDC Habitat',
+            proseAbsent: true,
+        );
+    }
+
+    /**
+     * THE READERS ARE GUARDED TOO, AND UNTIL NOW ONLY THE ENCODER WAS (C2 round 3, 2026-09-04).
+     *
+     * The guard above is structural — reflection over the constructor — and its own failure message
+     * invokes §1. `decode()` and `RawListing::mergedWith()` had no counterpart, and the merge's
+     * docblock conceded it in words: *"the reflection guard cannot catch it: that guard checks the
+     * snapshot ENCODER, not the merge."* A comment is not a guard.
+     *
+     * A review panel wired a 22nd field into the encoder ONLY and measured the result: the encoder
+     * guard noticed and forced it in (+2 assertions), **both readers noticed nothing** — decoded
+     * `NULL`, survived the merge as `NULL`. Latent, because all 21 current parameters are carried by
+     * both. But `CLAUDE.md` records this exact trap firing on the sibling `enrich()` path at a cost
+     * of 429 phantom price-history rows and 128 *Baisse de loyer* emails for one flat, and that was
+     * fixed with a clone-with AND a reflection guard. The merge got neither.
+     *
+     * ROUND-TRIP RATHER THAN KEY-PRESENCE, because that is what the readers can get wrong: a field
+     * the encoder writes and the decoder ignores is present in the JSON and absent from the object.
+     * Every parameter is given a value distinguishable from its default, so "unchanged" cannot pass
+     * for "carried".
+     */
+    public function testEveryConstructorParameterSurvivesDecodeAndMerge(): void
+    {
+        $parameters = (new \ReflectionClass(RawListing::class))->getConstructor()?->getParameters() ?? [];
+        self::assertNotSame([], $parameters, 'reflection found no constructor — the guard would pass vacuously');
+
+        $rich = $this->richListing();
+        $decoded = ListingSnapshot::decode(ListingSnapshot::encode($rich));
+
+        $skipped = [];
+
+        foreach ($parameters as $parameter) {
+            $name = $parameter->getName();
+            $property = new \ReflectionProperty(RawListing::class, $name);
+            $expected = $property->getValue($rich);
+
+            if ($expected === null) {
+                // Only a parameter this test could not give a distinguishable value to. Named
+                // rather than silently passed, so the coverage is auditable — an unnamed skip is
+                // how a guard becomes decorative.
+                $skipped[] = $name;
+
+                continue;
+            }
+
+            self::assertSame($expected, $property->getValue($decoded), 'RawListing::$' . $name . ' is lost by decode()');
+
+            $merged = $rich->mergedWith(new RawListing('s', 'e'));
+            self::assertSame($expected, $property->getValue($merged), 'RawListing::$' . $name . ' is lost by mergedWith()');
+        }
+
+        self::assertSame([], $skipped, 'every constructor parameter must be exercised: ' . implode(', ', $skipped));
+    }
+
+    /**
      * A snapshot that cannot be read is a LOUD failure, never a bare listing.
      *
      * Hard rule 3: an exception must not become an empty result. Degrading to a listing with no
