@@ -2257,38 +2257,38 @@ tool/guard) and say which ones the fix covers.**
 <!-- progress-block v1 -->
 | # | Step | Size | State | Evidence | Files |
 |---|------|------|-------|----------|-------|
-| 1 | 6-A1 In'li degradation — failure-rate health signal (dual window) | M | done | 56437d9 | src/php/Core/RunStore.php |
-| 2 | 6-A2 car loader — a params key no adapter reads is refused | M | done | 413f38e | src/php/Car/VehicleSourceLoader.php |
-| 3 | 6-A3 ListingMapper miss instrumentation + tenureField on the JSON path | L | done | 2ab3245 | src/php/Rent/Adapters/ListingMapper.php |
-| 4 | 6-A3 half 3 — rent plausibility band on mapped rents | M | done | d3c201a | src/php/Rent/Adapters/ListingMapper.php src/php/Rent/Adapters/Payload.php |
-| 5 | 6-A4 brand `autres` bypass — make_model_unknown_pattern | M | done | 0ae6cd0 | src/php/Car/VehicleSourceLoader.php config/car/sources.json |
+| 1 | 6-A1 In'li degradation — failure-rate health signal (dual window) | M | certified | 56437d9 test:2026-09-04 | src/php/Core/RunStore.php |
+| 2 | 6-A2 car loader — a params key no adapter reads is refused | M | certified | 413f38e test:2026-09-04 | src/php/Car/VehicleSourceLoader.php |
+| 3 | 6-A3 ListingMapper miss instrumentation + tenureField on the JSON path | L | certified | 2ab3245 test:2026-09-04 | src/php/Rent/Adapters/ListingMapper.php |
+| 4 | 6-A3 half 3 — rent plausibility band on mapped rents | M | certified | d3c201a test:2026-09-04 | src/php/Rent/Adapters/ListingMapper.php src/php/Rent/Adapters/Payload.php |
+| 5 | 6-A4 brand `autres` bypass — make_model_unknown_pattern | M | certified | 0ae6cd0 test:2026-09-04 | src/php/Car/VehicleSourceLoader.php config/car/sources.json |
 | 6 | 6-A5 score-floor batching + weight recalibration | L | deferred | - | src/php/Rent/Cli/DigestBatch.php config/rent/criteria.json |
-| 7 | 6-A6 SeLoger surface read out of a base64url tracking token | M | done | 9ea9d77 | src/php/Rent/Adapters/EmailAlertSource.php |
+| 7 | 6-A6 SeLoger surface read out of a base64url tracking token | M | certified | 9ea9d77 test:2026-09-04 | src/php/Rent/Adapters/EmailAlertSource.php |
 | 8 | 6-A7 F28 one-shot victims report (read-only, gitignored output) | S | done | - | - |
 | 9 | 6-B1 CapCar email source | L | deferred | - | config/car/sources.json |
 | 10 | 6-B2 La Centrale email source | L | deferred | - | config/car/sources.json |
 | 11 | 6-B3 Agorastore email source (optional third) | M | deferred | - | config/car/sources.json |
 | 12 | 6-B4 AutoScout24 — no alert has ever arrived | M | blocked | - | config/car/sources.json |
 | 13 | 6-C1 register and docs say what the tree says | M | done | ede198e | docs/plans/scout-unified-execution.plan.md |
-| 14 | 6-C2 r1 F2 (P0) — both segmentation guards read both separator keys | M | done | be8eba7 | src/php/Rent/Config/ConfigLoader.php tests/php/Rent/Config/ConfigTest.php |
-| 15 | 6-C2 r1 F1 (P0) — a flat the store holds as PLS is vetoed under a new ad id | M | done | 3eca42f | src/php/Rent/Cli/Pipeline.php src/php/Rent/Core/Dedup.php src/php/Rent/Store/Store.php |
-| 16 | 6-C2 r1 F-R1 + CMP-3 (P1) — counting a miss is not reporting one | M | done | 581cbce | src/php/Core/PatternMissLog.php src/php/Rent/Adapters/HtmlSource.php src/php/Car/SitemapVehicleSource.php |
+| 14 | 6-C2 r1 F2 (P0) — both segmentation guards read both separator keys | M | certified | be8eba7 test:2026-09-04 | src/php/Rent/Config/ConfigLoader.php tests/php/Rent/Config/ConfigTest.php |
+| 15 | 6-C2 r1 F1 (P0) — a flat the store holds as PLS is vetoed under a new ad id | M | certified | 3eca42f test:2026-09-04 | src/php/Rent/Cli/Pipeline.php src/php/Rent/Core/Dedup.php src/php/Rent/Store/Store.php |
+| 16 | 6-C2 r1 F-R1 + CMP-3 (P1) — counting a miss is not reporting one | M | certified | 581cbce test:2026-09-04 | src/php/Core/PatternMissLog.php src/php/Rent/Adapters/HtmlSource.php src/php/Car/SitemapVehicleSource.php |
 | 17 | 6-C2 r1 — two ledger expressions retargeted after the escalation moved | S | done | 081ab28 | tests/sabotage-check.sh |
 | 18 | 6-C2 P2 bundle — dump-eml fail-open guard, LOGIN trace, no docs/test (3 of 9) | M | done | 38f64bb | tools/dump-eml.php docs/ALERT-CAPTURE.md tests/test-dump-eml.sh |
-| 19 | 6-C2 P2 COR-F5 — a persisted twin doubt cleared by a third route | M | done | eb5d971 | src/php/Rent/Cli/Pipeline.php src/php/Rent/Store/Store.php |
-| 20 | 6-C2 P2 COR-F4 — SURFACE_PATTERN still has no left anchor | S | done | 38f64bb | src/php/Rent/Adapters/EmailAlertSource.php |
-| 21 | 6-C2 P2 COR-F3 — digest title asserts an undetermined regime that is determined | S | done | 38f64bb | src/php/Rent/Core/CriteriaEngine.php src/php/Rent/Notify/Formatter.php |
-| 22 | 6-C2 P2 CMP-2 — the frozen In'li fixture is the old template | M | done | 38f64bb | tests/fixtures/rent/inli/search-2026-09-04-nouveau-gabarit.html tests/php/Rent/Adapters/InliCurrentTemplateTest.php |
-| 23 | 6-C2 P2 CMP-1 — ntfy badge test uses an ASCII stand-in | S | done | 38f64bb | tests/php/Core/Notify/NtfyChannelWireTest.php |
+| 19 | 6-C2 P2 COR-F5 — a persisted twin doubt cleared by a third route | M | certified | eb5d971 test:2026-09-04 | src/php/Rent/Cli/Pipeline.php src/php/Rent/Store/Store.php |
+| 20 | 6-C2 P2 COR-F4 — SURFACE_PATTERN still has no left anchor | S | certified | 38f64bb test:2026-09-04 | src/php/Rent/Adapters/EmailAlertSource.php |
+| 21 | 6-C2 P2 COR-F3 — digest title asserts an undetermined regime that is determined | S | certified | 38f64bb test:2026-09-04 | src/php/Rent/Core/CriteriaEngine.php src/php/Rent/Notify/Formatter.php |
+| 22 | 6-C2 P2 CMP-2 — the frozen In'li fixture is the old template | M | certified | 38f64bb test:2026-09-04 | tests/fixtures/rent/inli/search-2026-09-04-nouveau-gabarit.html tests/php/Rent/Adapters/InliCurrentTemplateTest.php |
+| 23 | 6-C2 P2 CMP-1 — ntfy badge test uses an ASCII stand-in | S | certified | 38f64bb test:2026-09-04 | tests/php/Core/Notify/NtfyChannelWireTest.php |
 | 24 | 6-C2 P2 CMP-4 — F19 register row cites two stale line numbers | S | done | 38f64bb | docs/plans/scout-unified-execution.plan.md |
 | 25 | 6-C2 re-freeze at the last P2 commit and re-measure the span | S | done | 6001b01 | docs/plans/scout-unified-execution.plan.md |
-| 26 | 6-C2 round 2 — MAXIMAL, ran at 8fb9b64: 2 P1, 5 P2, 5 P3, all fixed | L | done | 5833b87 | src/php/Adapters/Mail/ImapMailbox.php src/php/Core/Notify/SmtpTransport.php src/php/Rent/Cli/Pipeline.php |
-| 27 | 6-C2 round 3 — ran at 5833b87: 2 P1, 4 P2, 5 P3, all fixed | L | done | 909c159 | bin/scout src/php/Rent/Core/ListingSnapshot.php tests/sabotage-check.sh |
-| 28 | F18 a plain grep silently skips the Latin-1 PAP fixtures | S | done | 38f64bb | tests/php/Repo/FixtureSecretsTest.php |
-| 29 | F20 the durable reading no longer claims where it was read | M | done | 526d246 | src/php/Rent/Cli/Pipeline.php docs/OPEN-QUESTIONS.md |
+| 26 | 6-C2 round 2 — MAXIMAL, ran at 8fb9b64: 2 P1, 5 P2, 5 P3, all fixed | L | certified | 5833b87 test:2026-09-04 | src/php/Adapters/Mail/ImapMailbox.php src/php/Core/Notify/SmtpTransport.php src/php/Rent/Cli/Pipeline.php |
+| 27 | 6-C2 round 3 — ran at 5833b87: 2 P1, 4 P2, 5 P3, all fixed | L | certified | 909c159 test:2026-09-04 | bin/scout src/php/Rent/Core/ListingSnapshot.php tests/sabotage-check.sh |
+| 28 | F18 a plain grep silently skips the Latin-1 PAP fixtures | S | certified | 38f64bb test:2026-09-04 | tests/php/Repo/FixtureSecretsTest.php |
+| 29 | F20 the durable reading no longer claims where it was read | M | certified | 526d246 test:2026-09-04 | src/php/Rent/Cli/Pipeline.php docs/OPEN-QUESTIONS.md |
 | 30 | F25 compose recreate wedges and leaves the watcher down silently | M | done | 38f64bb | tools/verify-deploy.sh tests/test-verify-deploy.sh README.md |
-| 31 | Deep — the five car MalformedText arms have no sabotage case | M | done | 526d246 | tests/php/Car/VehicleMalformedTextTest.php tests/sabotage-check.sh |
-| 32 | Deep — field-map regex has no load-time compile check | S | done | 38f64bb | src/php/Rent/Config/FieldMap.php tests/php/Rent/Config/ConfigTest.php |
+| 31 | Deep — the five car MalformedText arms have no sabotage case | M | certified | 526d246 test:2026-09-04 | tests/php/Car/VehicleMalformedTextTest.php tests/sabotage-check.sh |
+| 32 | Deep — field-map regex has no load-time compile check | S | certified | 38f64bb test:2026-09-04 | src/php/Rent/Config/FieldMap.php tests/php/Rent/Config/ConfigTest.php |
 | 33 | Deep — doc drift: WARN_FLAKY, card_separator_pattern refusals, 4 stale Core paths | M | done | 38f64bb | CLAUDE.md docs/OPEN-QUESTIONS.md |
 | 34 | Deep — plan track sections stale for Tracks 0 1 2-step0 4 and 6-A1/A2/A3 | M | done | 38f64bb | docs/plans/scout-unified-execution.plan.md |
 | 35 | 6-C2 — the TWO CONSECUTIVE CLEAN rounds the bar requires; rounds 1-3 each found real defects, cap is 5 then ask | L | todo | - | src/php |
