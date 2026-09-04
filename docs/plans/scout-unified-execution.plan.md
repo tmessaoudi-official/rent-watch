@@ -1084,7 +1084,12 @@ read-only) and the merged prose as one review deep.
   **RE-FREEZE for round 4: `909c159`** — 85 commits since `7765997`, **50 touching code**.
 
 - [2026-09-04 16:45] RECORD (**C2 ROUND 4 RAN, WAS NOT CLEAN, AND CANNOT COUNT EITHER WAY — the
-  two-clean counter RESTARTS AGAIN**). Three lenses, unnamed, pinned at `909c159`. Fixed in
+  two-clean counter RESTARTS AGAIN**). Three lenses, unnamed, pinned at **`6d0986e`** — NOT
+  `909c159`, which this record first claimed. Both surviving round-4 lens reports name `6d0986e`,
+  and `git merge-base --is-ancestor d3c201a 909c159` answers yes, so the reviewed span was wider
+  than the record said (9 commits, not 3). Corrected by the round-5 completeness lens. **Only two of
+  the three round-4 reports exist under `var/claude/`** — the completeness one was never written —
+  so "three lenses" is true of what RAN and not of what was KEPT. Fixed in
   `1529fbb` + `fe0a468`; suite **2757 / 10 737**, every guard green, drift `P0=0 P1=0 P2=0`.
 
   **THE FREEZE BROKE MID-ROUND**, and that alone disqualifies it: `569a1e5` landed *after* a lens
@@ -1137,6 +1142,92 @@ read-only) and the merged prose as one review deep.
   is reached with the counter at 1, and the exit is decided WITH the developer via
   `AskUserQuestion`, never silently — the 2026-08-30 ruling carried above, which autonomous mode
   does not suppress.
+
+- [2026-09-04 19:30] RECORD (**C2 ROUND 5 RAN AND WAS NOT CLEAN — 17 findings across three lenses:
+  6 + 6 + 5, of which 5 are P1. The two-clean counter is 0**). Three lenses, unnamed, pinned at
+  `5e68c24`; the freeze HELD this time (the completeness lens verified it at start and end). Reports
+  under `var/claude/c2-round5-*.md`.
+
+  **THE ROUND-4 RECORD ABOVE CONTAINED A FALSIFIED PREDICTION, and it is corrected rather than
+  quietly dropped.** It said the cap would be reached "with the counter at 1". Round 5 found
+  seventeen things, so the counter is **0**. A prediction written into a decisions log is a claim
+  like any other.
+
+  **THE HEADLINE FINDING WAS THE ROUND-4 FIX ITSELF, ON THE BOUND IT DID NOT TOUCH.** `1529fbb`
+  dropped the ceiling from the mapped band and kept the floor — and the floor does the identical
+  damage to a different guard. `CriteriaEngine::pricePerM2()` returns null when the rent is null, so
+  nulling a sub-200 figure skips the Track 1f plausibility branch: `{119 €, 60 m², 3 p}` judged
+  **DIGEST** at `909c159` and **MATCH** at `5e68c24`. The round-4 commit message had argued the
+  general principle — *"handing it a figure it will reject is strictly better than silence"* — and
+  then applied it to one of the two bounds, which is this repo's named recurring defect committed by
+  the fix for an instance of it, for the third round running.
+
+  **RULING REVERSED: Track 6-A3 half 3 (AGREED 2026-09-03) is withdrawn — the mapped path carries NO
+  band.** Not a defect fix but the reversal of a ruling, so it is recorded as one. The measurement
+  that reverses it: the "7 price-history rows at 119–290 €" the band was justified by contain
+  **ONE** row below 200 €, already digested on tenure — zero rows changed in either direction —
+  while the band disabled the price-per-m² floor, which is the mechanism `Payload`'s own docblock
+  names for a mis-mapped low rent. Every downstream guard reads a rent as `!== null`, so on a single
+  LABELLED value "outside the band" and "not stated" are the same input and nulling deletes evidence
+  rather than rejecting anything. The band stays in `EmailAlertSource::rentIn()`, where it sits
+  inside a loop over CANDIDATES and *refused* means **keep looking**. Reversed back by
+  reintroducing either bound in `ListingMapper::rents()` — two ledger cases now fire if anyone does.
+
+  **THE CI GATE WAS RED AT THE FROZEN COMMIT, and the round-4 record claimed "every guard green".**
+  Five ledger expressions went inert when the band moved into `Payload::plausibleRent()`;
+  `tests/test-sabotage-applies.sh` exits 1 and `ci.yml` runs it on every push. The claim was false
+  because that guard was never run — the suite, both tripwires, drift-scan and `bash -n` were.
+  **The commit immediately before the span is titled *"two ledger expressions went inert when the
+  escalation moved"*.** Same trap, one commit later, with the warning in the session's own memory
+  index. Two lenses found it independently. Retargeting the FILE was not enough either: the numbers
+  had become named constants in the same move, and all three stayed inert until the expressions
+  followed the code's SHAPE as well as its address.
+
+  **FOUR CONFIGURED FIELD-MAP KEYS WERE COUNTED BY NOTHING** — `rent`, `rent_hc`, `url` and
+  `tenure_field` — also found independently by two lenses. They are precisely the four read outside
+  `map()`'s constructor call, so anyone auditing that call saw a complete set. `tenure_field` is the
+  §1 one: dead, the key is simply absent, the classifier falls through to the SOURCE DEFAULT, and a
+  mixed-stock portal judges every listing by its most optimistic assumption while `item_count` is
+  unchanged, no run fails and `SourceHealth` stays `ok`. Now guarded BEHAVIOURALLY by reflection
+  over `FieldMap` — every configurable key must be reported by `total()` when dead — so a fifteenth
+  key instrumented by nobody fails there. `ref` is the one exemption, and it needs no counter: its
+  absence throws.
+
+  **THE SECRETS GUARDS DECODE BOTH BASE64 ALPHABETS AT ALL FOUR ALIGNMENTS**, sharing ONE cascade so
+  they cannot drift apart again, and `FixtureSecretsTest` gained an address guard — a non-portal
+  address, allow-listed by domain for portals and by FULL ADDRESS for consumer domains, because the
+  subscriber is on one and a domain allow-list would switch the guard off for the only address it
+  exists to catch. `mail.com` was moved to the address list for that reason after its single
+  occurrence was checked (a French template placeholder).
+
+  **TWO REVIEWER CLAIMS WERE MEASURED AND DID NOT SURVIVE, recorded because a finding accepted
+  without checking is as bad as one missed.** The alphabet widening could NOT be isolated: over
+  ~100 000 randomised realistic shapes there is no payload where the wide scan recovers an address
+  and the narrow one misses it — an ASCII address essentially never generates `+`/`/` inside its own
+  encoded span. It is kept as defence in depth and says so. And the scrubber's percent-decode cannot
+  be isolated through the tool's exit status either: an 80-character opaque-run detector fires
+  first, which is layered defence working rather than a gap.
+
+  **AND THE SHARPEST FINDING OF THE ROUND WAS AGAINST THE ROUND'S OWN FIX.** Adding four-alignment
+  decoding made `testTheGuardSeesThroughPercentEncoding` **vacuous**: with four offsets a fragment
+  of the RAW percent-encoded header decodes to text containing `eyJ` unaided, so deleting the
+  `rawurldecode` that a P0 was fixed with left the test green. Measured both ways — offset 0 alone
+  misses it, four offsets recover it. *A strictly better guard silently disabled the self-test
+  protecting a P0's repair.* An OUTCOME assertion cannot defend against that, because every added
+  capability gives the outcome one more way to be satisfied; the replacement asserts the MECHANISM
+  — each decoded form must be present in the cascade actually scanned — and is verified red without
+  it. Note the round-5 resilience lens had verified that twin non-vacuous AT `5e68c24`: it was
+  correct, and this session broke it afterwards.
+
+  **STILL OPEN, RECORDED NOT FIXED (P2):** correctness F3 — with no band, a selector drifting onto a
+  5-digit field extracts `95240` cleanly, `max_rent_cc` then rejects every card on the source, `rent`
+  counts zero misses because the extraction SUCCEEDED, and health stays `ok`. That is the ParuVendu
+  `autres` class one layer over — a capture that succeeds without meaning anything — and it wants
+  the same instrument, not this round's.
+
+  **ROUND 5 WAS THE MAXIMAL CAP AND THE COUNTER IS 0.** Per this repo's ladder and the 2026-08-30
+  ruling carried above, the exit is decided WITH the developer via `AskUserQuestion`, never
+  silently. Row 35 cannot close without that answer.
 
 ---
 
@@ -2314,8 +2405,8 @@ tool/guard) and say which ones the fix covers.**
 |---|------|------|-------|----------|-------|
 | 1 | 6-A1 In'li degradation — failure-rate health signal (dual window) | M | certified | 56437d9 test:2026-09-04 | src/php/Core/RunStore.php |
 | 2 | 6-A2 car loader — a params key no adapter reads is refused | M | certified | 413f38e test:2026-09-04 | src/php/Car/VehicleSourceLoader.php |
-| 3 | 6-A3 ListingMapper miss instrumentation + tenureField on the JSON path | L | certified | 2ab3245 test:2026-09-04 | src/php/Rent/Adapters/ListingMapper.php |
-| 4 | 6-A3 half 3 — rent plausibility band on mapped rents | M | certified | d3c201a test:2026-09-04 | src/php/Rent/Adapters/ListingMapper.php src/php/Rent/Adapters/Payload.php |
+| 3 | 6-A3 ListingMapper miss instrumentation + tenureField on the JSON path — COMPLETED at 8e3fe80: C2 r5 found 4 configured keys (rent, rent_hc, url, tenure_field) still counting nothing, so `certified` overclaimed | L | done | 8e3fe80 | src/php/Rent/Adapters/ListingMapper.php |
+| 4 | 6-A3 half 3 — RULING REVERSED at 8e3fe80: the mapped path carries NO band (both bounds erased evidence a `!== null` guard needed; the scan keeps its band) | M | done | 8e3fe80 | src/php/Rent/Adapters/ListingMapper.php src/php/Rent/Adapters/Payload.php |
 | 5 | 6-A4 brand `autres` bypass — make_model_unknown_pattern | M | certified | 0ae6cd0 test:2026-09-04 | src/php/Car/VehicleSourceLoader.php config/car/sources.json |
 | 6 | 6-A5 score-floor batching + weight recalibration | L | deferred | - | src/php/Rent/Cli/DigestBatch.php config/rent/criteria.json |
 | 7 | 6-A6 SeLoger surface read out of a base64url tracking token | M | certified | 9ea9d77 test:2026-09-04 | src/php/Rent/Adapters/EmailAlertSource.php |
