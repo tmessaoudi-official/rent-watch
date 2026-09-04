@@ -121,6 +121,16 @@ function recoverableForms(string $message): array
         $next = [];
 
         foreach ($queue as $text) {
+            // PERCENT-DECODE FIRST, and this line is a P0's whole cause (2026-09-04).
+            // `%` is outside the run class, so a percent-encoded blob SPLITS: the
+            // surviving run starts two characters late and strict base64 decodes it to
+            // garbage, which reads as "nothing recoverable here". Measured on a real
+            // `X-Mailin-EID`: `starts: 2BdGFr… len 162` decoding to 121 bytes of noise,
+            // while one `rawurldecode` first yields the subscriber's address in clear.
+            //
+            // `rawurldecode`, NOT `urldecode`: the latter turns `+` into a space, which
+            // would corrupt any run that is genuinely base64 rather than percent-encoded.
+            $text = rawurldecode($text);
             preg_match_all('~[A-Za-z0-9_\-]{16,}~', $text, $runs);
 
             foreach ($runs[0] as $run) {
@@ -228,6 +238,11 @@ $drop = [
     'arc-authentication-results', 'dkim-signature', 'reply-to', 'feedback-id',
     'list-unsubscribe', 'list-unsubscribe-post', 'x-sfmc-stack', 'x-delivery',
     'x-csa-complaints', 'message-id',
+    // BREVO/SENDINBLUE, added 2026-09-04 after a P0. `X-Mailin-EID` is a
+    // percent-encoded base64 blob that decodes to
+    // `<n>~<subscriber address>~<message-id>~<relay>` in clear text. It survived this
+    // scrubber AND `FixtureSecretsTest` into a pushed commit.
+    'x-mailin-eid', 'x-sib-id', 'x-mailin-client',
 ];
 
 $eol = str_contains($raw, "\r\n") ? "\r\n" : "\n";

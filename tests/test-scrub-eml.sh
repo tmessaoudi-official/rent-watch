@@ -520,5 +520,45 @@ php "$repo/tools/scrub-eml.php" "$work/noaddr.eml" "$work/ok.out.eml" "$address"
 check "a call WITH an address still scrubs and writes" test "$ok_status" -eq 0
 check "and its output exists" test -f "$work/ok.out.eml"
 
+# ── PERCENT-ENCODING: the P0 of 2026-09-04, and the scrubber's own half of it ────────────────────
+#
+# Brevo's `X-Mailin-EID` is a percent-encoded base64 blob decoding to
+# `<n>~<subscriber address>~<message-id>~<relay>`. The run scan's class is `[A-Za-z0-9_-]`, so `%`
+# SPLITS the blob: the surviving run starts two characters late and strict-decodes to noise, which
+# reads as "nothing recoverable". The scrubber said `scrubbed`, `FixtureSecretsTest` said clean, and
+# the fixture was committed AND PUSHED. Two guards, one shared mechanism, phase-shifted identically.
+#
+# Two halves, because either alone can be satisfied wrongly: the header must be DROPPED, and the
+# scrubber must REFUSE a capture whose address survives only behind percent-encoding.
+mailin="$work/mailin.eml"
+blob="$(php -r 'echo rawurlencode(base64_encode("98986954~" . $argv[1] . "~<3bd70a6e@example.test>~relay"));' "$address")"
+{
+  printf 'From: CapCar <contact@capcar.fr>\r\n'
+  printf 'Subject: alerte\r\n'
+  printf 'X-Mailin-EID: %s\r\n' "$blob"
+  printf 'Content-Type: text/plain\r\n\r\n'
+  printf 'Marque : Renault\r\n'
+} > "$mailin"
+
+mailin_status=0
+php "$repo/tools/scrub-eml.php" "$mailin" "$work/mailin.out.eml" "$address" \
+  >"$work/mailin.log" 2>&1 || mailin_status=$?
+
+check "a percent-encoded ESP header is handled, not silently kept" test "$mailin_status" -eq 0
+if [[ -f "$work/mailin.out.eml" ]]; then
+  check "and X-Mailin-EID is gone from the output" \
+    bash -c '! grep -aqi "^X-Mailin-EID:" "'"$work/mailin.out.eml"'"'
+  check "and the address is NOT recoverable by rawurldecode + base64" \
+    php -r '$r = file_get_contents($argv[1]); $a = $argv[2];
+            $forms = [$r, rawurldecode($r)];
+            foreach ($forms as $f) { preg_match_all("~[A-Za-z0-9_/+=-]{16,}~", $f, $m);
+              foreach ($m[0] as $run) { $d = base64_decode($run, false); if ($d !== false) { $forms[] = $d; } } }
+            foreach ($forms as $f) { if (str_contains($f, $a)) { exit(1); } } exit(0);' \
+    "$work/mailin.out.eml" "$address"
+else
+  check "and X-Mailin-EID is gone from the output" false
+  check "and the address is NOT recoverable by rawurldecode + base64" false
+fi
+
 printf '\n  %d passed, %d failed\n\n' "$pass" "$fail"
 [[ "$fail" -eq 0 ]]

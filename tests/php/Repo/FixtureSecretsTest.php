@@ -120,6 +120,31 @@ final class FixtureSecretsTest extends TestCase
     }
 
     /**
+     * PERCENT-ENCODING, and this one is a P0's self-test (2026-09-04).
+     *
+     * Brevo's `X-Mailin-EID` is a percent-encoded base64 blob decoding to
+     * `<n>~<subscriber address>~<message-id>~<relay>`. `%` is not in the run class, so the blob
+     * splits and the surviving run starts two characters late — 162 characters that strict-decode
+     * to 121 bytes of noise. Both this guard and the scrubber reported clean, and the fixture was
+     * committed AND PUSHED. One `rawurldecode` before the scan is the whole difference.
+     */
+    public function testTheGuardSeesThroughPercentEncoding(): void
+    {
+        $jwt = 'eyJhbGciOiJIUzI1NiJ9.eyJlbWFpbCI6InZpY3RpbUBleGFtcGxlLnRlc3QifQ.c2lnbmF0dXJlLXNpZ25hdHVyZS1zaWduYXR1cmU';
+
+        // THE REAL HEADER'S SHAPE, and the payload here is load-bearing: a FIRST DRAFT used a short
+        // `x~<jwt>~y` wrapper and passed with the fix REMOVED, because the percent-encoded
+        // fragments happened to align so that one of them still decoded to text containing the
+        // token. It found the token by luck, not by the repair — a vacuous self-test for a P0.
+        // Measured: with the numeric prefix and `~<id@host>~relay` suffix the real header carries,
+        // the run walk MISSES it without `rawurldecode` and finds it with.
+        $encoded = rawurlencode(base64_encode('98986954~' . $jwt . '~<3bd70a6e@example.test>~relay.example.test'));
+
+        self::assertStringNotContainsString('eyJ', $encoded, 'the raw header carries no recognisable token');
+        self::assertSame(['JWT'], array_column(self::suspects('X-Mailin-EID: ' . $encoded), 0), 'percent-encoding is decoded before looking');
+    }
+
+    /**
      * THE NEXT ENCODING OVER. A `Content-Transfer-Encoding: base64` body — a common mailer default
      * the project's own parser accepts — carries the same JWT as opaque 76-column lines: no `eyJ`
      * survives in the raw bytes and QP decoding changes nothing. A review panel proved on
@@ -270,8 +295,17 @@ final class FixtureSecretsTest extends TestCase
     private static function suspects(string $content): array
     {
         $found = [];
-        $forms = [$content, quoted_printable_decode($content)];
-        foreach ([$content, quoted_printable_decode($content)] as $text) {
+        // PERCENT-DECODED TOO, and its absence was a P0 (2026-09-04). `%` is outside the run class
+        // below, so a percent-encoded base64 blob SPLITS: the surviving run starts two characters
+        // late and strict-decodes to garbage, which reads as "nothing recoverable". A real
+        // `X-Mailin-EID` header carried the subscriber's address past BOTH this guard and
+        // `tools/scrub-eml.php` into a pushed commit — the two are phase-shifted identically
+        // because they share the mechanism, which is exactly why they must not diverge.
+        //
+        // `rawurldecode`, NOT `urldecode`: the latter turns `+` into a space and would corrupt a run
+        // that is genuinely base64.
+        $forms = [$content, quoted_printable_decode($content), rawurldecode($content)];
+        foreach ([$content, quoted_printable_decode($content), rawurldecode($content)] as $text) {
             foreach (self::base64Blocks($text) as $block) {
                 $forms[] = $block;
             }
