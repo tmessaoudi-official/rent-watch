@@ -1095,6 +1095,30 @@ into one**, and predicting its effect would have got it backwards: widening it t
 unlisted median gap from 9 points to **13** (58 vs 71 over 160 re-judged snapshots), so a list
 covering 60 % of the fleet discriminates MORE, not less.
 
+> **A CAR PORTAL WHOSE LINKS CARRY NO ID IS KEYED ON ITS CONTENT, AND A LABELLED CARD IS READ BY
+> ONE PATTERN (rows 37 + 38, 2026-09-05).** Measured on CapCar and La Centrale before building:
+> every link is a per-recipient tracking redirect (`sendibt3.com/tr/cl/<token>`,
+> `clicks.mail-alerte.lacentrale.fr/f/a/<token>~~/…`), so `basename()` of the path — the identity
+> ParuVendu and leboncoin have always used — is a fresh id per message and the same id for every
+> card in one. `id_from: content` is the SeLoger discipline on the car side: `sha1(source | folded
+> title | year | km)`, the PRICE deliberately out of the key (a drop is an event, not a second
+> car), behind a no-information floor — a title AND a year or a mileage — below which the segment
+> is not a card. Stated cost: two identical cars share one row, and on La Centrale, which truncates
+> the title to ~28 characters, the mileage is all that tells two `RENAULT KANGOO II EXPRESS p...`
+> apart. **Pick the scheme before the first enabled pass** — nothing migrates a row between keys.
+> The card itself is a labelled block (`Marque : X / Modèle : Y / … / Prix : P €`, U+00A0 before
+> every colon, U+202F in the price) or a title line with the facts on their own lines, so
+> `facts_pattern` accepts `title`, `make`, `model`, `version`, `gearbox` and `price` named groups
+> beside `body/fuel/year/km`; the title is composed `make model version` when no `title` group is
+> captured, and the loader REFUSES a second provider for any fact a group supplies
+> (`make_model_pattern`, `make_model_source`, `title_pattern`, `price_pattern` — two providers,
+> one honoured, the other inert). Two more things a labelled portal forced: `card_separator_pattern`
+> (a zero-width lookahead keeps the label inside the segment it starts) and `link_after` — on a
+> portal whose EVERY link sits on one tracking host, the last card's segment also holds the
+> footer's, so the card's link is the FIRST host link after its own CTA, never the last in the
+> segment. The unknown-make sentinel applies on the facts path too. ParuVendu and leboncoin are
+> byte-identical (their fixture tests are the counterweight); 12 ledger cases pin the directions.
+>
 > **A CAPTURE THAT SUCCEEDS IS NOT A CAPTURE THAT MEANS SOMETHING — the portal's own "I don't
 > know" token (Track 6-A4, 2026-09-02).** ParuVendu writes `/voiture-occasion/autres/autres/` when
 > it cannot name the marque. The pattern captured `autres` perfectly, so nothing read as a fault;

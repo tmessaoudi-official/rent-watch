@@ -69,7 +69,9 @@ final class VehicleEmailPatternMissTest extends TestCase
         /** @var list<string> $unread */
         $unread = $r->getConstant('UNREAD_PARAMS');
 
-        return array_values(array_diff($all, $unread, ['subject_pattern', 'make_model_unknown_pattern']));
+        // `card_separator_pattern` (row 38) is MESSAGE-level like `subject_pattern`: it decides
+        // where cards begin, not whether a card's field was read, so it has no miss to count.
+        return array_values(array_diff($all, $unread, ['subject_pattern', 'card_separator_pattern', 'make_model_unknown_pattern']));
     }
 
     /**

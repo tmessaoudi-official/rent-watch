@@ -1742,6 +1742,65 @@ run_sabotage "the search asks for SEQUENCE NUMBERS, which the second session can
   src/php/Adapters/Mail/ImapMailbox.php \
   "s%'UID SEARCH SINCE '%'SEARCH SINCE '%"
 
+# ── Rows 37 + 38 (2026-09-05): content identity and the labelled-card reader on the car adapter ──
+#
+# Every direction below is silent. A floor deleted makes every stripped card of one model ONE car;
+# a price in the key makes every drop a NEW car; a fold dropped or the source name dropped splits
+# or merges identities nobody can see; the facts title ignored puts `Kilométrage : 24409` on the
+# developer's phone as the car's name; the sentinel skipped on the facts path hands `Autres` the
+# whole brand share (Track 6-A4 again); a refusal removed lets two providers for one fact load
+# with one of them inert; the furniture precondition narrowed lets a footer link become a car; the
+# last-link rule restored hands a push an unsubscribe redirect. ParuVendu and leboncoin fixture
+# tests are the counterweight that the link path stayed byte-identical.
+
+run_sabotage "the content floor is deleted (a title-only card is an identity every Clio shares)" \
+  src/php/Car/VehicleEmailSource.php \
+  "s%if (\\\$title === '' || (\\\$year === null \\&\\& \\\$km === null)) {%if (false) {%"
+
+run_sabotage "the price enters the content key (every price drop is a brand-new car)" \
+  src/php/Car/VehicleEmailSource.php \
+  's%\$km === null ? '"''"' : (string) \$km,%\$km === null ? '"''"' : (string) \$km, (string) \$price,%'
+
+run_sabotage "the content key stops folding the title (LEXUS UX and Lexus UX are two cars)" \
+  src/php/Car/VehicleEmailSource.php \
+  's%(string) self::foldOrNull(\$title),%\$title,%'
+
+run_sabotage "the content key drops the source name (two portals, one row)" \
+  src/php/Car/VehicleEmailSource.php \
+  's%^\s*\$this->name(),$%%'
+
+run_sabotage "the facts title is ignored (the positional fallback names the car after its mileage line)" \
+  src/php/Car/VehicleEmailSource.php \
+  's%\$fromFacts = \$factsTitle !== null || \$factsMake !== null || \$factsModel !== null;%\$fromFacts = false;%'
+
+run_sabotage "the unknown-make sentinel skips the facts path (Autres earns the whole brand share)" \
+  src/php/Car/VehicleEmailSource.php \
+  's%if (\$make !== null \&\& preg_match(\$sentinel, \$make) === 1) {%if (\$factsMake === null \&\& \$make !== null \&\& preg_match(\$sentinel, \$make) === 1) {%'
+
+run_sabotage "the facts gearbox is ignored (a labelled Automatique scores as unstated)" \
+  src/php/Car/VehicleEmailSource.php \
+  's%gearbox: \$factsGearbox ?? self::gearboxFromTitle(\$title),%gearbox: self::gearboxFromTitle(\$title),%'
+
+run_sabotage "the furniture check is keyed on price_pattern alone again (a footer link becomes a car under link identity)" \
+  src/php/Car/VehicleEmailSource.php \
+  's%\$priceConfigured = \$pricePattern !== null || \$factsHasPrice;%\$priceConfigured = \$pricePattern !== null;%'
+
+run_sabotage "link_after is ignored — the LAST host link wins again (a push carries the footer's unsubscribe redirect)" \
+  src/php/Car/VehicleEmailSource.php \
+  's%foreach (\$after !== null ? \$m\[0\] : array_reverse(\$m\[0\]) as \$candidate) {%foreach (array_reverse(\$m[0]) as \$candidate) {%'
+
+run_sabotage "an unknown id_from value is accepted (a typo falls to link identity on a tracking-link portal)" \
+  src/php/Car/VehicleSourceLoader.php \
+  "s%!in_array(\\\$params\\['id_from'\\], \\['link', 'content'\\], true)%false%"
+
+run_sabotage "two providers for one fact load together (one of them inert)" \
+  src/php/Car/VehicleSourceLoader.php \
+  's%foreach (self::FACTS_GROUP_REPLACES as \$group => \$replaced) {%foreach ([] as \$group => \$replaced) {%'
+
+run_sabotage "both car separators load together (one ignored, in silence)" \
+  src/php/Car/VehicleSourceLoader.php \
+  "s%(\\\$params\\['card_separator'\\] ?? '') !== '' \\&\\& (\\\$params\\['card_separator_pattern'\\] ?? '') !== ''%false%"
+
 # Narrows the caught type instead of rethrowing: `\LogicException` is a real class, so the file still
 # parses, and every exception the loop is meant to survive (`SourceError`, `\RuntimeException`) now
 # escapes `run()`. NOTE the single backslashes — `\\` in a BRE is one literal backslash, and an
@@ -3928,7 +3987,7 @@ run_sabotage "the car pipeline baselines a sitemap source's health on its novel 
 
 run_sabotage "a furniture segment with no price and no facts is read as a card again" \
   src/php/Car/VehicleEmailSource.php \
-  's%        if ($pricePattern !== null \&\& $factsPattern !== null \&\& $price === null \&\& $body === null \&\& $year === null) {%        if (false) {%'
+  's%if (\$priceConfigured \&\& \$factsPattern !== null%if (false \&\& \$factsPattern !== null%'
 
 run_sabotage "the sitemap source stops checking robots.txt for lot pages" \
   src/php/Car/SitemapVehicleSource.php \

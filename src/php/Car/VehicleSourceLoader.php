@@ -16,7 +16,19 @@ final class VehicleSourceLoader
 {
     private const array TYPES = ['email_alert', 'sitemap_jsonld', 'fixture'];
     private const array FAMILIES = ['portal', 'dealer', 'auction'];
-    private const array PATTERN_PARAMS = ['subject_pattern', 'price_pattern', 'facts_pattern', 'title_pattern', 'make_model_pattern', 'make_model_unknown_pattern', 'seller_pattern', 'postcode_pattern'];
+    private const array PATTERN_PARAMS = ['subject_pattern', 'card_separator_pattern', 'price_pattern', 'facts_pattern', 'title_pattern', 'make_model_pattern', 'make_model_unknown_pattern', 'seller_pattern', 'postcode_pattern'];
+
+    /**
+     * The named groups `facts_pattern` may carry beside `body`/`fuel`/`year`/`km` (rows 37+38,
+     * 2026-09-05). A group here REPLACES the param that would otherwise provide the same fact,
+     * and the loader refuses both together: two providers for one fact is a guess about which one
+     * the adapter honours, and the ignored one fails silently.
+     */
+    private const array FACTS_GROUP_REPLACES = [
+        'make' => ['make_model_source', 'make_model_pattern', 'title_pattern'],
+        'title' => ['title_pattern'],
+        'price' => ['price_pattern'],
+    ];
 
     /**
      * Of those, the ones NO vehicle adapter reads — measured, not assumed
@@ -39,8 +51,9 @@ final class VehicleSourceLoader
      *
      * Read from the CODE, not from what the shipped config uses:
      * `grep -rnoE '[-]>param\(' src/php/Car/ src/php/Cli/` finds `VehicleEmailSource` (from,
-     * subject_pattern, card_separator, price_pattern, title_pattern, facts_pattern,
-     * make_model_pattern, make_model_source, link_host) and `CarScout` (from). A param an adapter
+     * subject_pattern, card_separator, card_separator_pattern, link_after, id_from, price_pattern,
+     * title_pattern, facts_pattern, make_model_pattern, make_model_source,
+     * make_model_unknown_pattern, link_host) and `CarScout` (from). A param an adapter
      * reads but this list omits is a refusal on a CORRECT config — the opposite failure, loud, and
      * the safe direction. The two move in the same change.
      *
@@ -57,6 +70,9 @@ final class VehicleSourceLoader
             'link_host',
             'subject_pattern',
             'card_separator',
+            'card_separator_pattern',
+            'link_after',
+            'id_from',
             'price_pattern',
             'title_pattern',
             'facts_pattern',
@@ -235,11 +251,55 @@ final class VehicleSourceLoader
                         'un motif vide ne reconnaîtrait jamais aucun jeton — retirez la clé ou donnez-lui une valeur',
                     );
                 }
-                if (!isset($params['make_model_pattern'])) {
+                // A facts `make` group (row 38) is a make provider too — the sentinel applies to
+                // whichever haystack the make came from.
+                $factsNamesMake = str_contains((string) ($params['facts_pattern'] ?? ''), '(?<make>')
+                    || str_contains((string) ($params['facts_pattern'] ?? ''), '(?P<make>');
+                if (!isset($params['make_model_pattern']) && !$factsNamesMake) {
                     throw ConfigError::at(
                         $where . '.params.make_model_unknown_pattern',
                         'décrit les jetons d\'un motif qui n\'existe pas — ajoutez make_model_pattern ou retirez cette clé',
                     );
+                }
+            }
+
+            // ROWS 37 + 38 (2026-09-05): identity scheme, regex segmentation, and the labelled-card
+            // groups — each refusal is a shape whose failure is silent.
+            //
+            // `id_from` is a VALUE, like `make_model_source`: a typo would fall to link identity,
+            // and on a portal whose links are per-recipient tokens that is a fresh identity per
+            // message — the whole backlog re-notified, reading as a busy market.
+            if (isset($params['id_from']) && !in_array($params['id_from'], ['link', 'content'], true)) {
+                throw ConfigError::at(
+                    $where . '.params.id_from',
+                    'attendu « link » ou « content », reçu « ' . $params['id_from'] . ' »',
+                );
+            }
+            // Both separators is a guess about which one the adapter honours — the rent loader's
+            // own rule, and the same words.
+            if (($params['card_separator'] ?? '') !== '' && ($params['card_separator_pattern'] ?? '') !== '') {
+                throw ConfigError::at(
+                    $where . '.params.card_separator_pattern',
+                    'card_separator et card_separator_pattern sont deux mécanismes pour la même chose : '
+                        . 'n\'en configurez qu\'un, sinon celui qui est ignoré échoue en silence',
+                );
+            }
+            // A `facts_pattern` group and the param that provides the same fact: two providers,
+            // one honoured, the other inert. Refused by name so the operator is sent to the line
+            // that is actually there.
+            $facts = (string) ($params['facts_pattern'] ?? '');
+            foreach (self::FACTS_GROUP_REPLACES as $group => $replaced) {
+                if ($facts === '' || !str_contains($facts, '(?<' . $group . '>') && !str_contains($facts, "(?P<" . $group . '>')) {
+                    continue;
+                }
+                foreach ($replaced as $key) {
+                    if (($params[$key] ?? '') !== '') {
+                        throw ConfigError::at(
+                            $where . '.params.' . $key,
+                            $key . ' et le groupe nommé « ' . $group . ' » de facts_pattern fournissent le même fait : '
+                                . 'gardez l\'un des deux, sinon celui qui est ignoré échoue en silence',
+                        );
+                    }
                 }
             }
 

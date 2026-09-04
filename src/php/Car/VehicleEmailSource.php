@@ -94,7 +94,6 @@ final readonly class VehicleEmailSource implements AcknowledgesMessages, CountsP
 
         $from = strtolower((string) $this->definition->param('from'));
         $subjectPattern = $this->definition->param('subject_pattern');
-        $separator = $this->definition->param('card_separator');
         $out = [];
 
         foreach ($messages as $position => $raw) {
@@ -110,7 +109,7 @@ final readonly class VehicleEmailSource implements AcknowledgesMessages, CountsP
             // only — the mark is written by acknowledge(), after the store has recorded the pass.
             $this->mailbox->claim($position);
 
-            $segments = $separator === null ? [$message->body] : explode($separator, $message->body);
+            $segments = $this->segments($message);
             $seen = [];
             foreach ($segments as $segment) {
                 // A SEGMENT IS NOT A CARD UNTIL `cardListing()` SAYS SO, and this source has a
@@ -197,24 +196,84 @@ final readonly class VehicleEmailSource implements AcknowledgesMessages, CountsP
         $this->patternMisses->record($key, $found);
     }
 
+    /**
+     * The segments of one message: one per card plus the header and footer furniture.
+     *
+     * `card_separator_pattern` (row 38) is the regex form, honoured IN PREFERENCE to the literal —
+     * the loader refuses both together. A pattern that cannot run is a CONFIG fault, not an event:
+     * every message would fail it identically, and returning the whole body as one segment would
+     * silently merge every card, so it throws (the rent adapter's own rule). A zero-width
+     * lookahead — `(?=Marque\x{00A0}:)` — keeps the label inside the segment it starts, which is
+     * what lets a labelled-block `facts_pattern` begin at the block's first line.
+     *
+     * @return list<string>
+     */
+    private function segments(EmailMessage $message): array
+    {
+        $pattern = $this->definition->param('card_separator_pattern');
+        if ($pattern !== null) {
+            $segments = preg_split($pattern, $message->body);
+            if ($segments === false) {
+                throw new SourceError($this->name(), 'card_separator_pattern illisible : ' . $pattern);
+            }
+
+            return $segments;
+        }
+
+        $separator = $this->definition->param('card_separator');
+
+        return $separator === null ? [$message->body] : explode($separator, $message->body);
+    }
+
     private function cardListing(EmailMessage $message, string $segment): ?VehicleListing
     {
         $link = $this->adLinkIn($segment);
         if ($link === null) {
             return null;
         }
-        $path = (string) (parse_url($link, PHP_URL_PATH) ?? '');
-        $id = basename(rtrim($path, '/'));
-        if ($id === '' || $id === '/') {
-            return null;
-        }
 
         $lines = preg_split('~\R~u', $segment) ?: [];
         $isUrl = static fn (string $l): bool => str_starts_with(trim($l), 'http://') || str_starts_with(trim($l), 'https://');
 
+        // FACTS FIRST (row 38) — body, fuel, year, mileage, and on a labelled-block portal the make,
+        // model, version, gearbox, price and title too, from the one pattern the portal's layout
+        // fits. Moved above the price and title readers because a facts-derived title has to
+        // exist before `make_model_source: title` and `gearboxFromTitle()` read `$title`; the
+        // ParuVendu/leboncoin outcome is unchanged because their patterns carry none of the new
+        // groups (their fixture tests are the proof).
+        $body = $fuel = null;
+        $year = $km = null;
+        $factsMake = $factsModel = $factsVersion = $factsGearbox = $factsTitle = null;
+        $factsPrice = null;
+        $factsHasPrice = false;
+        $factsPattern = $this->definition->param('facts_pattern');
+        if ($factsPattern !== null) {
+            $factsHasPrice = str_contains($factsPattern, '(?<price>') || str_contains($factsPattern, '(?P<price>');
+            $hit = preg_match_all($factsPattern, $segment, $f, PREG_SET_ORDER) > 0;
+            // THE ONE THAT PROVED THE GAP WAS REAL: 13 of 99 stored ParuVendu rows carry `body`,
+            // `fuel`, `year` and `mileageKm` all null — one miss here, four fields dark, and
+            // nothing said so.
+            $this->missed('facts_pattern', $hit);
+
+            if ($hit) {
+                $facts = end($f);
+                $body = self::foldOrNull($facts['body'] ?? null);
+                $fuel = self::fuel($facts['fuel'] ?? null);
+                $year = isset($facts['year']) && $facts['year'] !== '' ? (int) $facts['year'] : null;
+                $km = isset($facts['km']) && $facts['km'] !== '' ? self::int($facts['km']) : null;
+                $factsMake = self::foldOrNull($facts['make'] ?? null);
+                $factsModel = self::foldOrNull($facts['model'] ?? null);
+                $factsVersion = isset($facts['version']) ? trim($facts['version']) : null;
+                $factsGearbox = isset($facts['gearbox']) ? VehicleFacts::gearbox($facts['gearbox']) : null;
+                $factsTitle = isset($facts['title']) ? trim($facts['title']) : null;
+                $factsPrice = isset($facts['price']) && $facts['price'] !== '' ? self::int($facts['price']) : null;
+            }
+        }
+
         // PRICE — the card's own `€` line, the last one in the segment (the header's criteria line
-        // is not a bare price line and the anchored pattern never reads it).
-        $price = null;
+        // is not a bare price line and the anchored pattern never reads it) — or the `price` group
+        // of the facts, on a portal that labels it (the loader refuses both providers at once).
+        $price = $factsPrice;
         $priceLine = null;
         $pricePattern = $this->definition->param('price_pattern');
         if ($pricePattern !== null) {
@@ -228,7 +287,8 @@ final readonly class VehicleEmailSource implements AcknowledgesMessages, CountsP
             }
         }
 
-        // TITLE — the SUBJECT when a pattern names it there, otherwise the card's own lines.
+        // TITLE — the facts' own `title` group; else COMPOSED from make + model + version on a
+        // labelled block; else the SUBJECT when a pattern names it there; else the card's lines.
         //
         // **`title_pattern` WAS DECLARED AND UNREAD** (Track 1c), which is the inert-parameter
         // defect the rent side already paid for twice. It is read now because leboncoin needs it:
@@ -245,8 +305,18 @@ final readonly class VehicleEmailSource implements AcknowledgesMessages, CountsP
         $title = '';
         $titlePattern = $this->definition->param('title_pattern');
         $fromSubject = $titlePattern !== null;
+        $fromFacts = $factsTitle !== null || $factsMake !== null || $factsModel !== null;
 
-        if ($fromSubject) {
+        if ($fromFacts) {
+            // Composed from the RAW captures, not the folded make/model: the title is what the
+            // developer reads on the phone, and `Renault Clio Evolution` beats `renault clio`.
+            $facts = end($f);
+            $title = $factsTitle ?? trim(implode(' ', array_filter([
+                trim((string) ($facts['make'] ?? '')),
+                trim((string) ($facts['model'] ?? '')),
+                (string) ($factsVersion ?? ''),
+            ], static fn (string $p): bool => $p !== '')));
+        } elseif ($fromSubject) {
             $title = preg_match($titlePattern, $message->subject(), $t) === 1 ? trim($t[1] ?? '') : '';
             // The MISS is `''`, whether the pattern failed or captured nothing — both are the same
             // fact for this signal, and the empty capture is the one that reads like a value.
@@ -260,7 +330,7 @@ final readonly class VehicleEmailSource implements AcknowledgesMessages, CountsP
                 }
             }
         }
-        if ($title === '' && !$fromSubject) {
+        if ($title === '' && !$fromSubject && !$fromFacts) {
             foreach ($lines as $l) {
                 $l = trim($l);
                 if ($l !== '' && !$isUrl($l)) {
@@ -270,48 +340,36 @@ final readonly class VehicleEmailSource implements AcknowledgesMessages, CountsP
             }
         }
 
-        // FACTS — body, fuel, year, mileage, from the one line the portal lays out for them.
-        $body = $fuel = null;
-        $year = $km = null;
-        $factsPattern = $this->definition->param('facts_pattern');
-        if ($factsPattern !== null) {
-            $hit = preg_match_all($factsPattern, $segment, $f, PREG_SET_ORDER) > 0;
-            // THE ONE THAT PROVED THE GAP WAS REAL: 13 of 99 stored ParuVendu rows carry `body`,
-            // `fuel`, `year` and `mileageKm` all null — one miss here, four fields dark, and
-            // nothing said so.
-            $this->missed('facts_pattern', $hit);
-
-            if ($hit) {
-                $facts = end($f);
-                $body = self::foldOrNull($facts['body'] ?? null);
-                $fuel = self::fuel($facts['fuel'] ?? null);
-                $year = isset($facts['year']) ? (int) $facts['year'] : null;
-                $km = isset($facts['km']) ? self::int($facts['km']) : null;
-            }
-        }
-
         // FURNITURE, not a card. The CTA link that ends a card sits on the line AFTER the separator,
         // so the segment following the last card is the footer carrying that card's link and
         // nothing else — it re-yielded the last card on every message ("en double dans un même
-        // courrier", six times per doctor run on 2026-08-29). When the portal lays out a price line
-        // and a facts line and a segment has neither, it is not a card.
-        if ($pricePattern !== null && $factsPattern !== null && $price === null && $body === null && $year === null) {
+        // courrier", six times per doctor run on 2026-08-29). When the portal lays out a price
+        // (a `price_pattern` OR a facts `price` group — keyed on "a price provider is configured",
+        // because the day the price moved into the facts the old `$pricePattern !== null` test
+        // went false and a footer with a host link became a phantom listing under link identity)
+        // and facts, and a segment has none of it, it is not a card.
+        $priceConfigured = $pricePattern !== null || $factsHasPrice;
+        if ($priceConfigured && $factsPattern !== null
+            && $price === null && $body === null && $year === null && $km === null && !$fromFacts) {
             return null;
         }
 
-        // MAKE / MODEL — from wherever the portal states them, and the SOURCE IS NAMED.
+        // MAKE / MODEL — from the facts' own groups on a labelled block, else from wherever
+        // `make_model_source` names, and the SOURCE IS NAMED.
         //
         // ParuVendu encodes them in the ad path (`/voiture-occasion/<make>/<model>/`); leboncoin's
         // path is `/vi/<id>.htm` and states the make in the subject instead. `make_model_source`
         // says which, rather than trying the link and falling back to the title: a fallback would
         // let a pattern written for one haystack quietly match the other, which is how an
         // extraction failure acquires an alibi. Unconfigured means `link`, so ParuVendu is
-        // unchanged byte for byte.
+        // unchanged byte for byte. The loader refuses `make_model_pattern` beside a facts `make`
+        // group for the same reason — two providers, one honoured.
         //
         // IT MATTERS TO THE SCORE, not just to the display: `brand_avoid` is read off `make`, and
         // an unextracted make scores 0 on that component (Track 1d). A source that states its make
         // and does not map it would rank ten points below an identical car from a source that does.
-        $make = $model = null;
+        $make = $factsMake;
+        $model = $factsModel;
         $mm = $this->definition->param('make_model_pattern');
         if ($mm !== null) {
             $haystack = $this->definition->param('make_model_source') === 'title' ? $title : $link;
@@ -336,18 +394,60 @@ final readonly class VehicleEmailSource implements AcknowledgesMessages, CountsP
         // the `subject_pattern` ruling, and F30's shape.
         //
         // Both fields, because the row carries `model = autres` too. Applied AFTER the capture and
-        // never as a fallback to another haystack: reading the make out of the title in this branch
-        // is what `make_model_source`'s docblock refuses ("a fallback lets a pattern written for one
-        // haystack quietly match the other"), and the title is measurably the worse haystack here —
-        // over 108 stored rows its first word is the make 101 times. What this branch buys is the
-        // HONEST arm: `VehicleScorer` scores a null make 0 and says `marque inconnue — hors score`.
+        // never as a fallback to another haystack — and applied WHICHEVER haystack the make came
+        // from, the facts included: a labelled block writing `Marque : Autres` is the same token.
         $sentinel = $this->definition->param('make_model_unknown_pattern');
         if ($sentinel !== null) {
             if ($make !== null && preg_match($sentinel, $make) === 1) {
                 $make = null;
+                if ($fromFacts && $factsTitle === null) {
+                    // The composed title must not carry the token either — `Autres Autres X` is
+                    // not a name, and the title reaches the developer's phone.
+                    $title = trim(implode(' ', array_filter([
+                        $factsModel !== null && preg_match($sentinel, $factsModel) !== 1 ? trim((string) (end($f)['model'] ?? '')) : '',
+                        (string) ($factsVersion ?? ''),
+                    ], static fn (string $p): bool => $p !== '')));
+                }
             }
             if ($model !== null && preg_match($sentinel, $model) === 1) {
                 $model = null;
+            }
+        }
+
+        // IDENTITY (row 37). `link`: the last path segment of the card's own ad link, as ParuVendu
+        // and leboncoin have always been keyed. `content`: a hash of the car's STRUCTURAL facts —
+        // the SeLoger discipline — for a portal whose every link is a per-recipient tracking
+        // redirect, where `basename()` is a fresh identity per message and the same identity for
+        // every card in one.
+        //
+        // **The price is deliberately absent from the key.** A price drop is an event this project
+        // exists to detect; a price in the identity turns every drop into a brand-new car, notified
+        // as new with no history. Title, year and mileage do not move when the copy is rewritten.
+        //
+        // **The no-information floor, car shape:** something that NAMES the car and something that
+        // DESCRIBES it. A title alone would give every stripped card of one model a single
+        // identity, so the second is treated as already seen; a year or a mileage alone is shared
+        // by half a portal. Below it the segment is not a card — an extraction failure kept
+        // visible in the count rather than hidden behind a row.
+        //
+        // **Stated cost:** two identical cars — same title, same year, same mileage — share one
+        // identity, and on a portal that truncates the title (La Centrale, ~28 characters) the
+        // mileage is all that separates two `RENAULT KANGOO II EXPRESS p...`.
+        if ($this->definition->param('id_from') === 'content') {
+            if ($title === '' || ($year === null && $km === null)) {
+                return null;
+            }
+            $id = sha1(implode('|', [
+                $this->name(),
+                (string) self::foldOrNull($title),
+                $year === null ? '' : (string) $year,
+                $km === null ? '' : (string) $km,
+            ]));
+        } else {
+            $path = (string) (parse_url($link, PHP_URL_PATH) ?? '');
+            $id = basename(rtrim($path, '/'));
+            if ($id === '' || $id === '/') {
+                return null;
             }
         }
 
@@ -364,22 +464,50 @@ final readonly class VehicleEmailSource implements AcknowledgesMessages, CountsP
             year: $year,
             mileageKm: $km,
             fuel: $fuel,
-            gearbox: self::gearboxFromTitle($title),
+            gearbox: $factsGearbox ?? self::gearboxFromTitle($title),
             body: $body,
             observedAt: $message->sentAt(),
         );
     }
 
-    /** The LAST link on the ad host in the segment — the card's own; the header's links precede the card. */
+    /**
+     * The card's own ad link.
+     *
+     * Without `link_after`: the LAST link on the ad host in the segment — the header's links precede
+     * the card, and on ParuVendu and leboncoin the card's CTA is the last host link before the
+     * separator. With `link_after` (row 38): the FIRST host link after that marker's first
+     * occurrence in the segment, because on a portal whose EVERY link is on one tracking host —
+     * CapCar: banner, four CTAs, footer, all `sendibt3.com` — the last card's segment also holds the
+     * footer's links, and "last" would hand the developer an unsubscribe redirect from a push. A
+     * segment without the marker is not a card.
+     */
     private function adLinkIn(string $segment): ?string
     {
         $host = $this->definition->param('link_host');
-        if ($host === null || preg_match_all('~https?://\S+~', $segment, $m) === 0) {
+        if ($host === null) {
             return null;
         }
-        foreach (array_reverse($m[0]) as $candidate) {
+
+        $after = $this->definition->param('link_after');
+        $haystack = $segment;
+        if ($after !== null) {
+            $at = strpos($segment, $after);
+            if ($at === false) {
+                return null;
+            }
+            $haystack = substr($segment, $at + strlen($after));
+        }
+
+        if (preg_match_all('~https?://\S+~', $haystack, $m) === 0) {
+            return null;
+        }
+        $onHost = static function (string $candidate) use ($host): bool {
             $bare = preg_replace('~^https?://~', '', $candidate) ?? $candidate;
-            if (str_starts_with($bare, $host) || str_starts_with($bare, 'www.' . $host)) {
+
+            return str_starts_with($bare, $host) || str_starts_with($bare, 'www.' . $host);
+        };
+        foreach ($after !== null ? $m[0] : array_reverse($m[0]) as $candidate) {
+            if ($onHost($candidate)) {
                 return $candidate;
             }
         }

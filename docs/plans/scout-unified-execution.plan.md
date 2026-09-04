@@ -1288,6 +1288,42 @@ read-only) and the merged prose as one review deep.
   suite green before commit. **Not certified by execution: the live Gmail server** — the scripted
   server answers the commands a real one does, but the first `run` pass after redeploy is the
   proof that Gmail accepts `UID STORE +FLAGS.SILENT` on a label folder; check the label after it.
+  **PROVEN LIVE 2026-09-05 00:45** — redeployed at `766edd7` (`verify-deploy` clean), the first
+  watch pass completed (`8 source(s), 1178 annonce(s) analysées`) with no *marquage … refusé*
+  line, and a read-only Gmail search after it: `from:alertes.seloger.com is:read newer_than:1d`
+  → 12 threads, `is:unread` → none. Gmail accepts the STORE on a label folder. The same pass
+  surfaced a NEW live fault, unrelated: `inli: HTTP 302 from …/ile-de-france-region_r:11`,
+  source `broken` — row 44.
+- [2026-09-05 01:30] RECORD (**ROWS 37 + 38 BUILT TOGETHER — content identity and the
+  labelled-card reader on `VehicleEmailSource`**; one commit, both cells cite it). Measured
+  first, on the 2026-09-04 census captures: CapCar's 8 links are 4 CTAs + 4 banner/footer links,
+  ALL on `sendibt3.com` (so the last-link rule would hand a push the footer's redirect — hence
+  `link_after`); La Centrale's card is `TITLE / La Centrale N km / P €` with NO year and the title
+  truncated at ~28 chars (`RENAULT KANGOO II EXPRESS p...`); Agorastore's is one line carrying
+  year, km and a PLATE. **Scrubbing a La Centrale and a CapCar capture into the scratchpad
+  succeeded** — the address is not recoverable from their tokens — so B2 is NOT blocked on row 39;
+  Agorastore still is. Built: `id_from` (`link`|`content`, refused otherwise),
+  `card_separator_pattern` (mutually exclusive with the literal), `link_after`, and `facts_pattern`
+  named groups `title/make/model/version/gearbox/price` with the loader refusing a second provider
+  for any fact a group supplies; content key `sha1(source|fold(title)|year|km)`, price out, floor
+  = title AND (year or km); facts parsed BEFORE the title so a composed title exists when
+  `make_model_source: title` and the gearbox reader run; furniture check keyed on "a price
+  provider is configured" rather than on `price_pattern` (the 3C advisor's catch: the old test
+  went false the moment the price moved into the facts, and a footer link became a car under link
+  identity); the unknown-make sentinel applied on the facts path. Evidence:
+  `VehicleEmailContentIdentityTest` (19 tests on synthetic CapCar- and La Centrale-shaped
+  messages — no raw capture is referenced from a test), ParuVendu and leboncoin fixture tests
+  unchanged, `VehicleEmailPatternMissTest` subtracts `card_separator_pattern` as message-level;
+  12 ledger cases, 12/12 red by direct mutation — **after one of them came back UNDETECTED on
+  the first loop**: the furniture-precondition case was "covered" by a test on the CapCar shape,
+  where `link_after` and the lookahead separator keep every furniture link out of reach, so the
+  guard could be deleted with the test green. Rewritten on the La Centrale shape, whose `Détails`
+  split leaves the unsubscribe tail as its own segment — the mutation loop is what found it, and
+  a case that reads UNDETECTED is a finding about the TEST. One pre-existing expression went
+  inert with the change (the old one-line furniture condition) and was retargeted at the new
+  first line. `test-sabotage-applies` 712/712. What this does NOT do: B1/B2 config and fixtures are their own rows (9, 10),
+  and `CapCarPayloadShapeTest`'s "the subject cannot name a vehicle" assertion changes in B1's
+  commit, not this one.
 
 ---
 
@@ -2498,14 +2534,15 @@ tool/guard) and say which ones the fix covers.**
 | 33 | Deep — doc drift: WARN_FLAKY, card_separator_pattern refusals, 4 stale Core paths | M | done | 38f64bb | CLAUDE.md docs/OPEN-QUESTIONS.md |
 | 34 | Deep — plan track sections stale for Tracks 0 1 2-step0 4 and 6-A1/A2/A3 | M | done | 38f64bb | docs/plans/scout-unified-execution.plan.md |
 | 35 | 6-C2 — the TWO CONSECUTIVE CLEAN rounds the bar requires; rounds 1-3 each found real defects, cap is 5 then ask | L | todo | - | src/php |
-| 36 | Processed alert emails are marked \Seen — run only, after the store recorded the source; doctor/dump stay read-only | M | done | - | src/php/Adapters/Mail/ImapMailbox.php src/php/Adapters/Mail/Mailbox.php src/php/Rent/Cli/Pipeline.php src/php/Car/VehiclePipeline.php |
-| 37 | B-common — content-addressed identity for VehicleEmailSource (no-information floor, price out of the key, in-message duplicate announced) | M | todo | - | src/php/Car/VehicleEmailSource.php src/php/Car/VehicleSourceLoader.php |
-| 38 | B-common — per-segment labelled field reader for VehicleEmailSource (the CapCar shape) | M | todo | - | src/php/Car/VehicleEmailSource.php src/php/Car/VehicleSourceLoader.php |
+| 36 | Processed alert emails are marked \Seen — run only, after the store recorded the source; doctor/dump stay read-only | M | done | 766edd7 | src/php/Adapters/Mail/ImapMailbox.php src/php/Adapters/Mail/Mailbox.php src/php/Rent/Cli/Pipeline.php src/php/Car/VehiclePipeline.php |
+| 37 | B-common — content-addressed identity for VehicleEmailSource (no-information floor, price out of the key, in-message duplicate announced) | M | done | - | src/php/Car/VehicleEmailSource.php src/php/Car/VehicleSourceLoader.php |
+| 38 | B-common — per-segment labelled field reader for VehicleEmailSource (the CapCar shape) | M | done | - | src/php/Car/VehicleEmailSource.php src/php/Car/VehicleSourceLoader.php |
 | 39 | B3 prerequisite — a NARROW scrubber stripper for a base64 JSON-array identity blob, all refusal guarantees kept | M | todo | - | tools/scrub-eml.php tests/test-scrub-eml.sh |
 | 40 | F20 / Q39 — a repair route for a durably-excluded row: ruling (command vs stored distinction), then build | M | todo | - | src/php/Rent/Store/Store.php src/php/Rent/Cli/RentScout.php |
 | 41 | Round-5 P2 — a selector drifting onto a 5-digit field extracts cleanly and health stays ok: ruling (build vs accept), then build | M | todo | - | src/php/Rent/Adapters/ListingMapper.php |
 | 42 | Register + Known-issues bookkeeping — F1b, F3, F6 closers; three stale bullets | S | done | - | docs/plans/scout-unified-execution.plan.md |
 | 43 | Fresh test record at HEAD, then the freeze for row 35 | S | todo | - | - |
+| 44 | In'li answers HTTP 302 on ~2 of 5 passes (seen 2026-09-05 00:30, source reports broken) — measure the redirect, rule, fix or record | M | todo | - | src/php/Rent/Adapters/HtmlSource.php config/rent/sources.json |
 <!-- /progress-block -->
 ### Blocked
 
