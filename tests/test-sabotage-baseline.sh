@@ -83,6 +83,17 @@ else
   bad ".env.example is NOT copied into the scratch tree — DotEnvTest fails there for no reason a sabotage caused, and every case reports ok unconditionally"
 fi
 
+# `bin/` BY NAME TOO, and for the identical reason one file later. `bin/scout` sets
+# `zend.exception_ignore_args=1` — the structural half of "no credential reaches a stack trace" —
+# and `CredentialsNeverReachATraceTest` reads it. Its absence from the copy list made the scratch
+# baseline red on 2026-09-04, which the gate caught; naming it here turns that into a direct
+# diagnosis rather than a red baseline someone has to trace back to a missing directory.
+if grep -q 'cp -a "\$repo/src".*\$repo/bin' "$ledger"; then
+  ok "bin/ is in the scratch copy list (CredentialsNeverReachATraceTest reads bin/scout)"
+else
+  bad "bin/ is NOT copied into the scratch tree — the credential-trace guard fails there for no reason a sabotage caused"
+fi
+
 # ── 2. the guard must actually fire ───────────────────────────────────────────────────────────────
 #
 # The broken copy is written into `tests/` deliberately: the ledger derives `$repo` from
@@ -92,7 +103,10 @@ broken="$repo/tests/.test-sabotage-baseline-probe.sh"
 cleanup() { rm -f "$broken"; }
 trap cleanup EXIT
 
-sed 's| "$repo/.env.example" "$work/baseline/"| "$work/baseline/"|' "$ledger" >"$broken"
+# The probe drops `.env.example` from the BASELINE copy line specifically. `bin` joined that line
+# on 2026-09-04, so the pattern matches the pair rather than `.env.example` alone — and the `cmp`
+# below is what caught the drift the moment the line changed, rather than passing vacuously.
+sed 's| "$repo/.env.example" "$repo/bin" "$work/baseline/"| "$repo/bin" "$work/baseline/"|' "$ledger" >"$broken"
 
 if cmp -s "$ledger" "$broken"; then
   bad "the probe changed nothing — the baseline copy line no longer matches the expected shape, so this check proves nothing"

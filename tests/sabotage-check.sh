@@ -77,7 +77,16 @@ run_sabotage() {
   # The lesson generalises past this one file: ANY repo-root file a test reads must be in this list,
   # and the baseline check below runs in `$repo` rather than the scratch copy, so it cannot see the
   # difference. That gap is what `assert_scratch_baseline_green` now closes.
-  if ! cp -a "$repo/src" "$repo/tests" "$repo/config" "$repo/phpunit.xml" "$repo/composer.json" "$repo/.env.example" "$work/repo/" \
+  #
+  # `bin/` JOINED THE LIST 2026-09-04, and the reason is the list's own recorded failure repeating.
+  # `bin/scout` is no longer only an entry point: it sets `zend.exception_ignore_args=1`, which is
+  # the structural half of "no credential reaches a stack trace", and
+  # `CredentialsNeverReachATraceTest` reads it. Without `bin/` in the copy, that test fails in every
+  # scratch tree — which is exactly what `.env.example`'s absence did for 27 hours in 2026-08, when
+  # ONE failing test satisfied the `Failures: [1-9]` detection assertion unconditionally and ~375
+  # cases reported `ok` while proving nothing. `assert_scratch_baseline_green` caught it this time,
+  # on its first run after the test landed, which is the whole reason that gate exists.
+  if ! cp -a "$repo/src" "$repo/tests" "$repo/config" "$repo/phpunit.xml" "$repo/composer.json" "$repo/.env.example" "$repo/bin" "$work/repo/" \
     || ! cp -a "$repo/vendor" "$work/repo/vendor" \
     || ! ln -s "$repo/tools" "$work/repo/tools"; then
     printf '  \033[31mFAIL\033[0m %-58s (could not build the scratch copy)\n' "$label"
@@ -201,7 +210,7 @@ printf '  baseline: suite is green — sabotage results are meaningful\n'
 # gate that certifies §1 and a gate that certifies its own copy list, and it costs one suite run.
 rm -rf "$work/baseline"
 mkdir -p "$work/baseline"
-if ! cp -a "$repo/src" "$repo/tests" "$repo/config" "$repo/phpunit.xml" "$repo/composer.json" "$repo/.env.example" "$work/baseline/" \
+if ! cp -a "$repo/src" "$repo/tests" "$repo/config" "$repo/phpunit.xml" "$repo/composer.json" "$repo/.env.example" "$repo/bin" "$work/baseline/" \
   || ! cp -a "$repo/vendor" "$work/baseline/vendor" \
   || ! ln -s "$repo/tools" "$work/baseline/tools"; then
   printf '  \033[31mABORT\033[0m could not build the unsabotaged scratch copy.\n\n'
