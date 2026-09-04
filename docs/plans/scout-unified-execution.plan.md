@@ -2188,7 +2188,7 @@ tool/guard) and say which ones the fix covers.**
 | 22 | 6-C2 P2 CMP-2 — the frozen In'li fixture is the old template | M | done | 38f64bb | tests/fixtures/rent/inli/search-2026-09-04-nouveau-gabarit.html tests/php/Rent/Adapters/InliCurrentTemplateTest.php |
 | 23 | 6-C2 P2 CMP-1 — ntfy badge test uses an ASCII stand-in | S | done | 38f64bb | tests/php/Core/Notify/NtfyChannelWireTest.php |
 | 24 | 6-C2 P2 CMP-4 — F19 register row cites two stale line numbers | S | done | 38f64bb | docs/plans/scout-unified-execution.plan.md |
-| 25 | 6-C2 re-freeze at the last P2 commit and re-measure the span | S | done | 8fb9b64 | docs/plans/scout-unified-execution.plan.md |
+| 25 | 6-C2 re-freeze at the last P2 commit and re-measure the span | S | done | 6001b01 | docs/plans/scout-unified-execution.plan.md |
 | 26 | 6-C2 round 2 — MAXIMAL, ran at 8fb9b64: 2 P1, 5 P2, 5 P3, all fixed | L | done | 5833b87 | src/php/Adapters/Mail/ImapMailbox.php src/php/Core/Notify/SmtpTransport.php src/php/Rent/Cli/Pipeline.php |
 | 27 | 6-C2 round 3 — round 2 had findings, so the two-clean count restarts here | L | todo | - | src/php |
 | 28 | F18 a plain grep silently skips the Latin-1 PAP fixtures | S | done | 38f64bb | tests/php/Repo/FixtureSecretsTest.php |
