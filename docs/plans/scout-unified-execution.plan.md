@@ -1245,6 +1245,33 @@ read-only) and the merged prose as one review deep.
   thing to aim at is this round's own fixes, because that is where the last three rounds found their
   P1s. The recommendation and its reasoning are recorded above; they do not expire.
 
+- [2026-09-04 23:29] AGREED (**REACH 100 %, CODE FIRST — the pause is lifted and the order is
+  ruled**). The developer asked for the real remainder (*"How much is not done or not certified or
+  not ruled ! … real percentage/effort/time"*) and, given the forced sequencing, chose *"Code first,
+  then freeze and rounds"* via `AskUserQuestion`. Measured before the question: plan 29/35 steps,
+  84/122 pts (68 %); test-verified 16/35 (43 pts, 35 %); panel-certified **0** (counter 0, cap hit
+  at round 5); five firm items outside the block (9 pts) and three ruled-deferred ones (8 pts) — so
+  the honest denominator is 131 pts, 64 % done. Velocity 20.75 pts/week over 28 days of sessions.
+  **The order is forced, not preferred:** row 35 certifies a FROZEN span and every open code item
+  touches `src/`, `config/` or `tests/`, so a fix landing after a clean round moves the freeze and
+  resets the two-clean counter — two panels for one milestone, the waste this file names. So:
+  land every code item (rows 6, 9–11, 36–43 below), take each ruling as its row reaches it, freeze
+  ONCE, run C2 rounds to two consecutive clean, redeploy, `verify-deploy`. **Tier for this run:**
+  per-task 3C/6C gates run `advisor()` only; the three-lens panel runs at the freeze and nowhere
+  else (the economize ruling, and the developer's chosen option says the same). Row 12 (B4) stays
+  blocked on AutoScout24's first alert; 100 % is structurally 97.5 % of the block until it arrives.
+- [2026-09-04 23:29] AGREED (**PROCESSED ALERT EMAILS ARE MARKED `\Seen`** — developer request,
+  verbatim: *"can you mark the emails in (rent|car)/portails as seen when you process them ! so
+  that way i know which email was processed and which not ??"*). Row 36. The shape, stated before
+  it is built because it loosens a documented invariant (`ImapMailbox` is *"READ-ONLY, and enforced
+  rather than intended"* — `EXAMINE`, `BODY.PEEK`): the flag is set only by a `run` pass, only AFTER
+  the store has recorded that source's listings, and only on the messages that pass parsed;
+  `doctor` and `tools/dump-eml.php` stay read-only at the protocol level. The `SEARCH` stays
+  date-based (`SINCE` + `FROM`), never `UNSEEN`: the 7-day re-read is what lets a misread card
+  self-heal and what `FEED_SILENT` measures, so the flag is an INFORMATIONAL mark for the human, not
+  the pipeline's own dedup — the store's seen-set stays that. Stated cost: a pass that records and
+  then fails downstream leaves a message flagged; the next pass re-reads it anyway.
+
 ---
 
 ## Fragile implementations register (the developer asked; keep this list honest)
@@ -1268,12 +1295,12 @@ read-only) and the merged prose as one review deep.
 | # | Surface | State | Where handled |
 |---|---|---|---|
 | F1 | PAP positional anchors (all FOUR params) | **CLOSED — re-measured 2026-09-02, and the count in this cell was the stale one C1 was raised to fix.** It read *"100% null on 08-29/30/31, 23 null rows, 19 notified MATCH"*; the store now answers **0 null communes on every day from 08-28 to 09-02** (`SELECT substr(first_seen_at,1,10), COUNT(*), SUM(commune IS NULL)` over `evidence_json`), so the rows healed on re-sighting exactly as F28 predicts. Originally: Two independent axes — the body layout changed, AND all four params anchor on `\(\d{5}\)`, which 3 of PAP's location shapes do not carry | closed — Track 1h; re-verified against the live store 2026-09-02 |
-| F1b | PAP department-only / arrondissement variants | `Cergy (95)`, `Paris 16e` carry no 5-digit postcode, so title+commune+surface+rooms all fail together; 4 rows, all `REJECT` with an empty title. **This IS F6's "4 pap" rows — one root cause, not two** | Track 1h (new) |
+| F1b | PAP department-only / arrondissement variants | **CLOSED — 2026-09-04 bookkeeping (row 42); the closers had landed and the cell had not moved.** `Cergy (95)`, `Paris 16e` carry no 5-digit postcode, so title+commune+surface+rooms all failed together; 4 rows, all `REJECT` with an empty title, one root cause with F6's "4 pap". Track 1h's re-anchoring healed the four (F6 re-measured 0 pap on 2026-09-01) and `c95ddb8` (R6-1) lets `commune_pattern` read an arrondissement. Re-measured 2026-09-04 read-only: `SELECT source, COUNT(*) FROM listings WHERE title IS NULL OR trim(title)=''` returns **pap 0** | closed — Track 1h + `c95ddb8` |
 | F2 | Bien'ici single-card "Une annonce" reader | **CLOSED 2026-09-01** — fixed by `5962ae6` (08-31 22:04, the `Pas de photo` separator). Measured over the store by cross-checking title-stated against extracted surface on every row that states one: **BEFORE 244 checkable / 6 wrong · AFTER 52 checkable / 0 wrong**. The 6 victims stay REJECTed for ever (T5B-2) | Track 1g — done |
-| F3 | Extraction failures are invisible | A configured pattern that misses yields null "visibly" — but nothing counts misses, so F1 ran 4 days unnoticed | Track 1h (health half) |
+| F3 | Extraction failures are invisible | **CLOSED — 2026-09-04 bookkeeping (row 42).** A configured pattern that misses yielded null "visibly" while nothing counted misses, so F1 ran 4 days unnoticed. Closed in three moves this cell never recorded: `PatternMissLog` (Track 1h, one adapter), F27b/Track 6-A3 (every html/json/detail extraction through `ListingMapper`, and the car adapter), and C2 r1 F-R1 (`581cbce`: counting became REPORTING — `escalate()` is one implementation, discovered by reflection). What F3 does NOT cover, stated in `CLAUDE.md` § "An extraction that fails": a PARTIAL miss rate (cityloger's 16 %) is silent by design, and a capture that succeeds without meaning anything (row 41's P2) is a different instrument | closed — `581cbce` |
 | F4 | `postcode_pattern` + `title_pattern` on the CAR side | **CLOSED, and discharged more strongly than this row asked for.** `title_pattern` became READ (`77ea035`, against leboncoin's subject); the remaining two are **REFUSED AT LOAD** — `VehicleSourceLoader::UNREAD_PARAMS` throws a `ConfigError` naming the file to edit, so an inert param cannot be configured at all rather than merely being documented | Track 1c — done |
 | F5 | Coliving exclusion | **CLOSED — verified in the shipped config 2026-09-02.** `exclude_patterns` carries `\bco[\s-]?living\b`, which covers all three spellings; the row described `\bcoliving\b`, which is no longer what ships. (A first verification pass grepped the config for `coliv` and found nothing, which reads exactly like the defect still being open — the bracket in `co[\s-]?living` defeats a substring grep. Check the pattern, not a fragment of it.) | closed — Track 1i |
-| F6 | Empty-title rows | **RE-MEASURED 2026-09-01: 3 rows, not 7 — 2 seloger, 1 INLI (new, never recorded), 0 pap.** The PAP four are fixed (Track 1h's re-anchoring); the In'li one nothing had noticed. Store counts are CURRENT STATE — a title is rewritten on every re-sighting — so this does not contradict the earlier census, it supersedes it. **One of the two seloger rows was NOTIFIED as a MATCH on 08-27** with every `exclude_title_patterns` entry inert on it | **T5B-9, building** |
+| F6 | Empty-title rows | **RE-MEASURED 2026-09-01: 3 rows, not 7 — 2 seloger, 1 INLI (new, never recorded), 0 pap.** The PAP four are fixed (Track 1h's re-anchoring); the In'li one nothing had noticed. Store counts are CURRENT STATE — a title is rewritten on every re-sighting — so this does not contradict the earlier census, it supersedes it. **One of the two seloger rows was NOTIFIED as a MATCH on 08-27** with every `exclude_title_patterns` entry inert on it. **RE-MEASURED 2026-09-04 (row 42): 1 row, seloger; 0 inli, 0 pap** — T5B-9 (F24's second anchor) shipped 2026-09-01 and recovered the two SeLoger room rentals, and the In'li one has since been re-sighted with a title. The one left is not yet read; it is the regression test for whatever anchor comes next | **OPEN at 1 row** — T5B-9 shipped |
 | F7 | La Centrale truncation | Email carries ~3 of 900+ stated cards; `FEED_SILENT` keys on message DATE, so health stays green while 99.7% blind | Track 2 step 4 (documented cost) |
 | F8 | SeLoger `id_from: content` + a misread surface | A bad surface reading changes the dedup key → one flat can notify twice under two identities | Noted in 1g; same root class |
 | F9 | n=1 separators/patterns (leboncoin rent, PAP) | Measured on one capture each; PAP already proved what that costs | standing; each new alert is the regression test |
@@ -2424,12 +2451,12 @@ tool/guard) and say which ones the fix covers.**
 | 3 | 6-A3 ListingMapper miss instrumentation + tenureField on the JSON path — COMPLETED at 8e3fe80: C2 r5 found 4 configured keys (rent, rent_hc, url, tenure_field) still counting nothing, so `certified` overclaimed | L | done | 8e3fe80 | src/php/Rent/Adapters/ListingMapper.php |
 | 4 | 6-A3 half 3 — RULING REVERSED at 8e3fe80: the mapped path carries NO band (both bounds erased evidence a `!== null` guard needed; the scan keeps its band) | M | done | 8e3fe80 | src/php/Rent/Adapters/ListingMapper.php src/php/Rent/Adapters/Payload.php |
 | 5 | 6-A4 brand `autres` bypass — make_model_unknown_pattern | M | certified | 0ae6cd0 test:2026-09-04 | src/php/Car/VehicleSourceLoader.php config/car/sources.json |
-| 6 | 6-A5 score-floor batching + weight recalibration | L | deferred | - | src/php/Rent/Cli/DigestBatch.php config/rent/criteria.json |
+| 6 | 6-A5 score-floor batching + weight recalibration | L | todo | - | src/php/Rent/Cli/DigestBatch.php config/rent/criteria.json |
 | 7 | 6-A6 SeLoger surface read out of a base64url tracking token | M | certified | 9ea9d77 test:2026-09-04 | src/php/Rent/Adapters/EmailAlertSource.php |
 | 8 | 6-A7 F28 one-shot victims report (read-only, gitignored output) | S | done | - | - |
-| 9 | 6-B1 CapCar email source | L | deferred | - | config/car/sources.json |
-| 10 | 6-B2 La Centrale email source | L | deferred | - | config/car/sources.json |
-| 11 | 6-B3 Agorastore email source (optional third) | M | deferred | - | config/car/sources.json |
+| 9 | 6-B1 CapCar email source | L | todo | - | config/car/sources.json |
+| 10 | 6-B2 La Centrale email source | L | todo | - | config/car/sources.json |
+| 11 | 6-B3 Agorastore email source (optional third) | M | todo | - | config/car/sources.json |
 | 12 | 6-B4 AutoScout24 — no alert has ever arrived | M | blocked | - | config/car/sources.json |
 | 13 | 6-C1 register and docs say what the tree says | M | done | ede198e | docs/plans/scout-unified-execution.plan.md |
 | 14 | 6-C2 r1 F2 (P0) — both segmentation guards read both separator keys | M | certified | be8eba7 test:2026-09-04 | src/php/Rent/Config/ConfigLoader.php tests/php/Rent/Config/ConfigTest.php |
@@ -2454,6 +2481,14 @@ tool/guard) and say which ones the fix covers.**
 | 33 | Deep — doc drift: WARN_FLAKY, card_separator_pattern refusals, 4 stale Core paths | M | done | 38f64bb | CLAUDE.md docs/OPEN-QUESTIONS.md |
 | 34 | Deep — plan track sections stale for Tracks 0 1 2-step0 4 and 6-A1/A2/A3 | M | done | 38f64bb | docs/plans/scout-unified-execution.plan.md |
 | 35 | 6-C2 — the TWO CONSECUTIVE CLEAN rounds the bar requires; rounds 1-3 each found real defects, cap is 5 then ask | L | todo | - | src/php |
+| 36 | Processed alert emails are marked \Seen — run only, after the store recorded the source; doctor/dump stay read-only | M | todo | - | src/php/Adapters/Mail/ImapMailbox.php src/php/Adapters/Mail/Mailbox.php src/php/Rent/Cli/Pipeline.php src/php/Car/VehiclePipeline.php |
+| 37 | B-common — content-addressed identity for VehicleEmailSource (no-information floor, price out of the key, in-message duplicate announced) | M | todo | - | src/php/Car/VehicleEmailSource.php src/php/Car/VehicleSourceLoader.php |
+| 38 | B-common — per-segment labelled field reader for VehicleEmailSource (the CapCar shape) | M | todo | - | src/php/Car/VehicleEmailSource.php src/php/Car/VehicleSourceLoader.php |
+| 39 | B3 prerequisite — a NARROW scrubber stripper for a base64 JSON-array identity blob, all refusal guarantees kept | M | todo | - | tools/scrub-eml.php tests/test-scrub-eml.sh |
+| 40 | F20 / Q39 — a repair route for a durably-excluded row: ruling (command vs stored distinction), then build | M | todo | - | src/php/Rent/Store/Store.php src/php/Rent/Cli/RentScout.php |
+| 41 | Round-5 P2 — a selector drifting onto a 5-digit field extracts cleanly and health stays ok: ruling (build vs accept), then build | M | todo | - | src/php/Rent/Adapters/ListingMapper.php |
+| 42 | Register + Known-issues bookkeeping — F1b, F3, F6 closers; three stale bullets | S | done | - | docs/plans/scout-unified-execution.plan.md |
+| 43 | Fresh test record at HEAD, then the freeze for row 35 | S | todo | - | - |
 <!-- /progress-block -->
 ### Blocked
 
@@ -2480,24 +2515,24 @@ tool/guard) and say which ones the fix covers.**
 ### Fragile
 
 - See the **fragile implementations register** above; it is the maintained list. Rows still OPEN
-  there: F1b, F3, F6, F7, F8, F9, F20 and F26's guidance half.
+  there (re-read 2026-09-04, row 42): F6 (1 seloger row), F7 (La Centrale truncation — a stated
+  cost, documented in the config comment when B2 lands), F8, F9, and F20's repair-route half
+  (row 40). F1b and F3 were closed by commits their cells never recorded; F26's guidance half is
+  closed in `CLAUDE.md`.
 
 ### Known issues
 
-- **COR-F5** is the last open C2 round-1 finding: a persisted UNDETERMINED twin doubt can be cleared
-  by a third route's tier-5 source default. Ruled 2026-09-03, discriminator settled 2026-09-04
-  (gate the CLEARING direction on the incoming reading's confidence at ≥ 60, §1's own fail-closed
-  threshold), not yet built.
-- **The C2 freeze pointer `ede198e` is stale**, by its own stated test: `git log --oneline
-  ede198e..HEAD -- src config tests` is no longer empty. That is the expected consequence of closing
-  round-1 findings rather than a broken freeze — but round 2 needs a new freeze, which is step 25.
-- **The car domain's `MalformedText` arms disagree with each other, and only one of the two
-  directions is safe** (measured 2026-09-04 while scoping step 31). `VehicleClassifier::classify()`
-  fails CLOSED — unfoldable text returns `REJECT` with *"texte illisible"*. But
-  `VehicleCriteria::excludedBy()` and `bodyRankOf()` fail OPEN: they catch `MalformedText` and
-  return `null`, which for `excludedBy()` means *no user exclusion fired*. That is unreachable
-  today, and only for a reason nobody has written down — `VehicleScorer::judge()` returns on the
-  classification's `REJECT` before it ever calls `excludedBy()`, so a malformed listing never
-  reaches the fail-open arm. **The dependency is real, undocumented, and one edit from being
-  false**: weaken the classifier's catch arm and every user exclusion silently stops firing on the
-  same listings. Step 31's sabotage cases should pin the ORDER, not just each arm.
+- **Row 35 is UNMET and paused-then-resumed by ruling** (2026-09-04 23:29): the two-clean counter
+  is 0, the cap was reached at round 5, and the next freeze happens only after rows 6, 9–11 and
+  36–43 land. The recorded resume point `792eb3a` will be superseded by that freeze; do not run a
+  round before it.
+- **Round-5 P2, recorded not fixed** (row 41): with no band on the mapped path, a selector drifting
+  onto a 5-digit field extracts `95240` cleanly, `max_rent_cc` rejects every card, `rent` counts
+  zero misses and health stays `ok`. The ParuVendu `autres` class one layer over; it wants a
+  plausibility instrument, and whether to build one is a ruling the row will ask for.
+- **The car domain has no `PacedSource`**, recorded not fixed with its trigger: the moment a second
+  car web source without its own rate limiter exists, lift `PacedSource` into `Scout\Adapters`
+  over a shared contract — never write a car twin.
+- *(Three bullets that stood here on 2026-09-04 were stale against rows 19, 25 and 31 — COR-F5 is
+  built and test-verified at `eb5d971`; the `ede198e` freeze was superseded by step 25; the
+  `MalformedText` ORDER is pinned by `VehicleMalformedTextTest` at `526d246`. Removed by row 42.)*
