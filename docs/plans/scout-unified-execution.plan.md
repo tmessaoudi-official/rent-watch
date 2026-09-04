@@ -1083,6 +1083,61 @@ read-only) and the merged prose as one review deep.
 
   **RE-FREEZE for round 4: `909c159`** — 85 commits since `7765997`, **50 touching code**.
 
+- [2026-09-04 16:45] RECORD (**C2 ROUND 4 RAN, WAS NOT CLEAN, AND CANNOT COUNT EITHER WAY — the
+  two-clean counter RESTARTS AGAIN**). Three lenses, unnamed, pinned at `909c159`. Fixed in
+  `1529fbb` + `fe0a468`; suite **2757 / 10 737**, every guard green, drift `P0=0 P1=0 P2=0`.
+
+  **THE FREEZE BROKE MID-ROUND**, and that alone disqualifies it: `569a1e5` landed *after* a lens
+  had verified its span was empty, so the three reports do not describe one tree. A round run on a
+  moving tree cannot count toward the two-clean requirement — the rule exists for exactly this, and
+  the finding was the lens's own, not a later discovery.
+
+  **THE SHARPEST FINDING WAS THIS SESSION'S OWN FIX, FOR THE THIRD ROUND RUNNING, AND IT WAS
+  DEPLOYED.** The mapped rent band shipped with both bounds, and the UPPER one bypassed
+  `max_rent_cc` outright: `CriteriaEngine::disqualify()` guards the ceiling with `$rentCc !== null`,
+  so nulling a 25 000 € figure did not reject the flat, it removed the evidence the ceiling needed —
+  REJECT became MATCH, and the push said *"loyer non communiqué"* for a rent the portal had
+  communicated. The cause is transplantation: in `EmailAlertSource::rentIn()` the band sits inside a
+  loop over CANDIDATES, where *refused* means **keep looking** and discarding 95 000 costs nothing
+  because the real rent is on the next line. On a single MAPPED value it means *no rent at all* —
+  the same numbers, the opposite safety direction. The mapped path now keeps the FLOOR and drops the
+  ceiling; above 20 000 the ceiling already rejects, which is strictly better than silence.
+
+  **AND TWO GUARDS WERE GREEN WHILE THE GUARANTEE UNDER THEM WAS DEAD**, both the same shape — a
+  check satisfied by something other than the thing it names, and neither found by a red run:
+
+  - `mergedWith()` was tested in ONE direction. Production is `$card->mergedWith($detail)`; the
+    guard merged a RICH card with an EMPTY detail, so every `$any($mine, $theirs)` took `$mine` and
+    rewriting a field to `$this->x` left all 2 753 tests green. The two live `detail_map` fields are
+    fixture-covered and would have gone red anyway — which is precisely what would have hidden that
+    the guard itself was blind. The argument direction is asserted now, and **which fields it covers
+    is DERIVED from `mergedWith()`'s own body** rather than listed, so a field dropped out of `$any`
+    cannot exempt itself from the assertion by disappearing from it; a counterweight pins the
+    receiver-only set, because emptying the derived set would otherwise satisfy the direction
+    assertion on a method merging nothing.
+  - the entrypoint assertion read `bin/scout` WITHOUT stripping comment lines, so the docblock
+    explaining `zend.exception_ignore_args` satisfied a grep for the `ini_set` — commenting the line
+    OUT left the file green while the guarantee was dead. **The same file strips comments in two
+    other assertions and names the trap**, and it was still made here.
+
+  **A LEDGER CASE WAS CORRECTED BEFORE IT SHIPPED, which is the round-3 lesson landing in time.**
+  The counterweight's mutation first cut mid-argument-list, leaving `rentCc: $this->NOPE_rentCc,
+  $detail->rentCc),` — a stray argument and an unbalanced paren, so `RawListing` failed to LOAD and
+  the run printed `Errors … Assertions: 0`. That is a parse error wearing a detection's clothes, and
+  it read as a pass on first glance. The shipped form rewrites each line whole and leaves valid code
+  that merges nothing, verified with `php -l` **before** the assertion was believed. Round 3 shipped
+  such a case and armed a nightly alarm for a non-defect; this one did not ship.
+
+  **Rows 27 and 31 were wrongly `certified` and are back to `done`.** Their deliverable lives in
+  `tests/sabotage-check.sh`, which the progress adapter's `test_cmd` does not run — the exact
+  exclusion the commit that added the adapter had itself stated. `steps_certified` 20 → 18.
+
+  **RE-FREEZE for round 5: `fe0a468`.** Round 5 is the MAXIMAL cap. Rounds 1–4 each found
+  something, so even a fully clean round 5 is **one** clean round against a two-clean bar: the cap
+  is reached with the counter at 1, and the exit is decided WITH the developer via
+  `AskUserQuestion`, never silently — the 2026-08-30 ruling carried above, which autonomous mode
+  does not suppress.
+
 ---
 
 ## Fragile implementations register (the developer asked; keep this list honest)
