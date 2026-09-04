@@ -712,6 +712,58 @@ final class PipelineRunTest extends TestCase
     }
 
     /**
+     * F20 — THE DURABLE READING MAY NOT CLAIM A PROVENANCE THE ROW DOES NOT CARRY.
+     *
+     * `listings.tenure` holds ONE value and no note of where it came from. The judging loop writes
+     * the JUDGED classification back onto it, and that classification may carry a GROUP veto's or a
+     * TWIN's excluded tenure — so an exclusion read on a sibling is laundered into the row's own
+     * column, indistinguishable afterwards from one the listing's own text stated.
+     *
+     * The reason said *"relevé lors d'une lecture précédente de cette annonce"* — recorded on a
+     * previous reading of THIS listing — and a reviewer acted on it: they cleared `group_key`,
+     * deleted the excluded stranger outright, and the flat was still rejected, by a message
+     * pointing at a reading that had never happened. **The repair is not to invent the provenance
+     * — nothing stores it — but to stop asserting it.** Hard rule 9's discipline at the reason
+     * layer: a fact the row does not carry must not be manufactured for the operator's benefit.
+     *
+     * The rejection stays exactly as durable. Only the sentence changes.
+     */
+    public function testTheDurableExcludedReadingDoesNotClaimWhereItWasRead(): void
+    {
+        $store = $this->store();
+        $pipeline = $this->pipeline($store, new Notifier([new RecordingChannel()]));
+
+        // Pass 1 stores PLS on the direct route's own row.
+        $pipeline->runOnce([
+            new FakeSource('cdc_habitat', [$this->directRoute(['financement' => 'PLS'], 'Logement social PLS, commission d\'attribution.')], mixedTenure: true),
+        ], '2026-08-07T12:00:00+02:00');
+
+        // Pass 2 sees only the card, which says LLI — so the durable reading is what rejects it.
+        $pipeline->runOnce([
+            new FakeSource('cdc_habitat', [$this->directRoute(['financement' => 'LLI'], '4 pieces de 88 m2, logement intermediaire.')], mixedTenure: true),
+        ], '2026-08-07T12:20:00+02:00');
+
+        $signals = (string) (new \PDO('sqlite:' . (string) $this->dbPath))
+            ->query("SELECT signals_json FROM listings WHERE source = 'cdc_habitat'")
+            ->fetchColumn();
+
+        self::assertStringContainsString('PLS', $signals, 'the row is still held excluded');
+        self::assertStringNotContainsString(
+            'de cette annonce',
+            $signals,
+            'the column carries no provenance, so the reason may not claim the PLS was read here',
+        );
+        self::assertStringContainsString(
+            'origine non enregistrée',
+            $signals,
+            // Worded to avoid ending on "never", which would sit within the tenure tripwire's
+            // 80-character window of the word "cleared" opening the next docblock. Third false
+            // positive of this session, and the third reworded rather than patched around.
+            'and it says so, rather than leaving the operator to infer a reading that did not take place',
+        );
+    }
+
+    /**
      * COR-F5 — A DOUBT IS CLEARED BY POSITIVE EVIDENCE, NEVER BY A SOURCE DEFAULT.
      *
      * The test above is the legitimate clearing: the two routes are judged together again and the

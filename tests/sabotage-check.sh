@@ -4300,6 +4300,37 @@ run_sabotage "the pipeline sends a fixed confidence with the twin fact (the gate
   src/php/Rent/Cli/Pipeline.php \
   "s%\$seen\['source'\], \$seen\['bp'\]);%\$seen['source'], 100);%"
 
+# ── F20: the durable reading may not claim a provenance the row does not carry (2026-09-04) ─────
+#
+# `listings.tenure` holds ONE value and no note of where it came from, while the judging loop writes
+# the JUDGED classification back onto it — so a group veto's or a twin's excluded tenure is
+# laundered into the row's own column, indistinguishable afterwards. The old sentence claimed the
+# PLS had been "relevé lors d'une lecture précédente de cette annonce", and a reviewer acted on it:
+# they cleared `group_key`, removed the excluded stranger, and the flat stayed rejected by a message
+# pointing at a reading that did not take place. Nothing stores the provenance; the fix is to stop
+# asserting it. Hard rule 9 at the reason layer.
+run_sabotage "the durable reading claims the exclusion was read on this listing again" \
+  src/php/Rent/Cli/Pipeline.php \
+  "s%') retenu pour cette annonce — '%') relevé lors d\\\\'une lecture précédente de cette annonce — '%"
+
+# ── The car domain's MalformedText arms, and the ORDER they depend on (2026-09-04) ──────────────
+#
+# Five places in `src/php/Car/` catch `Text::fold()` refusing, and until now not one had a test, so
+# nothing said which way each fails — and they do not all fail the same way. The classifier fails
+# CLOSED (unfoldable text is REJECT); `VehicleCriteria::excludedBy()` fails OPEN (it returns null,
+# which reads as "no user exclusion fired").
+run_sabotage "unfoldable car text stops being rejected (the fail-closed arm inverted)" \
+  src/php/Car/VehicleClassifier.php \
+  "s%return new VehicleClassification(VehicleOutcome::REJECT, \['texte illisible%return new VehicleClassification(VehicleOutcome::MATCH, ['texte illisible%"
+
+# THE ORDER IS THE FINDING. The fail-open arm above is unreachable ONLY because `judge()` returns on
+# the classification's REJECT before it ever calls `excludedBy()`. That dependency is real,
+# undocumented until today, and one edit from being false: drop the early return and every user
+# exclusion silently stops firing on exactly the listings nobody can read.
+run_sabotage "the scorer stops rejecting on the classification first (the exclusions go blind)" \
+  src/php/Car/VehicleScorer.php \
+  "s%if (\$class->outcome === VehicleOutcome::REJECT) {%if (false) {%"
+
 printf '\n  %d sabotage(s) detected, %d undetected\n' "$pass" "$fail"
 
 if [[ -n "$_filter" ]]; then

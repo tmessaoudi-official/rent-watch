@@ -1296,6 +1296,22 @@ over-rejection would follow to the wrong listing.
 stored reading between "this row said PLS" and "something linked to this row said PLS". Until one
 exists, do not describe either veto as one-line reversible.
 
+> **THE MISATTRIBUTION HALF IS CLOSED (2026-09-04, F20); THE REPAIR ROUTE IS STILL OWED, and the
+> two are worth keeping apart.** The reason now reads *"régime exclu (PLS) retenu pour cette
+> annonce — origine non enregistrée (lecture propre, groupe ou autre voie) — conservé (§1)"*. That
+> is not the distinction this entry asks for: nothing new is stored, and a session cannot tell from
+> the row whether the `PLS` was its own reading or a sibling's. What changed is that the tool has
+> stopped CLAIMING it could — hard rule 9 at the reason layer, where an operator diagnosing a
+> silent over-rejection was being pointed at a reading that did not take place. The rejection is
+> exactly as durable and exactly as permanent.
+>
+> **This is deliberately the smaller of the two available fixes.** Storing the provenance means a
+> new column and a migration on the §1 audit trail; building a repair command means a route that
+> can re-admit an excluded listing, which is the direction §1 refuses without a ruling. Making the
+> sentence honest costs neither and removes the one consequence that was actively misleading
+> someone. `tests/php/Rent/Cli/PipelineRunTest::testTheDurableExcludedReadingDoesNotClaimWhereItWasRead`
+> pins it, with a ledger case restoring the old wording.
+
 **Unbuilt complement, same as Q38's third route**: surface the cross-track disagreement in the
 notification's `reasons[]` rather than only rejecting on it, so an over-link is visible instead of
 merely documented. Today a vetoed row is silent and the user cannot tell an over-link from an absent

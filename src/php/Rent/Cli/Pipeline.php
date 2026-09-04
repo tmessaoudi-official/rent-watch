@@ -898,7 +898,23 @@ final readonly class Pipeline
             signals: [new TenureSignal(
                 tier: 1,
                 tenure: $previous,
-                reason: 'régime exclu (' . $previous->value . ') relevé lors d\'une lecture précédente de cette annonce — conservé (§1)',
+                // THE REASON MAY NOT CLAIM A PROVENANCE THE ROW DOES NOT CARRY (F20, 2026-09-04).
+                //
+                // It read *"relevé lors d'une lecture précédente de cette annonce"* — recorded on a
+                // previous reading of THIS listing — and that is true only sometimes.
+                // `listings.tenure` holds one value and no note of where it came from, while the
+                // judging loop writes the JUDGED classification back onto it; a group veto's or a
+                // twin's excluded tenure is therefore laundered into the row's own column and is
+                // indistinguishable afterwards. A reviewer acted on the old sentence: they cleared
+                // `group_key`, removed the excluded stranger, and the flat stayed rejected by a
+                // message pointing at a reading that did not take place.
+                //
+                // The repair is not to invent the provenance — nothing stores it — but to stop
+                // asserting it, and to say plainly that it is not recorded. Hard rule 9 at the
+                // reason layer. The rejection is exactly as durable as before; only the sentence
+                // changed, and `scout run -v` is where it is read.
+                reason: 'régime exclu (' . $previous->value . ') retenu pour cette annonce — '
+                    . 'origine non enregistrée (lecture propre, groupe ou autre voie) — conservé (§1)',
                 evidence: $previous->value,
             )],
             outcome: Outcome::REJECT,
