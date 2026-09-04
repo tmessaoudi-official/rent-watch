@@ -145,6 +145,53 @@ final class VehiclePipelineTest extends TestCase
     // ------------------------------------------------------------------------------------------
 
     /** @return array{VehiclePipeline, CarRecordingChannel, VehicleStore} */
+    // ── Row 36 (2026-09-04): a processed alert email is acknowledged — AFTER the store recorded it ──
+
+    public function testAnEmailSourceIsAcknowledgedAfterTheStoreRecordedItsPass(): void
+    {
+        [$pipeline, , $store] = $this->pipeline();
+        $source = new AcknowledgingCarSource('mail', [$this->car('c1', 15000)], $store);
+
+        $result = $pipeline->runOnce([$source], '2026-09-04T10:00:00Z');
+
+        self::assertSame(['acknowledged-after-recording'], $source->events);
+        self::assertSame([], $result->errors);
+    }
+
+    public function testACarSourceWhoseFetchFailedIsNeverAcknowledged(): void
+    {
+        [$pipeline, , $store] = $this->pipeline();
+        $source = new AcknowledgingCarSource('mail', [], $store, throwOnFetch: new SourceError('mail', 'boom'));
+
+        $pipeline->runOnce([$source], '2026-09-04T10:00:00Z');
+
+        self::assertSame([], $source->events);
+    }
+
+    public function testAFailedCarAcknowledgementIsReportedAndDoesNotFailThePass(): void
+    {
+        [$pipeline, , $store] = $this->pipeline();
+        $source = new AcknowledgingCarSource('mail', [$this->car('c1', 15000)], $store, throwOnAck: new SourceError('mail', 'STORE refused by the server'));
+
+        $result = $pipeline->runOnce([$source], '2026-09-04T10:00:00Z');
+
+        self::assertSame(0, $result->sourcesFailed);
+        self::assertSame(1, $result->itemsParsed);
+        self::assertCount(1, $result->errors);
+        self::assertStringContainsString('STORE refused', $result->errors[0]);
+        self::assertFalse($store->isSeenSetEmpty(), 'recorded regardless');
+    }
+
+    public function testSeedingAcknowledgesACarSource(): void
+    {
+        [$pipeline, , $store] = $this->pipeline();
+        $source = new AcknowledgingCarSource('mail', [$this->car('c1', 15000)], $store);
+
+        $pipeline->runOnce([$source], '2026-09-04T10:00:00Z', true);
+
+        self::assertSame(['acknowledged-after-recording'], $source->events);
+    }
+
     private function pipeline(): array
     {
         $store = VehicleStore::open(':memory:');

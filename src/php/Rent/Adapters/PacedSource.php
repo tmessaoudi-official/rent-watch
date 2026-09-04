@@ -9,6 +9,7 @@ use Scout\Rent\Core\RawListing;
 use Scout\Core\SourceHealth;
 use Scout\Rent\Core\SourceProfile;
 use Scout\Rent\Core\Tenure;
+use Scout\Adapters\AcknowledgesMessages;
 use Scout\Adapters\FeedFreshness;
 use Scout\Core\CountsPatternMisses;
 use Scout\Core\PatternMissLog;
@@ -33,7 +34,7 @@ use Scout\Core\PatternMissLog;
  * all of them. A decorator handed its own private pacer would pace nothing useful, which is why
  * `PacedSource::wrapAll()` exists and is the only intended way to build these.
  */
-final readonly class PacedSource implements CountsPatternMisses, FeedFreshness, Source
+final readonly class PacedSource implements AcknowledgesMessages, CountsPatternMisses, FeedFreshness, Source
 {
     public function __construct(
         private Source $inner,
@@ -116,6 +117,19 @@ final readonly class PacedSource implements CountsPatternMisses, FeedFreshness, 
     public function patternMisses(): PatternMissLog
     {
         return $this->inner instanceof CountsPatternMisses ? $this->inner->patternMisses() : new PatternMissLog();
+    }
+
+    /**
+     * The THIRD capability forwarded the same way (row 36). Under `--watch` every rent source is
+     * wrapped in this decorator, so a capability it drops is one the deployed path never has —
+     * and the pipeline gates on the interface, so this class must carry it or `\Seen` would be
+     * set by `--once` and never by the watcher. No pacing: an acknowledgement is not a web request.
+     */
+    public function acknowledge(): void
+    {
+        if ($this->inner instanceof AcknowledgesMessages) {
+            $this->inner->acknowledge();
+        }
     }
 
     public function name(): string

@@ -6,8 +6,10 @@ namespace Scout\Tests\Rent\Cli;
 
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
+use Scout\Rent\Adapters\PacedSource;
 use Scout\Rent\Adapters\Source;
 use Scout\Adapters\SourceError;
+use Scout\Core\Pacer;
 use Scout\Rent\Core\Classification;
 use Scout\Rent\Core\Outcome;
 use Scout\Rent\Cli\Pipeline;
@@ -2697,6 +2699,71 @@ final class PipelineRunTest extends TestCase
                 . 'the excluded 4p/88 m²/1450 €), while still clearing this fixture\'s own floors '
                 . 'of 3 rooms and 75 m² — a counterweight rejected for its SIZE would prove nothing',
         );
+    }
+
+    // ── Row 36 (2026-09-04): a processed alert email is acknowledged — AFTER the store recorded it ──
+
+    /**
+     * Wrapped in `PacedSource` on purpose: under `--watch`, the deployed mode, every rent source is,
+     * and a capability the decorator drops is one production never has (the `FeedFreshness` scar).
+     * The fake records ORDER, so an acknowledgement moved above the recording loop reads
+     * `acknowledged-before-recording` and fails here.
+     */
+    public function testAnEmailSourceIsAcknowledgedAfterTheStoreRecordedItsPassEvenWhenPaced(): void
+    {
+        $store = Store::open(':memory:');
+        $inner = new AcknowledgingSource('mail', [$this->listing('m1', ['source' => 'mail'])], $store);
+        $paced = new PacedSource($inner, new Pacer(
+            clock: static fn (): float => 0.0,
+            sleeper: static function (float $seconds): void {},
+            rand: static fn (int $min, int $max): int => $min,
+        ));
+
+        $result = $this->pipeline($store)->runOnce([$paced], '2026-09-04T10:00:00Z');
+
+        self::assertSame(['acknowledged-after-recording'], $inner->events);
+        self::assertSame([], $result->errors);
+    }
+
+    public function testASourceWhoseFetchFailedIsNeverAcknowledged(): void
+    {
+        $store = Store::open(':memory:');
+        $source = new AcknowledgingSource('mail', [], $store, throwOnFetch: new SourceError('mail', 'boom'));
+
+        $this->pipeline($store)->runOnce([$source], '2026-09-04T10:00:00Z');
+
+        self::assertSame([], $source->events, 'nothing was processed, so nothing is marked');
+    }
+
+    /**
+     * The listings are already recorded, so the pass is a SUCCESS — but the developer will read an
+     * unflagged message as unprocessed and go looking for a broken source that is fine, so the
+     * failure has to reach the banner, not a closure nobody reads.
+     */
+    public function testAFailedAcknowledgementIsReportedAndDoesNotFailThePass(): void
+    {
+        $store = Store::open(':memory:');
+        $source = new AcknowledgingSource('mail', [$this->listing('m1', ['source' => 'mail'])], $store, throwOnAck: new SourceError('mail', 'STORE refused by the server'));
+
+        $result = $this->pipeline($store)->runOnce([$source], '2026-09-04T10:00:00Z');
+
+        self::assertSame(0, $result->sourcesFailed);
+        self::assertSame(1, $result->itemsParsed);
+        self::assertCount(1, $result->errors);
+        self::assertStringContainsString('mail', $result->errors[0]);
+        self::assertStringContainsString('STORE refused', $result->errors[0]);
+        self::assertFalse($store->isSeenSetEmpty(), 'recorded regardless');
+    }
+
+    /** `--seed` processes the message too: the listing enters the seen-set, which is what "processed" means. */
+    public function testSeedingAcknowledgesTheMessagesItSeededFrom(): void
+    {
+        $store = Store::open(':memory:');
+        $source = new AcknowledgingSource('mail', [$this->listing('m1', ['source' => 'mail'])], $store);
+
+        $this->pipeline($store)->runOnce([$source], '2026-09-04T10:00:00Z', true);
+
+        self::assertSame(['acknowledged-after-recording'], $source->events);
     }
 
     private function pipeline(Store $store, ?Notifier $notifier = null, ?CommutePlanner $commute = null): Pipeline

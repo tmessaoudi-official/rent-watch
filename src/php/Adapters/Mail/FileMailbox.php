@@ -66,4 +66,14 @@ final readonly class FileMailbox implements Mailbox
     {
         return 'fichiers .eml dans ' . $this->directory;
     }
+
+    /** Nothing to note: a fixture directory has no reader to inform, so a claim has no effect. */
+    public function claim(int $position): void
+    {
+    }
+
+    /** Nothing to mark — and deliberately no sidecar file either: `tests/fixtures/**` is ground truth, not state. */
+    public function acknowledge(): void
+    {
+    }
 }

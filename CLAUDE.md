@@ -1948,6 +1948,12 @@ tests/test-verify-deploy.sh      Its sabotage test — every failure state drive
                                  line. Same rule as the skills list further down
 tests/test-sabotage-baseline.sh  Proves the sabotage ledger judges its cases in a GREEN scratch tree
 tests/test-ci-workflow.sh   Proves ci.yml still wires every step this file claims CI runs
+tests/php/Adapters/Mail/ImapMailboxWireTest.php
+                            The IMAP client ON THE WIRE, against scripted-imap-server.php
+                            beside it (forked, loopback, transcript as evidence): a fetch is
+                            EXAMINE + UID FETCH … BODY.PEEK[]; the one write is the \Seen
+                            STORE on claimed, still-unseen UIDs, refused across a UIDVALIDITY
+                            change. Row 36's guarantees, and this client's first wire test
 tools/backup-state.sh       Backs up the seen-set — the one file this project calls
                             UNRECOVERABLE. SQLite's ONLINE backup API, never `cp`: the watcher
                             holds the db open in WAL, and a torn byte copy opens without
@@ -2114,6 +2120,26 @@ var/claude/                 Reports, review outputs — gitignored scratch (hand
   pipeline, never against the raw payload**: applied to the raw stored body the same anchor changes
   41 rows, but 37 are SeLoger tokens the query strip already closed — a true number attached to a
   cause that had already been fixed, which is the repo's named failure pointing backwards.
+- **A PROCESSED ALERT EMAIL IS MARKED `\Seen`, AND THE FLAG MEANS ONE THING (row 36, 2026-09-04
+  — developer request: *"mark the emails in (rent|car)/portails as seen when you process them, so
+  that way I know which email was processed and which not"*).** `ImapMailbox` READS under
+  `EXAMINE` + `BODY.PEEK[]` exactly as before; the one write is `acknowledge()` — a second session,
+  `SELECT`, one `UID STORE … +FLAGS.SILENT (\Seen)` — on the messages a source CLAIMED (passed its
+  `params.from` and `subject_pattern`, whatever they then yielded) and that do not already carry
+  the flag, so steady state opens no write session. It is called by the two pipelines ONLY, after
+  the store has recorded the pass, through `Scout\Adapters\AcknowledgesMessages` (gated on the
+  interface, forwarded by `PacedSource`, so `--watch` marks exactly what `--once` marks); `doctor`
+  and `tools/dump-eml.php` never mark, pinned by `AcknowledgeCallSitesTest`. A refusal lands in
+  `RunResult::$errors` and the pass carries on — the listings are on disk and the flag is for the
+  human. **So an UNREAD message inside the window is a signal**: no configured source claims its
+  sender or subject (a new template, a widened filter), or the `IMAP_MAX_MESSAGES` cap cut it —
+  truncation is visible for the first time. Two things not to "improve": the `SEARCH` stays
+  `SINCE` + `FROM`, never `UNSEEN` (the 7-day re-read is what lets a misread card self-heal and
+  what `FEED_SILENT` measures — the store's seen-set is the dedup, the flag is not), and the client
+  addresses messages by UID with `UIDVALIDITY` compared across the two sessions, because a
+  sequence number is only meaningful inside one. `tests/php/Adapters/Mail/ImapMailboxWireTest.php`
+  is this client's FIRST wire coverage — a scripted loopback server behind the `$connector` seam,
+  consulted only after the offline refusal — and 23 ledger cases pin every direction above.
 - **Two tracks, ONE push (developer ruling, 2026-08-29).** The 2026-08-06 rule that a landlord's
   listing and its agency copy on SeLoger/Bien'ici are two findings STANDS — identities, groups and
   histories stay per track, `Dedup::duplicateReason()` still refuses across families — but 43 flats

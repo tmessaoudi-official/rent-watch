@@ -247,4 +247,12 @@ final readonly class StubDatedMailbox implements Mailbox
     {
         return $this->newest;
     }
+
+    public function claim(int $position): void
+    {
+    }
+
+    public function acknowledge(): void
+    {
+    }
 }

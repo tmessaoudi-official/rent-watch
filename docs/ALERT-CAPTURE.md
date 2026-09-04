@@ -73,8 +73,12 @@ php tools/dump-eml.php support@agorastore.fr 2 var/claude/captures 'car-watch/po
 
 It reads `IMAP_HOST` / `IMAP_USER` / `IMAP_PASSWORD` / `IMAP_PORT` from `.env`, and it is **read-only
 at the protocol level** — `EXAMINE` rather than `SELECT`, `BODY.PEEK[]` rather than `BODY[]` — the
-same two choices `ImapMailbox` makes, so no defect on this side can mark the developer's mail as
-read or otherwise modify a real mailbox.
+same two choices `ImapMailbox` makes while it READS, so no defect on this side can mark the
+developer's mail as read or otherwise modify a real mailbox. (Since 2026-09-04 a `run` pass does
+mark the messages it processed `\Seen`, in a separate session after the store recorded them — that
+is the pipeline's doing, never this tool's, and `tests/php/Repo/AcknowledgeCallSitesTest.php` pins
+the tool to `EXAMINE` + `BODY.PEEK[]` with no `STORE`. A capture therefore never changes what the
+label shows as processed.)
 
 Three things to know before using it:
 

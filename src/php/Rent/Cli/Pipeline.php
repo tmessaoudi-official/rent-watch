@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Scout\Rent\Cli;
 
+use Scout\Adapters\AcknowledgesMessages;
+use Scout\Core\Redact;
 use Scout\Rent\Adapters\FeedDate;
 use Scout\Rent\Adapters\Source;
 use Scout\Adapters\SourceError;
@@ -107,12 +109,21 @@ final readonly class Pipeline
         /** @var list<array{listing: RawListing, family: string}> $harvested */
         $harvested = [];
 
+        /**
+         * Sources whose fetch SUCCEEDED — the only ones whose messages may be acknowledged (row 36).
+         * A failed fetch processed nothing, so it marks nothing.
+         *
+         * @var list<Source> $fetched
+         */
+        $fetched = [];
+
         foreach ($sources as $source) {
             ++$sourcesRun;
             $startedAt = hrtime(true);
 
             try {
                 $listings = $source->fetch();
+                $fetched[] = $source;
                 $durationMs = (int) round((hrtime(true) - $startedAt) / 1_000_000);
 
                 // `item_count` is what the ADAPTER PARSED, before criteria (Q30). Counting matches
@@ -370,6 +381,26 @@ final readonly class Pipeline
 
             if (!$changed) {
                 break;
+            }
+        }
+
+        // ROW 36 — THE MESSAGES ARE MARKED PROCESSED HERE, AND NOWHERE EARLIER. Every member of
+        // every cluster has been `record()`ed above, so a message flagged `\Seen` is one whose
+        // listings the store holds; moved above the recording loop, the flag would vouch for a
+        // pass that may still throw before writing, which the developer would read as "processed".
+        // Gated on the interface, never on the adapter class — and `PacedSource` forwards it, so
+        // the deployed `--watch` path is the same path as this one. A refusal is REPORTED on the
+        // banner and the pass carries on: the listings are on disk and the flag is informational.
+        foreach ($fetched as $source) {
+            if (!$source instanceof AcknowledgesMessages) {
+                continue;
+            }
+            try {
+                $source->acknowledge();
+            } catch (SourceError $e) {
+                $errors[] = Redact::text($e->getMessage());
+            } catch (\Throwable $e) {
+                $errors[] = $source->name() . ' : ' . Redact::text($e::class . ': ' . $e->getMessage());
             }
         }
 

@@ -1271,6 +1271,23 @@ read-only) and the merged prose as one review deep.
   self-heal and what `FEED_SILENT` measures, so the flag is an INFORMATIONAL mark for the human, not
   the pipeline's own dedup — the store's seen-set stays that. Stated cost: a pass that records and
   then fails downstream leaves a message flagged; the next pass re-reads it anyway.
+- [2026-09-05 00:40] RECORD (**ROW 36 BUILT — `\Seen` on processed alerts, and the IMAP client's
+  first wire coverage**). Shape as ruled above, plus what the 3C advisor pass added and was right
+  about: messages addressed by UID throughout (`UID SEARCH` / `UID FETCH … (UID FLAGS BODY.PEEK[])`)
+  because the mark runs in a SECOND session; `UIDVALIDITY` compared across the two and the store
+  refused on a change; only claimed-AND-still-unseen UIDs stored, so steady state opens no write
+  session; the claim state reset FIRST in `fetchRecent()` above the early returns; a refusal routed
+  to `RunResult::$errors` (both pipelines), never fatal; `PacedSource` forwards the capability so
+  `--watch` marks what `--once` marks; the `$connector` seam consulted only after the offline
+  refusal. Executable evidence: `ImapMailboxWireTest` (10 tests against a scripted loopback
+  server, transcript as evidence), `EmailAlertClaimTest` + `VehicleEmailClaimTest`, four
+  order-asserting pipeline tests per domain, `AcknowledgeCallSitesTest` (doctor and `dump-eml`
+  never mark), the `searchCommand()` assertions moved to `UID SEARCH`; **23 ledger cases, 23/23
+  red by direct mutation**; `test-sabotage-applies` 700/700 (three expressions orphaned by the
+  change retargeted — two were my own with `\\\\Seen` where the source has one backslash). Full
+  suite green before commit. **Not certified by execution: the live Gmail server** — the scripted
+  server answers the commands a real one does, but the first `run` pass after redeploy is the
+  proof that Gmail accepts `UID STORE +FLAGS.SILENT` on a label folder; check the label after it.
 
 ---
 
@@ -2481,7 +2498,7 @@ tool/guard) and say which ones the fix covers.**
 | 33 | Deep — doc drift: WARN_FLAKY, card_separator_pattern refusals, 4 stale Core paths | M | done | 38f64bb | CLAUDE.md docs/OPEN-QUESTIONS.md |
 | 34 | Deep — plan track sections stale for Tracks 0 1 2-step0 4 and 6-A1/A2/A3 | M | done | 38f64bb | docs/plans/scout-unified-execution.plan.md |
 | 35 | 6-C2 — the TWO CONSECUTIVE CLEAN rounds the bar requires; rounds 1-3 each found real defects, cap is 5 then ask | L | todo | - | src/php |
-| 36 | Processed alert emails are marked \Seen — run only, after the store recorded the source; doctor/dump stay read-only | M | todo | - | src/php/Adapters/Mail/ImapMailbox.php src/php/Adapters/Mail/Mailbox.php src/php/Rent/Cli/Pipeline.php src/php/Car/VehiclePipeline.php |
+| 36 | Processed alert emails are marked \Seen — run only, after the store recorded the source; doctor/dump stay read-only | M | done | - | src/php/Adapters/Mail/ImapMailbox.php src/php/Adapters/Mail/Mailbox.php src/php/Rent/Cli/Pipeline.php src/php/Car/VehiclePipeline.php |
 | 37 | B-common — content-addressed identity for VehicleEmailSource (no-information floor, price out of the key, in-message duplicate announced) | M | todo | - | src/php/Car/VehicleEmailSource.php src/php/Car/VehicleSourceLoader.php |
 | 38 | B-common — per-segment labelled field reader for VehicleEmailSource (the CapCar shape) | M | todo | - | src/php/Car/VehicleEmailSource.php src/php/Car/VehicleSourceLoader.php |
 | 39 | B3 prerequisite — a NARROW scrubber stripper for a base64 JSON-array identity blob, all refusal guarantees kept | M | todo | - | tools/scrub-eml.php tests/test-scrub-eml.sh |

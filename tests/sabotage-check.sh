@@ -1638,6 +1638,110 @@ run_sabotage "PacedSource::health drops the clock, so STALE can never fire" \
   src/php/Rent/Adapters/PacedSource.php \
   's%return \$this->inner->health(\$nowIso);%return \$this->inner->health();%'
 
+# ── Row 36 (2026-09-04): processed alert emails are marked \Seen — after the store recorded them ──
+#
+# Developer request: "mark the emails … as seen when you process them, so that way I know which
+# email was processed and which not". Every failure mode below is SILENT in the same direction: the
+# flag stops meaning "processed" while every pass still reports ok. A flag that is set too early
+# vouches for a pass that may not write; one set on unclaimed mail hides the unmatched sender the
+# developer wants to see; one never set sends them looking for a broken source that is fine; and a
+# fetch that opens the folder read-write is the invariant the class docblock promises away.
+
+run_sabotage "the rent pipeline never acknowledges (processed mail stays unread for ever)" \
+  src/php/Rent/Cli/Pipeline.php \
+  's%\$source->acknowledge();%%'
+
+run_sabotage "the rent pipeline acknowledges BEFORE the store recorded the pass" \
+  src/php/Rent/Cli/Pipeline.php \
+  's%\$fetched\[\] = \$source;%\$fetched[] = \$source; if (\$source instanceof AcknowledgesMessages) { \$source->acknowledge(); }%'
+
+run_sabotage "the rent pipeline acknowledges a source whose fetch FAILED" \
+  src/php/Rent/Cli/Pipeline.php \
+  's%foreach (\$fetched as \$source) {%foreach (\$sources as \$source) {%'
+
+run_sabotage "an acknowledgement refusal fails the whole rent pass" \
+  src/php/Rent/Cli/Pipeline.php \
+  's%\$errors\[\] = Redact::text(\$e->getMessage());%throw \$e;%'
+
+run_sabotage "the car pipeline never acknowledges" \
+  src/php/Car/VehiclePipeline.php \
+  's%\$source->acknowledge();%%'
+
+run_sabotage "the car pipeline acknowledges BEFORE the store recorded the pass" \
+  src/php/Car/VehiclePipeline.php \
+  's%++\$sourcesRun;%++\$sourcesRun; if (\$source instanceof AcknowledgesMessages) { \$source->acknowledge(); }%'
+
+run_sabotage "an acknowledgement refusal fails the whole car pass" \
+  src/php/Car/VehiclePipeline.php \
+  's%\$errors\[\] = Redact::text(\$e->getMessage());%throw \$e;%'
+
+# The deployed path: under --watch every rent source is wrapped. A decorator that drops the
+# capability makes `--once` mark mail and the watcher never — the FeedFreshness scar, third time.
+run_sabotage "PacedSource drops the acknowledgement (the watcher never marks, --once does)" \
+  src/php/Rent/Adapters/PacedSource.php \
+  's%\$this->inner->acknowledge();%%'
+
+run_sabotage "the rent email source claims nothing (every message reads as unprocessed)" \
+  src/php/Rent/Adapters/EmailAlertSource.php \
+  's%\$this->mailbox->claim(\$position);%%'
+
+run_sabotage "the rent email source claims a message that failed its own filters" \
+  src/php/Rent/Adapters/EmailAlertSource.php \
+  's%if (!\$this->isFrom(\$message)) {%\$this->mailbox->claim(\$position); if (!\$this->isFrom(\$message)) {%'
+
+run_sabotage "the rent email source swallows a mailbox refusal (the flag silently stops being set)" \
+  src/php/Rent/Adapters/EmailAlertSource.php \
+  's%throw new SourceError(\$this->name(), .marquage des courriers traités refusé — . . \$e->getMessage(), \$e);%return;%'
+
+run_sabotage "the car email source claims nothing" \
+  src/php/Car/VehicleEmailSource.php \
+  's%\$this->mailbox->claim(\$position);%%'
+
+run_sabotage "the car email source swallows a mailbox refusal" \
+  src/php/Car/VehicleEmailSource.php \
+  's%throw new SourceError(\$this->name(), .marquage des courriers traités refusé — . . \$e->getMessage(), \$e);%return;%'
+
+# On the wire, against the scripted loopback server (tests/php/Adapters/Mail/scripted-imap-server.php).
+run_sabotage "a fetch opens the folder READ-WRITE (EXAMINE becomes SELECT)" \
+  src/php/Adapters/Mail/ImapMailbox.php \
+  "s%'EXAMINE ' . self::quote(\\\$this->folder)%'SELECT ' . self::quote(\\\$this->folder)%"
+
+run_sabotage "READING sets \\Seen as a side effect (BODY.PEEK[] becomes BODY[])" \
+  src/php/Adapters/Mail/ImapMailbox.php \
+  's%(UID FLAGS BODY.PEEK\[\])%(UID FLAGS BODY[])%'
+
+run_sabotage "the store REPLACES the flag list instead of adding to it (the developer's own flags stripped)" \
+  src/php/Adapters/Mail/ImapMailbox.php \
+  's%+FLAGS.SILENT (\\Seen)%FLAGS.SILENT (\\Seen)%'
+
+run_sabotage "the store adds \\Deleted beside \\Seen" \
+  src/php/Adapters/Mail/ImapMailbox.php \
+  's%+FLAGS.SILENT (\\Seen)%+FLAGS.SILENT (\\Seen \\Deleted)%'
+
+run_sabotage "claims survive the next fetch (a stale claim is stored on the next pass)" \
+  src/php/Adapters/Mail/ImapMailbox.php \
+  's%\$this->claimed = \[\];%%'
+
+run_sabotage "UIDVALIDITY is not compared across the two sessions" \
+  src/php/Adapters/Mail/ImapMailbox.php \
+  's%if (\$this->uidValidity !== null \&\& \$validity !== \$this->uidValidity) {%if (false) {%'
+
+run_sabotage "UNCLAIMED messages are stored too (the unmatched sender the developer wants to see is hidden)" \
+  src/php/Adapters/Mail/ImapMailbox.php \
+  's%foreach (array_keys(\$this->claimed) as \$position) {%foreach (array_keys(\$this->uids) as \$position) {%'
+
+run_sabotage "already-seen messages are stored again on every pass (a login per pass for nothing)" \
+  src/php/Adapters/Mail/ImapMailbox.php \
+  's%if (isset(\$this->unseen\[\$uid\])) {%if (true) {%'
+
+run_sabotage "the test connector is consulted BEFORE the offline refusal (a way round SCOUT_OFFLINE)" \
+  src/php/Adapters/Mail/ImapMailbox.php \
+  "s%\\\$refusal = \\\\Scout\\\\Core\\\\Offline::refusalForHost(%\\\$refusal = \\\$this->connector !== null ? null : \\\\Scout\\\\Core\\\\Offline::refusalForHost(%"
+
+run_sabotage "the search asks for SEQUENCE NUMBERS, which the second session cannot use" \
+  src/php/Adapters/Mail/ImapMailbox.php \
+  "s%'UID SEARCH SINCE '%'SEARCH SINCE '%"
+
 # Narrows the caught type instead of rethrowing: `\LogicException` is a real class, so the file still
 # parses, and every exception the loop is meant to survive (`SourceError`, `\RuntimeException`) now
 # escapes `run()`. NOTE the single backslashes — `\\` in a BRE is one literal backslash, and an
@@ -2929,7 +3033,7 @@ run_sabotage "the card links to the portal's furniture instead of the flat" \
 # portal published normally -- a silent outage with a plausible explanation sitting next to it.
 run_sabotage "the IMAP window stops being a date query" \
   src/php/Adapters/Mail/ImapMailbox.php \
-  "s%'SEARCH SINCE ' . \$since%'SEARCH ALL'%"
+  "s%'UID SEARCH SINCE ' . \$since%'UID SEARCH ALL'%"
 
 # One mailbox serves every email source, so an unscoped window is a shared budget -- and it already
 # held 124 messages against a limit of 50. Drop the per-source sender and a busy portal starves a

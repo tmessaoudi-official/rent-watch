@@ -48,4 +48,32 @@ interface Mailbox
      * judge on `null` (hard rule 9).
      */
     public function newestMessageAt(): ?string;
+
+    /**
+     * Note that the message at `$position` in the last {@see fetchRecent()} result was CLAIMED by a
+     * source — it passed that source's sender and subject filters and was processed as its own.
+     *
+     * A claim is intent, not a write: nothing reaches the server until {@see acknowledge()}, which
+     * the pipeline calls only after the store has recorded the pass. Claims are per fetch and are
+     * cleared by the next {@see fetchRecent()}, because the mailbox is built once per source and
+     * the watch loop closes over it.
+     *
+     * @throws \InvalidArgumentException on a position the last fetch did not return — a programming
+     *                                   error, and a loud one, because a silently ignored claim is a
+     *                                   message that reads as unprocessed for ever
+     */
+    public function claim(int $position): void;
+
+    /**
+     * Mark every claimed message as processed, where the backend has such a notion.
+     *
+     * {@see ImapMailbox} sets `\Seen` on exactly the claimed UIDs that do not already carry it, in a
+     * second read-write session — see its docblock for the invariant this loosens and the rules
+     * that bound it. {@see FileMailbox} does nothing: a directory of frozen fixtures has no reader
+     * to inform. A no-op when nothing was claimed.
+     *
+     * @throws MailboxError when the server refused — the caller reports it and carries on; the
+     *                      listings are already recorded, so the pass is not failed for a flag
+     */
+    public function acknowledge(): void;
 }

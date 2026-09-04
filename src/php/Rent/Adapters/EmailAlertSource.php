@@ -17,6 +17,7 @@ use Scout\Rent\Core\SourceProfile;
 use Scout\Rent\Core\Tenure;
 use Scout\Core\Text;
 use Scout\Rent\Store\Store;
+use Scout\Adapters\AcknowledgesMessages;
 use Scout\Adapters\FeedFreshness;
 use Scout\Adapters\SourceError;
 
@@ -39,7 +40,7 @@ use Scout\Adapters\SourceError;
  * the scraping route hard rule 4 gates behind an explicit flag, and doing it invisibly from the
  * email path would route around the gate entirely.
  */
-final readonly class EmailAlertSource implements CountsPatternMisses, FeedFreshness, Source
+final readonly class EmailAlertSource implements AcknowledgesMessages, CountsPatternMisses, FeedFreshness, Source
 {
     /**
      * Where a rent lives in an alert. Ordered: the most explicit form wins.
@@ -217,7 +218,7 @@ final readonly class EmailAlertSource implements CountsPatternMisses, FeedFreshn
 
         $listings = [];
 
-        foreach ($messages as $raw) {
+        foreach ($messages as $position => $raw) {
             $message = EmailMessage::parse($raw);
 
             // Only messages this source sent. A shared mailbox receiving alerts from four portals
@@ -242,12 +243,31 @@ final readonly class EmailAlertSource implements CountsPatternMisses, FeedFreshn
                 continue;
             }
 
+            // CLAIMED: this message is ours, whatever it yields — a `Bien'ici` alert with no card
+            // at all is still a processed message. Intent only; the mark is written by
+            // acknowledge(), after the store has recorded the pass.
+            $this->mailbox->claim($position);
+
             foreach ($this->listingsIn($message) as $listing) {
                 $listings[] = $listing;
             }
         }
 
         return $listings;
+    }
+
+    /**
+     * Row 36: mark the messages this pass claimed as processed — the pipeline's call, after the
+     * store recorded them. A mailbox refusal becomes a `SourceError` so the pass can REPORT it
+     * without failing: the listings are already on disk.
+     */
+    public function acknowledge(): void
+    {
+        try {
+            $this->mailbox->acknowledge();
+        } catch (MailboxError $e) {
+            throw new SourceError($this->name(), 'marquage des courriers traités refusé — ' . $e->getMessage(), $e);
+        }
     }
 
     /**

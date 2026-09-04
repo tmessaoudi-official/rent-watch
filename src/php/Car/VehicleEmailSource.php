@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Scout\Car;
 
+use Scout\Adapters\AcknowledgesMessages;
 use Scout\Adapters\FeedFreshness;
 use Scout\Adapters\Mail\EmailMessage;
 use Scout\Adapters\Mail\Mailbox;
@@ -34,7 +35,7 @@ use Scout\Core\Text;
  * A card whose price line is missing still yields a listing with `priceEur = null` (unknown is
  * not zero); a segment with no ad link yields nothing — it is the header or the footer.
  */
-final readonly class VehicleEmailSource implements CountsPatternMisses, VehicleSource, FeedFreshness
+final readonly class VehicleEmailSource implements AcknowledgesMessages, CountsPatternMisses, VehicleSource, FeedFreshness
 {
     /** @param ?\Closure(string): void $warn */
     public function __construct(
@@ -96,7 +97,7 @@ final readonly class VehicleEmailSource implements CountsPatternMisses, VehicleS
         $separator = $this->definition->param('card_separator');
         $out = [];
 
-        foreach ($messages as $raw) {
+        foreach ($messages as $position => $raw) {
             $message = EmailMessage::parse($raw);
             if ($from !== '' && !str_contains(strtolower($message->from()), $from)) {
                 continue;
@@ -104,6 +105,10 @@ final readonly class VehicleEmailSource implements CountsPatternMisses, VehicleS
             if ($subjectPattern !== null && preg_match($subjectPattern, $message->subject()) !== 1) {
                 continue;
             }
+
+            // CLAIMED: past both filters, this message is ours whatever its segments yield. Intent
+            // only — the mark is written by acknowledge(), after the store has recorded the pass.
+            $this->mailbox->claim($position);
 
             $segments = $separator === null ? [$message->body] : explode($separator, $message->body);
             $seen = [];
@@ -138,6 +143,16 @@ final readonly class VehicleEmailSource implements CountsPatternMisses, VehicleS
         }
 
         return $out;
+    }
+
+    /** Row 36 — the rent twin's rule, verbatim: report a refusal, never fail the pass for a flag. */
+    public function acknowledge(): void
+    {
+        try {
+            $this->mailbox->acknowledge();
+        } catch (MailboxError $e) {
+            throw new SourceError($this->name(), 'marquage des courriers traités refusé — ' . $e->getMessage(), $e);
+        }
     }
 
     public function health(?string $nowIso = null): SourceHealth

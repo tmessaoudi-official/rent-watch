@@ -788,7 +788,7 @@ final class NetworkAdaptersTest extends TestCase
 
         $command = ImapMailbox::searchCommand('alertes.seloger.com', 7, $now);
 
-        self::assertSame('SEARCH SINCE 18-Aug-2026 FROM "alertes.seloger.com"', $command);
+        self::assertSame('UID SEARCH SINCE 18-Aug-2026 FROM "alertes.seloger.com"', $command);
 
         // RFC 3501 wants `dd-Mon-yyyy` with ENGLISH month abbreviations. A locale-aware formatter
         // would emit `Aoû` here and the server would reject the command or, far worse, match
@@ -797,7 +797,7 @@ final class NetworkAdaptersTest extends TestCase
 
         // No `from` configured: the date window still applies. A source without a sender to scope
         // by is not a source that should read the whole folder.
-        self::assertSame('SEARCH SINCE 18-Aug-2026', ImapMailbox::searchCommand(null, 7, $now));
+        self::assertSame('UID SEARCH SINCE 18-Aug-2026', ImapMailbox::searchCommand(null, 7, $now));
     }
 
     /**
@@ -809,8 +809,8 @@ final class NetworkAdaptersTest extends TestCase
     {
         $now = new \DateTimeImmutable('2026-08-25 18:00:00');
 
-        self::assertSame('SEARCH SINCE 24-Aug-2026', ImapMailbox::searchCommand(null, 0, $now));
-        self::assertSame('SEARCH SINCE 24-Aug-2026', ImapMailbox::searchCommand(null, -30, $now));
+        self::assertSame('UID SEARCH SINCE 24-Aug-2026', ImapMailbox::searchCommand(null, 0, $now));
+        self::assertSame('UID SEARCH SINCE 24-Aug-2026', ImapMailbox::searchCommand(null, -30, $now));
     }
 
     /** The sender reaches the command line, so the CRLF refusal has to cover it. */

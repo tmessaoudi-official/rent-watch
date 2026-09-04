@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Scout\Car;
 
+use Scout\Adapters\AcknowledgesMessages;
 use Scout\Adapters\FeedFreshness;
 use Scout\Adapters\SourceError;
 use Scout\Core\Notify\Notifier;
@@ -105,6 +106,20 @@ final readonly class VehiclePipeline
                     } else {
                         ++$undelivered;
                     }
+                }
+            }
+
+            // ROW 36 — every listing of this source is `record()`ed above, so its messages are
+            // marked processed HERE and nowhere earlier. A refusal is reported and the pass goes
+            // on: the cars are on disk, the flag is for the human reading the label. The rent
+            // pipeline carries the same block after its recording loop; keep the two rules equal.
+            if ($source instanceof AcknowledgesMessages) {
+                try {
+                    $source->acknowledge();
+                } catch (SourceError $e) {
+                    $errors[] = Redact::text($e->getMessage());
+                } catch (\Throwable $e) {
+                    $errors[] = $source->name() . ' : ' . Redact::text($e::class . ': ' . $e->getMessage());
                 }
             }
         }

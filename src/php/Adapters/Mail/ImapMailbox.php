@@ -16,9 +16,25 @@ use Scout\Core\MutableByDesign;
  * allows — enough to log in, select a mailbox, list recent messages and read them — because every
  * line of a hand-written protocol client is a line nobody else has reviewed.
  *
- * **READ-ONLY, and enforced rather than intended.** `EXAMINE`, not `SELECT`, so the server itself
- * refuses any modification; nothing here can flag, move or delete a message. The mailbox is the
- * developer's, it is where the alerts land, and a parser bug must not be able to cost them.
+ * **A FETCH IS READ-ONLY, and enforced rather than intended.** `EXAMINE`, not `SELECT`, so the
+ * server itself refuses any modification while messages are being read; `BODY.PEEK[]`, never
+ * `BODY[]`, so reading sets no flag as a side effect. The mailbox is the developer's, it is where
+ * the alerts land, and a parser bug must not be able to cost them.
+ *
+ * **THE ONE WRITE IS {@see acknowledge()}, and it can only ADD `\Seen`** (row 36, 2026-09-04 —
+ * developer request: *"mark the emails … as seen when you process them, so that way I know which
+ * email was processed and which not"*). It runs in a SECOND session — `SELECT`, one
+ * `UID STORE … +FLAGS.SILENT (\Seen)`, `LOGOUT` — on exactly the UIDs a source CLAIMED during the
+ * last fetch and that do not already carry the flag, so steady state opens no write session at all.
+ * Messages are addressed by UID throughout precisely because there are two sessions: a sequence
+ * number is only meaningful inside one, and the folder's `UIDVALIDITY` is compared across the two
+ * so a re-created folder cannot be flagged by a stale UID. Nothing here can ever remove a flag,
+ * move or delete a message, and the fetch's query stays date-based — the flag is for the human
+ * reading the label, never the pipeline's own dedup.
+ *
+ * `$connector` is the test seam that makes any of this observable on the wire: it replaces the
+ * `tls://` socket with one a scripted loopback server answers. It is consulted AFTER the offline
+ * refusal, never before, so it cannot be a way round `SCOUT_OFFLINE`.
  *
  * **"RECENT" IS A QUERY, NOT THE END OF THE FOLDER — and getting that wrong cost a live source.**
  * `fetchRecent()` used to read the highest `$limit` sequence numbers. On 2026-08-25 the developer
@@ -80,6 +96,30 @@ final class ImapMailbox implements Mailbox, MutableByDesign
     private ?string $newestMessageAt = null;
 
     /**
+     * Position in the last fetch's result → the message's UID. Per-fetch state, like the date above.
+     *
+     * @var list<int>
+     */
+    private array $uids = [];
+
+    /**
+     * UIDs of the last fetch that did NOT carry `\Seen` when read — the only ones worth storing.
+     *
+     * @var array<int, true>
+     */
+    private array $unseen = [];
+
+    /**
+     * Positions a source claimed since the last fetch.
+     *
+     * @var array<int, true>
+     */
+    private array $claimed = [];
+
+    /** The folder's `UIDVALIDITY` as EXAMINE reported it; a differing value on SELECT refuses the store. */
+    private ?int $uidValidity = null;
+
+    /**
      * @param string|null $fromFilter the source's own `params.from`, pushed INTO the IMAP query.
      *                                See {@see searchCommand()} for why it is not merely a
      *                                post-fetch filter.
@@ -105,6 +145,13 @@ final class ImapMailbox implements Mailbox, MutableByDesign
          * operator is already looking — `doctor`'s output, or the run banner.
          */
         private readonly ?\Closure $warn = null,
+        /**
+         * Test seam: `(string $host, int $port, int $timeoutSeconds) → resource|false`, replacing
+         * the `tls://` socket. Consulted only after the offline refusal has passed.
+         *
+         * @var ?\Closure(string, int, int): (resource|false)
+         */
+        private readonly ?\Closure $connector = null,
     ) {}
 
     public function newestMessageAt(): ?string
@@ -197,6 +244,13 @@ final class ImapMailbox implements Mailbox, MutableByDesign
         // a different file, individually deletable. One mechanism accidentally protected by another
         // is this repo's own named trap: never read "no harm occurred" as "the rule held".
         $this->newestMessageAt = null;
+        // The same rule for the claim state: a claim from the previous pass must never be stored
+        // on the strength of this one, and the early returns below are where a later reset would
+        // let it survive.
+        $this->uids = [];
+        $this->unseen = [];
+        $this->claimed = [];
+        $this->uidValidity = null;
 
         $this->connect();
 
@@ -206,8 +260,9 @@ final class ImapMailbox implements Mailbox, MutableByDesign
             $this->login();
 
             // EXAMINE, not SELECT. Read-only at the PROTOCOL level, so no bug on this side can
-            // modify the developer's mailbox.
+            // modify the developer's mailbox while it reads. The one write lives in acknowledge().
             $select = $this->command('EXAMINE ' . self::quote($this->folder));
+            $this->uidValidity = self::uidValidityIn($select);
 
             $total = 0;
             foreach ($select as $line) {
@@ -239,9 +294,13 @@ final class ImapMailbox implements Mailbox, MutableByDesign
 
             $messages = [];
 
-            foreach ($sequences as $sequence) {
-                $raw = $this->fetchMessage($sequence);
+            foreach ($sequences as $uid) {
+                [$raw, $seen] = $this->fetchMessage($uid);
                 $messages[] = $raw;
+                $this->uids[] = $uid;
+                if (!$seen) {
+                    $this->unseen[$uid] = true;
+                }
                 $this->noteMessageDate($raw);
             }
 
@@ -249,6 +308,105 @@ final class ImapMailbox implements Mailbox, MutableByDesign
         } finally {
             $this->disconnect();
         }
+    }
+
+    public function claim(int $position): void
+    {
+        if (!array_key_exists($position, $this->uids)) {
+            throw new \InvalidArgumentException(sprintf(
+                'claim(%d): the last fetch returned %d message(s) — a claim outside it would be silently ignored, and a message that reads as unprocessed for ever is the failure this flag exists to remove',
+                $position,
+                count($this->uids),
+            ));
+        }
+        $this->claimed[$position] = true;
+    }
+
+    /**
+     * The ONE write: `\Seen` on the claimed UIDs that lack it, in a second, read-write session.
+     *
+     * A no-op — no connection at all — when nothing needs storing, which is steady state: every
+     * message inside the window was processed on an earlier pass and already carries the flag.
+     * `--watch` runs ~96 passes a day per source; a login per pass for a flag already set would be
+     * the cost with none of the signal.
+     */
+    public function acknowledge(): void
+    {
+        $uids = [];
+        foreach (array_keys($this->claimed) as $position) {
+            $uid = $this->uids[$position];
+            if (isset($this->unseen[$uid])) {
+                $uids[] = $uid;
+            }
+        }
+        if ($uids === []) {
+            return;
+        }
+
+        $this->connect();
+
+        try {
+            $this->login();
+
+            // SELECT, not EXAMINE: this is the session that writes. A re-created folder hands out
+            // the same UIDs for different messages, and UIDVALIDITY is the server's own statement
+            // that the UIDs read under EXAMINE still name what they named — so a change refuses
+            // the store BEFORE it is sent, never after.
+            $selected = $this->command('SELECT ' . self::quote($this->folder));
+            $validity = self::uidValidityIn($selected);
+            if ($this->uidValidity !== null && $validity !== $this->uidValidity) {
+                throw new MailboxError(sprintf(
+                    'UIDVALIDITY of %s changed between the fetch (%d) and the acknowledgement (%s) — the claimed UIDs may name different messages, so nothing was marked',
+                    $this->folder,
+                    $this->uidValidity,
+                    $validity === null ? 'absent' : (string) $validity,
+                ));
+            }
+
+            $this->command(self::storeCommand($uids));
+
+            foreach ($uids as $uid) {
+                unset($this->unseen[$uid]);
+            }
+        } finally {
+            $this->disconnect();
+        }
+    }
+
+    /**
+     * `UID STORE <set> +FLAGS.SILENT (\Seen)` — ADD the one flag, and only that one.
+     *
+     * `+FLAGS`, never `FLAGS` (which REPLACES the flag list and would strip `\Flagged` or a label
+     * the developer set by hand) and never `-FLAGS`. `.SILENT` because the untagged FETCH echoes a
+     * non-silent STORE sends are noise this client would otherwise have to read past.
+     *
+     * @param list<int> $uids
+     */
+    public static function storeCommand(array $uids): string
+    {
+        $set = array_values(array_unique(array_map(static fn (int $u): int => $u, $uids)));
+        sort($set);
+        if ($set === []) {
+            throw new \InvalidArgumentException('a STORE with no UIDs would be a write that names nothing');
+        }
+
+        return 'UID STORE ' . implode(',', $set) . ' +FLAGS.SILENT (\Seen)';
+    }
+
+    /**
+     * The `UIDVALIDITY` a SELECT/EXAMINE response carries, or `null` when the server sent none.
+     *
+     * @param list<string> $lines
+     */
+    private static function uidValidityIn(array $lines): ?int
+    {
+        foreach ($lines as $line) {
+            if (preg_match('~\[UIDVALIDITY\s+(\d+)\]~i', $line, $m) === 1) {
+                return (int) $m[1];
+            }
+        }
+
+        return null;
     }
 
     /**
@@ -283,7 +441,9 @@ final class ImapMailbox implements Mailbox, MutableByDesign
         $days = max(1, $sinceDays);
         $since = $now->sub(new \DateInterval('P' . $days . 'D'))->format('d-M-Y');
 
-        $command = 'SEARCH SINCE ' . $since;
+        // `UID SEARCH`, so the answer is UIDs rather than sequence numbers: acknowledge() runs in a
+        // SECOND session, and a sequence number is only meaningful inside the one that read it.
+        $command = 'UID SEARCH SINCE ' . $since;
 
         if ($fromFilter !== null && $fromFilter !== '') {
             // Through `quote()`, so the CRLF refusal applies: this value reaches the command line.
@@ -443,14 +603,18 @@ final class ImapMailbox implements Mailbox, MutableByDesign
             throw new MailboxError($refusal);
         }
 
-        $socket = @stream_socket_client(
-            'tls://' . $this->host . ':' . $this->port,
-            $errno,
-            $errstr,
-            $this->timeoutSeconds,
-            STREAM_CLIENT_CONNECT,
-            $context,
-        );
+        // The test seam, AFTER the refusal above — a connector consulted first would be a way round
+        // `SCOUT_OFFLINE`, and the wire test asserts it is never asked for a non-loopback host.
+        $socket = $this->connector !== null
+            ? ($this->connector)($this->host, $this->port, $this->timeoutSeconds)
+            : @stream_socket_client(
+                'tls://' . $this->host . ':' . $this->port,
+                $errno,
+                $errstr,
+                $this->timeoutSeconds,
+                STREAM_CLIENT_CONNECT,
+                $context,
+            );
 
         if ($socket === false) {
             throw new MailboxError(sprintf('could not connect to %s:%d — %s', $this->host, $this->port, $errstr));
@@ -594,18 +758,28 @@ final class ImapMailbox implements Mailbox, MutableByDesign
         }
     }
 
-    private function fetchMessage(int $sequence): string
+    /**
+     * One message by UID, with whether it already carries `\Seen`.
+     *
+     * `BODY.PEEK[]`, never `BODY[]` — the plain form sets `\Seen` as a side effect of READING, which
+     * would mark every message in the window on every pass whether or not any source claimed it.
+     * The flags ride along so acknowledge() can skip what is already marked without a second read.
+     *
+     * @return array{string, bool} the raw message, and whether it was already `\Seen`
+     */
+    private function fetchMessage(int $uid): array
     {
         if ($this->socket === null) {
             throw new MailboxError('not connected');
         }
 
         $tag = sprintf('A%04d', ++$this->tag);
-        if (@fwrite($this->socket, $tag . ' FETCH ' . $sequence . ' BODY.PEEK[]' . "\r\n") === false) {
+        if (@fwrite($this->socket, $tag . ' UID FETCH ' . $uid . ' (UID FLAGS BODY.PEEK[])' . "\r\n") === false) {
             throw new MailboxError('could not write to the IMAP connection');
         }
 
         $body = '';
+        $seen = false;
 
         while (true) {
             $line = $this->readLine();
@@ -615,17 +789,21 @@ final class ImapMailbox implements Mailbox, MutableByDesign
                     throw new MailboxError('IMAP FETCH failed: ' . substr($line, strlen($tag) + 1));
                 }
 
-                return $body;
+                return [$body, $seen];
             }
 
-            // A literal: `* 12 FETCH (BODY[] {2048}` means exactly 2048 bytes follow.
+            if (preg_match('~FLAGS\s+\(([^)]*)\)~i', $line, $f) === 1 && preg_match('~\\\\Seen\b~i', $f[1]) === 1) {
+                $seen = true;
+            }
+
+            // A literal: `* 12 FETCH (UID 34 FLAGS () BODY[] {2048}` means exactly 2048 bytes follow.
             if (preg_match('~\{(\d+)\}$~', $line, $m) === 1) {
                 $length = (int) $m[1];
 
                 if ($length > self::MAX_MESSAGE_BYTES) {
                     throw new MailboxError(sprintf(
-                        'message %d is %d bytes, over the %d-byte limit — refusing to read it',
-                        $sequence,
+                        'message UID %d is %d bytes, over the %d-byte limit — refusing to read it',
+                        $uid,
                         $length,
                         self::MAX_MESSAGE_BYTES,
                     ));
