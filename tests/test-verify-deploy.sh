@@ -35,7 +35,14 @@ cat > "$TMP/bin/docker" <<'STUB'
 case "$1 ${2:-}" in
   "image inspect")
     [[ "${STUB_IMAGE_MISSING:-0}" == 1 ]] && exit 1
-    printf '%s\n' "${STUB_CURRENT_IMAGE}" ;;
+    # TWO different questions reach this branch, and answering both with the image ID made the
+    # image-age check silently indeterminable — a vacuous pass, which is the shape the whole file
+    # is about. Distinguish on the FORMAT, which is what the caller actually varies.
+    if [[ "$*" == *'{{.Created}}'* ]]; then
+      printf '%s\n' "${STUB_IMAGE_CREATED:-2099-01-01T00:00:00Z}"
+    else
+      printf '%s\n' "${STUB_CURRENT_IMAGE}"
+    fi ;;
   "compose ps")
     printf '%b' "${STUB_PS_ROWS}" ;;
   "compose config")
@@ -60,7 +67,7 @@ chmod +x "$TMP/bin/docker"
 # not asked for. A test proving something other than what it says is the trap this repo names most
 # often; here it was introduced by the test for the guard against exactly that class.
 reset_case() {
-  unset PS_ROWS SERVICES LEFTOVERS STALE_CONTAINER IMAGE_MISSING
+  unset PS_ROWS SERVICES LEFTOVERS STALE_CONTAINER IMAGE_MISSING IMAGE_CREATED
 }
 
 run() {
@@ -71,6 +78,7 @@ run() {
   STUB_LEFTOVERS="${LEFTOVERS:-}" \
   STUB_STALE_CONTAINER="${STALE_CONTAINER:-__none__}" \
   STUB_IMAGE_MISSING="${IMAGE_MISSING:-0}" \
+  STUB_IMAGE_CREATED="${IMAGE_CREATED:-2099-01-01T00:00:00Z}" \
     bash "$ROOT/tools/verify-deploy.sh" 2>&1
 }
 
@@ -110,6 +118,40 @@ if [[ $code -eq 1 && "$out" == *"AUTRE image"* ]]; then
   ok "a container running a previous image is caught"
 else
   ko "a container running a previous image is caught" "exit=$code out=$out"
+fi
+
+# ── 3b. IS THE IMAGE ITSELF NEWER THAN THE CODE? A different question from case 3, with the same
+#    comforting output. Case 3 asks whether the containers run the image that was built; this asks
+#    whether that image was built from the code that was committed. `src/` is baked in, so a pull
+#    changes the criteria immediately and changes no code at all — every container reporting
+#    "running, image courante" throughout. This is the failure that left a §1 fix unarmed in
+#    production for a day and a half on 2026-09-04, and an earlier instance ran seventeen hours.
+#
+#    Driven through the REAL repository rather than a stub, because the check reads `git log`
+#    directly: a stub docker cannot express "the image is older than HEAD's src commit". The image
+#    date is what the stub controls, so an epoch far in the past is a stale build by construction.
+reset_case; PS_ROWS="$healthy" out="$(PATH="$TMP/bin:$PATH" \
+  STUB_CURRENT_IMAGE="$CURRENT" STUB_STALE_IMAGE="$STALE" \
+  STUB_SERVICES='rent-scout\ncar-scout\n' STUB_PS_ROWS="$healthy" STUB_LEFTOVERS='' \
+  STUB_STALE_CONTAINER='__none__' STUB_IMAGE_MISSING=0 STUB_IMAGE_CREATED='2001-01-01T00:00:00Z' \
+  bash "$ROOT/tools/verify-deploy.sh" 2>&1)"; code=$?
+if [[ $code -eq 1 && "$out" == *"ANTÉRIEURE au dernier commit"* ]]; then
+  ok "an image older than the newest src/ commit is a failure, not a green deploy"
+else
+  ko "an image older than the newest src/ commit is a failure, not a green deploy" "exit=$code out=$out"
+fi
+
+# THE COUNTERWEIGHT: an image built after the code passes, or the check is satisfied by always
+# failing — which would make every real deploy look broken and train the operator to ignore it.
+reset_case; PS_ROWS="$healthy" out="$(PATH="$TMP/bin:$PATH" \
+  STUB_CURRENT_IMAGE="$CURRENT" STUB_STALE_IMAGE="$STALE" \
+  STUB_SERVICES='rent-scout\ncar-scout\n' STUB_PS_ROWS="$healthy" STUB_LEFTOVERS='' \
+  STUB_STALE_CONTAINER='__none__' STUB_IMAGE_MISSING=0 STUB_IMAGE_CREATED='2099-01-01T00:00:00Z' \
+  bash "$ROOT/tools/verify-deploy.sh" 2>&1)"; code=$?
+if [[ $code -eq 0 && "$out" == *"postérieure au dernier commit"* ]]; then
+  ok "an image built after the newest src/ commit passes"
+else
+  ko "an image built after the newest src/ commit passes" "exit=$code out=$out"
 fi
 
 # ── 4. The leftover is not this deploy's failure, it is the next one's: it holds the name that makes

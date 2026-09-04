@@ -1920,9 +1920,14 @@ tools/verify-deploy.sh           Did the redeploy land? `up -d` printing Started
                                  deployment: a wedged recreate leaves a watcher in `Created`,
                                  and `docker compose ps` without -a OMITS it, so the failure
                                  renders as a shorter list. Asserts every declared service
-                                 has a RUNNING container, on the CURRENT image, with no
-                                 hex-prefixed leftover holding a name for the next recreate
-                                 to die on. Read-only
+                                 has a RUNNING container, on the CURRENT image, that the
+                                 IMAGE ITSELF postdates the newest src/ commit, and that no
+                                 hex-prefixed leftover holds a name for the next recreate to
+                                 die on. Read-only. The image-age check is a DIFFERENT
+                                 question from the image-id one and the answer looks the
+                                 same: "running, image courante" is true of a watcher whose
+                                 image predates the fix by a day and a half, which is
+                                 exactly what happened on 2026-09-04
 tests/test-verify-deploy.sh      Its sabotage test — 7 cases through a stub `docker`,
                                  counterweight first. A missing image exits 2 ("build it"),
                                  never 1 ("watcher down"): collapsing those would make a

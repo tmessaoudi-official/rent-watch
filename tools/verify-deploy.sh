@@ -90,6 +90,39 @@ for service in "${services[@]}"; do
   good "$service ($name) : running, image courante"
 done
 
+# ── IS THE IMAGE ITSELF NEWER THAN THE CODE? ────────────────────────────────────────────────────
+#
+# The three checks above answer "are the containers running the image I built". They do NOT answer
+# "is that image built from the code I committed", and those are different questions with the same
+# comforting output. `src/` is baked into the image and `config/` is bind-mounted, so a `git pull`
+# changes the criteria immediately and changes NO CODE until a rebuild — every container `running,
+# image courante` throughout.
+#
+# This is the failure that cost this project a day and a half on 2026-09-04: a §1 fix — a flat the
+# store holds as PLS being vetoed when a portal re-advertises it under a new ad id — was committed,
+# pushed, CI-green and UNARMED in production, on three link-keyed portals where a re-advertisement
+# mints a new id. Nothing in `git status`, `git log` or a passing suite disagreed, and the earlier
+# instance of the same shape ran seventeen hours. Green, pushed and deployed are three different
+# things, and only this line is about the third one.
+if git -C "$(pwd)" rev-parse --is-inside-work-tree > /dev/null 2>&1; then
+  newest_src_epoch="$(git log -1 --format=%ct -- src 2>/dev/null)"
+  image_iso="$(docker image inspect "$IMAGE" --format '{{.Created}}' 2>/dev/null)"
+  image_epoch="$(date -d "$image_iso" +%s 2>/dev/null)"
+
+  if [[ -z "$newest_src_epoch" || -z "$image_epoch" ]]; then
+    # Not a failure: a shallow clone has no history to compare against. Say so rather than passing
+    # quietly, because a check that cannot run and does not say so is the vacuous-green shape.
+    say "image vs code : indéterminable (historique git ou date d'image absente)"
+  elif (( image_epoch < newest_src_epoch )); then
+    bad "l'image est ANTÉRIEURE au dernier commit de src/ — le watcher tourne du code périmé"
+    printf '      image  %s\n      commit %s (%s)\n' \
+      "$image_iso" "$(git log -1 --format=%cI -- src)" "$(git log -1 --format=%h -- src)"
+    printf '      docker compose build && docker compose up -d --remove-orphans\n'
+  else
+    good "l'image est postérieure au dernier commit de src/"
+  fi
+fi
+
 # The leftover is not this deploy's failure; it is the NEXT one's. Compose renames the old container
 # out of the way and, when the recreate does not complete, leaves it behind holding the name.
 leftovers="$(docker ps -a --format '{{.Names}}' 2>/dev/null | grep -E '^[0-9a-f]{12}_' || true)"

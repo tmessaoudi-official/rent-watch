@@ -212,10 +212,17 @@ sit for minutes; compose renames the old container while it waits, and twice on 
 wedged — once failing outright on `Conflict. The container name … is already in use` with rent-scout
 left in `Created`, once sitting about thirteen minutes. **Neither announced anything**, because
 `docker compose ps` without `-a` omits a service that is not running: the failure renders as a
-shorter list. `tools/verify-deploy.sh` asserts the three things that output cannot show you — every
+shorter list. `tools/verify-deploy.sh` asserts the four things that output cannot show you — every
 declared service has a container and it is running, that container runs the *current* image rather
-than one from three deploys ago, and no hex-prefixed leftover is still holding a name that will kill
-the next recreate. It is read-only, and `tests/test-verify-deploy.sh` is its sabotage test.
+than one from three deploys ago, **that the image itself was built after the newest `src/` commit**,
+and no hex-prefixed leftover is still holding a name that will kill the next recreate. It is
+read-only, and `tests/test-verify-deploy.sh` is its sabotage test.
+
+The third of those is a different question from the second, with the same comforting output. The
+second asks whether the containers run the image you built; the third asks whether that image was
+built from the code you committed. On 2026-09-04 a §1 fix was committed, pushed, CI-green and
+unarmed in production for a day and a half while every container reported *running, image courante*
+throughout — and an earlier instance of the same shape ran seventeen hours.
 
 The rehearsal step is there because the seen-set is the one file this project documents as
 unrecoverable, and a schema migration is the only routine operation that rewrites it. `.backup` is
