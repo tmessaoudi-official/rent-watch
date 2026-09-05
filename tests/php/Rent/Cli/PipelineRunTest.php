@@ -1908,6 +1908,117 @@ final class PipelineRunTest extends TestCase
     }
 
     /**
+     * THE TWIN VETO IS TRANSITIVE ACROSS A CONNECTED COMPONENT, and nothing tested it.
+     *
+     * `Pipeline` resolves each twin component to its MOST RESTRICTIVE reading, iterated to a fixed
+     * point, and its own comment prices the cost: *"a chain A–B–C where A and C would never have
+     * been linked directly now vetoes both"*. The nightly ledger reported the propagation as
+     * UNDETECTED — measured at HEAD, nulling the comparison leaves all 91 pipeline tests green.
+     *
+     * The chain is built out of the rules that make it possible rather than asserted into
+     * existence: `twinReason()` refuses a SAME-FAMILY pair, so A(institutional)–B(private) and
+     * B(private)–C(institutional) are twins while A–C is not; and the rents step 1450 / 1478 / 1506,
+     * each pair inside `Dedup`'s 30 € tolerance and the ends 56 € apart, outside it. A states PLS.
+     * C states LLI and would be a match on its own.
+     *
+     * Without the propagation C is pushed — a third copy of a flat this project has already refused,
+     * one link away from the refusal.
+     */
+    public function testTheTwinVetoTravelsTheWholeChainNotJustTheDirectLink(): void
+    {
+        $store = $this->store();
+        $channel = new RecordingChannel();
+        $pipeline = $this->pipeline($store, new Notifier([$channel]));
+
+        $at = static fn (string $source, string $id, int $rent, string $description, array $fields = []): RawListing => new RawListing(
+            sourceName: $source, externalId: $id, title: 'T4 Sartrouville',
+            description: $description, fields: $fields,
+            url: 'https://' . $source . '.test/' . $id,
+            commune: 'Sartrouville', postcode: '78500',
+            rentCc: $rent, surfaceM2: 88.0, rooms: 4,
+        );
+
+        $a = $at('cdc_habitat', 'a1', 1450, 'Financement PLS. Commission d attribution, demande de logement social.', ['financement' => 'PLS']);
+        // B STATES AN ELIGIBLE TENURE OUTRIGHT. With an undetermined B the chain proves nothing:
+        // an UNKNOWN twin already turns a match into a digest, so C is withheld whether or not the
+        // reading propagates — a first version of this test made exactly that mistake and passed
+        // against a landed mutation. An eligible B leaves A's PLS, travelling B, as the only thing
+        // between C and a push.
+        $b = $at('seloger', 'b1', 1478, 'Logement intermédiaire (LLI), 4 pieces de 88 m2, proche gare.');
+        $c = $at('inli', 'c1', 1506, 'Logement intermédiaire (LLI), 4 pieces de 88 m2.');
+
+        $pipeline->runOnce([
+            new FakeSource('cdc_habitat', listings: [$a], mixedTenure: true),
+            // `FakeSource` defaults to `institutional`; the middle link MUST be private or
+            // `twinReason()` refuses every pair in the chain and the test proves nothing.
+            new FakeSource('seloger', listings: [$b], mixedTenure: true, family: 'private'),
+            new FakeSource('inli', listings: [$c], mixedTenure: true),
+        ], self::NOW);
+
+        $pushed = array_map(
+            static fn (Notification $n): string => $n->title,
+            array_filter($channel->sent, static fn (Notification $n): bool => $n->kind === NotificationKind::MATCH),
+        );
+
+        self::assertSame([], $pushed, 'the PLS reading must reach C through B, which is the only link it has');
+    }
+
+    /**
+     * THE PERSISTED GROUP VETO, ISOLATED FROM THE DWELLING SCAN THAT NOW SHADOWS IT.
+     *
+     * `testTheClusterVetoSurvivesTheExcludedSiblingNotBeingFetched` above covers the same scenario
+     * and can no longer PROVE this read: `excludedDwellings()` — the fourth veto route, added
+     * later — catches that flat too, so nulling `groupExcludedTenure()` alone leaves it green.
+     * Measured: with both nulled it goes red; with either alone it does not. The nightly ledger
+     * reported the case as *undetected*, which was true and did not mean the guarantee was gone.
+     *
+     * What separates the two routes is that the dwelling scan needs the FACTS to still match, and
+     * the group key needs nothing. So: the excluded sibling was recorded at 1450 € and the portal
+     * has since republished the survivor at 1750 — outside `Dedup`'s rent tolerance, which is
+     * decisive rather than merely unhelpful — and `excludedDwellings()` can no longer see it. The
+     * persisted group is then the only thing between a PLS flat and a push.
+     *
+     * A rent change is the most ordinary event this project watches for; it must not launder a
+     * flat past §1.
+     */
+    public function testThePersistedGroupVetoHoldsWhenTheDwellingScanCanNoLongerMatch(): void
+    {
+        $store = $this->store();
+        $channel = new RecordingChannel();
+        $pipeline = $this->pipeline($store, new Notifier([$channel]));
+
+        $facts = static fn (string $source, string $id, int $rent, string $description, array $fields = []): RawListing => new RawListing(
+            sourceName: $source, externalId: $id, title: 'T4 Sartrouville',
+            description: $description, fields: $fields,
+            commune: 'Sartrouville', postcode: '78500',
+            rentCc: $rent, surfaceM2: 88.0, rooms: 4,
+        );
+
+        $survivor = $facts('inli', 'i-1', 1450, 'Logement intermédiaire (LLI), 4 pieces de 88 m2, ascenseur.');
+        $excluded = $facts('cdc', 'c-1', 1450, 'Financement PLS. Commission d attribution, demande de logement social.', ['financement' => 'PLS']);
+
+        // Pass 1: both present. The veto fires and the pair is grouped.
+        $pipeline->runOnce([
+            new FakeSource('inli', listings: [$survivor], mixedTenure: true),
+            new FakeSource('cdc', listings: [$excluded], mixedTenure: true),
+        ], self::NOW);
+        self::assertSame('REJECT', $store->outcome($store->dedupKey($survivor)), 'pass 1 must veto');
+
+        // Pass 2: the sibling is gone AND the rent has moved 300 € — far outside the tolerance, so
+        // no stored excluded dwelling matches this listing any more.
+        $channel->sent = [];
+        $pipeline->runOnce([
+            new FakeSource('inli', listings: [$facts('inli', 'i-1', 1750, 'Logement intermédiaire (LLI), 4 pieces de 88 m2, ascenseur.')], mixedTenure: true),
+        ], '2026-08-08T12:00:00+02:00');
+
+        self::assertNotContains(
+            NotificationKind::MATCH,
+            array_map(static fn (Notification $n): NotificationKind => $n->kind, $channel->sent),
+            'the flat KEEPS the group it earned; a rent change is not a new flat',
+        );
+    }
+
+    /**
      * Q34: the digest announces only what is NEW since the last successful emission.
      *
      * The ledger case for this — `the digest re-emits everything on every pass (Q34)` — was the ONE

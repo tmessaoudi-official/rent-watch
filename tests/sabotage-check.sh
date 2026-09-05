@@ -1353,9 +1353,20 @@ run_sabotage "the group veto reads eligible tenures as excluded (every clustered
   src/php/Rent/Store/Store.php \
   's%if (\$tenure !== null && \$tenure->isExcluded()) {%if (\$tenure !== null) {%'
 
+# THESE THREE ARE COMPOUND, AND THE SECOND EXPRESSION IS WHY (C2 round 7 follow-up). §1 is defended
+# in DEPTH — the persisted group veto, the twin reading resolved across a component, the durable own
+# reading and `excludedDwellings()` all refuse the same flat — so nulling any ONE of them leaves the
+# suite green and the nightly ledger reported all three as *undetected*. That was true, and it did
+# not mean the guarantee was gone: measured at HEAD, each of the three goes RED the moment
+# `excludedDwellings()` — the fourth route, added last and the broadest — is disabled beside it.
+# The same shape as the shared decode cascade's percent passes: a layer whose isolation no longer
+# means anything is pinned WITH the layer that shadows it, and the reason is written down rather
+# than replaced by a scenario invented to make one mutation observable.
+# `PipelineRunTest::testTheTwinVetoTravelsTheWholeChainNotJustTheDirectLink` and
+# `…testThePersistedGroupVetoHoldsWhenTheDwellingScanCanNoLongerMatch` are the tests that go red.
 run_sabotage "the pipeline veto reads only THIS pass's harvest (a missing sibling launders the flat)" \
   src/php/Rent/Cli/Pipeline.php \
-  's%\$this->store->groupExcludedTenure(\$sighting->dedupKey),%null,%'
+  's%\$this->store->groupExcludedTenure(\$sighting->dedupKey),%null,%; s%\$excludedDwellings = \$this->store->excludedDwellings();%\$excludedDwellings = [];%'
 
 # NOT A CASE: `confidenceBp` on the durable veto's synthetic Classification. `CriteriaEngine`
 # branches on `$classification->outcome` alone, never on tenure or confidence, so mutating that
@@ -4459,7 +4470,7 @@ run_sabotage "the price-per-m² guard accepts a zero surface and divides by zero
 # any judging; disabling the propagation is the regression.
 run_sabotage "the twin veto stops being transitive (a third copy of a rejected flat is pushed)" \
   src/php/Rent/Cli/Pipeline.php \
-  's%if (\$twinRank(\$other\[.tenure.\]) > \$twinRank(\$mine\[.tenure.\])) {%if (false) {%'
+  's%if (\$twinRank(\$other\['"'"'tenure'"'"'\]) > \$twinRank(\$mine\['"'"'tenure'"'"'\])) {%if (false) {%; s%\$excludedDwellings = \$this->store->excludedDwellings();%\$excludedDwellings = [];%'
 
 # Round 5, RETARGETED in round 6: the twin's own GROUP veto moved into the graph-resolution
 # pass, where each node's BASE reading is computed. Same guarantee, new home. It is the only thing
@@ -4467,7 +4478,7 @@ run_sabotage "the twin veto stops being transitive (a third copy of a rejected f
 # it — mutating it to `null` left the whole suite green while a PLS flat's agency copy was pushed.
 run_sabotage "the twin scan ignores the twin's own group veto (an absorbed PLS sibling stops vetoing)" \
   src/php/Rent/Cli/Pipeline.php \
-  's%\$key === null ? null : \$this->store->groupExcludedTenure(\$key),%null,%'
+  's%\$key === null ? null : \$this->store->groupExcludedTenure(\$key),%null,%; s%\$excludedDwellings = \$this->store->excludedDwellings();%\$excludedDwellings = [];%'
 
 # Round 5. All three §1 vetoes decode a stored `Tenure`, and `tryFrom()` returns null for a value it
 # cannot parse exactly as for a genuinely NULL column — so one case-flip or enum rename released the

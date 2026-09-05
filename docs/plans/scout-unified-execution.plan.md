@@ -1524,6 +1524,45 @@ read-only) and the merged prose as one review deep.
   `IMAP_MAX_MESSAGES` was raised 250 → 500 in `.env` after the live doctor reported seloger's window
   TRUNCATED (361 messages, 250 read).
 
+- [2026-09-05 16:30] RECORD (**C2 ROUND 7 — THREE OPUS LENSES, NOT CLEAN, AND ONE FINDING IS A §1
+  BREACH**). Span `878851d..b692570`, frozen; reports in `var/claude/c2-round7-*.md`. Two P0s,
+  three P1s, ten P2s, eight P3s. The two-clean counter stays at **0** — round 8 must run against a
+  new freeze, and the lenses said so themselves.
+  **P0 (correctness) — the drain is the THIRD verdict surface and it read one §1 signal.**
+  `pendingLowScore()` selects the row's own `tenure` and nothing else; `Pipeline` and `reclassify`
+  both refuse on the PERSISTED twin and group readings. A flat whose twin was judged `PLS`, or
+  whose cluster held a `PLS` sibling, was pushed as an individual MATCH and marked MATCH — which
+  cannot be demoted, so it left the queue for ever. Proven by executed probe on both vetoes. Fixed
+  ABOVE the retry/rollup split (both arms announce), UNKNOWN twin included.
+  **P0 (both lenses) — the car drain computed a REJECT and discarded it**, announcing an
+  `accidenté` car on the stored score with a reason line that said the snapshot was absent when it
+  had decoded cleanly. Reachable with no forged state: the excluded set was widened in code on
+  2026-08-31.
+  **P1 — collapse before the split.** Per-list collapse missed the twins that STRADDLE the gate:
+  one entry in each list, `collapseTwins()` returns at `count < 2`, and the flat went out twice in
+  one drain, the agency copy taking the headline whenever it scored higher.
+  **P1 — a remainder line must stay silent when there is no remainder**; `overflow()` counted every
+  queued row against the rollup list alone, so every retry read as still pending, on both domains.
+  Every existing assertion proved the line FIRES and none proved it silent.
+  **The P2 worth carrying: one finding was true of the syntax and false of the leak.** Three
+  `RentScout` warnings print `$failure->getMessage()` unredacted — and `ChannelError::__construct()`
+  redacts, `Notifier::send()` returning nothing else. That guarantee had NO test (deleting the
+  constructor's `Redact::text()` left the suite green); it has one now. Chasing it found a REAL
+  defect: `DeliveringChannel` threw `new ChannelError(<one argument>)`, a TypeError that `Notifier`
+  wraps — so every refusal test passed on a wrapped TypeError and the refusal path was never
+  exercised as itself.
+
+- [2026-09-05 16:45] RECORD (**THE SHARDED LEDGER COMPLETED FOR THE FIRST TIME IN EIGHT DAYS, AND
+  NAMED NINE GUARANTEES WITH NO TEST BEHIND THEM**). Run 33968248059 at `1c9f8aa`: six shards, all
+  finished, **745 detected / 9 undetected**, and the aggregating alert opened ONE issue naming each
+  case with its shard — the whole mechanism working end to end, on the first dispatch after the
+  change. The partition was independently proven exact by a lens: `126+126+126+126+125+125 = 754`,
+  zero duplicates, zero gaps. **The nine are the round's real inheritance**: several are §1-adjacent
+  (the twin veto's transitivity, the twin's own group veto, the pipeline veto reading only this
+  pass's harvest) and one is a secrets guard (the fixture-secrets guard blind to quoted-printable).
+  Two of the nine are round-6's own and are already closed by the round-7 work. They are being
+  re-run at HEAD one by one; each survivor needs a test, which is exactly what `undetected` means.
+
 ---
 
 ## Fragile implementations register (the developer asked; keep this list honest)
