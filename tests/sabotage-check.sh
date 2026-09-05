@@ -1852,6 +1852,12 @@ run_sabotage "the car pass stops saying how many matches it held back for the ro
   src/php/Car/Cli/CarScout.php \
   's%if (\$r->queuedLowScore > 0) {%if (false) {%'
 
+# And `doctor`, rent side — the car side's `rollup :` line had a test from the start; the rent
+# side had none until the deployed image was asked and answered nothing (6C round 1, 2026-09-05).
+run_sabotage "rent doctor stops naming the push gate and the low-score queue" \
+  src/php/Rent/Cli/RentScout.php \
+  's%if (\$criteria->notify->pushMinScore !== null) {%if (false) {%'
+
 
 # ── Rows 40 + 41 (2026-09-05): the reopen repair, and the same-filter warning ──
 #

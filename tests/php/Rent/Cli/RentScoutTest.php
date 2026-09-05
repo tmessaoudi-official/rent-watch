@@ -633,6 +633,20 @@ final class RentScoutTest extends TestCase
         self::assertSame(6, Store::open((string) $this->dbPath)->pendingLowScoreCount(), 'queued for the rollup');
     }
 
+    /** And `doctor` names the gate and the queue — the place the developer looks first (the car side already did). */
+    public function testDoctorNamesThePushGateAndTheLowScoreQueue(): void
+    {
+        $root = $this->fixtureRootWithPushGate(100);
+        $this->scoutIn($root, ['run', '--seed'], $this->delivering());
+        $this->republishEverything();
+        $this->scoutIn($root, ['run', '--once'], $this->delivering());
+
+        $r = $this->scoutIn($root, ['doctor']);
+
+        self::assertSame(0, $r['code'], $r['err']);
+        self::assertStringContainsString('rollup  : seuil 100 — 6 correspondance(s) en attente', $r['out'], 'the gate and the queue, on one line');
+    }
+
     public function testTheDigestEntryExplainsItselfRatherThanBeingABareLink(): void
     {
         $root = $this->demoRoot();

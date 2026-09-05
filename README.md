@@ -505,7 +505,8 @@ bas »*, below the *« à vérifier »* tenure doubts. The title claims the regi
 tenure doubt is present; a rollup-only mail is titled *« Vérifié, score bas : N annonce(s) »*. The
 store records the announcement kind (`DIGEST < ROLLUP < MATCH`, monotone), so a rent drop that
 lifts a rolled-up flat over the line is pushed once, as a promotion, and a flat already pushed is
-never demoted. Remove the key to push every match individually again.
+never demoted. Remove the key to push every match individually again. Every pass says how many
+matches it held back, and `doctor` prints the gate and the queue as `rollup :` — on both domains.
 
 **On a day with nothing pending the floor says nothing at all**, and records no window as served.
 The heartbeat already proves the watcher is alive every 24 h, so a daily "rien à vérifier" push

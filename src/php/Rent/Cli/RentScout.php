@@ -345,6 +345,14 @@ final readonly class RentScout
         $this->line('  digest  : à la fin de toute passe produisant du nouveau, sur demande (`scout --domain=rent digest`), '
             . 'et en plancher quotidien à ' . $criteria->notify->digestHour . 'h en `--watch` (Q34) '
             . '— silencieux si rien n\'est en attente');
+        // A5: the low-score queue is a fact the developer will look for HERE first — a quiet phone
+        // under a gate is not a quiet market. The car side says the same on its own `rollup` line.
+        $waitingLowScore = $store->pendingLowScoreCount();
+        if ($criteria->notify->pushMinScore !== null) {
+            $this->line(sprintf('  rollup  : seuil %d — %d correspondance(s) en attente du récapitulatif « vérifié, score bas » (drainées par le digest ci-dessus)', $criteria->notify->pushMinScore, $waitingLowScore));
+        } elseif ($waitingLowScore > 0) {
+            $this->line(sprintf('  rollup  : %d correspondance(s) jugée(s) et jamais notifiée(s) — aucun seuil configuré, `scout --domain=rent digest` les émet', $waitingLowScore));
+        }
         $this->line('');
 
         if ($sources === []) {
