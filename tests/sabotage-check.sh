@@ -1781,6 +1781,78 @@ run_sabotage "a stated lot reference is ignored (an auction card with no year an
   src/php/Car/VehicleEmailSource.php \
   "s%if (\\\$this->definition->param('id_from') === 'content' \\&\\& \\\$ref !== '') {%if (false) {%"
 
+# ── Row 6 / A5 (2026-09-05): the push gate, the rollup queue and the third announcement kind ──
+#
+# Every direction here changes WHAT REACHES THE PHONE while every pass still reports ok: a gate
+# that never holds back floods the phone again; a rollup that marks nothing re-announces every day;
+# one that marks MATCH hides the promotion a later rent drop earns; a ROLLUP rank equal to MATCH
+# does the same one layer down; a floor marker written before delivery consumes the day's window on
+# a failed send. And the rent digest's title must never claim a tenure doubt for a settled match.
+
+run_sabotage "the rent push gate is deleted (every match is pushed again, the queue never fills)" \
+  src/php/Rent/Cli/Pipeline.php \
+  's%if (\$pushMin !== null \&\& (\$verdict->score ?? 0) < \$pushMin) {%if (false) {%'
+
+run_sabotage "a ROLLUP announcement ranks as a MATCH (the promotion over the gate becomes unreachable)" \
+  src/php/Rent/Store/Store.php \
+  "s%'ROLLUP' => 2,%'ROLLUP' => 3,%"
+
+run_sabotage "a MATCH write no longer sticks against a later ROLLUP write (a pushed flat is demoted)" \
+  src/php/Rent/Store/Store.php \
+  's%WHEN notified_at IS NOT NULL AND COALESCE(notified_as, %WHEN false AND COALESCE(notified_as, %'
+
+run_sabotage "the low-score queue also returns rows already announced (the rollup repeats itself daily)" \
+  src/php/Rent/Store/Store.php \
+  "s%              WHERE outcome = 'MATCH' AND notified_at IS NULL%              WHERE outcome = 'MATCH'%"
+
+run_sabotage "the rent digest marks a rolled-up match as DIGEST (a settled LLI recorded as a tenure doubt)" \
+  src/php/Rent/Cli/RentScout.php \
+  "s%\\\$store->markNotified(\\\$entry\\['key'\\], \\\$now, 'ROLLUP');%\\\$store->markNotified(\\\$entry['key'], \\\$now, 'DIGEST');%"
+
+run_sabotage "the rent digest drops the low-score section from the mail (queued matches are marked and never shown)" \
+  src/php/Rent/Cli/RentScout.php \
+  's%\$notification = (new Formatter())->digest(\$entries, \$batch->lowScore);%\$notification = (new Formatter())->digest(\$entries);%'
+
+run_sabotage "the formatter attaches the regime clause to a rollup-only digest" \
+  src/php/Rent/Notify/Formatter.php \
+  "s%title: 'Vérifié, score bas : ' . count(\\\$lowScore) . ' annonce(s)',%title: 'À vérifier : ' . count(\\\$lowScore) . ' annonce(s) au régime indéterminé',%"
+
+run_sabotage "the car push gate is deleted" \
+  src/php/Car/VehiclePipeline.php \
+  's%if (\$pushMin !== null \&\& (\$verdict->score ?? 0) < \$pushMin) {%if (false) {%'
+
+run_sabotage "the car rollup queue returns announced cars too (the rollup repeats itself daily)" \
+  src/php/Car/VehicleStore.php \
+  "s%WHERE outcome = 'MATCH' AND notified_at IS NULL ORDER BY seen_epoch%WHERE outcome = 'MATCH' ORDER BY seen_epoch%"
+
+run_sabotage "the car rollup verb marks nothing on delivery" \
+  src/php/Car/Cli/CarScout.php \
+  "s%\\\$store->markNotified(\\\$entry\\['key'\\], \\\$this->now());%%"
+
+run_sabotage "the car rollup floor writes its marker BEFORE delivery is confirmed" \
+  src/php/Car/Cli/CarScout.php \
+  "s%\\\$this->warn('récapitulatif quotidien non délivré — rien marqué, nouvel essai au prochain passage.');%@file_put_contents(\\\$this->stateFile('car-rollup.txt'), \\\$now); \\\$this->warn('récapitulatif quotidien non délivré');%"
+
+run_sabotage "the car rollup floor marks nothing on delivery (the same cars roll up every morning)" \
+  src/php/Car/Cli/CarScout.php \
+  "s%\\\$store->markNotified(\\\$entry\\['key'\\], \\\$now);%%"
+
+run_sabotage "the car rollup is emitted as a MATCH kind (a rollup filed as a push)" \
+  src/php/Car/VehicleFormatter.php \
+  's%kind: NotificationKind::ROLLUP,%kind: NotificationKind::MATCH,%'
+
+# The remainder line, both domains — the round-7 P2 shape again: `queuedLowScore` was asserted as a
+# RunResult field on both pipelines while the LINE the operator reads was asserted on one CLI only,
+# so the rent one could be deleted with the suite green (6C round 1, 2026-09-05).
+run_sabotage "the rent pass stops saying how many matches it held back for the rollup" \
+  src/php/Rent/Cli/RentScout.php \
+  's%if (\$result->queuedLowScore > 0) {%if (false) {%'
+
+run_sabotage "the car pass stops saying how many matches it held back for the rollup" \
+  src/php/Car/Cli/CarScout.php \
+  's%if (\$r->queuedLowScore > 0) {%if (false) {%'
+
+
 # ── Rows 40 + 41 (2026-09-05): the reopen repair, and the same-filter warning ──
 #
 # `--reopen` is the ONE way back for a durably-excluded row, and a half-done reopen is worse than
@@ -2963,10 +3035,11 @@ run_sabotage "the pipeline stops naming the digest remainder to the operator" \
 #
 # An unrecognised announcement kind must rank as the STRONGEST, so a value nobody understands
 # suppresses rather than re-announces — the quiet direction, in the one place §1 wants it. The
-# sibling rule (a pre-v8 NULL reading as MATCH) was pinned; this arm was not.
+# sibling rule (a pre-v8 NULL reading as MATCH) was pinned; this arm was not. Retargeted 2026-09-05
+# when A5 inserted ROLLUP at rank 2 and the default moved to 3 — the applies gate caught it inert.
 run_sabotage "an unrecognised announcement kind re-announces instead of staying quiet" \
   src/php/Rent/Store/Store.php \
-  "s%            default => 2,%            default => 0,%"
+  "s%            default => 3,%            default => 0,%"
 
 # A denial that FOLLOWS the noun. `Ascenseur : non` is an ordinary French spec-block row and read
 # as `true` — a bonus awarded for a lift that does not exist, the direction Prose's own docblock

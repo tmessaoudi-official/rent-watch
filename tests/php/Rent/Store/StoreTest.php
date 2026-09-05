@@ -250,6 +250,61 @@ final class StoreTest extends TestCase
         );
     }
 
+    /**
+     * A5 (row 6, 2026-09-05): a THIRD announcement kind between the two. A low-score match carried
+     * in the rollup has been told about — it covers the digest question — but it has NOT been
+     * pushed as a match, so a later rent drop lifting it over the gate is a promotion, pushed once.
+     * The ordering is monotone: DIGEST < ROLLUP < MATCH, a write never demotes.
+     */
+    public function testARollupAnnouncementSitsBetweenDigestAndMatch(): void
+    {
+        $listing = $this->listing(externalId: 'ANN-R1');
+        $key = $this->store->dedupKey($listing);
+        $this->store->record($listing, 900, '2026-09-05T09:00:00+00:00');
+
+        $this->store->markNotified($key, '2026-09-05T09:05:00+00:00', 'ROLLUP');
+
+        self::assertTrue($this->store->wasNotified($key));
+        self::assertTrue($this->store->wasNotifiedAs($key, 'DIGEST'), 'a rollup covers the doubt question');
+        self::assertTrue($this->store->wasNotifiedAs($key, 'ROLLUP'));
+        self::assertFalse($this->store->wasNotifiedAs($key, 'MATCH'), 'rolled up is not pushed — the promotion stays reachable');
+
+        // A later DIGEST write cannot demote it; a later MATCH write promotes it.
+        $this->store->markNotified($key, '2026-09-05T10:00:00+00:00', 'DIGEST');
+        self::assertTrue($this->store->wasNotifiedAs($key, 'ROLLUP'), 'never demoted');
+        $this->store->markNotified($key, '2026-09-05T11:00:00+00:00', 'MATCH');
+        self::assertTrue($this->store->wasNotifiedAs($key, 'MATCH'), 'promoted');
+        $this->store->markNotified($key, '2026-09-05T12:00:00+00:00', 'ROLLUP');
+        self::assertTrue($this->store->wasNotifiedAs($key, 'MATCH'), 'and a match is never demoted to a rollup');
+    }
+
+    /** The low-score queue is exactly the judged MATCHes nobody has been told about, oldest first. */
+    public function testThePendingLowScoreQueueIsTheUnannouncedMatches(): void
+    {
+        $queued = $this->listing(externalId: 'LS-1');
+        $pushed = $this->listing(externalId: 'LS-2');
+        $doubt = $this->listing(externalId: 'LS-3');
+        foreach ([[$queued, 'MATCH', false], [$pushed, 'MATCH', true], [$doubt, 'DIGEST', false]] as [$l, $outcome, $announced]) {
+            $key = $this->store->dedupKey($l);
+            $this->store->record($l, 900, '2026-09-05T09:00:00+00:00');
+            $this->store->recordVerdict($key, 'LLI', 90, ['mention explicite'], $l);
+            $this->store->recordOutcome($key, $outcome);
+            if ($announced) {
+                $this->store->markNotified($key, '2026-09-05T09:05:00+00:00', 'MATCH');
+            }
+        }
+
+        $rows = $this->store->pendingLowScore();
+
+        self::assertCount(1, $rows);
+        self::assertSame($this->store->dedupKey($queued), $rows[0]['dedup_key']);
+        self::assertSame(1, $this->store->pendingLowScoreCount());
+        self::assertArrayHasKey('evidence_json', $rows[0], 'announced from its snapshot, like the digest');
+
+        $this->store->markNotified($this->store->dedupKey($queued), '2026-09-05T10:00:00+00:00', 'ROLLUP');
+        self::assertSame([], $this->store->pendingLowScore(), 'a rolled-up row leaves the queue');
+    }
+
     /** A match covers a doubt, so a digest never re-announces something already pushed as a match. */
     public function testAMatchAnnouncementCoversTheDigestQuestionToo(): void
     {

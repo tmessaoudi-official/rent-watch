@@ -97,6 +97,8 @@ final class VehicleCriteriaLoader
             priceDropMinEur: $n->requireInt('price_drop_min_eur', 0),
             priceDropMinPct: $n->requireFloat('price_drop_min_pct', 0.0, 100.0),
             sourceAlertCooldownHours: $n->optInt('source_alert_cooldown_hours', 12, 1, 720) ?? 12,
+            pushMinScore: $n->optInt('push_min_score', null, 0, 100),
+            rollupHour: $n->optInt('rollup_hour', null, 0, 23),
         );
         $n->done();
         $r->done();

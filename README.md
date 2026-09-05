@@ -99,7 +99,7 @@ Everything a domain owns follows ONE scheme, so the next domain is one registry 
 | fixtures | `tests/fixtures/rent/<source>/` | `tests/fixtures/car/<source>/` | under the domain that reads them |
 | env keys | `RENT_SCOUT_DB`, `RENT_IMAP_MAILBOX`, `RENT_NTFY_TOPIC`, `RENT_HEARTBEAT_HOURS`, `RENT_FEED_SILENT_DAYS` | `CAR_*` | `<SLUG>_*`; the IMAP/SMTP account, `NTFY_SERVER`, `IMAP_SINCE_DAYS`, `IMAP_MAX_MESSAGES`, `TZ` are shared |
 | database | `state/rent-watch.sqlite3` | `state/car-watch.sqlite3` | `state/<slug>-watch.sqlite3` |
-| markers | `state/rent-heartbeat.txt`, `rent-digest.txt`, `rent-last-refusal.txt` | `state/car-heartbeat.txt`, `car-last-refusal.txt` | `state/<slug>-*.txt` |
+| markers | `state/rent-heartbeat.txt`, `rent-digest.txt`, `rent-last-refusal.txt` | `state/car-heartbeat.txt`, `car-rollup.txt`, `car-last-refusal.txt` | `state/<slug>-*.txt` |
 | mailbox label | `rent-watch/portails` | `car-watch/portails` | `<slug>-watch/portails` |
 | push label | `rent-watch` | `car-watch` | `<slug>-watch` leads every subject and title |
 | ntfy topic | `rw-<32 hex>` | `cw-<32 hex>` | `<initial>w-<32 hex>`, `openssl rand -hex 16` — the topic IS the secret |
@@ -459,7 +459,8 @@ scout --domain=rent dump <source>           # raw payload of the first item — 
 scout --domain=rent run --once [-v]         # single pass
 scout --domain=rent run --watch [-v]        # loop: every 15 min ± 5 of jitter, paced per host (Q37)
 scout --domain=rent test-notify             # verify the notification channel
-scout --domain=rent digest [--dry-run]      # emit the pending "à vérifier" rollup, on demand
+scout --domain=rent digest [--dry-run]      # emit the pending "à vérifier" rollup AND the "vérifié, score bas"
+                                            #   section (matches under push_min_score), on demand
 scout --domain=rent reclassify [--dry-run]  # re-judge stored UNKNOWN verdicts against today's classifier
 scout --domain=rent reclassify --reopen=<dedup_key>   # the ONE way back for a durably-excluded row: prints where
                                             #   the exclusion came from, clears the row's own + twin readings,
@@ -495,6 +496,16 @@ emits at the end of any pass that produced NEW entries; `scout --domain=rent dig
 pending. The floor is what reaches a backlog that failed to send, or one the batch cap left behind,
 on a day that produced nothing new — before it existed, such a backlog sat in the bin until somebody
 thought to look, and that bin is where every listing the classifier could not resolve lands.
+
+**Since 2026-09-05 the digest has a SECOND SECTION, and the two are never mixed.** A listing that
+MATCHED but scored under `notify.push_min_score` (rent: 55, the measured p90 of 1 046 stored
+matches) is not pushed on its own: it waits in the store and the same drain — `digest`, the
+end-of-pass emission and the daily floor — announces it under its own heading, *« vérifié, score
+bas »*, below the *« à vérifier »* tenure doubts. The title claims the regime clause only when a
+tenure doubt is present; a rollup-only mail is titled *« Vérifié, score bas : N annonce(s) »*. The
+store records the announcement kind (`DIGEST < ROLLUP < MATCH`, monotone), so a rent drop that
+lifts a rolled-up flat over the line is pushed once, as a promotion, and a flat already pushed is
+never demoted. Remove the key to push every match individually again.
 
 **On a day with nothing pending the floor says nothing at all**, and records no window as served.
 The heartbeat already proves the watcher is alive every 24 h, so a daily "rien à vérifier" push
@@ -655,8 +666,17 @@ inert on all six by measurement.
 docker compose run --rm car-scout doctor                  # sources, seen-set, channels
 docker compose run --rm car-scout run --once --seed       # mandatory before --watch
 docker compose up -d car-scout
+docker compose run --rm car-scout rollup [--dry-run]     # the "vérifié, score bas" rollup, on demand
 MAILBOX_DIR=tests/fixtures/car/paruvendu CAR_SCOUT_DB=:memory: php bin/scout --domain=car dump paruvendu   # offline
 ```
+
+**The car side has a push gate and a rollup too (2026-09-05), and the rollup is deliberately NOT a
+digest**: the car domain has no tenure doubt, so there is nothing for a digest to mean. A MATCH
+scoring under `notify.push_min_score` (73 — the same bar as the `!!` marker, measured over 646
+stored matches: about one in four arrives individually) waits in the store; `rollup` announces the
+queue on demand, and under `--watch` a daily floor at `notify.rollup_hour` (8, local `TZ`) drains
+it, marking on delivery only — the marker `state/car-rollup.txt` is written after the channel
+confirms, so a refused send leaves the window open. `doctor` prints the queue as `rollup :`.
 
 ## Legal posture
 

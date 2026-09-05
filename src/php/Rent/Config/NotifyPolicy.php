@@ -31,6 +31,17 @@ final readonly class NotifyPolicy
         public float $rentDropMinPct = 2.0,
         public int $sourceBrokenCooldownHours = 24,
         public int $digestHour = 8,
+        /**
+         * A5 (row 6, developer ruling 2026-09-05): a MATCH scoring below this is not pushed on
+         * its own — it is queued and drained through the digest under its own heading,
+         * *"vérifié, score bas"*. `null` (the default, and every test fixture) means every match
+         * is pushed, exactly as before. Deliberately a SEPARATE knob from `highPriorityScore`:
+         * that one drives the `!!` marker (score AND confidence, calibrated 2026-08-26) and this
+         * one drives delivery; moving one must not silently move the other. Measured before the
+         * ruling: 55 is the p90 of 1046 stored matches under production's shape, so ~10 % arrive
+         * individually and the rest in the daily rollup.
+         */
+        public ?int $pushMinScore = null,
     ) {}
 
     /**
@@ -68,6 +79,7 @@ final readonly class NotifyPolicy
             rentDropMinPct: $r->has('rent_drop_min_pct') ? $r->requireFloat('rent_drop_min_pct', 0.0, 100.0) : 2.0,
             sourceBrokenCooldownHours: $r->optInt('source_broken_cooldown_hours', 24, 0) ?? 0,
             digestHour: $r->optInt('digest_hour', 8, 0, 23) ?? 8,
+            pushMinScore: $r->optInt('push_min_score', null, 0, 100),
         );
         $r->done();
 

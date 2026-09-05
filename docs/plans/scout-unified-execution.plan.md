@@ -1444,6 +1444,11 @@ read-only) and the merged prose as one review deep.
   the child probe gets the same preamble) — proven by running the class under
   `-d zend.exception_ignore_args=1` locally: green, where it was red. Nightly ledger: also red on
   the same cause; dispatched on demand after the push so today's verdict is real.
+  **A third instance of the same premise** surfaced only once the suite was green: the
+  `tests/test-dump-eml.sh` shell probe ("an argument DOES reach the trace on this PHP") — fixed the
+  same way, every `php` in it carrying both `-d` directives, proven under a shim forcing the
+  production ini (17/17 from 16/17). **Fast job GREEN at `3f8fc42`** (run 33945957335: suite +
+  guards success), the first green push since 2026-09-03 08:56. Ledger re-dispatched on that SHA.
 
 ---
 
@@ -2438,6 +2443,17 @@ tool/guard) and say which ones the fix covers.**
   (The plan's "the existing zero-over-reach sabotage cases must stay green" was trivially true —
   they test `isAvoidedBrand`, which this does not touch, so they never guarded this change; three
   new cases do.)
+> **LANDED 2026-09-05. THIS SECTION IS A RECORD, NOT A TO-DO.** Row 6 is `done`. What shipped is
+> the ruling of 2026-09-05 05:10 — weights untouched, individual push at ≥ 55 — built as a SEPARATE
+> `notify.push_min_score` knob rather than by moving `high_priority_score` (which stays 50: the
+> marker is score AND confidence, the gate is delivery; the log line saying *"50 → 55"* names the
+> bar, not the marker). Rent: `Store::announcementRank` DIGEST < ROLLUP < MATCH, `pendingLowScore()`,
+> `DigestBatch::$lowScore`, the digest's second heading, `Pipeline` gate, `RunResult::$queuedLowScore`.
+> Car: `push_min_score` 73 + `rollup_hour` 8, `VehicleStore::pendingRollup()`, `NotificationKind::ROLLUP`,
+> `VehicleFormatter::rollup()`, the `rollup [--dry-run]` verb, the startup and in-loop floor with
+> `state/car-rollup.txt` written after delivery. Pinned by the ledger block *Row 6 / A5* — no count written here, the block is the tally: a first draft wrote one and it was wrong by the same evening.
+> The recalibration half below was offered and DECLINED — it is closed by ruling, not deferred.
+
 - **A5 score-floor batching + recalibration** (ruling above). Two halves, ordered: (1) the
   batching — individual push only at score ≥ `high_priority_score`, the rest through the existing
   digest drain (`Cli/DigestBatch` is the shared landing zone; do NOT build a second one); (2) the
@@ -2624,7 +2640,7 @@ tool/guard) and say which ones the fix covers.**
 | 3 | 6-A3 ListingMapper miss instrumentation + tenureField on the JSON path — COMPLETED at 8e3fe80: C2 r5 found 4 configured keys (rent, rent_hc, url, tenure_field) still counting nothing, so `certified` overclaimed | L | done | 8e3fe80 | src/php/Rent/Adapters/ListingMapper.php |
 | 4 | 6-A3 half 3 — RULING REVERSED at 8e3fe80: the mapped path carries NO band (both bounds erased evidence a `!== null` guard needed; the scan keeps its band) | M | done | 8e3fe80 | src/php/Rent/Adapters/ListingMapper.php src/php/Rent/Adapters/Payload.php |
 | 5 | 6-A4 brand `autres` bypass — make_model_unknown_pattern | M | certified | 0ae6cd0 test:2026-09-04 | src/php/Car/VehicleSourceLoader.php config/car/sources.json |
-| 6 | 6-A5 score-floor batching + weight recalibration | L | todo | - | src/php/Rent/Cli/DigestBatch.php config/rent/criteria.json |
+| 6 | 6-A5 score-floor batching + weight recalibration | L | done | - | src/php/Rent/Cli/DigestBatch.php config/rent/criteria.json |
 | 7 | 6-A6 SeLoger surface read out of a base64url tracking token | M | certified | 9ea9d77 test:2026-09-04 | src/php/Rent/Adapters/EmailAlertSource.php |
 | 8 | 6-A7 F28 one-shot victims report (read-only, gitignored output) | S | done | - | - |
 | 9 | 6-B1 CapCar email source | L | done | 618b065 | config/car/sources.json tests/php/Car/CapCarFixtureTest.php |
@@ -2663,7 +2679,7 @@ tool/guard) and say which ones the fix covers.**
 | 42 | Register + Known-issues bookkeeping — F1b, F3, F6 closers; three stale bullets | S | done | - | docs/plans/scout-unified-execution.plan.md |
 | 43 | Fresh test record at HEAD, then the freeze for row 35 | S | todo | - | - |
 | 44 | In'li answers HTTP 302 on ~2 of 5 passes (seen 2026-09-05 00:30, source reports broken) — measure the redirect, rule, fix or record | M | done | 2553c94 |
-| 45 | CI RED for two days (12 pushes, since 46546bc): a PCRE2 ≥ 10.43 lookbehind in criteria.json and a trace test assuming the development ini — fix at the root, add a portability guard, re-run the nightly ledger on demand | M | todo | - | config/rent/criteria.json tests/php/Repo/PortablePatternsTest.php tests/php/Repo/CredentialsNeverReachATraceTest.php | src/php/Rent/Adapters/HtmlSource.php config/rent/sources.json |
+| 45 | CI RED for two days (12 pushes, since 46546bc): a PCRE2 ≥ 10.43 lookbehind in criteria.json and a trace test assuming the development ini — fix at the root, add a portability guard, re-run the nightly ledger on demand | M | done | 3f8fc42 | config/rent/criteria.json tests/php/Repo/PortablePatternsTest.php tests/php/Repo/CredentialsNeverReachATraceTest.php | src/php/Rent/Adapters/HtmlSource.php config/rent/sources.json |
 <!-- /progress-block -->
 ### Blocked
 

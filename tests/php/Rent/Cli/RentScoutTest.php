@@ -613,6 +613,26 @@ final class RentScoutTest extends TestCase
         self::assertStringContainsString('https://example.test/annonces/demo-0001', $r['out']);
     }
 
+    /**
+     * A5, at the operator's surface. The push gate holds a match back for the daily rollup, and the
+     * PASS must say so: a phone that stays quiet while the store fills is otherwise indistinguishable
+     * from a quiet market. The pipeline field alone is not the guarantee — the round-7 P2 above
+     * (`digestOverflow`) was the remainder line deletable with the whole suite green.
+     */
+    public function testAPassThatHoldsAMatchBackForTheRollupSaysSo(): void
+    {
+        $root = $this->fixtureRootWithPushGate(100);
+        $this->scoutIn($root, ['run', '--seed'], $this->delivering());
+        $this->republishEverything();
+
+        $r = $this->scoutIn($root, ['run', '--once'], $this->delivering());
+
+        self::assertSame(0, $r['code'], $r['err']);
+        self::assertStringContainsString('6 correspondance(s) sous le seuil de notification individuelle', $r['out'], 'the pass names what it held back — every one of the six demo matches');
+        self::assertStringNotContainsString('[MATCH]', $r['out'], 'held back, not pushed');
+        self::assertSame(6, Store::open((string) $this->dbPath)->pendingLowScoreCount(), 'queued for the rollup');
+    }
+
     public function testTheDigestEntryExplainsItselfRatherThanBeingABareLink(): void
     {
         $root = $this->demoRoot();
@@ -1330,6 +1350,28 @@ final class RentScoutTest extends TestCase
     }
 
     /** @param list<string> $channels */
+    /** The demo root with `notify.push_min_score` set — the frozen criteria, one key added. */
+    private function fixtureRootWithPushGate(int $pushMinScore): string
+    {
+        $root = $this->fixtureRoot(enabled: true);
+        $criteria = json_decode(
+            (string) file_get_contents($root . '/config/rent/criteria.json'),
+            true,
+            flags: JSON_THROW_ON_ERROR,
+        );
+        self::assertIsArray($criteria);
+        /** @var array<string,mixed> $notify */
+        $notify = $criteria['notify'] ?? [];
+        $notify['push_min_score'] = $pushMinScore;
+        $criteria['notify'] = $notify;
+        file_put_contents(
+            $root . '/config/rent/criteria.json',
+            json_encode($criteria, JSON_THROW_ON_ERROR),
+        );
+
+        return $root;
+    }
+
     private function fixtureRootWithChannels(array $channels): string
     {
         $root = $this->fixtureRoot(enabled: true);

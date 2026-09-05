@@ -41,16 +41,28 @@ final readonly class DigestBatch
         public int $waiting = 0,
         public int $withoutSnapshot = 0,
         public array $warnings = [],
+        /**
+         * THE SECOND QUEUE (A5, row 6, 2026-09-05): matches held back by `push_min_score`, drained
+         * through this same batch under their own heading — never mixed into `$entries`, because
+         * the rent digest MEANS tenure doubt and a settled LLI announced there would misreport its
+         * §1 status. Same entry shape; marked `ROLLUP` on delivery, never `DIGEST`.
+         *
+         * @var list<array{listing: RawListing, verdict: Verdict, key: string, keys: list<string>}>
+         */
+        public array $lowScore = [],
+        public int $waitingLowScore = 0,
     ) {}
 
+    /** Nothing in EITHER queue. */
     public function isEmpty(): bool
     {
-        return $this->entries === [];
+        return $this->entries === [] && $this->lowScore === [];
     }
 
+    /** Entries carried by this batch, both queues. */
     public function count(): int
     {
-        return \count($this->entries);
+        return \count($this->entries) + \count($this->lowScore);
     }
 
     /**
@@ -61,7 +73,7 @@ final readonly class DigestBatch
      */
     public function overflow(): int
     {
-        return max(0, $this->waiting - $this->count());
+        return max(0, $this->waiting - \count($this->entries)) + max(0, $this->waitingLowScore - \count($this->lowScore));
     }
 
     public function unreadable(): int

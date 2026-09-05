@@ -39,6 +39,7 @@ final class CarScoutTest extends TestCase
         }
         @unlink(\dirname($this->db) . '/car-heartbeat.txt');
         @unlink(\dirname($this->db) . '/car-last-refusal.txt');
+        @unlink(\dirname($this->db) . '/car-rollup.txt');
     }
 
     public function testTheDomainFlagIsDispatchedFromTheGenericEntryPoint(): void
@@ -83,10 +84,95 @@ final class CarScoutTest extends TestCase
 
         self::assertSame(0, $r['code'], $r['err']);
         $matches = array_values(array_filter($channel->sent, static fn ($n) => $n->kind === NotificationKind::MATCH));
-        self::assertCount(3, $matches, 'three cards, three pushes, none twice');
+        // A5 (2026-09-05): the shipped gate is 73 and the three cards score 80 / 73 / 46 under the
+        // shipped criteria — two pushed, none twice, and the 2008 (46) QUEUED for the rollup.
+        self::assertCount(2, $matches, 'two cards at or over the gate, two pushes, none twice');
         self::assertStringStartsWith('paruvendu · ', $matches[0]->title);
         self::assertStringContainsString('Renault Austral 2023 · 26 000 km · 21 000 €', $matches[0]->title);
+        self::assertStringContainsString('1 correspondance(s) sous le seuil', $r['out'], 'the pass says what it held back');
+        self::assertSame(1, \Scout\Car\VehicleStore::open($this->db)->pendingRollupCount());
         rmdir($empty);
+    }
+
+    // ── Row 6 / A5 (2026-09-05): the rollup verb and its daily floor ──
+
+    public function testRollupAnnouncesTheQueuedMatchesOnceUnderItsOwnKindAndMarksThemOnDelivery(): void
+    {
+        $this->queueTheWeakParuVenduCard();
+        $channel = new CarRecordingChannel();
+
+        $r = $this->scout(['--domain=car', 'rollup'], $channel);
+
+        self::assertSame(0, $r['code'], $r['out'] . $r['err']);
+        $rollups = array_values(array_filter($channel->sent, static fn ($n) => $n->kind === NotificationKind::ROLLUP));
+        self::assertCount(1, $rollups, 'one rollup, not a push per car');
+        self::assertStringContainsString('score bas', $rollups[0]->title);
+        self::assertStringContainsString('Peugeot 2008', implode("\n", $rollups[0]->reasons));
+        self::assertSame([], array_filter($channel->sent, static fn ($n) => $n->kind === NotificationKind::MATCH), 'never a MATCH push');
+        self::assertSame(0, \Scout\Car\VehicleStore::open($this->db)->pendingRollupCount(), 'marked on delivery');
+
+        $again = $this->scout(['--domain=car', 'rollup'], $channel);
+        self::assertStringContainsString('Aucune correspondance en attente', $again['out'], 'drained once');
+    }
+
+    public function testRollupDryRunAnnouncesNothingAndMarksNothing(): void
+    {
+        $this->queueTheWeakParuVenduCard();
+        $channel = new CarRecordingChannel();
+
+        $r = $this->scout(['--domain=car', 'rollup', '--dry-run'], $channel);
+
+        self::assertSame(0, $r['code'], $r['out'] . $r['err']);
+        self::assertStringContainsString('Peugeot 2008', $r['out'], 'printed');
+        self::assertSame([], $channel->sent, 'sent nowhere');
+        self::assertSame(1, \Scout\Car\VehicleStore::open($this->db)->pendingRollupCount(), 'still queued');
+    }
+
+    /** The floor at startup, like the rent digest's: a queue left when the container stopped is drained before the first pass. */
+    public function testTheRollupFloorDrainsTheQueueAtStartupUnderWatchAndWritesItsMarkerOnDelivery(): void
+    {
+        $this->queueTheWeakParuVenduCard();
+        $channel = new CarRecordingChannel();
+        putenv('SCOUT_MAX_PASSES=1');
+        try {
+            // 20:00 local with rollup_hour 8 and no marker: the window is due.
+            $r = $this->scout(['--domain=car', 'run', '--watch', '--source=paruvendu'], $channel);
+        } finally {
+            putenv('SCOUT_MAX_PASSES');
+        }
+
+        self::assertSame(0, $r['code'], $r['out'] . $r['err']);
+        self::assertCount(1, array_filter($channel->sent, static fn ($n) => $n->kind === NotificationKind::ROLLUP));
+        self::assertFileExists(\dirname($this->db) . '/car-rollup.txt', 'the marker is written after delivery');
+        self::assertSame(0, \Scout\Car\VehicleStore::open($this->db)->pendingRollupCount());
+    }
+
+    /** The marker is written AFTER the channel confirms: a rollup the channel refused leaves the window open and the queue intact. */
+    public function testTheRollupFloorWritesNoMarkerAndMarksNothingWhenTheChannelRefuses(): void
+    {
+        $this->queueTheWeakParuVenduCard();
+        $channel = new CarRecordingChannel();
+        $channel->down = true;
+        putenv('SCOUT_MAX_PASSES=1');
+        try {
+            $r = $this->scout(['--domain=car', 'run', '--watch', '--source=paruvendu'], $channel);
+        } finally {
+            putenv('SCOUT_MAX_PASSES');
+        }
+
+        self::assertSame([], $channel->sent);
+        self::assertFileDoesNotExist(\dirname($this->db) . '/car-rollup.txt', 'no delivery, no marker — the window stays open');
+        self::assertSame(1, \Scout\Car\VehicleStore::open($this->db)->pendingRollupCount(), 'still queued for the next window');
+        self::assertStringContainsString('non délivré', $r['out'] . $r['err']);
+    }
+
+    /** One `run --once` over the ParuVendu fixtures under the shipped gate queues exactly the 46-point 2008. */
+    private function queueTheWeakParuVenduCard(): void
+    {
+        \Scout\Car\VehicleStore::open($this->db)->record(new \Scout\Car\VehicleListing(sourceName: 'paruvendu', externalId: 'seed'), '2026-08-01T00:00:00Z');
+        $r = $this->scout(['--domain=car', 'run', '--once', '--source=paruvendu'], new CarRecordingChannel());
+        self::assertSame(0, $r['code'], $r['err']);
+        self::assertSame(1, \Scout\Car\VehicleStore::open($this->db)->pendingRollupCount());
     }
 
     public function testDoctorReportsTheSourceAndTheSeenSet(): void

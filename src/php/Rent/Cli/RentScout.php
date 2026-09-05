@@ -40,6 +40,8 @@ use Scout\Core\Pacer;
 use Scout\Rent\Core\RawListing;
 use Scout\Rent\Core\SourceProfile;
 use Scout\Rent\Core\DigestCause;
+use Scout\Rent\Core\Classification;
+use Scout\Rent\Core\Outcome;
 use Scout\Rent\Core\Tenure;
 use Scout\Core\Redact;
 use Scout\Core\SourceStatus;
@@ -1030,6 +1032,11 @@ final readonly class RentScout
         if ($result->undelivered > 0) {
             $this->warn($result->undelivered . ' notification(s) non délivrée(s) — elles seront réessayées');
         }
+        if ($result->queuedLowScore > 0) {
+            // A5: said on every pass that holds something back, so a quiet phone is never read as
+            // a quiet market — the flats exist, they are waiting for the daily rollup.
+            $this->line(sprintf('%d correspondance(s) sous le seuil de notification individuelle — en attente du récapitulatif quotidien (« vérifié, score bas »)', $result->queuedLowScore));
+        }
 
         return $result->hasProblems() ? 1 : 0;
     }
@@ -1098,7 +1105,7 @@ final readonly class RentScout
         }
 
         if ($batch->isEmpty()) {
-            $this->line('Aucune annonce en attente dans le récapitulatif « à vérifier ».');
+            $this->line('Aucune annonce en attente — ni « à vérifier », ni « vérifié, score bas ».');
 
             return 0;
         }
@@ -1108,7 +1115,7 @@ final readonly class RentScout
         $unreadable = $batch->unreadable();
         $waiting = $batch->waiting;
 
-        $notification = (new Formatter())->digest($entries);
+        $notification = (new Formatter())->digest($entries, $batch->lowScore);
 
         $this->line($notification->title);
         foreach ($notification->reasons as $reason) {
@@ -1180,8 +1187,13 @@ final readonly class RentScout
         foreach ($entries as $entry) {
             $store->markNotified($entry['key'], $now, 'DIGEST');
         }
+        // A5: a rolled-up match is marked ROLLUP, never DIGEST (it is no tenure doubt) and never
+        // MATCH (it was not pushed — the promotion over the gate stays reachable).
+        foreach ($batch->lowScore as $entry) {
+            $store->markNotified($entry['key'], $now, 'ROLLUP');
+        }
 
-        $this->line(count($entries) . ' annonce(s) émise(s).');
+        $this->line($batch->count() . ' annonce(s) émise(s)' . ($batch->lowScore !== [] ? sprintf(' (dont %d « vérifié, score bas »)', count($batch->lowScore)) : '') . '.');
 
         return 0;
     }
@@ -1263,11 +1275,77 @@ final readonly class RentScout
             ];
         }
 
+        // A5 — THE SECOND QUEUE (row 6, 2026-09-05). Each queued match is re-SCORED from its
+        // snapshot under today's criteria so the rollup carries a real score (the store keeps
+        // none) — with the tenure classification it was STORED with, never a fresh one: this
+        // command announces verdicts, it does not re-form a §1 verdict (the rule the docblock of
+        // its own test states). Never throws, never prints — the same contract as above.
+        $lowScore = [];
+        $waitingLowScore = $store->pendingLowScoreCount();
+        if ($waitingLowScore > 0) {
+            $engine = new CriteriaEngine($this->criteria());
+
+            foreach ($store->pendingLowScore() as $row) {
+                $key = $row['dedup_key'];
+                /** @var list<string> $storedReasons */
+                $storedReasons = $this->decodeSignals($row['signals_json']);
+                try {
+                    $listing = $store->evidence($key);
+                } catch (\JsonException | \InvalidArgumentException $e) {
+                    $warnings[] = sprintf('instantané illisible pour %s — laissée en attente : %s', $key, Redact::text($e->getMessage()));
+                    continue;
+                }
+
+                if ($listing === null) {
+                    // An unencodable payload: announced from the stored columns with the reasons
+                    // the verdict recorded, and WITHOUT a score — nothing can re-score it (§1).
+                    ++$withoutSnapshot;
+                    $lowScore[] = [
+                        'listing' => new RawListing(sourceName: $row['source'], externalId: $row['external_id'], title: $row['title'], url: $row['url'], rentCc: $row['rent_cc']),
+                        'verdict' => Verdict::matched(0, $storedReasons, false),
+                        'key' => $key,
+                        'keys' => [$key],
+                    ];
+                    continue;
+                }
+
+                $tenure = is_string($row['tenure']) ? Tenure::tryFrom($row['tenure']) : null;
+                if ($tenure === null || $tenure->isExcluded() || $tenure === Tenure::UNKNOWN) {
+                    // A MATCH outcome beside a tenure that could not have produced one is a row
+                    // nobody should announce from here; `reclassify` owns it.
+                    $warnings[] = sprintf('%s : régime stocké « %s » incompatible avec un MATCH — laissée en attente', $key, (string) $row['tenure']);
+                    continue;
+                }
+
+                $verdict = $engine->judge(
+                    $listing,
+                    new Classification($tenure, (int) ($row['confidence_bp'] ?? 0), [], Outcome::MATCH),
+                    $this->ageSeconds($store, $key),
+                );
+
+                if ($verdict->outcome !== Outcome::MATCH) {
+                    // Today's criteria no longer match it: not the rollup's to announce, and not
+                    // its to re-file either — `scout reclassify` owns verdict changes.
+                    $warnings[] = sprintf('%s re-jugée %s aujourd\'hui — laissée en attente, `scout --domain=rent reclassify` la revoit', $key, $verdict->outcome->value);
+                    continue;
+                }
+
+                $lowScore[] = [
+                    'listing' => $listing,
+                    'verdict' => Verdict::matched($verdict->score ?? 0, [...$storedReasons, ...$verdict->reasons], $verdict->highPriority),
+                    'key' => $key,
+                    'keys' => [$key],
+                ];
+            }
+        }
+
         return new DigestBatch(
             entries: $entries,
             waiting: $waiting,
             withoutSnapshot: $withoutSnapshot,
             warnings: $warnings,
+            lowScore: $lowScore,
+            waitingLowScore: $waitingLowScore,
         );
     }
 
@@ -2104,7 +2182,7 @@ final readonly class RentScout
             ));
         }
 
-        $notification = (new Formatter())->digest($batch->entries);
+        $notification = (new Formatter())->digest($batch->entries, $batch->lowScore);
         $failures = $notifier->send($notification);
 
         foreach ($failures as $failure) {
@@ -2122,6 +2200,9 @@ final readonly class RentScout
 
         foreach ($batch->entries as $entry) {
             $store->markNotified($entry['key'], $now, 'DIGEST');
+        }
+        foreach ($batch->lowScore as $entry) {
+            $store->markNotified($entry['key'], $now, 'ROLLUP');
         }
 
         $this->line(sprintf(

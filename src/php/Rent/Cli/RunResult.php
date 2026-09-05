@@ -101,6 +101,8 @@ final readonly class RunResult
          * @var list<string>
          */
         public array $warnings = [],
+        /** A5: matches judged this pass and held back by `push_min_score` for the rollup. */
+        public int $queuedLowScore = 0,
     ) {}
 
     /**

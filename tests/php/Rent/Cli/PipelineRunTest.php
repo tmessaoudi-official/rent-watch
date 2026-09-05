@@ -2701,6 +2701,80 @@ final class PipelineRunTest extends TestCase
         );
     }
 
+    // ── Row 6 / A5 (2026-09-05): a match below `push_min_score` is queued for the rollup, not pushed ──
+
+    /** The pipeline fixture criteria plus a push gate; nothing else moves. */
+    private function gatedCriteria(int $pushMinScore): Criteria
+    {
+        /** @var array<string, mixed> $data */
+        $data = json_decode((string) file_get_contents(self::ROOT . '/tests/fixtures/rent/criteria/pipeline.json'), true, 32, JSON_THROW_ON_ERROR);
+        $data['notify']['push_min_score'] = $pushMinScore;
+
+        return ConfigLoader::criteriaFromArray($data);
+    }
+
+    /** Rank-3 commune, no lift, minimum surface, rent at the ceiling: only the freshness bonus scores. */
+    private function lowScoreListing(string $id): RawListing
+    {
+        return new RawListing(
+            sourceName: 'fake',
+            externalId: $id,
+            title: 'T3 Argenteuil - logement intermediaire',
+            description: '3 pieces de 75 m2, LLI.',
+            fields: ['financement' => 'LLI'],
+            url: 'https://example.test/' . $id,
+            commune: 'Argenteuil',
+            postcode: '95100',
+            rentCc: 1790,
+            surfaceM2: 75.0,
+            rooms: 3,
+        );
+    }
+
+    public function testAMatchBelowTheGateIsQueuedNotPushedAndOneAboveItIsPushed(): void
+    {
+        $store = Store::open(':memory:');
+        $channel = new RecordingChannel();
+        $pipeline = new Pipeline($this->gatedCriteria(55), $store, new Notifier([$channel]));
+        $low = $this->lowScoreListing('low-1');
+        $high = $this->listing('high-1');
+
+        $result = $pipeline->runOnce([new FakeSource('fake', [$low, $high])], '2026-09-05T10:00:00Z');
+
+        self::assertSame(2, $result->matches, 'both are MATCHES — the gate is about delivery, not judgement');
+        $pushed = array_map(static fn (Notification $n): ?string => $n->url, array_filter($channel->sent, static fn (Notification $n): bool => $n->kind === NotificationKind::MATCH));
+        self::assertSame(['https://example.test/high-1'], array_values($pushed), 'only the listing at or above the gate is pushed');
+
+        $lowKey = $store->dedupKey($low);
+        self::assertSame('MATCH', $store->outcome($lowKey), 'judged a match, recorded as one');
+        self::assertFalse($store->wasNotified($lowKey), 'queued: nobody has been told yet');
+        self::assertSame(1, $store->pendingLowScoreCount());
+        self::assertTrue($store->wasNotifiedAs($store->dedupKey($high), 'MATCH'));
+    }
+
+    public function testSeedingMarksAQueuedMatchTooSoNoBacklogDrainsIntoTheFirstRollup(): void
+    {
+        $store = Store::open(':memory:');
+        $pipeline = new Pipeline($this->gatedCriteria(55), $store, new Notifier([new RecordingChannel()]));
+
+        $pipeline->runOnce([new FakeSource('fake', [$this->lowScoreListing('low-2')])], '2026-09-05T10:00:00Z', true);
+
+        self::assertTrue($store->wasNotified($store->dedupKey($this->lowScoreListing('low-2'))), '`--seed` means nothing currently published is news');
+        self::assertSame(0, $store->pendingLowScoreCount());
+    }
+
+    public function testWithoutAGateEveryMatchIsPushedAsBefore(): void
+    {
+        $store = Store::open(':memory:');
+        $channel = new RecordingChannel();
+
+        $result = $this->pipeline($store, new Notifier([$channel]))->runOnce([new FakeSource('fake', [$this->lowScoreListing('low-3'), $this->listing('high-3')])], '2026-09-05T10:00:00Z');
+
+        self::assertSame(2, $result->matches);
+        self::assertCount(2, array_filter($channel->sent, static fn (Notification $n): bool => $n->kind === NotificationKind::MATCH));
+        self::assertSame(0, $store->pendingLowScoreCount());
+    }
+
     // ── Row 41 (2026-09-05): every card of a source failing the SAME hard filter is a warning ──
 
     /**

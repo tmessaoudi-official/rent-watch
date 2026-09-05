@@ -145,6 +145,66 @@ final class VehiclePipelineTest extends TestCase
     // ------------------------------------------------------------------------------------------
 
     /** @return array{VehiclePipeline, CarRecordingChannel, VehicleStore} */
+    // ── Row 6 / A5 (2026-09-05): a match below `push_min_score` is queued for the rollup, not pushed ──
+
+    /** @return array{0: VehiclePipeline, 1: CarRecordingChannel, 2: VehicleStore} */
+    private function gatedPipeline(int $pushMinScore): array
+    {
+        $store = VehicleStore::open(':memory:');
+        $channel = new CarRecordingChannel();
+        $minimal = VehicleCriteriaTest::minimal();
+        $minimal['notify']['push_min_score'] = $pushMinScore;
+        $pipeline = new VehiclePipeline(VehicleCriteriaLoader::fromArray($minimal), $store, new Notifier([$channel]));
+
+        return [$pipeline, $channel, $store];
+    }
+
+    /** Twelve years old, 210 000 km, at the ceiling, an avoided make: only the body ranks. */
+    private function weakCar(string $id): VehicleListing
+    {
+        return new VehicleListing(
+            sourceName: 'paruvendu', externalId: $id, title: 'Peugeot 208 Active', description: 'Citadine - Essence - Année 2014 - 210 000 km',
+            url: 'https://www.paruvendu.fr/a/voiture-occasion/peugeot/208/' . $id, make: 'peugeot', model: '208',
+            priceEur: 29900, year: 2014, mileageKm: 210000, fuel: 'essence', gearbox: null, body: 'citadine',
+        );
+    }
+
+    public function testAMatchBelowTheGateIsQueuedNotPushedAndOneAboveItIsPushed(): void
+    {
+        [$pipeline, $channel, $store] = $this->gatedPipeline(60);
+        $source = new FakeCarSource('paruvendu', [$this->weakCar('weak'), $this->car('strong', 15000)], null, $store);
+
+        $result = $pipeline->runOnce([$source], '2026-09-05T10:00:00Z');
+
+        self::assertSame(2, $result->matches, 'both are MATCHES — the gate is about delivery, not judgement');
+        $pushed = $this->ofKind($channel, NotificationKind::MATCH);
+        self::assertCount(1, $pushed);
+        self::assertStringContainsString('Austral', $pushed[0]->title);
+        self::assertSame(1, $result->queuedLowScore);
+        self::assertSame(1, $store->pendingRollupCount(), 'the weak one waits for the rollup');
+        self::assertFalse($store->wasNotified($store->dedupKey($this->weakCar('weak'))));
+    }
+
+    public function testSeedingMarksAQueuedCarTooSoNoBacklogDrainsIntoTheFirstRollup(): void
+    {
+        [$pipeline, , $store] = $this->gatedPipeline(60);
+
+        $pipeline->runOnce([new FakeCarSource('paruvendu', [$this->weakCar('weak-2')], null, $store)], '2026-09-05T10:00:00Z', true);
+
+        self::assertTrue($store->wasNotified($store->dedupKey($this->weakCar('weak-2'))));
+        self::assertSame(0, $store->pendingRollupCount());
+    }
+
+    public function testWithoutAGateEveryCarMatchIsPushedAsBefore(): void
+    {
+        [$pipeline, $channel, $store] = $this->pipeline();
+
+        $pipeline->runOnce([new FakeCarSource('paruvendu', [$this->weakCar('weak-3'), $this->car('strong-3', 15000)], null, $store)], '2026-09-05T10:00:00Z');
+
+        self::assertCount(2, $this->ofKind($channel, NotificationKind::MATCH));
+        self::assertSame(0, $store->pendingRollupCount());
+    }
+
     // ── Row 41 (2026-09-05): every car of a source failing the SAME hard filter is a warning ──
 
     public function testASourceWhoseEveryCarFailsTheSameFilterIsWarnedAbout(): void

@@ -421,6 +421,7 @@ final readonly class Pipeline
         // channel confirms, so in steady state it is the standing match count while the pass sends
         // nothing at all.
         $notified = 0;
+        $queuedLowScore = 0;
         $rejected = [];
 
         /** @var list<array{listing: RawListing, verdict: Verdict, key: string, keys: list<string>}> $digestEntries */
@@ -659,6 +660,20 @@ final readonly class Pipeline
                 continue;
             }
 
+            // A5 — ROW 6 (developer ruling 2026-09-05): A MATCH BELOW THE GATE IS QUEUED, NOT PUSHED.
+            // It is judged, recorded and counted as a match above; it stays unannounced here and
+            // `Store::pendingLowScore()` hands it to the digest drain, which announces it under
+            // its own heading and marks it ROLLUP — so a rent drop lifting it over the gate later
+            // is a promotion, pushed once. `null` (every fixture) keeps the pre-A5 behaviour.
+            // Placed AFTER the twin bookkeeping so a copy already pushed by its direct route is
+            // marked as before, and before the send so nothing below the gate ever leaves.
+            $pushMin = $this->criteria->notify->pushMinScore;
+            if ($pushMin !== null && ($verdict->score ?? 0) < $pushMin) {
+                ++$queuedLowScore;
+
+                continue;
+            }
+
             $failures = $this->notifier->send($this->formatter->match(
                 $listing,
                 $verdict,
@@ -785,7 +800,7 @@ final readonly class Pipeline
             digestOverflow: $digestOverflow,
             unencodable: $unencodable,
             errors: $errors,
-            rejected: $rejected, warnings: $warnings,
+            rejected: $rejected, warnings: $warnings, queuedLowScore: $queuedLowScore,
         );
     }
 

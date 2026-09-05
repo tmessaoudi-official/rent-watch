@@ -12,7 +12,10 @@ use Scout\Adapters\Mail\ImapMailbox;
 use Scout\Adapters\SourceError;
 use Scout\Config\ConfigError;
 use Scout\Core\CountsPatternMisses;
+use Scout\Car\VehicleSnapshot;
+use Scout\Car\VehicleListing;
 use Scout\Core\Heartbeat;
+use Scout\Rent\Core\DigestSchedule;
 use Scout\Core\Notify\Notification;
 use Scout\Core\Notify\NotificationKind;
 use Scout\Core\Notify\Notifier;
@@ -82,6 +85,7 @@ final readonly class CarScout
                 'dump', 'replay' => $this->dump($flags),
                 'run' => $this->runCommand($flags),
                 'test-notify' => $this->testNotify(),
+                'rollup' => $this->rollup($flags),
                 'help', '--help', '-h' => $this->help(0),
                 default => $this->fail('commande inconnue : ' . $command) + $this->help(2) - 2,
             };
@@ -122,6 +126,14 @@ final readonly class CarScout
         $this->line('car-watch · base ' . $this->dbPath() . ' · journal ' . $store->journalMode() . ' · schéma véhicules ' . VehicleStore::SCHEMA_VERSION);
         $counts = $store->counts();
         $this->line(sprintf('  seen-set : %d annonce(s), %d notifiée(s), %d correspondance(s)%s', $counts['count'], $counts['notified'], $counts['matches'], $store->isSeenSetEmpty() ? ' — VIDE : `run --once --seed` avant `--watch` (Q36)' : ''));
+        // A5: the queue is a fact the developer will look for HERE first — a quiet phone under a
+        // gate is not a quiet market.
+        $queued = $store->pendingRollupCount();
+        if ($criteria->notify->pushMinScore !== null) {
+            $this->line(sprintf('  rollup   : seuil %d — %d correspondance(s) en attente du récapitulatif « vérifié, score bas »%s', $criteria->notify->pushMinScore, $queued, $criteria->notify->rollupHour === null ? ' (verbe `rollup` seulement, pas de plancher quotidien)' : sprintf(' (plancher quotidien à %dh, marqueur state/car-rollup.txt)', $criteria->notify->rollupHour)));
+        } elseif ($queued > 0) {
+            $this->line(sprintf('  rollup   : %d correspondance(s) jugée(s) et jamais notifiée(s) — aucun seuil configuré, `scout --domain=car rollup` les émet', $queued));
+        }
         $notifier = $this->notifier($criteria);
         $this->line('  canaux   : ' . ($notifier->hasRemoteChannel() ? 'au moins un canal atteint un destinataire' : 'AUCUN canal n\'atteint de destinataire'));
         foreach ($notifier->inventory() as $channel) {
@@ -380,8 +392,19 @@ final readonly class CarScout
             $beat();
         }
 
+        // A5 — THE ROLLUP FLOOR, the rent side's Q34 shape on the car domain: before the first
+        // pass (a backlog left when the container last stopped is exactly what a restart should
+        // drain), silent on a day with nothing queued, marker written only after the channel
+        // confirms. An unusable `rollup_hour` or `TZ` is refused by the loader / `zoneFromEnv()`.
+        $notify = $this->criteria()->notify;
+        $rollupSchedule = $notify->rollupHour === null ? null : new DigestSchedule($notify->rollupHour);
+        $rollupZone = DigestSchedule::zoneFromEnv(($tz = getenv('TZ')) === false ? null : $tz);
+        if ($rollupSchedule !== null && $rollupSchedule->isDue($this->lastRollup(), $this->now(), $rollupZone)) {
+            $this->floorRollup($notifier, $store, $this->now());
+        }
+
         $loop = new WatchLoop(
-            pass: function () use ($pipeline, $sources, &$passes, &$notified, &$failedPasses, $verbose, $heartbeat, $beat): void {
+            pass: function () use ($pipeline, $sources, &$passes, &$notified, &$failedPasses, $verbose, $heartbeat, $beat, $rollupSchedule, $rollupZone, $notifier, $store): void {
                 // `finally`, and it is the whole point rather than a style choice — the rent side's
                 // own comment, which this loop claimed to mirror and did not (round-4 panel,
                 // 2026-08-31). The beat sat after the work INSIDE the closure, and `WatchLoop` wraps
@@ -411,6 +434,14 @@ final readonly class CarScout
                         }
                     } catch (\Throwable $beatFailure) {
                         $this->warn('battement de cœur non émis : ' . Redact::text($beatFailure->getMessage()));
+                    }
+
+                    try {
+                        if ($rollupSchedule !== null && $rollupSchedule->isDue($this->lastRollup(), $this->now(), $rollupZone)) {
+                            $this->floorRollup($notifier, $store, $this->now());
+                        }
+                    } catch (\Throwable $rollupFailure) {
+                        $this->warn('récapitulatif quotidien non émis : ' . Redact::text($rollupFailure->getMessage()));
                     }
                 }
             },
@@ -450,6 +481,7 @@ final readonly class CarScout
         $this->line('  scout --domain=car run --watch [-v]       boucle Q37, battement Q27 (state/car-heartbeat.txt)');
         $this->line('  … --source=<nom>                          limite à une source (répétable ; force une source désactivée)');
         $this->line('  scout --domain=car test-notify            vérifie le canal du car-watch');
+        $this->line('  scout --domain=car rollup [--dry-run]     émet le récapitulatif « vérifié, score bas » en attente (A5)');
         $this->line('');
         $this->line('  config : config/car/criteria.json (+ criteria.local.json), config/car/sources.json');
         $this->line('  env    : CAR_SCOUT_DB, CAR_IMAP_MAILBOX, CAR_NTFY_TOPIC, CAR_HEARTBEAT_HOURS, CAR_FEED_SILENT_DAYS');
@@ -609,6 +641,11 @@ final readonly class CarScout
         foreach ($r->warnings as $warning) {
             $this->warn($warning);
         }
+        if ($r->queuedLowScore > 0) {
+            // A5: said on every pass that holds something back, so a quiet phone is never read as
+            // a quiet market — the cars exist, they are waiting for the daily rollup.
+            $this->line(sprintf('%d correspondance(s) sous le seuil de notification individuelle — en attente du récapitulatif (« vérifié, score bas »)', $r->queuedLowScore));
+        }
         if ($verbose) {
             foreach ($r->rejected as $line) {
                 $this->line('  ' . $line);
@@ -627,6 +664,128 @@ final readonly class CarScout
         }
 
         return (int) $raw;
+    }
+
+    /**
+     * `scout --domain=car rollup [--dry-run]` — the on-demand half of A5's daily rollup: every MATCH
+     * held back by `push_min_score` and never delivered, one line each, marked only after the
+     * channel confirms. Reads the STORE (score and snapshot were written by the pass), re-judges
+     * nothing, and says so out loud when the queue is empty.
+     */
+    private function rollup(array $flags): int
+    {
+        $dryRun = in_array('--dry-run', $flags, true);
+        foreach ($flags as $flag) {
+            if ($flag !== '--dry-run') {
+                return $this->fail('option inconnue : ' . $flag . ' (connue : --dry-run)');
+            }
+        }
+        $store = $this->store();
+        [$entries, $waiting, $unreadable] = $this->collectRollup($store);
+        foreach ($unreadable as $warning) {
+            $this->warn($warning);
+        }
+        if ($entries === []) {
+            $this->line('Aucune correspondance en attente du récapitulatif « vérifié, score bas ».');
+
+            return 0;
+        }
+        $notification = (new VehicleFormatter())->rollup($entries);
+        $this->line($notification->title);
+        foreach ($notification->reasons as $line) {
+            $this->line($line);
+        }
+        if ($waiting > count($entries)) {
+            $this->line(sprintf('%d autre(s) en attente — relancer `scout --domain=car rollup` pour la suite.', $waiting - count($entries)));
+        }
+        if ($dryRun) {
+            $this->line('--dry-run : rien n\'a été envoyé, rien n\'a été marqué comme émis.');
+
+            return 0;
+        }
+        $notifier = $this->notifier($this->criteria());
+        $fatal = $notifier->fatalProblem();
+        if ($fatal !== null) {
+            return $this->fail($fatal);
+        }
+        $failures = $notifier->send($notification);
+        foreach ($failures as $failure) {
+            $this->warn(Redact::text($failure->getMessage()));
+        }
+        if (!$notifier->delivered($failures)) {
+            $this->warn('récapitulatif non délivré — rien n\'a été marqué comme émis, il sera réessayé.');
+
+            return 1;
+        }
+        foreach ($entries as $entry) {
+            $store->markNotified($entry['key'], $this->now());
+        }
+        $this->line(count($entries) . ' véhicule(s) émis.');
+
+        return 0;
+    }
+
+    /**
+     * The queue, decoded — never throws, never prints (the floor calls this inside the loop's
+     * `finally`). A row whose snapshot will not decode is announced from its columns and counted.
+     *
+     * @return array{0: list<array{car: VehicleListing, score: ?int, key: string}>, 1: int, 2: list<string>}
+     */
+    private function collectRollup(VehicleStore $store): array
+    {
+        $entries = [];
+        $warnings = [];
+        foreach ($store->pendingRollup() as $row) {
+            $car = null;
+            if (is_string($row['snapshot_json']) && $row['snapshot_json'] !== '') {
+                try {
+                    $car = VehicleSnapshot::decode($row['snapshot_json']);
+                } catch (\Throwable $e) {
+                    $warnings[] = sprintf('instantané illisible pour %s — annoncé depuis les colonnes : %s', $row['dedup_key'], Redact::text($e->getMessage()));
+                }
+            }
+            $car ??= new VehicleListing(sourceName: $row['source'], externalId: $row['external_id'], title: $row['title'], url: $row['url'], priceEur: $row['price_eur'] === null ? null : (int) $row['price_eur']);
+            $entries[] = ['car' => $car, 'score' => $row['score'] === null ? null : (int) $row['score'], 'key' => $row['dedup_key']];
+        }
+
+        return [$entries, $store->pendingRollupCount(), $warnings];
+    }
+
+    /** The daily floor — silent when nothing is queued, marker written only after delivery. */
+    private function floorRollup(Notifier $notifier, VehicleStore $store, string $now): void
+    {
+        [$entries, $waiting, $warnings] = $this->collectRollup($store);
+        if ($entries === []) {
+            return;
+        }
+        foreach ($warnings as $warning) {
+            $this->warn($warning);
+        }
+        $failures = $notifier->send((new VehicleFormatter())->rollup($entries));
+        foreach ($failures as $failure) {
+            $this->warn(Redact::text($failure->getMessage()));
+        }
+        if (!$notifier->delivered($failures)) {
+            $this->warn('récapitulatif quotidien non délivré — rien marqué, nouvel essai au prochain passage.');
+
+            return;
+        }
+        foreach ($entries as $entry) {
+            $store->markNotified($entry['key'], $now);
+        }
+        @file_put_contents($this->stateFile('car-rollup.txt'), $now);
+        $this->line(sprintf('récapitulatif quotidien « vérifié, score bas » : %d véhicule(s) émis%s.', count($entries), $waiting > count($entries) ? sprintf(' — %d autre(s) en attente', $waiting - count($entries)) : ''));
+    }
+
+    private function lastRollup(): ?string
+    {
+        $path = $this->stateFile('car-rollup.txt');
+        if (!is_file($path)) {
+            return null;
+        }
+        $v = @file_get_contents($path);
+
+        return $v === false || trim($v) === '' ? null : trim($v);
     }
 
     private function lastHeartbeat(): ?string

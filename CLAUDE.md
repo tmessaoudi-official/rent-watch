@@ -456,6 +456,46 @@ publishes a directory of *résidences* with zero rents, zero surfaces and zero o
 `disponib`. It was ranked second on portfolio value, not on a verified feed — a `200` had been read
 as a feed. See `docs/SOURCES.md`, whose A2 and A3 rows were both corrected.
 
+### The push gate — a match under the line waits for the rollup (A5, 2026-09-05)
+
+**Nothing in the score gated DELIVERY until now**: every MATCH was pushed the minute it was seen,
+and with region mode yielding ~80 matches the phone was the digest. Measured before the ruling,
+over all 1 046 stored MATCH snapshots re-judged offline under production's shape (commute
+30 / 75 min from the 411 cached communes): p10 23 · p50 40 · p90 54 · max 69 — commute is the
+dominant component at 21/30 mean, rent headroom is near-dead at 1.9/15 because rents cluster at
+the ceiling, and the commune's 25 points are earned by 15 listings of 1 046. Rebalancing was
+offered and **declined** (developer ruling: *keep the weights, push individually at ≥ 55*).
+
+- **`notify.push_min_score` is a SEPARATE knob from `high_priority_score`.** The marker is *score
+  AND confidence ≥ 80* and says how sure the classifier is; the gate says whether the phone
+  buzzes now or tomorrow morning. Rent 55 (the p90, one match in ten individually); car 73, the
+  marker's own calibrated bar (one in four). Omitting the key pushes everything, as before.
+- **The rent queue drains through the EXISTING digest** — `Cli/DigestBatch` grew a second list,
+  and `digest`, the end-of-pass emission and the daily floor all announce it under its own
+  heading, *« vérifié, score bas »*, never mixed with the tenure doubts. That is the §1 half:
+  a settled LLI must not be announced under *« au régime indéterminé »*, so the title carries the
+  regime clause only when a tenure doubt is in the batch, and a rollup-only mail says
+  *« Vérifié, score bas : N annonce(s) »*. The drain RE-SCORES a queued row from its v7 snapshot
+  with the STORED classification, never re-forming a verdict (the `reclassify` rule), and a row the
+  current criteria reject is left waiting with a warning rather than announced.
+- **The store records WHAT a row was announced as, and the ordering is monotone**:
+  `DIGEST (1) < ROLLUP (2) < MATCH (3)`. A rent drop that lifts a rolled-up flat over the line is
+  a promotion and is pushed once; a pushed flat is never demoted to a rollup; a `DIGEST` write
+  over a `ROLLUP` keeps `ROLLUP`. Schema untouched — `notified_as` already existed (v8).
+- **The car half is a ROLLUP, deliberately not a digest**: the car domain has no tenure doubt, so
+  `scout --domain=car rollup [--dry-run]` and a daily floor at `notify.rollup_hour` (marker
+  `state/car-rollup.txt`, written after the channel confirms — a refused send marks nothing and
+  leaves the window open) drain `VehicleStore::pendingRollup()`. `NotificationKind::ROLLUP` is the
+  third kind. The floor reuses `Rent\Core\DigestSchedule` unchanged.
+
+> **The startup floor was built with `$criteria` out of scope and every fixture stayed green
+> until the one test that reaches it ran**: `CarScout::watch()` takes the pipeline, sources,
+> store and notifier as parameters and never the criteria, so the floor block copied from
+> `runCommand()` read an undefined variable — three PHP warnings and a `null` schedule that
+> silently never fired. It is the *"a fix landing on one of two symmetric surfaces"* shape at the
+> scale of a method: the verb worked, the floor did not, and only a test asserting the floor's own
+> emission told them apart.
+
 ### The email-alert path — four defects, all found by one real message (2026-08-25)
 
 **`EmailAlertSource`, `EmailMessage`, `FileMailbox` and `ImapMailbox` were written BLIND**, and the

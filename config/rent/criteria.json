@@ -88,6 +88,8 @@
       "console"
     ],
     "high_priority_score": 50,
+    "_push_min_score": "A5 (Track 6, developer ruling 2026-09-05): a MATCH scoring below this is NOT pushed on its own — it waits for the daily digest and is announced there under its own heading, « vérifié, score bas », never mixed with the « à vérifier » tenure doubts. MEASURED before the ruling, over all 1046 stored MATCH snapshots re-judged offline under production's shape (commute 30 / 75 min): p10 23 · p50 40 · p90 54 · max 69, so 55 is the p90 — about one match in ten arrives individually, the rest once a day. A SEPARATE knob from high_priority_score on purpose: that one drives the `!!` marker (score AND confidence ≥ 80, calibrated 2026-08-26) and this one drives delivery; the developer chose the delivery gate and declined to move the weights. A rent drop lifting a rolled-up flat over this line is a promotion, pushed once (DIGEST < ROLLUP < MATCH is monotone in the store). Remove the key to push every match again.",
+    "push_min_score": 55,
     "rent_drop_min_eur": 20,
     "rent_drop_min_pct": 2.0,
     "source_broken_cooldown_hours": 24,

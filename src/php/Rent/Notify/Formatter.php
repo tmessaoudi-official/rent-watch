@@ -168,13 +168,38 @@ final readonly class Formatter
      *
      * @param list<array{listing: RawListing, verdict: Verdict}> $entries
      */
-    public function digest(array $entries): Notification
+    /**
+     * @param list<array{listing: RawListing, verdict: Verdict, key: string, keys: list<string>}> $entries  the tenure-doubt bin
+     * @param list<array{listing: RawListing, verdict: Verdict, key: string, keys: list<string>}> $lowScore the A5 queue —
+     *                                                                                                     settled matches held back by `push_min_score`
+     */
+    public function digest(array $entries, array $lowScore = []): Notification
     {
         $lines = [];
         foreach ($entries as $entry) {
             $listing = $entry['listing'];
             $lines[] = '• ' . $this->headline($listing, null)
                 . ($entry['verdict']->reasons === [] ? '' : ' — ' . $entry['verdict']->reasons[0]);
+        }
+
+        // ONE MAIL, TWO QUEUES, SEPARATED (A5, row 6). The rollup sits UNDER the §1 bin with its
+        // own heading, and its entries never touch the title or the regime clause below: those
+        // are earned by the tenure-doubt entries alone, and a low-score entry is a settled match.
+        if ($lowScore !== []) {
+            $lines[] = '— vérifié, score bas : ' . count($lowScore) . ' annonce(s) sous le seuil de notification individuelle —';
+            foreach ($lowScore as $entry) {
+                $listing = $entry['listing'];
+                $lines[] = '• ' . $this->headline($listing, ($entry['verdict']->score ?? 0) > 0 ? $entry['verdict']->score : null)
+                    . ($entry['verdict']->reasons === [] ? '' : ' — ' . $entry['verdict']->reasons[0]);
+            }
+        }
+        if ($entries === []) {
+            return new Notification(
+                kind: NotificationKind::DIGEST,
+                priority: Priority::LOW,
+                title: 'Vérifié, score bas : ' . count($lowScore) . ' annonce(s)',
+                reasons: $lines,
+            );
         }
 
         // The regime clause is EARNED, not assumed. The bin has had two entrances since Track 1f —

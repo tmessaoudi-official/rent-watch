@@ -29,6 +29,14 @@ enum NotificationKind: string
     case DIGEST = 'DIGEST';
 
     /**
+     * A5 (2026-09-05): settled matches held back by `push_min_score`, rolled up once a day. NOT a
+     * digest — the rent digest means tenure doubt and the car domain has no digest at all — so a
+     * car rollup carries its own kind, and a channel that files DIGEST as "à vérifier" cannot
+     * mistake it for one.
+     */
+    case ROLLUP = 'ROLLUP';
+
+    /**
      * "I am still running."
      *
      * The one notification that is sent when nothing happened, and the reason it exists (Q27): a

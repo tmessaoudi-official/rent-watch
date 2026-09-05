@@ -32,6 +32,27 @@ final readonly class VehicleFormatter
         );
     }
 
+    /**
+     * The daily ROLLUP (A5, row 6): matches held back by `push_min_score`, one line each, the
+     * score leading so the reader can skim. Not a digest — see `NotificationKind::ROLLUP`.
+     *
+     * @param list<array{car: VehicleListing, score: ?int}> $entries
+     */
+    public function rollup(array $entries): Notification
+    {
+        $lines = [];
+        foreach ($entries as $entry) {
+            $lines[] = '• ' . $this->headline($entry['car'], $entry['score']);
+        }
+
+        return new Notification(
+            kind: NotificationKind::ROLLUP,
+            priority: Priority::LOW,
+            title: 'Vérifié, score bas : ' . count($entries) . ' véhicule(s) sous le seuil de notification individuelle',
+            reasons: $lines,
+        );
+    }
+
     public function priceDrop(VehicleListing $car, int $previousEur, int $currentEur): Notification
     {
         $delta = $previousEur - $currentEur;

@@ -1267,10 +1267,50 @@ final readonly class Store
      */
     private static function announcementRank(string $outcome): int
     {
+        // DIGEST < ROLLUP < MATCH (A5, row 6, 2026-09-05). A rollup entry has been told about —
+        // it covers the doubt question — but it has NOT been pushed as a match, so a later rent
+        // drop over the gate is a promotion, pushed once. Anything unrecognised ranks as MATCH,
+        // the strongest, which is the §1-safe reading: an unknown kind never re-announces.
         return match ($outcome) {
             'DIGEST' => 1,
-            default => 2,
+            'ROLLUP' => 2,
+            default => 3,
         };
+    }
+
+    /**
+     * Everything judged a MATCH and never delivered, oldest first — the low-score queue (A5).
+     *
+     * The pipeline pushes a match at or above `push_min_score` on the pass that judges it, so an
+     * undelivered MATCH is one the gate held back (or one whose push failed, which the next pass
+     * retries first). Same row shape as {@see pendingDigest()}, same reason: decoding belongs to
+     * the caller so a corrupt snapshot costs one entry, not the batch.
+     *
+     * @return list<array{dedup_key: string, source: string, external_id: string, url: ?string, title: string, rent_cc: ?int, evidence_json: ?string, signals_json: ?string, tenure: ?string}>
+     */
+    public function pendingLowScore(int $limit = self::DIGEST_BATCH): array
+    {
+        $statement = $this->pdo->prepare(
+            "SELECT dedup_key, source, external_id, url, title, rent_cc, evidence_json, signals_json, tenure, confidence_bp
+               FROM listings
+              WHERE outcome = 'MATCH' AND notified_at IS NULL
+              ORDER BY seen_epoch ASC, dedup_key ASC
+              LIMIT :limit",
+        );
+        $statement->bindValue('limit', max(1, $limit), \PDO::PARAM_INT);
+        $statement->execute();
+
+        /** @var list<array{dedup_key: string, source: string, external_id: string, url: ?string, title: string, rent_cc: ?int, evidence_json: ?string, signals_json: ?string, tenure: ?string}> $rows */
+        $rows = $statement->fetchAll(\PDO::FETCH_ASSOC);
+
+        return $rows;
+    }
+
+    public function pendingLowScoreCount(): int
+    {
+        return (int) $this->pdo->query(
+            "SELECT COUNT(*) FROM listings WHERE outcome = 'MATCH' AND notified_at IS NULL",
+        )->fetchColumn();
     }
 
     /** @throws \InvalidArgumentException if the key was never recorded — a silent no-op here would re-notify forever */
@@ -1297,11 +1337,14 @@ final readonly class Store
                 SET notified_at = :at,
                     notified_as = CASE
                         WHEN notified_at IS NOT NULL AND COALESCE(notified_as, \'MATCH\') = \'MATCH\' THEN \'MATCH\'
+                        WHEN notified_at IS NOT NULL AND notified_as = \'ROLLUP\' AND :as2 = \'DIGEST\' THEN \'ROLLUP\'
                         ELSE :as
                     END
               WHERE dedup_key = :key',
         );
-        $statement->execute(['at' => $atIso, 'as' => $as, 'key' => $dedupKey]);
+        // The monotone ordering, in SQL: a MATCH is sticky against everything, a ROLLUP against a
+        // DIGEST, anything else takes the new kind (schema v8, extended by A5 — see announcementRank()).
+        $statement->execute(['at' => $atIso, 'as' => $as, 'as2' => $as, 'key' => $dedupKey]);
 
         if ($statement->rowCount() === 0) {
             throw new \InvalidArgumentException(sprintf('annonce inconnue, impossible de la marquer notifiée : %s', $dedupKey));

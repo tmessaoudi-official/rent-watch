@@ -321,6 +321,72 @@ final class RentScoutDigestTest extends TestCase
         );
     }
 
+    // ── Row 6 / A5 (2026-09-05): the low-score queue drains through the SAME command, under its own heading ──
+
+    /**
+     * ONE drain, two queues, separated in the mail: a low-score match is *vérifié, score bas*, never
+     * *à vérifier* — the rent digest MEANS tenure doubt, and announcing a settled LLI under that
+     * heading would misreport its §1 status. A drained entry is marked ROLLUP, so a later rent drop
+     * over the gate is still a promotion.
+     */
+    public function testALowScoreMatchIsRolledUpUnderItsOwnHeadingAndMarkedRollup(): void
+    {
+        $root = $this->tempRoot();
+        $key = $this->seedQueuedMatch($root, new RawListing(
+            sourceName: 'inli',
+            externalId: 'LOW-1',
+            title: 'Appartement 3 pièces',
+            description: 'Logement intermédiaire (LLI).',
+            fields: ['financement' => 'LLI'],
+            // Inside the temp root's criteria: the command re-SCORES a queued row under today's
+            // criteria, and a row they reject is left waiting for `reclassify`, never announced.
+            commune: 'Sartrouville',
+            postcode: '78500',
+            rentCc: 1450,
+            surfaceM2: 88.0,
+            rooms: 4,
+        ));
+
+        $result = $this->scout($root, ['digest'], $this->delivering());
+
+        self::assertSame(0, $result['code'], $result['out'] . $result['err']);
+        self::assertStringContainsString('score bas', $result['out'], 'its own heading');
+        self::assertStringContainsString('Sartrouville 78500', $result['out'], 'announced from the snapshot; ERR=' . $result['err']);
+        self::assertStringNotContainsString('régime indéterminé', $result['out'], 'a settled LLI is never announced as a tenure doubt');
+
+        $store = Store::open($root . '/state/rent-watch.sqlite3');
+        self::assertTrue($store->wasNotifiedAs($key, 'ROLLUP'), 'marked as rolled up, on delivery');
+        self::assertFalse($store->wasNotifiedAs($key, 'MATCH'), 'not as pushed — the promotion stays reachable');
+
+        $second = $this->scout($root, ['digest']);
+        self::assertStringContainsString('aucune annonce', mb_strtolower($second['out']), 'drained once');
+    }
+
+    /** Both queues in one mail: the tenure doubts keep their heading and their clause, the rollup keeps its own. */
+    public function testBothQueuesShareOneMailWithTwoHeadings(): void
+    {
+        $root = $this->tempRoot();
+        $this->seedDigestRow($root, new RawListing(sourceName: 'cdc_habitat', externalId: 'D-1', title: 'T4', description: 'Logement conventionné', commune: 'Sartrouville', postcode: '78500', rentCc: 1450, surfaceM2: 88.0, rooms: 4));
+        $this->seedQueuedMatch($root, new RawListing(sourceName: 'inli', externalId: 'LOW-2', title: 'T3', description: 'LLI', fields: ['financement' => 'LLI'], commune: 'Sartrouville', postcode: '78500', rentCc: 1450, surfaceM2: 88.0, rooms: 4));
+
+        $result = $this->scout($root, ['digest'], $this->delivering());
+
+        self::assertSame(0, $result['code'], $result['out'] . $result['err']);
+        self::assertStringContainsString('À vérifier : 1 annonce(s) au régime indéterminé', $result['out']);
+        self::assertStringContainsString('score bas', $result['out']);
+        self::assertLessThan(strpos($result['out'], 'score bas'), strpos($result['out'], 'À vérifier'), 'the §1 bin comes first');
+    }
+
+    private function seedQueuedMatch(string $root, RawListing $listing): string
+    {
+        $store = Store::open($root . '/state/rent-watch.sqlite3');
+        $sighting = $store->record($listing, $listing->effectiveRentCc(), self::NOW);
+        $store->recordVerdict($sighting->dedupKey, 'LLI', 90, ['champ structuré financement = « LLI »'], $listing);
+        $store->recordOutcome($sighting->dedupKey, 'MATCH');
+
+        return $sighting->dedupKey;
+    }
+
     private function seedDigestRow(string $root, RawListing $listing, string $tenure = 'UNKNOWN'): string
     {
         $store = Store::open($root . '/state/rent-watch.sqlite3');

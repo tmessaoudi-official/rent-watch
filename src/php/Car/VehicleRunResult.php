@@ -24,5 +24,7 @@ final readonly class VehicleRunResult
         public array $rejected = [],
         /** @var list<string> what the pass noticed (row 41) — printed, never a source failure */
         public array $warnings = [],
+        /** A5: matches judged this pass and held back by `push_min_score` for the rollup. */
+        public int $queuedLowScore = 0,
     ) {}
 }

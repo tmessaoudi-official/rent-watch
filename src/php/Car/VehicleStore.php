@@ -223,6 +223,29 @@ final readonly class VehicleStore
         return $v === false ? null : $v;
     }
 
+    /**
+     * The ROLLUP queue (A5, row 6): every MATCH nobody has been told about, oldest first, with the
+     * score and snapshot the pass stored — the car store keeps both, so nothing is re-judged here.
+     *
+     * @return list<array{dedup_key: string, source: string, external_id: string, url: ?string, title: string, price_eur: ?int, score: ?int, snapshot_json: ?string}>
+     */
+    public function pendingRollup(int $limit = 50): array
+    {
+        $q = $this->pdo->prepare("SELECT dedup_key, source, external_id, url, title, price_eur, score, snapshot_json FROM vehicle_listings WHERE outcome = 'MATCH' AND notified_at IS NULL ORDER BY seen_epoch ASC, dedup_key ASC LIMIT :l");
+        $q->bindValue('l', max(1, $limit), \PDO::PARAM_INT);
+        $q->execute();
+
+        /** @var list<array{dedup_key: string, source: string, external_id: string, url: ?string, title: string, price_eur: ?int, score: ?int, snapshot_json: ?string}> $rows */
+        $rows = $q->fetchAll(\PDO::FETCH_ASSOC);
+
+        return $rows;
+    }
+
+    public function pendingRollupCount(): int
+    {
+        return (int) $this->pdo->query("SELECT COUNT(*) FROM vehicle_listings WHERE outcome = 'MATCH' AND notified_at IS NULL")->fetchColumn();
+    }
+
     /** @return array{count: int, notified: int, matches: int} */
     public function counts(): array
     {

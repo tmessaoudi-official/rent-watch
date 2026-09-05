@@ -42,6 +42,7 @@ final readonly class VehiclePipeline
 
         $sourcesRun = $sourcesFailed = $itemsParsed = $matches = $rejectedCount = $priceDrops = $notified = $undelivered = 0;
         $errors = $rejected = [];
+        $queuedLowScore = 0;
         /** @var array<string, array{judged: int, by: array<string, int>}> $filterTally row 41 */
         $filterTally = [];
 
@@ -94,6 +95,15 @@ final readonly class VehiclePipeline
                 ++$matches;
 
                 if (!$this->store->wasNotified($sighting->dedupKey)) {
+                    // A5 — ROW 6: A MATCH BELOW THE GATE IS QUEUED, NOT PUSHED. Judged, recorded and
+                    // counted above; it stays unannounced and `VehicleStore::pendingRollup()` hands
+                    // it to the daily rollup. `null` (every fixture) keeps the pre-A5 behaviour.
+                    $pushMin = $this->criteria->notify->pushMinScore;
+                    if ($pushMin !== null && ($verdict->score ?? 0) < $pushMin) {
+                        ++$queuedLowScore;
+                        continue;
+                    }
+
                     $failures = $this->notifier->send($this->formatter->match($car, $verdict));
                     if ($this->notifier->delivered($failures)) {
                         ++$notified;
@@ -136,7 +146,7 @@ final readonly class VehiclePipeline
         return new VehicleRunResult(
             sourcesRun: $sourcesRun, sourcesFailed: $sourcesFailed, itemsParsed: $itemsParsed, matches: $matches,
             rejectedCount: $rejectedCount, priceDrops: $priceDrops, notified: $notified, undelivered: $undelivered,
-            errors: $errors, rejected: $rejected, warnings: SameFilterWarning::warnings($filterTally),
+            errors: $errors, rejected: $rejected, warnings: SameFilterWarning::warnings($filterTally), queuedLowScore: $queuedLowScore,
         );
     }
 
