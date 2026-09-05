@@ -39,7 +39,14 @@ namespace Scout\Config;
 class DotEnv { public static function load(string $path): void {} }
 STUB
 
-run() { ( cd "$TMP" && php tools/dump-eml.php "$@" 2>&1 ); }
+# THE PRINTING RUNTIME IS SET, NOT ASSUMED (CI, 2026-09-05). The runner's PHP ships the production
+# ini (`zend.exception_ignore_args = On`), where every "the password never reaches a trace" check
+# below passes for free and the premise probe fails — this step was the last red one on CI. Both
+# directives are PHP_INI_ALL, so the test creates the runtime it is guarding against, exactly as
+# `CredentialsNeverReachATraceTest` does. A wrapper `php` on PATH prepending the opposite `-d`
+# loses: the last `-d` wins, and these come last.
+PHP_PRINTING_ARGS='-d zend.exception_ignore_args=0 -d zend.exception_string_param_max_len=15'
+run() { ( cd "$TMP" && php $PHP_PRINTING_ARGS tools/dump-eml.php "$@" 2>&1 ); }
 
 # ── 1. it refuses every shape that lands under tests/ ────────────────────────────────────────────
 #
@@ -123,7 +130,7 @@ fi
 #
 # First prove the MECHANISM, on this machine's own PHP rather than by assertion: an argument leaks,
 # a `use` binding does not.
-leak="$(php -r '
+leak="$(php $PHP_PRINTING_ARGS -r '
     $arg = static function (string $line) { throw new RuntimeException("refused"); };
     try { $arg("LOGIN \"u\" \"SUPERSECRETPW\""); } catch (Throwable $e) { echo $e->getTraceAsString(); }
 ' 2>&1)"
@@ -133,7 +140,7 @@ else
   ko "an argument DOES reach the trace on this PHP (the mechanism is real)" "trace=$leak"
 fi
 
-quiet="$(php -r '
+quiet="$(php $PHP_PRINTING_ARGS -r '
     $pass = "SUPERSECRETPW";
     $bound = static function () use ($pass) { throw new RuntimeException("refused"); };
     try { $bound(); } catch (Throwable $e) { echo $e->getTraceAsString(); }
