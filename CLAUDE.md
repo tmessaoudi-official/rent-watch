@@ -2156,6 +2156,28 @@ var/claude/                 Reports, review outputs — gitignored scratch (hand
   is not done until the DEPLOYED watcher's first live pass says so — commute is the production-only
   path, and a test that reproduces the sequence on a path production does not take proves the
   sequence, not the production.**
+- **A DURABLY-EXCLUDED ROW HAS ONE WAY BACK, AND IT IS A NAMED COMMAND (row 40, 2026-09-05).**
+  `scout --domain=rent reclassify --reopen=<dedup_key>` prints where the exclusion came from
+  (*lecture propre / jumeau / groupe*), clears the row's OWN and TWIN readings, and re-judges it
+  on its own evidence in the same invocation — a row that then judges MATCH is notified, so the
+  run needs a delivering channel like every promotion. The GROUP veto is reported and deliberately
+  NOT cleared: it lives on the siblings' own readings, and a sibling that really says `PLS` keeps
+  saying it, so the command tells you the next pass will reject again while that holds. Never a
+  pattern, never "all" — the cost of a wrong re-open is a social-housing flat pushed as a match.
+  `--dry-run` reports and clears nothing; an unknown key is refused and touches nothing. This
+  closes F20's *"repair route still owed"*; the *"this row said PLS vs something linked to it said
+  PLS"* distinction was offered and declined — the provenance is printed instead of stored.
+- **EVERY CARD OF A SOURCE FAILING THE SAME HARD FILTER IS A WARNING (row 41, 2026-09-05), and
+  it is the instrument the round-5 P2 asked for.** With no band on the mapped path, a selector
+  drifting onto a 5-digit field extracts `95240` cleanly — no miss counted, every card rejected
+  by `max_rent_cc`, health `ok`. `Core/SameFilterWarning` is ONE implementation for both pipelines:
+  each judged card counts into a per-source tally keyed on its disqualifier with the numbers
+  normalised, and when every card of a source (three or more) failed the same filter the pass
+  carries one warning naming the source, the count and the filter — `RunResult::$warnings`, printed
+  beside the errors and never counted as a failure. **§1 and vehicle-set rejections are excluded
+  on purpose**: a source whose every card is social housing is the classifier working, and
+  counting it would fire the one honest signal on exactly the sources the rules exist to refuse.
+  It says nothing about a PARTIAL drift, and it reaches the run output, not `SourceHealth`.
 - **A room is a NOUN, not a POSITION.** `^\s*chambre\b` was the first cut of the coliving
   exclusion and three live titles defeated it in one week — a leading emoji (`✅ Chambre 10 min RER
   B`, pushed as a match at 20:04 on 2026-08-29), an adjective (`Confortable chambre individuelle`),

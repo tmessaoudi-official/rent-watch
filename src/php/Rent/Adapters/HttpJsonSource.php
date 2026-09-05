@@ -163,9 +163,13 @@ final readonly class HttpJsonSource implements CountsPatternMisses, Source
             // A non-2xx is a recorded FAILURE, not an empty result. `docs/SOURCES.md` records five
             // portals that answer 403 to a plain client; that fact has to reach the run log, because
             // it is what says "this source needs the email route" rather than "the market is quiet".
+            // A redirect names where it points — the same rule as `HtmlSource` (row 44), so the
+            // two adapters diagnose a 3xx the same way.
+            $location = $response->status >= 300 && $response->status < 400 ? $response->header('location') : null;
             throw new SourceError(
                 $this->name(),
                 'HTTP ' . $response->status . ' from ' . $url
+                    . ($location !== null && $location !== '' ? ' → Location: ' . $location : '')
                     . ($response->status === 403 ? ' — this source blocks plain clients; use the email-alert route' : ''),
             );
         }

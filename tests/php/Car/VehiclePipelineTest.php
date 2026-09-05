@@ -145,6 +145,48 @@ final class VehiclePipelineTest extends TestCase
     // ------------------------------------------------------------------------------------------
 
     /** @return array{VehiclePipeline, CarRecordingChannel, VehicleStore} */
+    // ── Row 41 (2026-09-05): every car of a source failing the SAME hard filter is a warning ──
+
+    public function testASourceWhoseEveryCarFailsTheSameFilterIsWarnedAbout(): void
+    {
+        [$pipeline, , $store] = $this->pipeline();
+        $source = new FakeCarSource('drifted', [$this->car('d1', 95240), $this->car('d2', 95241), $this->car('d3', 95242)], null, $store);
+
+        $result = $pipeline->runOnce([$source], '2026-09-05T10:00:00Z');
+
+        self::assertCount(1, $result->warnings, implode(' | ', $result->warnings));
+        self::assertStringContainsString('drifted', $result->warnings[0]);
+        self::assertStringContainsString('prix', $result->warnings[0], 'the filter is named');
+        self::assertSame([], $result->errors);
+    }
+
+    public function testASurvivorOrFewerThanThreeCarsRaisesNoSameFilterWarning(): void
+    {
+        [$pipeline, , $store] = $this->pipeline();
+        $alive = new FakeCarSource('alive', [$this->car('a1', 95240), $this->car('a2', 95241), $this->car('a3', 15000)], null, $store);
+        $tiny = new FakeCarSource('tiny', [$this->car('t1', 95240), $this->car('t2', 95241)], null, $store);
+
+        $result = $pipeline->runOnce([$alive, $tiny], '2026-09-05T10:00:00Z');
+
+        self::assertSame([], $result->warnings);
+    }
+
+    /** The excluded-vehicle set is the classifier working, never a drifted selector. */
+    public function testClassifierRejectionsNeverRaiseTheSameFilterWarning(): void
+    {
+        [$pipeline, , $store] = $this->pipeline();
+        $wrecks = new FakeCarSource('wrecks', [
+            $this->car('w1', 9000, 'Vendu pour pièces, accidenté'),
+            $this->car('w2', 9000, 'Véhicule gagé, vendu pour pièces'),
+            $this->car('w3', 9000, 'Epave pour pièces'),
+        ], null, $store);
+
+        $result = $pipeline->runOnce([$wrecks], '2026-09-05T10:00:00Z');
+
+        self::assertSame(3, $result->rejectedCount);
+        self::assertSame([], $result->warnings);
+    }
+
     // ── Row 36 (2026-09-04): a processed alert email is acknowledged — AFTER the store recorded it ──
 
     public function testAnEmailSourceIsAcknowledgedAfterTheStoreRecordedItsPass(): void

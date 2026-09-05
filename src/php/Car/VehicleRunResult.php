@@ -22,5 +22,7 @@ final readonly class VehicleRunResult
         public int $undelivered = 0,
         public array $errors = [],
         public array $rejected = [],
+        /** @var list<string> what the pass noticed (row 41) — printed, never a source failure */
+        public array $warnings = [],
     ) {}
 }

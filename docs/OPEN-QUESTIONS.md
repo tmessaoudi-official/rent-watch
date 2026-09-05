@@ -1296,6 +1296,13 @@ over-rejection would follow to the wrong listing.
 stored reading between "this row said PLS" and "something linked to this row said PLS". Until one
 exists, do not describe either veto as one-line reversible.
 
+> **THE REPAIR ROUTE LANDED 2026-09-05 (row 40, developer ruling: the command, not the stored
+> distinction).** `scout --domain=rent reclassify --reopen=<dedup_key>` prints the provenance
+> (own reading / twin reading with its source / group veto), clears the row's own and twin
+> readings, and re-judges the row on its own evidence in the same invocation. The group veto is
+> reported and NOT cleared — it lives on the siblings' own readings. Either veto is therefore
+> reversible by one named command, and only by one: never a pattern, never "all".
+
 > **THE MISATTRIBUTION HALF IS CLOSED (2026-09-04, F20); THE REPAIR ROUTE IS STILL OWED, and the
 > two are worth keeping apart.** The reason now reads *"régime exclu (PLS) retenu pour cette
 > annonce — origine non enregistrée (lecture propre, groupe ou autre voie) — conservé (§1)"*. That

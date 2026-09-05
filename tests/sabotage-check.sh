@@ -1781,6 +1781,46 @@ run_sabotage "a stated lot reference is ignored (an auction card with no year an
   src/php/Car/VehicleEmailSource.php \
   "s%if (\\\$this->definition->param('id_from') === 'content' \\&\\& \\\$ref !== '') {%if (false) {%"
 
+# ── Rows 40 + 41 (2026-09-05): the reopen repair, and the same-filter warning ──
+#
+# `--reopen` is the ONE way back for a durably-excluded row, and a half-done reopen is worse than
+# none: clearing the own reading but not the twin's leaves the twin veto in force and the operator
+# believing the row was re-opened. A dry run that clears is the opposite failure. The same-filter
+# warning is silent in every direction it can break: not returned, floored at one card, or counting
+# §1 rejections — which would fire on a source of social housing and dilute the one honest signal.
+
+run_sabotage "reopen clears the row's own reading but not the twin's (the twin veto stays in force)" \
+  src/php/Rent/Store/Store.php \
+  's%UPDATE listings SET tenure = NULL, twin_tenure = NULL, twin_source = NULL WHERE dedup_key = :key%UPDATE listings SET tenure = NULL WHERE dedup_key = :key%'
+
+run_sabotage "a dry-run reopen clears the reading anyway" \
+  src/php/Rent/Store/Store.php \
+  's%if (!\$dryRun) {%if (true) {%'
+
+run_sabotage "reopen on an unknown key is silently a no-op with exit 0" \
+  src/php/Rent/Cli/RentScout.php \
+  's%return \$this->fail(.--reopen : aucune annonce ne porte la clé . . \$reopen . . — rien n..a été touché.);%$this->line("");%'
+
+run_sabotage "the rent pipeline computes the same-filter warnings and returns none" \
+  src/php/Rent/Cli/Pipeline.php \
+  's%rejected: \$rejected, warnings: \$warnings%rejected: $rejected, warnings: []%'
+
+run_sabotage "the car pipeline computes the same-filter warnings and returns none" \
+  src/php/Car/VehiclePipeline.php \
+  's%warnings: SameFilterWarning::warnings(\$filterTally),%warnings: [],%'
+
+run_sabotage "§1 and vehicle-set rejections count toward the same-filter warning (it fires on a source of social housing)" \
+  src/php/Core/SameFilterWarning.php \
+  "s%if (str_starts_with(\\\$lower, 'tenure:') || str_starts_with(\\\$lower, 'exclu :') || str_starts_with(\\\$lower, 'exclu:')) {%if (false) {%"
+
+run_sabotage "the same-filter floor drops to one card (one bad card is a warning)" \
+  src/php/Core/SameFilterWarning.php \
+  's%public const int FLOOR = 3;%public const int FLOOR = 1;%'
+
+run_sabotage "the same-filter warning fires when MOST cards, not every card, fail one filter" \
+  src/php/Core/SameFilterWarning.php \
+  "s%if (\\\$count === \\\$t\\['judged'\\]) {%if (\\\$count * 2 >= \\\$t['judged']) {%"
+
 run_sabotage "the facts gearbox is ignored (a labelled Automatique scores as unstated)" \
   src/php/Car/VehicleEmailSource.php \
   's%gearbox: \$factsGearbox ?? self::gearboxFromTitle(\$title),%gearbox: self::gearboxFromTitle(\$title),%'
@@ -3165,7 +3205,7 @@ run_sabotage "a robots body starting with a markup character is trusted" \
 # neither `coloc` nor `colocation` appears anywhere in them [measured 2026-08-25].
 run_sabotage "the coliving-room title pattern is dropped from the criteria" \
   config/rent/criteria.json \
-  's%^    "(?<!\[0-9\])(?<!\[0-9\].*chambres?.*$%%'
+  's%^    "^(?!\.\*.*chambres?.*$%%'
 
 # ── Bien'ici: the second email portal, and the first keyed on a real listing id ──────────────────
 #

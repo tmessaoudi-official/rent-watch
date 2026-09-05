@@ -461,6 +461,9 @@ scout --domain=rent run --watch [-v]        # loop: every 15 min ± 5 of jitter,
 scout --domain=rent test-notify             # verify the notification channel
 scout --domain=rent digest [--dry-run]      # emit the pending "à vérifier" rollup, on demand
 scout --domain=rent reclassify [--dry-run]  # re-judge stored UNKNOWN verdicts against today's classifier
+scout --domain=rent reclassify --reopen=<dedup_key>   # the ONE way back for a durably-excluded row: prints where
+                                            #   the exclusion came from, clears the row's own + twin readings,
+                                            #   re-judges it (the group veto is reported, never cleared)
 scout --domain=rent replay <source>         # alias of `dump` — takes a SOURCE NAME
 scout --domain=rent replay <source> --file=<payload>   # a frozen page through that source's own field map, offline
 ```
@@ -503,7 +506,10 @@ floor — and `scout --domain=rent doctor` prints the hour, the resolved local z
 `scout --domain=rent reclassify` re-runs the classifier AND the criteria engine over stored `UNKNOWN` verdicts,
 using the schema-v7 snapshot of the listing the verdict was formed from. A row stored before v7 has
 no snapshot and is **skipped, not judged on whatever text remains** — re-judging on less evidence
-than the original saw is how a social listing becomes a match. `--since` is deliberately refused;
+than the original saw is how a social listing becomes a match. `--reopen=<dedup_key>` (2026-09-05)
+is the one way back for a row whose excluded reading came from an over-link or an over-merge: it
+names the provenance, clears the row's own and twin readings, and re-judges on the same
+invocation — never a pattern, never "all". `--since` is deliberately refused;
 see `docs/plans/archive/finish-everything.plan.md` for why.
 
 A listing whose dedup CLUSTER holds an excluded tenure is skipped for the same reason and counted

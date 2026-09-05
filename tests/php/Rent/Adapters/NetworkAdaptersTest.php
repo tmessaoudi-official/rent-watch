@@ -154,6 +154,31 @@ final class NetworkAdaptersTest extends TestCase
 
     // ---------------------------------------------------------------- http (hard rule 3)
 
+    /**
+     * A REDIRECT NAMES WHERE IT POINTS (row 44, 2026-09-05). In'li answered 302 on two of five live
+     * passes and the run log held only `HTTP 302 from <url>` — enough to say the source broke, not
+     * enough to tell a moved page from a cookie bounce or a shield. The failure must carry the
+     * `Location`, so the next occurrence diagnoses itself.
+     */
+    public function testARedirectFailureNamesItsLocation(): void
+    {
+        try {
+            $this->httpSource(new FakeHttpClient(new HttpResponse(302, '', ['location' => 'https://example.test/shield?u=abc'])))->fetch();
+            self::fail('a 3xx is a failure');
+        } catch (SourceError $e) {
+            self::assertStringContainsString('HTTP 302 from https://example.test/api/search', $e->getMessage());
+            self::assertStringContainsString('Location: https://example.test/shield?u=abc', $e->getMessage());
+        }
+
+        // A 3xx WITHOUT a Location says so by saying nothing extra — never a fabricated target.
+        try {
+            $this->httpSource(new FakeHttpClient(new HttpResponse(302, '')))->fetch();
+            self::fail('a 3xx is a failure');
+        } catch (SourceError $e) {
+            self::assertStringNotContainsString('Location', $e->getMessage());
+        }
+    }
+
     private function httpSource(HttpClient $client, array $overrides = [], ?Robots $robots = null): HttpJsonSource
     {
         $definition = new SourceDefinition(

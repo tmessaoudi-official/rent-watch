@@ -6,6 +6,7 @@ namespace Scout\Rent\Cli;
 
 use Scout\Adapters\AcknowledgesMessages;
 use Scout\Core\Redact;
+use Scout\Core\SameFilterWarning;
 use Scout\Rent\Adapters\FeedDate;
 use Scout\Rent\Adapters\Source;
 use Scout\Adapters\SourceError;
@@ -412,6 +413,9 @@ final readonly class Pipeline
 
         $digestOverflow = 0;
 
+        /** @var array<string, array{judged: int, by: array<string, int>}> $filterTally row 41 */
+        $filterTally = [];
+
         // CONFIRMED DELIVERIES, which is not `$matches`. See `RunResult::$notified` — `$matches` is
         // incremented when the engine judges, before the already-announced gate and before the
         // channel confirms, so in steady state it is the standing match count while the pass sends
@@ -504,6 +508,9 @@ final readonly class Pipeline
             // truth — it was recorded and classified but never judged — and that NULL is what stops
             // `pendingDigest()` from mistaking an unjudged member for a digested one.
             $this->store->recordOutcome($sighting->dedupKey, $verdict->outcome->value);
+
+            // ROW 41: one judged card into the same-filter tally, whatever its outcome.
+            SameFilterWarning::count($filterTally, $listing->sourceName, $verdict->outcome === Outcome::REJECT ? $verdict->disqualifier : null);
 
             if ($verdict->outcome === Outcome::REJECT) {
                 ++$rejectedCount;
@@ -759,6 +766,10 @@ final readonly class Pipeline
             $undelivered += $this->alertOnHealth($sources, $nowIso);
         }
 
+        // ROW 41 — a source whose every judged card failed the SAME hard filter is named here,
+        // beside the errors and never as one: the pass succeeded, the selector may not have.
+        $warnings = SameFilterWarning::warnings($filterTally);
+
         return new RunResult(
             sourcesRun: $sourcesRun,
             sourcesFailed: $sourcesFailed,
@@ -774,7 +785,7 @@ final readonly class Pipeline
             digestOverflow: $digestOverflow,
             unencodable: $unencodable,
             errors: $errors,
-            rejected: $rejected,
+            rejected: $rejected, warnings: $warnings,
         );
     }
 

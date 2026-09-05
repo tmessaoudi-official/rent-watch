@@ -9,6 +9,7 @@ use Scout\Adapters\FeedFreshness;
 use Scout\Adapters\SourceError;
 use Scout\Core\Notify\Notifier;
 use Scout\Core\Redact;
+use Scout\Core\SameFilterWarning;
 
 /**
  * fetch → classify → judge → record → notify, for cars. The rent pipeline's shape with what the car
@@ -41,6 +42,8 @@ final readonly class VehiclePipeline
 
         $sourcesRun = $sourcesFailed = $itemsParsed = $matches = $rejectedCount = $priceDrops = $notified = $undelivered = 0;
         $errors = $rejected = [];
+        /** @var array<string, array{judged: int, by: array<string, int>}> $filterTally row 41 */
+        $filterTally = [];
 
         foreach ($sources as $source) {
             $started = microtime(true);
@@ -78,6 +81,10 @@ final readonly class VehiclePipeline
                 if ($sighting->isCurrent) {
                     $this->store->recordVerdict($sighting->dedupKey, $verdict, $car);
                 }
+
+                // ROW 41: one judged car into the same-filter tally — the first reject reason names
+                // the filter; `exclu : …` (the vehicle set) is the classifier working and is skipped.
+                SameFilterWarning::count($filterTally, $source->name(), $verdict->outcome === VehicleOutcome::REJECT ? ($verdict->reasons[0] ?? null) : null);
 
                 if ($verdict->outcome === VehicleOutcome::REJECT) {
                     ++$rejectedCount;
@@ -129,7 +136,7 @@ final readonly class VehiclePipeline
         return new VehicleRunResult(
             sourcesRun: $sourcesRun, sourcesFailed: $sourcesFailed, itemsParsed: $itemsParsed, matches: $matches,
             rejectedCount: $rejectedCount, priceDrops: $priceDrops, notified: $notified, undelivered: $undelivered,
-            errors: $errors, rejected: $rejected,
+            errors: $errors, rejected: $rejected, warnings: SameFilterWarning::warnings($filterTally),
         );
     }
 

@@ -605,6 +605,10 @@ final readonly class CarScout
         foreach ($r->errors as $error) {
             $this->warn($error);
         }
+        // Row 41 — what the pass noticed, beside the failures and never counted as one.
+        foreach ($r->warnings as $warning) {
+            $this->warn($warning);
+        }
         if ($verbose) {
             foreach ($r->rejected as $line) {
                 $this->line('  ' . $line);

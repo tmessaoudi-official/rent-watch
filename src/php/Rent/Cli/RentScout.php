@@ -990,6 +990,10 @@ final readonly class RentScout
         foreach ($result->errors as $error) {
             $this->warn($error);
         }
+        // Row 41 — what the pass noticed, beside the failures and never counted as one.
+        foreach ($result->warnings as $warning) {
+            $this->warn($warning);
+        }
 
         if ($result->unencodable > 0) {
             // Named on the pass that causes it, rather than left to be discovered from a skip
@@ -1337,10 +1341,19 @@ final readonly class RentScout
     private function reclassify(array $flags): int
     {
         $dryRun = false;
+        $reopen = null;
 
         foreach ($flags as $flag) {
             if ($flag === '--dry-run') {
                 $dryRun = true;
+                continue;
+            }
+
+            // F20 / Q39 (row 40): the one way back for a durably-excluded row. The key is named
+            // in full — never a pattern, never "all" — because the cost of a wrong re-open is a
+            // social-housing flat pushed as a match.
+            if (str_starts_with($flag, '--reopen=') && strlen($flag) > 9) {
+                $reopen = substr($flag, 9);
                 continue;
             }
 
@@ -1355,10 +1368,31 @@ final readonly class RentScout
                 );
             }
 
-            return $this->fail('option inconnue : ' . $flag . ' (connues : --dry-run)');
+            return $this->fail('option inconnue : ' . $flag . ' (connues : --dry-run, --reopen=<clé>)');
         }
 
         $store = $this->store();
+
+        if ($reopen !== null) {
+            $provenance = $store->reopen($reopen, $dryRun);
+            if ($provenance === null) {
+                return $this->fail('--reopen : aucune annonce ne porte la clé ' . $reopen . ' — rien n\'a été touché');
+            }
+            $twin = $provenance['twin'];
+            $this->line(sprintf(
+                '%s %s — lecture propre : %s · jumeau : %s · groupe : %s',
+                $dryRun ? 'réouverture (simulation, rien n\'est effacé)' : 'réouverture',
+                $reopen,
+                $provenance['own']?->value ?? 'aucune',
+                $twin === null ? 'aucun' : $twin['tenure']->value . ' (' . $twin['source'] . ')',
+                $provenance['group']?->value ?? 'aucun',
+            ));
+            if ($provenance['group'] !== null) {
+                $this->warn('le veto de groupe vient des lectures propres des annonces liées et n\'est PAS effacé : '
+                    . 'la prochaine passe rejettera de nouveau cette annonce tant qu\'une annonce liée dit ' . $provenance['group']->value);
+            }
+        }
+
         $criteria = $this->criteria();
         $rows = $store->staleVerdicts();
 

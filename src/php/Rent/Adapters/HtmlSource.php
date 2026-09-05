@@ -465,9 +465,17 @@ final readonly class HtmlSource implements CountsPatternMisses, Source
         }
 
         if (!$response->isSuccess()) {
+            // A REDIRECT NAMES WHERE IT POINTS (row 44, 2026-09-05). In'li answered 302 on two of
+            // five live passes and the run log held only `HTTP 302 from <url>` — enough to say the
+            // source broke, not enough to say whether the page moved, a cookie bounce fired or a
+            // shield answered, and four cold probes from the same host all returned 200. The next
+            // occurrence must diagnose itself: the `Location` is the whole difference between a
+            // config fix and a hard-rule-5 refusal, and it costs nothing to carry.
+            $location = $response->status >= 300 && $response->status < 400 ? $response->header('location') : null;
             throw new SourceError(
                 $this->name(),
                 'HTTP ' . $response->status . ' from ' . $url
+                    . ($location !== null && $location !== '' ? ' → Location: ' . $location : '')
                     . ($response->status === 403 ? ' — this source blocks plain clients; use the email-alert route' : ''),
             );
         }

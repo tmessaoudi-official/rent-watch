@@ -673,6 +673,93 @@ final class RentScoutReclassifyTest extends TestCase
         return is_string($value) ? $value : null;
     }
 
+    // ── F20 / Q39 (row 40, 2026-09-05): `--reopen=<dedup_key>` is the ONE way back for a durably-excluded row ──
+
+    /**
+     * A row holding an excluded reading it got from a TWIN (the other track said PLS, the row's own
+     * card says nothing) can never be re-opened by any pass: `staleVerdicts()` skips excluded
+     * tenures, `pendingDigest()` skips non-DIGEST outcomes, `replay` writes no verdicts. The repair
+     * command clears the row's own reading AND its twin reading, says where each came from, and
+     * lets the normal re-judge run on the same invocation.
+     */
+    public function testReopenClearsTheDurableReadingSaysWhereItCameFromAndReJudges(): void
+    {
+        $root = $this->tempRoot();
+        $listing = new RawListing(
+            sourceName: 'demo',
+            externalId: 'REOPEN-1',
+            title: 'T4 lumineux',
+            description: 'Quatre pieces, 88 m2, ascenseur, logement intermediaire.',
+            fields: ['financement' => 'LLI'],
+            commune: 'Sartrouville',
+            postcode: '78500',
+            rentCc: 1450,
+            surfaceM2: 88.0,
+            rooms: 4,
+        );
+        $key = $this->seed($root, $listing, 'PLS', 'REJECT');
+        $store = Store::open($root . '/state/rent-watch.sqlite3');
+        $store->recordTwin($key, Tenure::PLS, 'seloger', 90);
+
+        // A re-opened row that re-judges as a MATCH is NOTIFIED — that is the miss the command
+        // recovers — so the run needs a channel that delivers, like every promotion test here.
+        $r = $this->scout($root, ['reclassify', '--reopen=' . $key], $this->delivering());
+
+        self::assertSame(0, $r['code'], $r['out'] . $r['err']);
+        self::assertStringContainsString('1 promotion', $r['out'], 'the re-opened row was re-judged on its own evidence and promoted');
+        self::assertStringContainsString('lecture propre : PLS', $r['out'], 'the row\'s own durable reading is named');
+        self::assertStringContainsString('jumeau : PLS (seloger)', $r['out'], 'the twin reading is named with its source');
+        self::assertStringContainsString('groupe : aucun', $r['out']);
+        self::assertNull($store->twinTenure($key), 'the twin reading is cleared');
+        self::assertSame(
+            'LLI',
+            $this->pdo($root)->query("SELECT tenure FROM listings WHERE dedup_key = '" . $key . "'")->fetchColumn(),
+            'the same invocation re-judged the row on its OWN evidence',
+        );
+    }
+
+    public function testReopenOnAnUnknownKeyIsRefusedAndTouchesNothing(): void
+    {
+        $root = $this->tempRoot();
+        $key = $this->seed($root, $this->listing('KEEP-1'), 'PLS', 'REJECT');
+
+        $r = $this->scout($root, ['reclassify', '--reopen=no-such-key']);
+
+        self::assertSame(2, $r['code']);
+        self::assertStringContainsString('no-such-key', $r['err'] . $r['out']);
+        self::assertSame('PLS', $this->pdo($root)->query("SELECT tenure FROM listings WHERE dedup_key = '" . $key . "'")->fetchColumn());
+    }
+
+    public function testDryRunReopenReportsTheProvenanceAndClearsNothing(): void
+    {
+        $root = $this->tempRoot();
+        $key = $this->seed($root, $this->listing('DRY-1'), 'PLS', 'REJECT');
+        $store = Store::open($root . '/state/rent-watch.sqlite3');
+        $store->recordTwin($key, Tenure::PLS, 'seloger', 90);
+
+        $r = $this->scout($root, ['reclassify', '--dry-run', '--reopen=' . $key]);
+
+        self::assertSame(0, $r['code'], 'OUT=' . $r['out'] . ' ERR=' . $r['err']);
+        self::assertStringContainsString('lecture propre : PLS', $r['out']);
+        self::assertSame('PLS', $this->pdo($root)->query("SELECT tenure FROM listings WHERE dedup_key = '" . $key . "'")->fetchColumn(), 'dry run: nothing cleared');
+        self::assertNotNull($store->twinTenure($key), 'dry run: the twin reading stays');
+    }
+
+    private function listing(string $id): RawListing
+    {
+        return new RawListing(
+            sourceName: 'demo',
+            externalId: $id,
+            title: 'T4 lumineux',
+            description: 'Quatre pieces, 88 m2.',
+            commune: 'Sartrouville',
+            postcode: '78500',
+            rentCc: 1450,
+            surfaceM2: 88.0,
+            rooms: 4,
+        );
+    }
+
     private function seed(string $root, RawListing $listing, string $tenure, ?string $outcome): string
     {
         $store = Store::open($root . '/state/rent-watch.sqlite3');

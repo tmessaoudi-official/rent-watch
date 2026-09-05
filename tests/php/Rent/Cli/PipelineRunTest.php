@@ -2701,6 +2701,71 @@ final class PipelineRunTest extends TestCase
         );
     }
 
+    // ── Row 41 (2026-09-05): every card of a source failing the SAME hard filter is a warning ──
+
+    /**
+     * The round-5 P2: a selector drifting onto a 5-digit field extracts `95240` cleanly, so no miss
+     * is counted, `max_rent_cc` then rejects every card, and health stays `ok`. The honest generic
+     * signal is the SHAPE of the rejections — one source, one filter, every card — with no band
+     * and no magic number.
+     */
+    public function testASourceWhoseEveryCardFailsTheSameFilterIsWarnedAbout(): void
+    {
+        $store = Store::open(':memory:');
+        $source = new FakeSource('drifted', [
+            $this->listing('d1', ['source' => 'drifted', 'rentCc' => 95240]),
+            $this->listing('d2', ['source' => 'drifted', 'rentCc' => 95241]),
+            $this->listing('d3', ['source' => 'drifted', 'rentCc' => 95242]),
+        ]);
+
+        $result = $this->pipeline($store)->runOnce([$source], '2026-09-05T10:00:00Z');
+
+        self::assertCount(1, $result->warnings, implode(' | ', $result->warnings));
+        self::assertStringContainsString('drifted', $result->warnings[0]);
+        self::assertStringContainsString('3', $result->warnings[0]);
+        self::assertStringContainsString('rent', $result->warnings[0], 'the filter is named');
+        self::assertSame([], $result->errors, 'a warning, not a source failure');
+    }
+
+    public function testMixedRejectionsOrOneSurvivorRaiseNoSameFilterWarning(): void
+    {
+        $store = Store::open(':memory:');
+        $mixed = new FakeSource('mixed', [
+            $this->listing('m1', ['source' => 'mixed', 'rentCc' => 95240]),
+            $this->listing('m2', ['source' => 'mixed', 'rentCc' => 95241]),
+            $this->listing('m3', ['source' => 'mixed', 'commune' => 'Marseille', 'rentCc' => 900]),
+        ]);
+        $survivor = new FakeSource('alive', [
+            $this->listing('a1', ['source' => 'alive', 'rentCc' => 95240]),
+            $this->listing('a2', ['source' => 'alive', 'rentCc' => 95241]),
+            $this->listing('a3', ['source' => 'alive']),
+        ]);
+        $tiny = new FakeSource('tiny', [
+            $this->listing('t1', ['source' => 'tiny', 'rentCc' => 95240]),
+            $this->listing('t2', ['source' => 'tiny', 'rentCc' => 95241]),
+        ]);
+
+        $result = $this->pipeline($store)->runOnce([$mixed, $survivor, $tiny], '2026-09-05T10:00:00Z');
+
+        self::assertSame([], $result->warnings, 'two filters, one match, or fewer than three cards: nothing to say');
+    }
+
+    /** §1 rejections are the classifier WORKING, never a drifted selector: they must not count. */
+    public function testTenureRejectionsNeverRaiseTheSameFilterWarning(): void
+    {
+        $store = Store::open(':memory:');
+        $social = new FakeSource('social', [
+            $this->listing('s1', ['source' => 'social', 'fields' => ['financement' => 'PLS'], 'description' => 'PLS']),
+            $this->listing('s2', ['source' => 'social', 'fields' => ['financement' => 'PLS'], 'description' => 'PLS']),
+            $this->listing('s3', ['source' => 'social', 'fields' => ['financement' => 'PLS'], 'description' => 'PLS']),
+        ], mixedTenure: true);
+
+        $result = $this->pipeline($store)->runOnce([$social], '2026-09-05T10:00:00Z');
+
+        self::assertSame(3, $result->rejectedCount);
+        self::assertSame([], $result->warnings);
+    }
+
     // ── Row 36 (2026-09-04): a processed alert email is acknowledged — AFTER the store recorded it ──
 
     /**

@@ -93,6 +93,14 @@ final readonly class RunResult
         public int $unencodable = 0,
         public array $errors = [],
         public array $rejected = [],
+        /**
+         * Not failures, not rejections: things the pass NOTICED that the operator should read
+         * (row 41 — a source whose every card failed the same hard filter). Printed beside
+         * `$errors` by the CLI and never counted as a broken source.
+         *
+         * @var list<string>
+         */
+        public array $warnings = [],
     ) {}
 
     /**

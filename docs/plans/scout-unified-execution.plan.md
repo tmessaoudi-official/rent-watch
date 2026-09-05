@@ -1387,6 +1387,43 @@ read-only) and the merged prose as one review deep.
   `alerts.agorastore.fr`. **The lesson worth the most: parse a scrubbed capture back and compare
   the link count with the raw before committing it** — `scrubbed` is a statement about what left
   the file, not about what the parser can still read.
+- [2026-09-05 05:10] AGREED (**four rulings in one `AskUserQuestion`, each on a measurement**).
+  **A5 (row 6): keep the weights, push individually at score ≥ 55, the rest through the separate
+  *"vérifié, score bas"* rollup as ruled 2026-09-01.** Measured first, over all 1046 stored MATCH
+  snapshots re-judged offline with production's shape (commute 30 / 75 min, from the 411 cached
+  communes — `scratchpad/a5-measure.php`): p10 23 · p50 40 · p90 54 · max 69; ≥40 → 51 %, ≥45 →
+  25 %, ≥50 → 14 %, ≥55 → 10 %, ≥60 → 3 %. Components: commute mean 21/30 (dominant), surface
+  5/10, lift 15 on 14 % only, rent headroom 1.9/15 (rents cluster at the ceiling), commune 25 pts
+  earned by 15 of 1046 — region mode leaves it near-dead. `high_priority_score` 50 → 55 is the
+  measured p90; rebalancing was offered and declined. **F20 / Q39 (row 40): a repair COMMAND** —
+  `scout --domain=rent reclassify --reopen=<dedup_key>` clears the durable excluded reading on one
+  named row, prints where the exclusion came from (own reading / twin / group sibling), and lets
+  the next pass re-judge; explicit and logged, nothing automatic; the provenance-in-store route was
+  declined. **Round-5 P2 (row 41): build the same-filter WARN** — when every card a source yielded
+  in a pass fails the SAME hard filter, health warns; no band, no magic number. **Row 44 (In'li
+  302): wait for the next occurrence** — the run log now names the redirect's `Location` (built,
+  tested); no retry that would mask a shield.
+- [2026-09-05 06:00] RECORD (**ROWS 40, 41 AND 44 BUILT**). **Row 40:** `scout --domain=rent
+  reclassify --reopen=<dedup_key>` — `Store::reopen()` reports the provenance (own reading, twin
+  reading with its source, group veto) and clears the row's OWN and TWIN readings; the group veto
+  is reported and deliberately NOT cleared (it lives on the siblings' own readings, and the command
+  says the next pass will reject again while a sibling says PLS). The rest of the same invocation
+  re-judges the row on its own evidence — the first test caught that a re-opened row promoted to
+  MATCH is NOTIFIED, so the run needs a delivering channel, exactly like every promotion. Unknown
+  key → refused, nothing touched; `--dry-run` reports and clears nothing. **Row 41:**
+  `Core/SameFilterWarning` — ONE implementation for both pipelines (the `escalate()` rule): every
+  judged card counts into a per-source tally keyed on its disqualifier with numbers normalised;
+  when every card of a source (≥ 3) failed the SAME filter, `RunResult::$warnings` /
+  `VehicleRunResult::$warnings` carry one line naming the source, the count and the filter, printed
+  by both CLIs beside the errors and never counted as a failure. §1 (`tenure:`) and vehicle-set
+  (`exclu :`) rejections are deliberately excluded — the classifier working is not a drifted
+  selector; a test on three PLS listings pins it (the tenure-guard fired on that test's `PLS`
+  fixtures next to the word "match" — a false positive, stated). The car tally keys on the SOURCE
+  name (the first test used listing names and caught it). **Row 44:** `HtmlSource` and
+  `HttpJsonSource` name a 3xx's `Location` in the failure; a 3xx without one says nothing extra.
+  Eight ledger cases (reopen half-done, dry-run clears, unknown key silent, warnings dropped on
+  either pipeline, §1 counted, floor at one, "most" instead of "every"); mutation loop and full
+  suite chained before the commit.
 
 ---
 
@@ -2572,7 +2609,7 @@ tool/guard) and say which ones the fix covers.**
 | 8 | 6-A7 F28 one-shot victims report (read-only, gitignored output) | S | done | - | - |
 | 9 | 6-B1 CapCar email source | L | done | 618b065 | config/car/sources.json tests/php/Car/CapCarFixtureTest.php |
 | 10 | 6-B2 La Centrale email source | L | done | 21117b7 | config/car/sources.json tests/php/Car/LaCentraleFixtureTest.php tools/scrub-eml.php |
-| 11 | 6-B3 Agorastore email source (optional third) | M | done | - | config/car/sources.json tests/php/Car/AgorastoreFixtureTest.php |
+| 11 | 6-B3 Agorastore email source (optional third) | M | done | 74d15d1 | config/car/sources.json tests/php/Car/AgorastoreFixtureTest.php |
 | 12 | 6-B4 AutoScout24 — no alert has ever arrived | M | blocked | - | config/car/sources.json |
 | 13 | 6-C1 register and docs say what the tree says | M | done | ede198e | docs/plans/scout-unified-execution.plan.md |
 | 14 | 6-C2 r1 F2 (P0) — both segmentation guards read both separator keys | M | certified | be8eba7 test:2026-09-04 | src/php/Rent/Config/ConfigLoader.php tests/php/Rent/Config/ConfigTest.php |
@@ -2600,12 +2637,12 @@ tool/guard) and say which ones the fix covers.**
 | 36 | Processed alert emails are marked \Seen — run only, after the store recorded the source; doctor/dump stay read-only | M | done | 766edd7 | src/php/Adapters/Mail/ImapMailbox.php src/php/Adapters/Mail/Mailbox.php src/php/Rent/Cli/Pipeline.php src/php/Car/VehiclePipeline.php |
 | 37 | B-common — content-addressed identity for VehicleEmailSource (no-information floor, price out of the key, in-message duplicate announced) | M | done | 7e1d54b | src/php/Car/VehicleEmailSource.php src/php/Car/VehicleSourceLoader.php |
 | 38 | B-common — per-segment labelled field reader for VehicleEmailSource (the CapCar shape) | M | done | 7e1d54b | src/php/Car/VehicleEmailSource.php src/php/Car/VehicleSourceLoader.php |
-| 39 | B3 prerequisite — a NARROW scrubber stripper for a base64 JSON-array identity blob, all refusal guarantees kept | M | done | - | tools/scrub-eml.php tests/test-scrub-eml.sh |
-| 40 | F20 / Q39 — a repair route for a durably-excluded row: ruling (command vs stored distinction), then build | M | todo | - | src/php/Rent/Store/Store.php src/php/Rent/Cli/RentScout.php |
-| 41 | Round-5 P2 — a selector drifting onto a 5-digit field extracts cleanly and health stays ok: ruling (build vs accept), then build | M | todo | - | src/php/Rent/Adapters/ListingMapper.php |
+| 39 | B3 prerequisite — a NARROW scrubber stripper for a base64 JSON-array identity blob, all refusal guarantees kept | M | done | 74d15d1 | tools/scrub-eml.php tests/test-scrub-eml.sh |
+| 40 | F20 / Q39 — a repair route for a durably-excluded row: ruling (command vs stored distinction), then build | M | done | - | src/php/Rent/Store/Store.php src/php/Rent/Cli/RentScout.php |
+| 41 | Round-5 P2 — a selector drifting onto a 5-digit field extracts cleanly and health stays ok: ruling (build vs accept), then build | M | done | - | src/php/Rent/Adapters/ListingMapper.php |
 | 42 | Register + Known-issues bookkeeping — F1b, F3, F6 closers; three stale bullets | S | done | - | docs/plans/scout-unified-execution.plan.md |
 | 43 | Fresh test record at HEAD, then the freeze for row 35 | S | todo | - | - |
-| 44 | In'li answers HTTP 302 on ~2 of 5 passes (seen 2026-09-05 00:30, source reports broken) — measure the redirect, rule, fix or record | M | todo | - | src/php/Rent/Adapters/HtmlSource.php config/rent/sources.json |
+| 44 | In'li answers HTTP 302 on ~2 of 5 passes (seen 2026-09-05 00:30, source reports broken) — measure the redirect, rule, fix or record | M | done | - | src/php/Rent/Adapters/HtmlSource.php config/rent/sources.json |
 <!-- /progress-block -->
 ### Blocked
 

@@ -1786,6 +1786,46 @@ final readonly class Store
         return ['tenure' => $tenure, 'source' => (string) $row['twin_source']];
     }
 
+    /**
+     * F20 / Q39 (row 40, 2026-09-05): the ONE way back for a durably-excluded row.
+     *
+     * A row's own excluded reading is permanent by design — `staleVerdicts()` skips it,
+     * `pendingDigest()` skips a non-DIGEST outcome, `replay` writes no verdicts — and so is a
+     * `PLS` it received from a twin on the other track. That is the §1-safe direction, and it has
+     * one cost: an over-link or an over-merge rejects a genuine LLI flat for ever, and no command
+     * could undo it. This is that command's store half: it reports where the exclusion came from
+     * and clears the row's OWN reading and its TWIN reading, so the next pass (or the rest of the
+     * `reclassify` invocation that called it) re-judges the row on its own evidence.
+     *
+     * The GROUP veto is reported but NOT cleared: it lives on the siblings' own readings, and a
+     * sibling that really says `PLS` keeps saying it. Re-opening a row whose group still vetoes it
+     * changes nothing on the next pass, and the report says so before the operator wonders why.
+     *
+     * @return array{own: ?Tenure, twin: ?array{tenure: Tenure, source: string}, group: ?Tenure}|null
+     *         the provenance, or `null` when no such row exists — nothing is touched then
+     */
+    public function reopen(string $dedupKey, bool $dryRun = false): ?array
+    {
+        $exists = $this->pdo->prepare('SELECT 1 FROM listings WHERE dedup_key = :key');
+        $exists->execute(['key' => $dedupKey]);
+        if ($exists->fetchColumn() === false) {
+            return null;
+        }
+
+        $provenance = [
+            'own' => $this->tenure($dedupKey),
+            'twin' => $this->twinTenure($dedupKey),
+            'group' => $this->groupExcludedTenure($dedupKey),
+        ];
+
+        if (!$dryRun) {
+            $this->pdo->prepare('UPDATE listings SET tenure = NULL, twin_tenure = NULL, twin_source = NULL WHERE dedup_key = :key')
+                ->execute(['key' => $dedupKey]);
+        }
+
+        return $provenance;
+    }
+
     public function recordOutcome(string $dedupKey, string $outcome): void
     {
         $this->pdo->prepare('UPDATE listings SET outcome = :outcome WHERE dedup_key = :key')
