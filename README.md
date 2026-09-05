@@ -171,6 +171,20 @@ entire back catalogue at once. With `restart: unless-stopped` that refusal becom
 visible, since Q27 records it to `state/rent-last-refusal.txt` and reports it on the next successful
 start, but still a loop. Seed first and it starts clean.
 
+**If you drive it with cron instead — `--once` — you owe two scheduled verbs.** The daily floors
+live inside the watch loop, so a `--once` deployment has the event-driven paths and no floor at all:
+the *à vérifier* bin and the *vérifié, score bas* queue both fill and nothing empties them. Add them
+to the same cron that runs the pass:
+
+```cron
+30 8 * * *  cd /srv/scout && docker compose run --rm rent-scout digest
+35 8 * * *  cd /srv/scout && docker compose run --rm car-scout  rollup
+```
+
+Both are safe to run when there is nothing pending — they say so and send nothing. Every `--once`
+pass that holds a match back names the verb it is waiting for, and `doctor` says the floor is
+`--watch` only, on both domains.
+
 **File ownership is the one thing that bites on a first deploy.** `state/` is bind-mounted from the
 host, so it belongs to whoever created it, while the container runs as its own uid. Compose defaults
 to `1000:1000` — the ordinary first user on a Debian/Ubuntu VPS. If yours differs:
@@ -499,14 +513,24 @@ thought to look, and that bin is where every listing the classifier could not re
 
 **Since 2026-09-05 the digest has a SECOND SECTION, and the two are never mixed.** A listing that
 MATCHED but scored under `notify.push_min_score` (rent: 55, the measured p90 of 1 046 stored
-matches) is not pushed on its own: it waits in the store and the same drain — `digest`, the
-end-of-pass emission and the daily floor — announces it under its own heading, *« vérifié, score
+matches) is not pushed on its own: it waits in the store, and **two** drains empty that queue —
+`scout --domain=rent digest` and the daily floor, which is `--watch` only. The end-of-pass emission
+is NOT one of them: a pass announces the *à vérifier* entries it produced and QUEUES the low-score
+matches, so a cron-driven `--once` deployment must schedule the verb itself (see § Deploying it) or
+nothing ever announces them. Both drains announce the queue under its own heading, *« vérifié, score
 bas »*, below the *« à vérifier »* tenure doubts. The title claims the regime clause only when a
 tenure doubt is present; a rollup-only mail is titled *« Vérifié, score bas : N annonce(s) »*. The
 store records the announcement kind (`DIGEST < ROLLUP < MATCH`, monotone), so a rent drop that
 lifts a rolled-up flat over the line is pushed once, as a promotion, and a flat already pushed is
 never demoted. Remove the key to push every match individually again. Every pass says how many
-matches it held back, and `doctor` prints the gate and the queue as `rollup :` — on both domains.
+matches it held back — and names the drain that will empty it, which differs by run mode — and
+`doctor` prints the gate, the queue and the floor's `--watch` scope as `rollup :`, on both domains.
+
+**A queued row is not always a low score.** The queue is *matched, and nobody was told* — which is
+also what a push that FAILED leaves behind, and on a deployment with no gate configured it is the
+only thing it can be. So both drains re-score each row and split it: at or over the line (or with
+no gate at all) it is pushed as the individual match it is and recorded as `MATCH`; only a row that
+really fell short is rolled up. A retry the channel refuses is left exactly where it was.
 
 **On a day with nothing pending the floor says nothing at all**, and records no window as served.
 The heartbeat already proves the watcher is alive every 24 h, so a daily "rien à vérifier" push

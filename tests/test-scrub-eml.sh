@@ -581,6 +581,53 @@ check "a percent-encoded blob under an UNKNOWN header is REFUSED, not written" \
 check "and nothing was written for it" \
   bash -c '! test -f "'"$work/custom.out.eml"'"'
 
+# ── ONE LAYER DEEPER: percent-encoded INSIDE the base64 (C2 round 6, resilience P1).
+#
+# An ESP redirect-tracking shape: `redirect=https://…/?email=<percent-encoded address>` wrapped in
+# base64. The tool's cascade percent-decodes before EVERY scan level and refused it all along; the
+# CI guard percent-decoded once, up front, and passed it. The two now share one implementation
+# (`Scout\Core\RecoverableForms`), and this case is the tool-side half of the pair — it proves the
+# shape is refused, and it will keep proving it after the next "simplification" of the cascade.
+nested="$work/nested.eml"
+nblob="$(php -r 'echo base64_encode("redirect=https://track.example.test/?email=" . rawurlencode($argv[1]) . "&c=42");' "$address")"
+{
+  printf 'From: CapCar <contact@capcar.fr>\r\n'
+  printf 'Subject: alerte\r\n'
+  printf 'X-Custom-Tracking: %s\r\n' "$nblob"
+  printf 'Content-Type: text/plain\r\n\r\n'
+  printf 'Marque : Renault\r\n'
+} > "$nested"
+
+nested_status=0
+php "$repo/tools/scrub-eml.php" "$nested" "$work/nested.out.eml" "$address" \
+  >"$work/nested.log" 2>&1 || nested_status=$?
+
+check "an address percent-encoded INSIDE a base64 blob is REFUSED" \
+  test "$nested_status" -ne 0
+check "and nothing was written for it either" \
+  bash -c '! test -f "'"$work/nested.out.eml"'"'
+
+# And the real `X-Mailin-EID` shape inside an OUTER base64 — a regression shape, isolating nothing:
+# percent-encoding touches only `+`, `/` and `=`, an ASCII address never encodes to `+` or `/`, so
+# the inner run survives intact and decodes with no percent pass at all (measured, as for the
+# `X-Custom-Tracking` case above).
+nested2="$work/nested2.eml"
+n2blob="$(php -r 'echo base64_encode("t=" . rawurlencode(base64_encode("98986954~" . $argv[1] . "~<3bd70a6e@example.test>~relay.example.test")) . "&c=42");' "$address")"
+{
+  printf 'From: CapCar <contact@capcar.fr>\r\n'
+  printf 'Subject: alerte\r\n'
+  printf 'X-Custom-Tracking: %s\r\n' "$n2blob"
+  printf 'Content-Type: text/plain\r\n\r\n'
+  printf 'Marque : Renault\r\n'
+} > "$nested2"
+
+nested2_status=0
+php "$repo/tools/scrub-eml.php" "$nested2" "$work/nested2.out.eml" "$address" \
+  >"$work/nested2.log" 2>&1 || nested2_status=$?
+
+check "an address percent-encoded BETWEEN two base64 layers is REFUSED" \
+  test "$nested2_status" -ne 0
+
 
 check "a percent-encoded ESP header is handled, not silently kept" test "$mailin_status" -eq 0
 if [[ -f "$work/mailin.out.eml" ]]; then

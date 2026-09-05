@@ -1234,8 +1234,9 @@ final readonly class Store
      * then overwrote `tenure` and `outcome`, taking the row out of both `staleVerdicts()` and
      * `pendingDigest()`, so neither `scout reclassify` nor `scout digest` could reach it either.
      *
-     * The ordering is monotone and closed: DIGEST < MATCH. A row already announced as a MATCH is
-     * never re-announced as anything.
+     * The ordering is monotone and closed: DIGEST < ROLLUP < MATCH (three levels since A5 —
+     * see {@see announcementRank()}). A row already announced as a MATCH is never re-announced
+     * as anything.
      *
      * **A pre-v8 row — a timestamp with no recorded kind — reads as MATCH.** That is the quiet
      * direction on purpose: those rows were announced by a version that did not record what it

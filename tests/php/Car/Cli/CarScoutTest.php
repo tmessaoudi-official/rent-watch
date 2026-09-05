@@ -166,6 +166,94 @@ final class CarScoutTest extends TestCase
         self::assertStringContainsString('non délivré', $r['out'] . $r['err']);
     }
 
+    /**
+     * The held-back line names the drain THIS run mode has. The daily floor lives inside the watch
+     * loop, so under `--once` the queue empties when the operator's cron runs `rollup` and never
+     * otherwise — promising a daily rollup there reads as reassurance while the queue grows.
+     */
+    public function testAOncePassNamesTheVerbRatherThanAFloorItDoesNotHave(): void
+    {
+        \Scout\Car\VehicleStore::open($this->db)->record(new \Scout\Car\VehicleListing(sourceName: 'paruvendu', externalId: 'seed'), '2026-08-01T00:00:00Z');
+
+        $r = $this->scout(['--domain=car', 'run', '--once', '--source=paruvendu'], new CarRecordingChannel());
+
+        self::assertSame(0, $r['code'], $r['err']);
+        self::assertStringContainsString('sous le seuil de notification individuelle', $r['out']);
+        self::assertStringContainsString('scout --domain=car rollup', $r['out'], 'the --once drain is the verb');
+        self::assertStringContainsString('ne tourne que sous --watch', $r['out'], 'and the floor\'s scope is stated');
+    }
+
+    // ── C2 round 6 (2026-09-05): a queued car AT the line never went out, so it is re-pushed ─────
+
+    /**
+     * The queue cannot tell a car HELD BACK by the gate from one whose push FAILED — both leave a
+     * `MATCH` outcome with no `notified_at`. A car at or over the line is therefore re-pushed as
+     * the individual match it is, never filed under a heading that says it scored badly.
+     */
+    public function testTheRollupVerbRePushesAQueuedMatchAtOrOverTheGate(): void
+    {
+        $key = $this->queueACarOverTheGate();
+        $channel = new CarRecordingChannel();
+
+        $r = $this->scout(['--domain=car', 'rollup'], $channel);
+
+        self::assertSame(0, $r['code'], $r['out'] . $r['err']);
+        self::assertStringContainsString('réémise(s) individuellement', $r['out']);
+        self::assertCount(1, array_filter($channel->sent, static fn ($n) => $n->kind === NotificationKind::MATCH), 'pushed as a match');
+        self::assertSame([], array_filter($channel->sent, static fn ($n) => $n->kind === NotificationKind::ROLLUP), 'and no rollup beside it');
+        self::assertTrue(\Scout\Car\VehicleStore::open($this->db)->wasNotified($key), 'marked on delivery');
+    }
+
+    /** The floor is the only automatic drain under `--watch`, so it re-pushes exactly as the verb does. */
+    public function testTheRollupFloorRePushesAQueuedMatchAtOrOverTheGate(): void
+    {
+        $key = $this->queueACarOverTheGate();
+        $channel = new CarRecordingChannel();
+        putenv('SCOUT_MAX_PASSES=1');
+        try {
+            $r = $this->scout(['--domain=car', 'run', '--watch', '--source=paruvendu'], $channel);
+        } finally {
+            putenv('SCOUT_MAX_PASSES');
+        }
+
+        self::assertSame(0, $r['code'], $r['out'] . $r['err']);
+        self::assertStringContainsString('réémise(s) individuellement', $r['out']);
+        self::assertCount(1, array_filter($channel->sent, static fn ($n) => $n->kind === NotificationKind::MATCH && str_contains($n->title, 'Mercedes')));
+        self::assertTrue(\Scout\Car\VehicleStore::open($this->db)->wasNotified($key));
+    }
+
+    /** A refused retry is left EXACTLY where it was: nothing marked, offered again next drain. */
+    public function testARefusedRetryIsLeftQueuedAndSaidOutLoud(): void
+    {
+        $key = $this->queueACarOverTheGate();
+        $channel = new CarRecordingChannel();
+        $channel->down = true;
+
+        $r = $this->scout(['--domain=car', 'rollup'], $channel);
+
+        self::assertStringContainsString('réémission non délivrée', $r['out'] . $r['err']);
+        self::assertFalse(\Scout\Car\VehicleStore::open($this->db)->wasNotified($key), 'nothing marked on a refused send');
+        self::assertSame(1, \Scout\Car\VehicleStore::open($this->db)->pendingRollupCount(), 'still queued');
+    }
+
+    /**
+     * A queued MATCH whose STORED score clears the shipped gate and whose snapshot could not be
+     * encoded — the production shape of a push that failed, and the arm that has to fall back to
+     * the stored score because nothing can be re-judged.
+     */
+    private function queueACarOverTheGate(): string
+    {
+        $store = \Scout\Car\VehicleStore::open($this->db);
+        $car = new \Scout\Car\VehicleListing(sourceName: 'paruvendu', externalId: 'HAUT-1', title: 'Mercedes Classe B 180 d', priceEur: 12000);
+        $sighting = $store->record($car, '2026-08-01T00:00:00Z');
+        $store->recordVerdict($sighting->dedupKey, \Scout\Car\VehicleVerdict::matched(90, ['jugée au-dessus du seuil'], false), $car);
+        $pdo = new \PDO('sqlite:' . $this->db);
+        $pdo->setAttribute(\PDO::ATTR_ERRMODE, \PDO::ERRMODE_EXCEPTION);
+        $pdo->prepare('UPDATE vehicle_listings SET snapshot_json = NULL WHERE dedup_key = :k')->execute(['k' => $sighting->dedupKey]);
+
+        return $sighting->dedupKey;
+    }
+
     /** One `run --once` over the ParuVendu fixtures under the shipped gate queues exactly the 46-point 2008. */
     private function queueTheWeakParuVenduCard(): void
     {
@@ -182,6 +270,9 @@ final class CarScoutTest extends TestCase
         self::assertStringContainsString('VIDE', $r['out'], 'an empty seen-set is named, with the seed command');
         self::assertStringContainsString('paruvendu', $r['out']);
         self::assertStringContainsString('car-watch', $r['out']);
+        // The floor's SCOPE, not just its hour: it runs inside the watch loop, so a cron-driven
+        // `--once` deployment has the verb and nothing else (C2 round 6, completeness lens).
+        self::assertStringContainsString('sous --watch UNIQUEMENT', $r['out']);
     }
 
     /**

@@ -194,8 +194,11 @@ final readonly class Formatter
             }
         }
         if ($entries === []) {
+            // ROLLUP, not DIGEST (C2 round 6, correctness P2): the rent digest MEANS tenure doubt,
+            // and a mail holding only settled matches is not one — the same reason the car side
+            // carries its own kind. A channel filing DIGEST as « à vérifier » cannot mistake it.
             return new Notification(
-                kind: NotificationKind::DIGEST,
+                kind: NotificationKind::ROLLUP,
                 priority: Priority::LOW,
                 title: 'Vérifié, score bas : ' . count($lowScore) . ' annonce(s)',
                 reasons: $lines,

@@ -183,8 +183,9 @@ final class PapFixtureTest extends TestCase
 
         self::assertSame([], $shipped->patternMisses()->total(), 'the shipped patterns read every capture');
 
-        // The patterns as they stood on 2026-08-28, against the same four captures: two new-template
-        // ones miss, two old-template ones do not.
+        // The patterns as they stood on 2026-08-28: the old-template captures read, the newer ones
+        // miss. The COUNTS move with the fixture directory, which is the point — a capture added
+        // without re-reading this test would otherwise slip past it.
         $stale = $this->source([
             'surface_pattern' => '~\(\d{5}\)\h*\n\h*([\d.,]+)\h*m²~u',
             'rooms_pattern' => '~^[^\n]*?(\d+)\h*pi[eè]ces?[^\n]*\n[^\n]*\(\d{5}\)~mu',
@@ -192,13 +193,40 @@ final class PapFixtureTest extends TestCase
         $stale->fetch();
         $counts = $stale->patternMisses()->counts();
 
-        self::assertSame(2, $counts['surface_pattern']['misses'], 'the two new-template captures miss');
-        self::assertSame(4, $counts['surface_pattern']['calls']);
+        self::assertSame(3, $counts['surface_pattern']['misses'], 'every new-template capture misses');
+        self::assertSame(5, $counts['surface_pattern']['calls']);
         self::assertSame(
             [],
             $stale->patternMisses()->total(),
             'a PARTIAL miss raises nothing — a portal\'s copy varies, and crying wolf is how a signal gets ignored',
         );
+    }
+
+    /**
+     * THE FIFTH CAPTURE IS HERE FOR ITS `Date` HEADER, and the flat is incidental.
+     *
+     * `Date: Sat, 5 Sep 2026 09:19:13 +0200` — a SINGLE-DIGIT day, which RFC 5322 writes as
+     * `1*2DIGIT` and which `parseRfc2822()` refused for a month, because its four masks all used
+     * `d` and the round-trip that makes it strict re-formats `5` as `05`. PAP is the portal that
+     * sends it. Measured in production on 2026-09-05: every PAP row first seen 1–5 September
+     * carried `observedAt = NULL` (36 of 86), `source_runs.feed_newest_at` for pap froze at
+     * `2026-08-31T15:24:29Z`, and the live `doctor` reported `feed_silent` — *"rien envoyé depuis
+     * 4 jour(s)"* — on a feed delivering daily.
+     *
+     * Two silent failures from one line: the store's stale-sighting guard had no instant to compare
+     * (the 429-history-row defect), and a health verdict was false. `EmailMessageSentAtTest` covers
+     * the parser; this covers the CHAIN, from a real header to the listing's own observation time —
+     * the hop `Pipeline::enrich()` silently dropped once already.
+     */
+    public function testASingleDigitDayInTheDateHeaderReachesTheListingsObservationTime(): void
+    {
+        $listing = $this->byCommune()['Épinay-sur-Seine'];
+
+        self::assertSame('2026-09-05T07:19:13Z', $listing->observedAt);
+        self::assertSame('93800', $listing->postcode);
+        self::assertSame(70.0, $listing->surfaceM2);
+        self::assertSame(3, $listing->rooms);
+        self::assertSame(550, $listing->rentHc, 'PAP states no charges anywhere — HC, never an invented CC');
     }
 
     public function testTheCardsOwnFactsBeatTheSearchCriteriaQuotedAboveThem(): void
@@ -234,7 +262,7 @@ final class PapFixtureTest extends TestCase
         sort($communes);
 
         self::assertSame(
-            ['Lieusaint', 'Meulan-en-Yvelines', 'Milly-la-Forêt', 'Saint-Maur-des-Fossés'],
+            ['Lieusaint', 'Meulan-en-Yvelines', 'Milly-la-Forêt', 'Saint-Maur-des-Fossés', 'Épinay-sur-Seine'],
             $communes,
             'EVERY capture names a commune, and NONE is a ranked one — sorted, because the '
             . 'mailbox does not promise an order and pinning an incidental one is a false guarantee. '

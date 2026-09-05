@@ -109,7 +109,12 @@ check "runs the ledger's scratch-baseline self-test" \
 check "the ledger's output is captured for the alert" has 'tee "$RUNNER_TEMP/ledger.log"'
 check "and pipefail is set, so tee cannot mask a red ledger" has 'set -o pipefail'
 check "the red-ledger issue names WHICH cases were not caught" has 'undetected or unapplied:'
-check "and reads them from the captured log" has 'RUNNER_TEMP}/ledger.log'
+# The SHARDED read (2026-09-05): the tee still writes `$RUNNER_TEMP/ledger.log` in each shard, the
+# artifact carries it to the alert job, and the alert reads every shard's copy — so the pin moved
+# from one path to the collected set. Summing the tallies is what makes the issue name the whole
+# night rather than one sixth of it.
+check "and reads them from every shard's collected log" has 'ledger-${n}/ledger.log'
+check "and SUMS the shard tallies, so the issue speaks for the whole night" has '(6 shards)'
 check "runs the drift-scan self-test"        has "tests/test-drift-scan.sh"
 check "runs the sabotage ledger"             has "tests/sabotage-check.sh"
 
@@ -143,9 +148,55 @@ check "…and that path really calls issues.create" \
 # 29th), so this was a budget outgrown, not a hang — and a budget outgrown silently is worse than a
 # hang, because a hang at least looks wrong. Stated cost of `cancelled()`: a manual cancel opens a
 # spurious issue, which is this repo's stated bias — one beat too many, never one suppressed.
+# SHARDED SINCE 2026-09-05, so the mechanism moved and the GUARANTEE did not. The alert lives in
+# its own job now — six shards must raise ONE issue, not six — and it is gated on
+# `needs.sabotage.result != 'success'`, which covers `cancelled` the way `failure() || cancelled()`
+# used to, and covers `skipped` shards besides. The job-level `always()` is what lets it run at all
+# after a cancelled dependency; without it GitHub skips the whole job and the timeout reaches
+# nobody again, which is the 2026-08-29 defect this block exists for.
 red_if_line="$(grep -n -A1 'A red ledger must reach a human' "$wf" | grep -m1 'if:' | sed 's/^[0-9]*-//')"
-check "the red-ledger notice fires on a CANCELLED job too (a timeout is a cancellation)" \
-  bash -c 'grep -qE "cancelled\(\)" <<<"$1"' _ "$red_if_line"
+check "the red-ledger notice fires on a CANCELLED ledger too (a timeout is a cancellation)" \
+  bash -c 'grep -qE "needs\.sabotage\.result != .success." <<<"$1"' _ "$red_if_line"
+check "…and its job runs even after a cancelled dependency (always(), or GitHub skips it)" \
+  grep -qE "if: always\(\) && needs\.sabotage\.result != .skipped." "$wf"
+
+# ── THE SHARDING CONTRACT (2026-09-05) ───────────────────────────────────────────────────────────
+# One job could not finish the ledger any more: 258 -> 527 -> 750 cases, four of the last eight
+# nightlies cut off at the cap and four red for the row-45 cause — eight days with no completed
+# detection proof. Each direction below is silent if it breaks.
+check "the ledger job is sharded" grep -q "shard: \[1, 2, 3, 4, 5, 6\]" "$wf"
+# fail-fast would cancel five shards the moment one found an undetected regression, so the alert
+# would name one case and hide however many the others were about to find.
+check "…with fail-fast disabled (one shard's finding must not cancel the other five)" \
+  grep -q "fail-fast: false" "$wf"
+check "…and each shard passes its own SABOTAGE_SHARD" grep -q 'SABOTAGE_SHARD: ${{ matrix.shard }}/' "$wf"
+
+# THE DENOMINATOR IS DUPLICATED and GitHub expressions give no way to avoid it. A `/6` beside a
+# five-way matrix silently drops a sixth of the ledger while every remaining shard still reports a
+# clean run — the `--section=` typo defect one layer up, and undetectable from any shard's output.
+matrix_n="$(grep -m1 -oE 'shard: \[[0-9, ]+\]' "$wf" | tr -cd ',' | wc -c)"
+matrix_n=$((matrix_n + 1))
+shard_denom="$(grep -m1 -oE 'SABOTAGE_SHARD: \$\{\{ matrix\.shard \}\}/[0-9]+' "$wf" | grep -oE '[0-9]+$')"
+check "the shard denominator matches the matrix size (a /6 beside five shards drops a sixth)" \
+  test "${shard_denom:-0}" = "$matrix_n"
+
+# AND THE LEDGER'S OWN HALF OF THE CONTRACT. Both refusals exit before any suite runs, so these
+# two checks are cheap — and they are the ones that matter: a shard spec silently ignored means one
+# job runs everything and five run nothing, and a spec selecting no case means six jobs report a
+# clean ledger between them having proved nothing. Neither is visible from any shard's output.
+check "the ledger REFUSES a malformed shard spec" \
+  bash -c 'SABOTAGE_SHARD=oops bash "$1/tests/sabotage-check.sh" >/dev/null 2>&1; test $? -eq 1' _ "$repo"
+check "…and one that names no shard of the split" \
+  bash -c 'SABOTAGE_SHARD=7/6 bash "$1/tests/sabotage-check.sh" >/dev/null 2>&1; test $? -eq 1' _ "$repo"
+# A shard result printed without its scope reads as the whole ledger.
+check "a shard says it is one" grep -q 'SHARD %d/%d' "$repo/tests/sabotage-check.sh"
+
+# The evidence has to survive the job that produced it, or the alert reads six logs it cannot see.
+check "each shard keeps its ledger log for the alert job" grep -q "actions/upload-artifact" "$wf"
+check "…and the alert job collects them" grep -q "actions/download-artifact" "$wf"
+# A shard that produced NO log was killed before writing; its silence is UNKNOWN, never clean.
+check "a shard with no log is named rather than read as clean" \
+  grep -q "produced no log at all" "$wf"
 
 # And the budget itself: measured 75 / 87 / 90+ minutes on three consecutive nightlies, so a floor
 # of 180 is what stops a "tidy-up" back to the old value from silently disabling the nightly again.

@@ -82,12 +82,37 @@ final readonly class EmailMessage
      * RFC 2822 `Date`, parsed strictly: the value must re-format to itself under the mask that
      * accepted it. Shared with the feed-freshness reader in {@see ImapMailbox}, which learnt this
      * rule first (a `Fri, 09 Aug 2026` recorded as 14 August closed a FEED_SILENT verdict).
+     *
+     * **THE MASK SET IS THE RFC'S OWN GRAMMAR, not the shapes one portal happened to send.** It was
+     * four masks for a month and refused two legal ones, at a cost measured in production on
+     * 2026-09-05: RFC 5322 writes the day as `1*2DIGIT` and makes the seconds optional, PAP writes
+     * `Thu, 3 Sep 2026`, and the round-trip refused it because `createFromFormat` accepts `3` and
+     * re-formats it as `03`. Every PAP alert of 1–5 September was stored with no observation time —
+     * disarming the stale-sighting guard that exists because of the 429-history-row defect — while
+     * `feed_newest_at` froze on 31 August and `FEED_SILENT` was about to call a daily feed dead.
+     * Five days a month, on any portal that does not zero-pad, and nothing anywhere said so.
+     *
+     * Widening cannot weaken it: the round-trip is what makes this strict, and it applies to every
+     * mask. A mismatched weekday, an impossible day and a relative expression are still refused —
+     * `EmailMessageSentAtTest` asserts that counterweight beside the widening, because a mask list
+     * is exactly the thing somebody "simplifies" by dropping the round-trip.
      */
     public static function parseRfc2822(string $header): ?\DateTimeImmutable
     {
         $value = trim(preg_replace('~\s*\([^()]*\)\s*$~', '', trim($header)) ?? trim($header));
 
-        foreach (['D, d M Y H:i:s O', 'd M Y H:i:s O', 'D, d M Y H:i:s T', 'd M Y H:i:s T'] as $mask) {
+        $masks = [];
+        foreach (['D, ', ''] as $dow) {           // the day name is optional in the grammar
+            foreach (['d', 'j'] as $day) {        // 1*2DIGIT — zero-padded or not
+                foreach (['H:i:s', 'H:i'] as $time) { // seconds are optional
+                    foreach (['O', 'T'] as $zone) {   // +0200, or a named zone
+                        $masks[] = $dow . $day . ' M Y ' . $time . ' ' . $zone;
+                    }
+                }
+            }
+        }
+
+        foreach ($masks as $mask) {
             $parsed = \DateTimeImmutable::createFromFormat($mask, $value);
 
             if ($parsed !== false && $parsed->format($mask) === $value) {

@@ -39,6 +39,7 @@ use Scout\Core\Notify\Priority;
 use Scout\Core\Pacer;
 use Scout\Rent\Core\RawListing;
 use Scout\Rent\Core\SourceProfile;
+use Scout\Rent\Core\Dedup;
 use Scout\Rent\Core\DigestCause;
 use Scout\Rent\Core\Classification;
 use Scout\Rent\Core\Outcome;
@@ -349,7 +350,7 @@ final readonly class RentScout
         // under a gate is not a quiet market. The car side says the same on its own `rollup` line.
         $waitingLowScore = $store->pendingLowScoreCount();
         if ($criteria->notify->pushMinScore !== null) {
-            $this->line(sprintf('  rollup  : seuil %d — %d correspondance(s) en attente du récapitulatif « vérifié, score bas » (drainées par le digest ci-dessus)', $criteria->notify->pushMinScore, $waitingLowScore));
+            $this->line(sprintf('  rollup  : seuil %d — %d correspondance(s) en attente du récapitulatif « vérifié, score bas » (drainées par `scout --domain=rent digest` ; le plancher quotidien ne tourne que sous --watch)', $criteria->notify->pushMinScore, $waitingLowScore));
         } elseif ($waitingLowScore > 0) {
             $this->line(sprintf('  rollup  : %d correspondance(s) jugée(s) et jamais notifiée(s) — aucun seuil configuré, `scout --domain=rent digest` les émet', $waitingLowScore));
         }
@@ -704,7 +705,7 @@ final readonly class RentScout
         // the `--once` path re-introduced it nineteen lines from the out-parameter that exists for
         // exactly this (round-6 panel, two lenses).
         $pushed = null;
-        $code = $this->onePass($criteria, $store, $notifier, $sources, $seed, $verbose, $pushed);
+        $code = $this->onePass($criteria, $store, $notifier, $sources, $seed, $verbose, false, $pushed);
 
         // A PENDING REFUSAL FORCES A BEAT ON `--once` (round-5 panel, 2026-08-31). Q27's promise is
         // that "the next successful start reports it on the beat and clears it" — and `--once` has
@@ -860,7 +861,7 @@ final readonly class RentScout
                     // The RESULT is used now rather than discarded: it carries what the pass
                     // actually pushed, which is the figure the beat reports.
                     $pushed = null;
-                    $this->onePass($criteria, $store, $notifier, PacedSource::wrapAll($sources, $pacer), false, $verbose, $pushed);
+                    $this->onePass($criteria, $store, $notifier, PacedSource::wrapAll($sources, $pacer), false, $verbose, true, $pushed);
                     ++$passes;
                     $notified += $pushed ?? 0;
                     $threw = false;
@@ -951,6 +952,15 @@ final readonly class RentScout
         array $sources,
         bool $seed,
         bool $verbose,
+        /**
+         * Is this pass inside the watch loop?
+         *
+         * It changes ONE sentence — the one naming what will empty the low-score queue. The daily
+         * floor runs under `--watch` only, so telling a cron-driven `--once` deployment to wait for
+         * a *récapitulatif quotidien* names a drain that will never run there, and the queue grows
+         * for ever while the line reads as reassurance (C2 round 6, completeness lens).
+         */
+        bool $watching = false,
         /**
          * What the pass ACTUALLY ANNOUNCED — confirmed deliveries, for the Q27 beat. See
          * {@see RunResult::$notified} for why this is not `matches`. An out-parameter rather than a
@@ -1043,7 +1053,17 @@ final readonly class RentScout
         if ($result->queuedLowScore > 0) {
             // A5: said on every pass that holds something back, so a quiet phone is never read as
             // a quiet market — the flats exist, they are waiting for the daily rollup.
-            $this->line(sprintf('%d correspondance(s) sous le seuil de notification individuelle — en attente du récapitulatif quotidien (« vérifié, score bas »)', $result->queuedLowScore));
+            //
+            // And it names the drain THIS run mode actually has: the floor is `--watch` only, so
+            // under `--once` the queue empties when the operator's cron runs the verb, and nothing
+            // else will ever do it.
+            $this->line(sprintf(
+                '%d correspondance(s) sous le seuil de notification individuelle — %s',
+                $result->queuedLowScore,
+                $watching
+                    ? 'en attente du récapitulatif quotidien (« vérifié, score bas »)'
+                    : 'en attente de `scout --domain=rent digest` (« vérifié, score bas ») — le plancher quotidien ne tourne que sous --watch',
+            ));
         }
 
         return $result->hasProblems() ? 1 : 0;
@@ -1125,9 +1145,14 @@ final readonly class RentScout
 
         $notification = (new Formatter())->digest($entries, $batch->lowScore);
 
-        $this->line($notification->title);
-        foreach ($notification->reasons as $reason) {
-            $this->line($reason);
+        if ($entries !== [] || $batch->lowScore !== []) {
+            $this->line($notification->title);
+            foreach ($notification->reasons as $reason) {
+                $this->line($reason);
+            }
+        }
+        foreach ($batch->retries as $retry) {
+            $this->line('[RETRY] ' . (new Formatter())->match($retry['listing'], $retry['verdict'])->title);
         }
 
         if ($withoutSnapshot > 0) {
@@ -1177,6 +1202,14 @@ final readonly class RentScout
 
         $this->warnIfNothingDelivers($notifier);
 
+        $now = $this->nowIso ?? date('c');
+        // The retries first, as the individual pushes they are (C2 round 6, resilience P2).
+        $this->pushRetries($notifier, $store, $batch->retries, $now);
+
+        if ($entries === [] && $batch->lowScore === []) {
+            return 0;
+        }
+
         $failures = $notifier->send($notification);
         foreach ($failures as $failure) {
             $this->warn($failure->getMessage());
@@ -1191,14 +1224,16 @@ final readonly class RentScout
             return 1;
         }
 
-        $now = $this->nowIso ?? date('c');
         foreach ($entries as $entry) {
             $store->markNotified($entry['key'], $now, 'DIGEST');
         }
         // A5: a rolled-up match is marked ROLLUP, never DIGEST (it is no tenure doubt) and never
-        // MATCH (it was not pushed — the promotion over the gate stays reachable).
+        // MATCH (it was not pushed — the promotion over the gate stays reachable). EVERY key of a
+        // collapsed twin pair, so the other route is not re-announced tomorrow.
         foreach ($batch->lowScore as $entry) {
-            $store->markNotified($entry['key'], $now, 'ROLLUP');
+            foreach ($entry['keys'] as $key) {
+                $store->markNotified($key, $now, 'ROLLUP');
+            }
         }
 
         $this->line($batch->count() . ' annonce(s) émise(s)' . ($batch->lowScore !== [] ? sprintf(' (dont %d « vérifié, score bas »)', count($batch->lowScore)) : '') . '.');
@@ -1289,9 +1324,12 @@ final readonly class RentScout
         // command announces verdicts, it does not re-form a §1 verdict (the rule the docblock of
         // its own test states). Never throws, never prints — the same contract as above.
         $lowScore = [];
+        $retries = [];
         $waitingLowScore = $store->pendingLowScoreCount();
         if ($waitingLowScore > 0) {
-            $engine = new CriteriaEngine($this->criteria());
+            $criteria = $this->criteria();
+            $engine = new CriteriaEngine($criteria);
+            $pushMin = $criteria->notify->pushMinScore;
 
             foreach ($store->pendingLowScore() as $row) {
                 $key = $row['dedup_key'];
@@ -1338,13 +1376,29 @@ final readonly class RentScout
                     continue;
                 }
 
-                $lowScore[] = [
+                $entry = [
                     'listing' => $listing,
                     'verdict' => Verdict::matched($verdict->score ?? 0, [...$storedReasons, ...$verdict->reasons], $verdict->highPriority),
                     'key' => $key,
                     'keys' => [$key],
                 ];
+                // A RETRY, NOT A ROLLUP (C2 round 6, resilience P2): the queue cannot tell a
+                // match held back by the gate from one whose push failed, and on a deployment
+                // with no gate every queued row is the latter. Re-scored here, so the split is
+                // the gate's own comparison — and a row at or over the line is pushed as the
+                // match it is, never announced under a heading that says it fell short.
+                if ($pushMin === null || ($verdict->score ?? 0) >= $pushMin) {
+                    $retries[] = $entry;
+                } else {
+                    $lowScore[] = $entry;
+                }
             }
+            // TWO TRACKS, ONE ROLLUP (C2 round 6, correctness P1): the pipeline's twin cover
+            // fires only on a copy that was PUSHED, so two below-gate copies of one flat — a
+            // direct route and an agency copy — were both queued and both announced. Collapsed
+            // here, at the drain, so it holds whichever pass saw which copy.
+            $lowScore = $this->collapseTwins($lowScore, $warnings);
+            $retries = $this->collapseTwins($retries, $warnings);
         }
 
         return new DigestBatch(
@@ -1354,7 +1408,103 @@ final readonly class RentScout
             warnings: $warnings,
             lowScore: $lowScore,
             waitingLowScore: $waitingLowScore,
+            retries: $retries,
         );
+    }
+
+    /**
+     * Merge cross-track twins inside one drained list: the direct route survives (a private
+     * copy only when there is no direct one), the other copy's key joins `keys` so delivery marks
+     * both, and the survivor's reasons name the other route with its link — the push's own rule,
+     * *the better route is never hidden*. `Dedup::twinReason()` is the same test the pipeline
+     * applies, so the two cannot disagree about what a twin is.
+     *
+     * The family map is the ONE thing this reads outside the store, and a config it cannot read
+     * must not take the drain down with it: the digest is §1's only landing zone, and this command
+     * exists precisely for the backlog no pass will re-offer. So a `ConfigError` is VOICED and the
+     * entries pass through uncollapsed — the behaviour of the day before this method existed,
+     * costing a duplicate announcement rather than a bin that never empties. Every other verb still
+     * refuses on the same error, loudly, where sources are what it is about.
+     *
+     * @param list<array{listing: RawListing, verdict: Verdict, key: string, keys: list<string>}> $entries
+     * @param list<string>                                                                       $warnings
+     *
+     * @return list<array{listing: RawListing, verdict: Verdict, key: string, keys: list<string>}>
+     */
+    private function collapseTwins(array $entries, array &$warnings): array
+    {
+        if (count($entries) < 2) {
+            return $entries;
+        }
+        $family = [];
+        try {
+            foreach (ConfigLoader::loadSources($this->rootDir . '/config/rent/sources.json') as $definition) {
+                $family[$definition->name] = $definition->family;
+            }
+        } catch (ConfigError $e) {
+            $warnings[] = 'familles des sources illisibles — les copies croisées ne sont pas fusionnées : ' . Redact::text($e->getMessage());
+
+            return $entries;
+        }
+        $dedup = new Dedup();
+        $out = [];
+        foreach ($entries as $entry) {
+            $listing = $entry['listing'];
+            $mine = $family[$listing->sourceName] ?? 'private';
+            foreach ($out as $i => $kept) {
+                $theirs = $family[$kept['listing']->sourceName] ?? 'private';
+                if ($dedup->twinReason($kept['listing'], $listing, $theirs, $mine) === null) {
+                    continue;
+                }
+                // The direct route wins the headline; whichever loses is named beneath it.
+                [$winner, $loser] = $mine === 'institutional' && $theirs !== 'institutional' ? [$entry, $kept] : [$kept, $entry];
+                $route = ($family[$loser['listing']->sourceName] ?? 'private') === 'institutional' ? 'voie directe' : 'agence / portail';
+                $link = $loser['listing']->url === null ? '' : ' : ' . $loser['listing']->url;
+                $out[$i] = [
+                    'listing' => $winner['listing'],
+                    'verdict' => Verdict::matched($winner['verdict']->score ?? 0, [sprintf('aussi via %s (%s)%s', $loser['listing']->sourceName, $route, $link), ...$winner['verdict']->reasons], $winner['verdict']->highPriority),
+                    'key' => $winner['key'],
+                    'keys' => array_values(array_unique([...$kept['keys'], ...$entry['keys']])),
+                ];
+                continue 2;
+            }
+            $out[] = $entry;
+        }
+
+        return array_values($out);
+    }
+
+    /**
+     * Push the drain's retries as the individual matches they are, marking MATCH on delivery.
+     * Shared by the `digest` verb and the daily floor — one implementation, so the floor cannot
+     * forget what the verb does (the repo's named recurring defect).
+     *
+     * @param list<array{listing: RawListing, verdict: Verdict, key: string, keys: list<string>}> $retries
+     *
+     * @return int pushes confirmed delivered
+     */
+    private function pushRetries(Notifier $notifier, Store $store, array $retries, string $now): int
+    {
+        $delivered = 0;
+        foreach ($retries as $entry) {
+            $failures = $notifier->send((new Formatter())->match($entry['listing'], $entry['verdict']));
+            foreach ($failures as $failure) {
+                $this->warn(Redact::text($failure->getMessage()));
+            }
+            if (!$notifier->delivered($failures)) {
+                $this->warn(sprintf('réémission non délivrée pour %s — laissée en attente.', $entry['key']));
+                continue;
+            }
+            foreach ($entry['keys'] as $key) {
+                $store->markNotified($key, $now, 'MATCH');
+            }
+            ++$delivered;
+        }
+        if ($retries !== []) {
+            $this->line(sprintf('%d correspondance(s) réémise(s) individuellement — au niveau du seuil ou sans seuil, jamais « score bas » (%d délivrée(s)).', count($retries), $delivered));
+        }
+
+        return $delivered;
     }
 
     /**
@@ -2190,6 +2340,15 @@ final readonly class RentScout
             ));
         }
 
+        // The retries first, as individual pushes: the floor is the only automatic drain a
+        // `--watch` deployment has, so a failed push that outlived its source's re-emission is
+        // recovered HERE or nowhere. The verb does the same through the same method.
+        $this->pushRetries($notifier, $store, $batch->retries, $now);
+
+        if ($batch->entries === [] && $batch->lowScore === []) {
+            return;
+        }
+
         $notification = (new Formatter())->digest($batch->entries, $batch->lowScore);
         $failures = $notifier->send($notification);
 
@@ -2210,7 +2369,9 @@ final readonly class RentScout
             $store->markNotified($entry['key'], $now, 'DIGEST');
         }
         foreach ($batch->lowScore as $entry) {
-            $store->markNotified($entry['key'], $now, 'ROLLUP');
+            foreach ($entry['keys'] as $key) {
+                $store->markNotified($key, $now, 'ROLLUP');
+            }
         }
 
         $this->line(sprintf(

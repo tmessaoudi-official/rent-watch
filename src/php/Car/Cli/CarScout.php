@@ -36,6 +36,7 @@ use Scout\Car\VehicleSource;
 use Scout\Car\VehicleSourceDefinition;
 use Scout\Car\VehicleSourceLoader;
 use Scout\Car\VehicleStore;
+use Scout\Car\VehicleVerdict;
 use Scout\Cli\WatchLoop;
 use Scout\Cli\ChannelFactory;
 
@@ -130,7 +131,7 @@ final readonly class CarScout
         // gate is not a quiet market.
         $queued = $store->pendingRollupCount();
         if ($criteria->notify->pushMinScore !== null) {
-            $this->line(sprintf('  rollup   : seuil %d — %d correspondance(s) en attente du récapitulatif « vérifié, score bas »%s', $criteria->notify->pushMinScore, $queued, $criteria->notify->rollupHour === null ? ' (verbe `rollup` seulement, pas de plancher quotidien)' : sprintf(' (plancher quotidien à %dh, marqueur state/car-rollup.txt)', $criteria->notify->rollupHour)));
+            $this->line(sprintf('  rollup   : seuil %d — %d correspondance(s) en attente du récapitulatif « vérifié, score bas »%s', $criteria->notify->pushMinScore, $queued, $criteria->notify->rollupHour === null ? ' (verbe `rollup` seulement, pas de plancher quotidien)' : sprintf(' (plancher quotidien à %dh sous --watch UNIQUEMENT, marqueur state/car-rollup.txt ; sous --once, planifier le verbe)', $criteria->notify->rollupHour)));
         } elseif ($queued > 0) {
             $this->line(sprintf('  rollup   : %d correspondance(s) jugée(s) et jamais notifiée(s) — aucun seuil configuré, `scout --domain=car rollup` les émet', $queued));
         }
@@ -419,7 +420,7 @@ final readonly class CarScout
                     $result = $pipeline->runOnce($sources, $this->now());
                     ++$passes;
                     $notified += $result->notified;
-                    $this->report($result, false, $verbose);
+                    $this->report($result, false, $verbose, true);
                     $threw = false;
                 } finally {
                     if ($threw) {
@@ -628,7 +629,13 @@ final readonly class CarScout
         return $only === [] ? null : $only;
     }
 
-    private function report(\Scout\Car\VehicleRunResult $r, bool $seed, bool $verbose): void
+    /**
+     * @param bool $watching is this pass inside the watch loop? It changes ONE sentence — the one
+     *                       naming what will empty the low-score queue. The daily floor runs under
+     *                       `--watch` only, so telling a cron-driven `--once` deployment to wait
+     *                       for a daily rollup names a drain that will never run there.
+     */
+    private function report(\Scout\Car\VehicleRunResult $r, bool $seed, bool $verbose, bool $watching = false): void
     {
         $this->line(sprintf('%d source(s), %d annonce(s) analysées · %d correspondance(s), %d écartée(s), %d baisse(s) de prix, %d notifiée(s)%s', $r->sourcesRun, $r->itemsParsed, $r->matches, $r->rejectedCount, $r->priceDrops, $r->notified, $r->undelivered > 0 ? ', ' . $r->undelivered . ' NON délivrée(s)' : ''));
         if ($seed) {
@@ -644,7 +651,13 @@ final readonly class CarScout
         if ($r->queuedLowScore > 0) {
             // A5: said on every pass that holds something back, so a quiet phone is never read as
             // a quiet market — the cars exist, they are waiting for the daily rollup.
-            $this->line(sprintf('%d correspondance(s) sous le seuil de notification individuelle — en attente du récapitulatif (« vérifié, score bas »)', $r->queuedLowScore));
+            $this->line(sprintf(
+                '%d correspondance(s) sous le seuil de notification individuelle — %s',
+                $r->queuedLowScore,
+                $watching
+                    ? 'en attente du récapitulatif (« vérifié, score bas »)'
+                    : 'en attente de `scout --domain=car rollup` (« vérifié, score bas ») — le plancher quotidien ne tourne que sous --watch',
+            ));
         }
         if ($verbose) {
             foreach ($r->rejected as $line) {
@@ -681,19 +694,24 @@ final readonly class CarScout
             }
         }
         $store = $this->store();
-        [$entries, $waiting, $unreadable] = $this->collectRollup($store);
+        [$entries, $waiting, $unreadable, $retries] = $this->collectRollup($store);
         foreach ($unreadable as $warning) {
             $this->warn($warning);
         }
-        if ($entries === []) {
+        if ($entries === [] && $retries === []) {
             $this->line('Aucune correspondance en attente du récapitulatif « vérifié, score bas ».');
 
             return 0;
         }
+        foreach ($retries as $retry) {
+            $this->line('[RETRY] ' . (new VehicleFormatter())->match($retry['car'], $retry['verdict'])->title);
+        }
         $notification = (new VehicleFormatter())->rollup($entries);
-        $this->line($notification->title);
-        foreach ($notification->reasons as $line) {
-            $this->line($line);
+        if ($entries !== []) {
+            $this->line($notification->title);
+            foreach ($notification->reasons as $line) {
+                $this->line($line);
+            }
         }
         if ($waiting > count($entries)) {
             $this->line(sprintf('%d autre(s) en attente — relancer `scout --domain=car rollup` pour la suite.', $waiting - count($entries)));
@@ -707,6 +725,10 @@ final readonly class CarScout
         $fatal = $notifier->fatalProblem();
         if ($fatal !== null) {
             return $this->fail($fatal);
+        }
+        $this->pushRetries($notifier, $store, $retries, $this->now());
+        if ($entries === []) {
+            return 0;
         }
         $failures = $notifier->send($notification);
         foreach ($failures as $failure) {
@@ -729,12 +751,18 @@ final readonly class CarScout
      * The queue, decoded — never throws, never prints (the floor calls this inside the loop's
      * `finally`). A row whose snapshot will not decode is announced from its columns and counted.
      *
-     * @return array{0: list<array{car: VehicleListing, score: ?int, key: string}>, 1: int, 2: list<string>}
+     * @return array{0: list<array{car: VehicleListing, score: ?int, key: string}>, 1: int, 2: list<string>, 3: list<array{car: VehicleListing, verdict: VehicleVerdict, key: string}>}
      */
     private function collectRollup(VehicleStore $store): array
     {
         $entries = [];
+        $retries = [];
         $warnings = [];
+        $criteria = $this->criteria();
+        $pushMin = $criteria->notify->pushMinScore;
+        $scorer = new VehicleScorer();
+        $classifier = new VehicleClassifier();
+        [$year, $month] = [(int) date('Y', strtotime($this->now())), (int) date('n', strtotime($this->now()))];
         foreach ($store->pendingRollup() as $row) {
             $car = null;
             if (is_string($row['snapshot_json']) && $row['snapshot_json'] !== '') {
@@ -744,22 +772,75 @@ final readonly class CarScout
                     $warnings[] = sprintf('instantané illisible pour %s — annoncé depuis les colonnes : %s', $row['dedup_key'], Redact::text($e->getMessage()));
                 }
             }
+            $stored = $row['score'] === null ? null : (int) $row['score'];
+            // A RETRY, NOT A ROLLUP (C2 round 6, resilience P2): the queue cannot tell a car held
+            // back by the gate from one whose push failed, and with no gate every queued car is
+            // the latter. Re-judged from the snapshot (the stored score when there is none) so
+            // the split is the gate's own comparison; at or over the line it is pushed as the
+            // match it is, never filed under « score bas ».
+            $verdict = null;
+            if ($car !== null) {
+                $judged = $scorer->judge($car, $classifier->classify($car), $criteria, $year, $month);
+                if ($judged->outcome === VehicleOutcome::MATCH) {
+                    $verdict = $judged;
+                }
+            }
             $car ??= new VehicleListing(sourceName: $row['source'], externalId: $row['external_id'], title: $row['title'], url: $row['url'], priceEur: $row['price_eur'] === null ? null : (int) $row['price_eur']);
-            $entries[] = ['car' => $car, 'score' => $row['score'] === null ? null : (int) $row['score'], 'key' => $row['dedup_key']];
+            $score = $verdict?->score ?? $stored;
+            if ($pushMin === null || ($score !== null && $score >= $pushMin)) {
+                $retries[] = ['car' => $car, 'verdict' => $verdict ?? VehicleVerdict::matched($score ?? 0, ['réémission — score conservé, instantané absent'], false), 'key' => $row['dedup_key']];
+                continue;
+            }
+            $entries[] = ['car' => $car, 'score' => $score, 'key' => $row['dedup_key']];
         }
 
-        return [$entries, $store->pendingRollupCount(), $warnings];
+        return [$entries, $store->pendingRollupCount(), $warnings, $retries];
+    }
+
+    /**
+     * Push the drain's retries as the individual matches they are, marking on delivery. Shared
+     * by the `rollup` verb and the daily floor — one implementation, so the floor cannot forget
+     * what the verb does.
+     *
+     * @param list<array{car: VehicleListing, verdict: VehicleVerdict, key: string}> $retries
+     */
+    private function pushRetries(Notifier $notifier, VehicleStore $store, array $retries, string $now): int
+    {
+        $delivered = 0;
+        foreach ($retries as $entry) {
+            $failures = $notifier->send((new VehicleFormatter())->match($entry['car'], $entry['verdict']));
+            foreach ($failures as $failure) {
+                $this->warn(Redact::text($failure->getMessage()));
+            }
+            if (!$notifier->delivered($failures)) {
+                $this->warn(sprintf('réémission non délivrée pour %s — laissée en attente.', $entry['key']));
+                continue;
+            }
+            $store->markNotified($entry['key'], $now);
+            ++$delivered;
+        }
+        if ($retries !== []) {
+            $this->line(sprintf('%d correspondance(s) réémise(s) individuellement — au niveau du seuil ou sans seuil, jamais « score bas » (%d délivrée(s)).', count($retries), $delivered));
+        }
+
+        return $delivered;
     }
 
     /** The daily floor — silent when nothing is queued, marker written only after delivery. */
     private function floorRollup(Notifier $notifier, VehicleStore $store, string $now): void
     {
-        [$entries, $waiting, $warnings] = $this->collectRollup($store);
-        if ($entries === []) {
+        [$entries, $waiting, $warnings, $retries] = $this->collectRollup($store);
+        if ($entries === [] && $retries === []) {
             return;
         }
         foreach ($warnings as $warning) {
             $this->warn($warning);
+        }
+        // Retries first, as individual pushes — the floor is the only automatic drain under
+        // `--watch`, so a failed push is recovered here or nowhere (the verb does the same).
+        $this->pushRetries($notifier, $store, $retries, $now);
+        if ($entries === []) {
+            return;
         }
         $failures = $notifier->send((new VehicleFormatter())->rollup($entries));
         foreach ($failures as $failure) {

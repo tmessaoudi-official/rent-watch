@@ -51,12 +51,23 @@ final readonly class DigestBatch
          */
         public array $lowScore = [],
         public int $waitingLowScore = 0,
+        /**
+         * THE RETRIES (C2 round 6, resilience P2): rows in the low-score queue that are NOT under
+         * the line — a match whose individual push FAILED, or any queued match on a deployment
+         * with no gate at all. Both queries select `outcome = MATCH AND notified_at IS NULL` and
+         * cannot tell the two apart; the drain can, because it re-scores. Announced as ordinary
+         * MATCH pushes by every emission site, marked `MATCH` on delivery — never filed under
+         * « score bas », which would claim a threshold the score does not fall under.
+         *
+         * @var list<array{listing: RawListing, verdict: Verdict, key: string, keys: list<string>}>
+         */
+        public array $retries = [],
     ) {}
 
     /** Nothing in EITHER queue. */
     public function isEmpty(): bool
     {
-        return $this->entries === [] && $this->lowScore === [];
+        return $this->entries === [] && $this->lowScore === [] && $this->retries === [];
     }
 
     /** Entries carried by this batch, both queues. */

@@ -1450,6 +1450,77 @@ read-only) and the merged prose as one review deep.
   production ini (17/17 from 16/17). **Fast job GREEN at `3f8fc42`** (run 33945957335: suite +
   guards success), the first green push since 2026-09-03 08:56. Ledger re-dispatched on that SHA.
 
+- [2026-09-05 13:00] RECORD (**C2 ROUND 6 — NOT CLEAN ON ALL THREE LENSES; every finding fixed**).
+  Round 6 ran over `5e68c24..878851d` (the A5 freeze). Grades as given: correctness P1+P2,
+  resilience P1+P2, completeness P0+P2+P3; reports in `var/claude/c2-round6-*.md`. The two-clean
+  counter stays at **0**. Disposition, each with its own tests and ledger cases:
+  **RES-P1** — `FixtureSecretsTest::allForms()` and `tools/scrub-eml.php` were two copies of one
+  decode cascade and the copy was one decode short, so `base64(percent-encoded(address))` passed CI
+  while the tool refused it. One implementation now, `Scout\Core\RecoverableForms`. Measured while
+  writing the ledger case: an ASCII address never base64-encodes to `+` or `/`, so the in-loop
+  percent-decode is NOT isolable — the case removes both percent passes together and says why.
+  **RES-P2** — a queued row is *matched and nobody was told*, which is also what a FAILED push
+  leaves behind and, with no gate configured, the only thing it can be. Both drains now re-score and
+  split: at or over the line (or no gate) the row is pushed individually and marked `MATCH`; only a
+  row that really fell short is rolled up. `pushRetries()` is ONE method per domain called from the
+  verb AND the floor, with a ledger case per call site.
+  **COR-P1** — two below-gate copies of one flat, direct route and agency copy, were both queued and
+  both announced in the same mail: the pipeline's twin cover only fires on a copy that was PUSHED.
+  Collapsed at the drain, in both orders, marking every key of the pair. A `sources.json` the drain
+  cannot read is VOICED and the entries pass through uncollapsed — §1's only landing zone must not
+  be taken down by a config error, and a duplicate announcement is the pre-fix behaviour.
+  **COR-P2** — a rollup-only rent mail carried `NotificationKind::DIGEST`.
+  **COMP-P0** — this file and the README claimed THREE drains for the low-score queue; the code has
+  two, because the end-of-pass emission calls `formatter->digest($batch)` with one argument and only
+  COUNTS what it queued. Both corrected, README § Deploying it gained the `--once` cron step, and
+  both pass lines and both `doctor`s now name the drain the RUN MODE actually has.
+  **COMP-P2** — `Store.php`'s docblock still said `DIGEST < MATCH`. **COMP-P3** — `/add-source` now
+  carries a car-domain scope block. Full suite **2925 tests / 11582 assertions green**; applies gate
+  756/756 after retargeting two expressions the `RecoverableForms` extraction and the `keys`
+  refactor had orphaned.
+
+- [2026-09-05 13:30] RECORD (**A LIVE SILENT DEFECT FOUND BY THE SOURCE AUDIT THE DEVELOPER ASKED
+  FOR — an RFC-legal `Date` was refused, and it cost PAP its observation time AND its feed
+  verdict**). The ask was *"retest all emails to see if we missed anything, all sources to get if we
+  missed any information"*. Method: per-source NULL rate over every field of the stored snapshots,
+  both domains, plus one live `doctor` on each. **RFC 5322 writes the day as `1*2DIGIT`** and
+  `EmailMessage::parseRfc2822()` carried four masks, all `d` — so `Sat, 5 Sep 2026 09:19:13 +0200`,
+  which is what PAP actually sends (VERIFIED by pulling two live messages through
+  `tools/dump-eml.php` and reading the header, not inferred from the dates), round-tripped to `05`
+  and was refused. Measured: every PAP row first seen 1–5 September has `observedAt = NULL` (36 of
+  86) while every row to 31 August has one, `source_runs.feed_newest_at` for pap is frozen at
+  `2026-08-31T15:24:29Z`, and the live doctor reported **`pap feed_silent` — "rien envoyé depuis
+  4 jour(s)" on a feed delivering daily**. Two silent failures at once: the store's stale-sighting
+  guard (the 429-history-row defect) had no instant to compare, and a health verdict was false —
+  hard rule 2 from both ends. The mask set is now the RFC's grammar (optional day name × 1-or-2-digit
+  day × optional seconds × `O`/`T`), still round-trip strict, with the counterweight asserted
+  (a mismatched weekday, `31 Sep`, `tomorrow` and `+2 days` all still refused). One parser serves
+  `sentAt()` and `ImapMailbox`'s feed reader, so both surfaces are fixed at once.
+
+- [2026-09-05 13:45] AGREED (**three rulings in one `AskUserQuestion`, each on a measurement**).
+  **(1) The nightly ledger is SHARDED, not merely given a bigger budget.** Measured: not one
+  completed run in eight days — four CANCELLED at the 240-minute cap (258 → 527 → 750 cases in three
+  weeks) and four failed on the row-45 CI cause; seven issues open and none closable. GitHub's
+  hosted ceiling is 360, so raising had nowhere left to go. Six-way matrix on the case index,
+  `fail-fast: false` (one shard's finding must not cancel five others), each shard uploading its log,
+  and the alert moved to ONE aggregating `sabotage-alert` job so a bad night still opens a single
+  issue and a good one still closes the whole backlog. `issues: write` moved with it — a shard that
+  only runs the ledger holds no write token. **(2) leboncoin stays as it is**: it has sent nothing
+  since 2026-08-26 (rent) / 2026-08-27 (car), both sources report `broken` on 248 and 164
+  consecutive empty runs, and only the developer can re-create a portal alert — recorded, not
+  configured away. **(3) In'li's 8 % missing postcode is recorded, not repaired**: 48 of 600 rows
+  have no `cp` and in region mode that is an outright reject, though their communes are stated and
+  all are Île-de-France. The card `cp` was removed on 2026-09-02 when In'li changed its URL format,
+  so the postcode now rests only on the detail page's title — the single-selector risk this file
+  already records. In'li is answering `HTTP 302 → /maintenance` right now, so nothing can be probed
+  live; a commune→postcode fallback and forgiving a null postcode in region mode were both offered
+  and declined, the second correctly (it re-opens the fail-open shape region mode was guarded
+  against). **Also measured and NOT acted on beyond a note:** ParuVendu's `facts_pattern` loses
+  year, mileage, fuel and body together on 15–17 of ~132 cards (11 %, confirmed live and in the
+  store) because it requires `body - fuel - Année …` and real cards write `Année 2020 - 80 237 km`;
+  `IMAP_MAX_MESSAGES` was raised 250 → 500 in `.env` after the live doctor reported seloger's window
+  TRUNCATED (361 messages, 250 read).
+
 ---
 
 ## Fragile implementations register (the developer asked; keep this list honest)

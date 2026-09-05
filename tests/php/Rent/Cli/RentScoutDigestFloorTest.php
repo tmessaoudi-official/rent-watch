@@ -286,6 +286,70 @@ final class RentScoutDigestFloorTest extends TestCase
         self::assertStringContainsString('digest_hour', $r['err']);
     }
 
+    // ── C2 round 6 (2026-09-05): the floor drains the low-score queue TOO, both ways ─────────────
+
+    /**
+     * The floor is the only automatic drain a `--watch` deployment has, so a push that FAILED and
+     * outlived its source's re-emission is recovered here or nowhere. With no gate configured —
+     * the default — nothing is ever held back, so every queued row is exactly that.
+     */
+    public function testTheFloorRePushesAQueuedMatchWhenNoGateIsConfigured(): void
+    {
+        $root = $this->tempRoot();
+        $key = $this->seedQueuedMatch($root, 'RETRY-FLOOR');
+
+        $r = $this->watch($root);
+
+        self::assertSame(0, $r['code'], $r['err']);
+        self::assertStringContainsString('réémise(s) individuellement', $r['out'], 'pushed by the floor, not left waiting');
+        self::assertStringNotContainsString('Vérifié, score bas', $r['out'], 'no gate held it back — it is not a low score');
+        self::assertTrue(Store::open($root . '/state/rent-watch.sqlite3')->wasNotifiedAs($key, 'MATCH'));
+    }
+
+    /** Under a gate it really fell short of, the same floor rolls it up and marks it ROLLUP. */
+    public function testTheFloorRollsUpAMatchThatReallyFellShortOfTheGate(): void
+    {
+        $root = $this->tempRoot(['notify' => ['push_min_score' => 100]]);
+        $key = $this->seedQueuedMatch($root, 'ROLLUP-FLOOR');
+
+        $r = $this->watch($root);
+
+        self::assertSame(0, $r['code'], $r['err']);
+        self::assertStringContainsString('score bas', $r['out']);
+        self::assertStringNotContainsString('réémise(s) individuellement', $r['out']);
+        $store = Store::open($root . '/state/rent-watch.sqlite3');
+        self::assertTrue($store->wasNotifiedAs($key, 'ROLLUP'));
+        self::assertFalse($store->wasNotifiedAs($key, 'MATCH'), 'the promotion over the gate stays reachable');
+    }
+
+    /**
+     * A queued MATCH: the shape the push gate and a failed send both leave behind — a `MATCH`
+     * outcome with no `notified_at`. Its facts sit inside this class's criteria, because the drain
+     * re-scores from the snapshot and leaves a row today's criteria reject waiting.
+     */
+    private function seedQueuedMatch(string $root, string $id): string
+    {
+        $listing = new RawListing(
+            sourceName: 'inli',
+            externalId: $id,
+            title: 'Appartement 3 pièces',
+            description: 'Logement intermédiaire (LLI).',
+            fields: ['financement' => 'LLI'],
+            commune: 'Sartrouville',
+            postcode: '78500',
+            rentCc: 1450,
+            surfaceM2: 88.0,
+            rooms: 4,
+        );
+
+        $store = Store::open($root . '/state/rent-watch.sqlite3');
+        $sighting = $store->record($listing, $listing->effectiveRentCc(), self::NOW);
+        $store->recordVerdict($sighting->dedupKey, 'LLI', 90, ['champ structuré financement = « LLI »'], $listing);
+        $store->recordOutcome($sighting->dedupKey, 'MATCH');
+
+        return $sighting->dedupKey;
+    }
+
     // ── harness ──────────────────────────────────────────────────────────────────────────────────
 
     /** @return array{code: int, out: string, err: string} */

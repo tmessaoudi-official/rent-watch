@@ -38,6 +38,29 @@ Adding a source must be **config-only** in the common case. A bespoke adapter un
 `src/php/Adapters/sites/` is the fallback, not the default path. If you find yourself writing PHP here,
 stop and say why config was not enough — a contract every source bypasses is not a contract.
 
+> **SCOPE: this skill is the RENT domain** — `config/rent/sources.json`, the tenure classifier, the
+> `à vérifier` digest. **A car source is a different file and a different vocabulary**, and running
+> these steps against it produces a block the car loader refuses. For `config/car/sources.json`,
+> keep steps 1, 3, 5 and 6 (find the real endpoint, freeze a fixture, prove a health baseline,
+> report) and read the car-side params off `Car/VehicleSourceLoader::PATTERN_PARAMS` rather than the
+> field-map tables below. The four that have no rent equivalent, each earned by a real portal:
+>
+> - **`facts_pattern`** — ONE regex with named groups (`body/fuel/year/km`, plus `title/make/model/
+>   version/gearbox/price/ref`) for a labelled card. Configuring a second provider for a fact a
+>   group already supplies is refused at load: two providers, one honoured, the other inert.
+> - **`card_separator_pattern`** — a zero-width lookahead, for a card whose separator is the label
+>   that STARTS it rather than a CTA that ends it.
+> - **`make_model_unknown_pattern`** — the portal's own *I don't know* token (ParuVendu writes
+>   `/autres/autres/`). Without it the sentinel is captured as a make, matches no `brand_avoid`
+>   stem, and silently awards the whole brand share to a car on the avoid list.
+> - **`id_from: content`** — for a portal whose every link is a per-recipient tracking redirect, so
+>   `basename()` is a fresh id per message and the same id for every card in one. Pick the scheme
+>   BEFORE the first enabled pass: nothing migrates a stored row between keys.
+>
+> Step 4 (tenure) has no car equivalent — the §1 vehicle set is CODE in `VehicleClassifier` and is
+> not configurable — but `tests/test-vehicle-guard.sh` is the tripwire that watches it, exactly as
+> `tests/test-tenure-guard.sh` watches the rent one.
+
 ---
 
 ## Step 0 — Which path?

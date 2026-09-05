@@ -631,6 +631,12 @@ final class RentScoutTest extends TestCase
         self::assertStringContainsString('6 correspondance(s) sous le seuil de notification individuelle', $r['out'], 'the pass names what it held back — every one of the six demo matches');
         self::assertStringNotContainsString('[MATCH]', $r['out'], 'held back, not pushed');
         self::assertSame(6, Store::open((string) $this->dbPath)->pendingLowScoreCount(), 'queued for the rollup');
+        // AND IT NAMES THE DRAIN THIS RUN MODE HAS. The daily floor lives inside the watch loop, so
+        // under `--once` the queue empties when the operator's cron runs the verb and never
+        // otherwise; promising a *récapitulatif quotidien* here reads as reassurance while the
+        // queue grows for ever (C2 round 6, completeness lens).
+        self::assertStringContainsString('scout --domain=rent digest', $r['out'], 'the --once drain is the verb');
+        self::assertStringContainsString('ne tourne que sous --watch', $r['out'], 'and the floor\'s scope is stated');
     }
 
     /** And `doctor` names the gate and the queue — the place the developer looks first (the car side already did). */
@@ -645,6 +651,7 @@ final class RentScoutTest extends TestCase
 
         self::assertSame(0, $r['code'], $r['err']);
         self::assertStringContainsString('rollup  : seuil 100 — 6 correspondance(s) en attente', $r['out'], 'the gate and the queue, on one line');
+        self::assertStringContainsString('ne tourne que sous --watch', $r['out'], 'and the floor\'s scope, which a cron deployment does not have');
     }
 
     public function testTheDigestEntryExplainsItselfRatherThanBeingABareLink(): void

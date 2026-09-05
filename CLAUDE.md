@@ -89,7 +89,18 @@ none). The retraction half landed 2026-08-22 and is the same rule read backwards
 closed one, so issues #1 and #2 stood open for days after the regression they reported was fixed and
 pushed, and an alert nobody retracts becomes furniture. Both halves are pinned by
 `tests/test-ci-workflow.sh` — by step NAME *and* by the API call that does the work, since a name
-alone survives the body being gutted. **`scout --domain=rent run --watch` now runs** (2026-08-19):
+alone survives the body being gutted. **THE LEDGER IS SHARDED SIX WAYS since 2026-09-05** (developer
+ruling), because one job could no longer finish it: 258 → 527 → 750 cases in three weeks, four of
+the last eight nightlies CANCELLED at the 240-minute cap and four failed on row 45's CI cause —
+eight days with no completed detection proof and seven issues nobody could close. GitHub's hosted
+ceiling is 360, so a bigger budget had nowhere left to go. `SABOTAGE_SHARD=<i>/<n>` selects by case
+INDEX (stable whatever `SABOTAGE_FILTER` does), refuses a malformed spec and refuses a spec that
+selects no case at all — a silently-ignored shard is how six jobs report a clean ledger between them
+and run nothing, the `--section=` typo defect one layer up. `fail-fast: false` is load-bearing: one
+shard's finding must not cancel the five that were about to find their own. **The alert lives in its
+own `sabotage-alert` job** so six shards still open ONE issue and a green night still closes the
+whole backlog; it holds the `issues: write` token that the shards no longer do, and it names a shard
+whose log is MISSING rather than reading its silence as clean. **`scout --domain=rent run --watch` now runs** (2026-08-19):
 `Core/Pacer` holds the Q37 cadence (15 min ± 5, 5 s between distinct hosts, 60 s per host, order
 shuffled each pass), `Adapters/PacedSource` is the decorator that applies it — so `Pipeline` never
 learns that time exists and `--once` stays unpaced — and `Cli/WatchLoop` is the loop, which SURVIVES
@@ -471,13 +482,34 @@ offered and **declined** (developer ruling: *keep the weights, push individually
   buzzes now or tomorrow morning. Rent 55 (the p90, one match in ten individually); car 73, the
   marker's own calibrated bar (one in four). Omitting the key pushes everything, as before.
 - **The rent queue drains through the EXISTING digest** — `Cli/DigestBatch` grew a second list,
-  and `digest`, the end-of-pass emission and the daily floor all announce it under its own
+  and **TWO** drains empty it: `scout --domain=rent digest` and the daily floor, which runs under
+  `--watch` only. **The end-of-pass emission is NOT one of them** — `Pipeline` calls
+  `formatter->digest($batch)` with one argument and merely COUNTS what it queued, so a cron-driven
+  `--once` deployment announces nothing from that queue until the verb is scheduled. This paragraph
+  said *"digest, the end-of-pass emission and the daily floor"* for a day, in both this file and the
+  README, and a review lens caught it; a documented drain that does not exist is how an operator
+  concludes the queue is empty. Both real drains announce it under its own
   heading, *« vérifié, score bas »*, never mixed with the tenure doubts. That is the §1 half:
   a settled LLI must not be announced under *« au régime indéterminé »*, so the title carries the
   regime clause only when a tenure doubt is in the batch, and a rollup-only mail says
   *« Vérifié, score bas : N annonce(s) »*. The drain RE-SCORES a queued row from its v7 snapshot
   with the STORED classification, never re-forming a verdict (the `reclassify` rule), and a row the
   current criteria reject is left waiting with a warning rather than announced.
+- **A QUEUED ROW IS NOT PROOF OF A LOW SCORE, and reading it as one loses a push for ever** (C2
+  round 6). The queue is *matched, and nobody was told* — exactly what a FAILED push leaves behind,
+  and on a deployment with no gate configured it is the only thing a queued row can be. So each
+  drain re-scores and splits: at or over the line, or with no gate at all, the row is pushed as the
+  individual match it is and marked `MATCH`; only a row that really fell short is rolled up. A
+  refused retry is left untouched for the next drain. `pushRetries()` is ONE implementation per
+  domain called from both the verb and the floor, and the ledger carries a case per call site — a
+  fix landing on one of two symmetric surfaces is this repo's named recurring defect.
+- **Cross-track twins are collapsed AT THE DRAIN, not only at the push.** The pipeline's twin cover
+  fires on a copy that was pushed, so two below-gate copies of one flat — a direct route and an
+  agency copy — were both queued and both announced in the same mail. The drain collapses them
+  (direct route survives, the other named beneath it with its link) and marks EVERY key of the
+  pair, in whichever order the passes queued them. A `sources.json` the drain cannot read is
+  VOICED and the entries pass through uncollapsed: the digest is §1's only landing zone, so a
+  duplicate announcement is the acceptable cost and a bin that never empties is not.
 - **The store records WHAT a row was announced as, and the ordering is monotone**:
   `DIGEST (1) < ROLLUP (2) < MATCH (3)`. A rent drop that lifts a rolled-up flat over the line is
   a promotion and is pushed once; a pushed flat is never demoted to a rollup; a `DIGEST` write
@@ -1212,6 +1244,31 @@ covering 60 % of the fleet discriminates MORE, not less.
 > a fixture can have. One placeholder per distinct value now. **Always parse a scrubbed capture
 > back and compare its link count with the raw one** before committing it.
 >
+> **A PORTAL WRITES ITS FACTS LINE IN MORE SHAPES THAN THE FIRST CAPTURE SHOWS (2026-09-05).**
+> ParuVendu's `facts_pattern` required `body - fuel - Année YYYY - N km`; the portal also sends
+> `Essence - Année 2019 - 59 500 km` and a bare `Année 2020 - 80 237 km`, and on those the WHOLE
+> match failed — so year, mileage, fuel and body went null TOGETHER on **17 of 160 stored cards
+> (11 %; live `doctor`: `facts_pattern 15/132`)**. Year and mileage are the two heaviest inputs of
+> the vehicle score, so those cars were judged *année inconnue / kilométrage inconnu* with the facts
+> printed on their own card, and nothing read as a fault: a card that extracts nothing looks exactly
+> like a card that says nothing. **`PatternMissLog` counted every one of them and stayed silent,
+> correctly** — `total()` speaks only at 100 %, and 11 % is the partial-miss blind spot this file
+> already records for cityloger. It was found by the per-source NULL-rate audit, not by a test.
+>
+> **The trial is the part to copy, and it rejected two plausible repairs before the third stood.**
+> Run the candidate over every stored card of that source first: `[^\n-]+?` for the optional body
+> LOSES 38 cards, because the commonest body is `4x4 - SUV` and it contains the separator; and a
+> GREEDY optional body puts a lone `Essence` in the BODY slot — a wrong answer wearing an alibi, the
+> `autres` class again. The shipped shape is a LAZY optional body (`)??`) over a CLOSED fuel list:
+> 143 identical, 17 gained, 0 lost, 0 changed. The list had to be widened as it was closed
+> (`GPL ou GNL`), because the catch-all it replaced was what made any lone leading component look
+> like a fuel. Four ledger cases, one per rejected shape.
+>
+> **A `_`-prefixed note is a comment only while the key it annotates exists** (`Config\Reader`), so
+> `_facts_pattern` documents `facts_pattern` and `_facts_pattern_shapes` is refused as an unread
+> param. Cost ten minutes to rediscover; it is the same rule the CapCar block already records from
+> the other side.
+
 > **A CAPTURE THAT SUCCEEDS IS NOT A CAPTURE THAT MEANS SOMETHING — the portal's own "I don't
 > know" token (Track 6-A4, 2026-09-02).** ParuVendu writes `/voiture-occasion/autres/autres/` when
 > it cannot name the marque. The pattern captured `autres` perfectly, so nothing read as a fault;
@@ -2005,10 +2062,13 @@ tests/fixtures/rent/leboncoin/   The third portal's, and the first HTML-ONLY ale
                             part at all, so every URL lives in an href. n=1 — one message, three
                             cards, the first this subscription ever produced
 tests/fixtures/rent/pap/         The fourth portal's, and the first DIRECT-FROM-OWNER one. ONE listing
-                            per message, so no card_separator at all. Both captures quote the
+                            per message, so no card_separator at all. The first captures quote the
                             alert's own SEARCH CRITERIA above the listing — the 45 m² floor the
                             first-match-wins surface reader returned instead of the flat's 50 —
-                            which is what the positional anchors exist to defeat
+                            which is what the positional anchors exist to defeat. The FIFTH is
+                            here for its HEADER, not its flat: `Date: Sat, 5 Sep 2026`, the
+                            single-digit day RFC 5322 allows and this repo's strict parser
+                            refused for a month
 tools/scrub-eml.php         Turns a captured .eml into a committable fixture; REFUSES to write
                             while the address is RECOVERABLE — decoding base64url runs and
                             quoted-printable before it looks, not merely grepping for it
@@ -2168,6 +2228,26 @@ var/claude/                 Reports, review outputs — gitignored scratch (hand
   funnel, `EmailAlertSource::health()`, which `doctor`, the pipeline and the heartbeat all read
   (the beat used to read `Store::health()` by name and would have counted a source healthy on the
   very pass `doctor` called it silent). `doctor` gives a per-source value the same window advice.
+- **STRICT IS NOT THE SAME AS NARROW, and for a month the `Date` parser was both (2026-09-05).**
+  The round-trip below is right and stays; what was wrong is the MASK SET it round-tripped against.
+  RFC 5322 writes the day as `1*2DIGIT` and makes the seconds optional, the four masks were all `d`
+  with `H:i:s`, and PAP sends `Sat, 5 Sep 2026 09:19:13 +0200` — `createFromFormat` accepts `5` and
+  re-formats it `05`, so the round-trip refused a legal header. **Five days a month, on any portal
+  that does not zero-pad, and nothing anywhere said so.** Measured: every PAP row first seen 1–5
+  September carried `observedAt = NULL` (36 of 86) while every row to 31 August carried one;
+  `source_runs.feed_newest_at` for `pap` froze at `2026-08-31T15:24:29Z`; and the live `doctor`
+  reported **`pap feed_silent` — *« rien envoyé depuis 4 jour(s) »* on a feed delivering daily**.
+  Two silent failures from one line: the store's stale-sighting guard (the 429-history-row defect)
+  had no instant to compare, and a health verdict was false — hard rule 2 from both ends. The masks
+  are now the grammar itself (optional day name × 1-or-2-digit day × optional seconds × `O`/`T`),
+  and widening cannot weaken anything because the round-trip applies to every mask — the
+  counterweight (a mismatched weekday, `31 Sep`, `tomorrow`, `+2 days`) is asserted beside the
+  widening. **It was found by an audit, not by a test**: per-source NULL rates over the stored
+  snapshots, which is the same instrument that found the SeLoger subject-as-title defect. Run it
+  after any source goes live, and again when a portal changes its template. **The live header was
+  READ, not inferred** — two messages pulled through `tools/dump-eml.php` — because *a true number
+  attached to an invented cause* is this repo's named failure and the dates alone were only
+  circumstantial.
 - **A `Date:` header needs a STRICT parser, and `new \DateTimeImmutable` is not one.** It is a
   *relative-expression* parser: it misparses far more often than it throws, and every misparse moves
   the instant FORWARD. `Date: Fri, 09 Aug 2026` — where 9 August is a Sunday — has `Fri` applied as a

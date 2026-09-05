@@ -4,10 +4,12 @@ declare(strict_types=1);
 
 namespace Scout\Tests\Rent\Cli;
 
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use Scout\Rent\Cli\RentScout;
 use Scout\Core\Notify\ConsoleChannel;
 use Scout\Core\Notify\Notifier;
+use Scout\Core\Notify\NotificationKind;
 use Scout\Tests\Support\DeliveringChannel;
 use Scout\Rent\Core\RawListing;
 use Scout\Rent\Store\Store;
@@ -331,7 +333,9 @@ final class RentScoutDigestTest extends TestCase
      */
     public function testALowScoreMatchIsRolledUpUnderItsOwnHeadingAndMarkedRollup(): void
     {
-        $root = $this->tempRoot();
+        // A gate ABOVE any score the row can reach: with no gate configured every queued row is a
+        // RETRY (a push that failed), pushed individually — the rollup exists only under a gate.
+        $root = $this->tempRoot(['notify' => ['push_min_score' => 100]]);
         $key = $this->seedQueuedMatch($root, new RawListing(
             sourceName: 'inli',
             externalId: 'LOW-1',
@@ -365,7 +369,7 @@ final class RentScoutDigestTest extends TestCase
     /** Both queues in one mail: the tenure doubts keep their heading and their clause, the rollup keeps its own. */
     public function testBothQueuesShareOneMailWithTwoHeadings(): void
     {
-        $root = $this->tempRoot();
+        $root = $this->tempRoot(['notify' => ['push_min_score' => 100]]);
         $this->seedDigestRow($root, new RawListing(sourceName: 'cdc_habitat', externalId: 'D-1', title: 'T4', description: 'Logement conventionné', commune: 'Sartrouville', postcode: '78500', rentCc: 1450, surfaceM2: 88.0, rooms: 4));
         $this->seedQueuedMatch($root, new RawListing(sourceName: 'inli', externalId: 'LOW-2', title: 'T3', description: 'LLI', fields: ['financement' => 'LLI'], commune: 'Sartrouville', postcode: '78500', rentCc: 1450, surfaceM2: 88.0, rooms: 4));
 
@@ -375,6 +379,195 @@ final class RentScoutDigestTest extends TestCase
         self::assertStringContainsString('À vérifier : 1 annonce(s) au régime indéterminé', $result['out']);
         self::assertStringContainsString('score bas', $result['out']);
         self::assertLessThan(strpos($result['out'], 'score bas'), strpos($result['out'], 'À vérifier'), 'the §1 bin comes first');
+    }
+
+    // ── C2 round 6 (2026-09-05): a queued row AT the line is a failed push, not a low score ──────
+
+    /**
+     * The queue cannot tell a match HELD BACK by the gate from one whose push FAILED — both leave a
+     * `MATCH` outcome with no `notified_at`. So the drain re-scores and splits: at or over the
+     * line, the row is pushed as the individual match it is and marked MATCH; announcing it under
+     * *« vérifié, score bas »* would report the opposite of what the gate decided.
+     */
+    public function testAQueuedMatchAtOrOverTheGateIsPushedIndividuallyAndMarkedMatch(): void
+    {
+        $root = $this->tempRoot(['notify' => ['push_min_score' => 1]]);
+        $key = $this->seedQueuedMatch($root, $this->queueable('inli', 'RETRY-1'));
+
+        $channel = $this->delivering();
+        $result = $this->scout($root, ['digest'], $channel);
+
+        self::assertSame(0, $result['code'], $result['out'] . $result['err']);
+        self::assertStringContainsString('[RETRY]', $result['out'], 'pushed, not rolled up');
+        self::assertStringContainsString('réémise(s) individuellement', $result['out']);
+        // The rollup HEADING, not the phrase: the retry line itself says « jamais score bas ».
+        self::assertStringNotContainsString('Vérifié, score bas', $result['out'], 'it did not fall short — it never went out');
+
+        self::assertCount(1, $channel->sent, 'one push, and no rollup mail beside it');
+        self::assertSame(NotificationKind::MATCH, $channel->sent[0]->kind);
+
+        $store = Store::open($root . '/state/rent-watch.sqlite3');
+        // MATCH is rank 3 and `wasNotifiedAs()` asks *at least*, so this says it was pushed rather
+        // than rolled up — a ROLLUP row answers false here.
+        self::assertTrue($store->wasNotifiedAs($key, 'MATCH'), 'marked as pushed, not rolled up');
+    }
+
+    /**
+     * The deployment with NO gate is the one this branch exists for: nothing there is ever held
+     * back, so a queued row can only be a push that failed, and leaving it to a rollup that will
+     * never be configured is how it is lost.
+     */
+    public function testWithNoGateConfiguredEveryQueuedRowIsRetriedRatherThanRolledUp(): void
+    {
+        $root = $this->tempRoot();
+        $key = $this->seedQueuedMatch($root, $this->queueable('inli', 'RETRY-2'));
+
+        $channel = $this->delivering();
+        $result = $this->scout($root, ['digest'], $channel);
+
+        self::assertSame(0, $result['code'], $result['out'] . $result['err']);
+        self::assertStringContainsString('réémise(s) individuellement', $result['out']);
+        self::assertStringNotContainsString('Vérifié, score bas', $result['out']);
+        self::assertSame(NotificationKind::MATCH, $channel->sent[0]->kind);
+        self::assertTrue(Store::open($root . '/state/rent-watch.sqlite3')->wasNotifiedAs($key, 'MATCH'));
+    }
+
+    /**
+     * A failed push whose channel is still refusing is left EXACTLY where it was: nothing marked,
+     * so the next drain offers it again. Marking first would consume it permanently.
+     */
+    public function testARetryTheChannelRefusesIsLeftWaitingAndSaidOutLoud(): void
+    {
+        $root = $this->tempRoot();
+        $key = $this->seedQueuedMatch($root, $this->queueable('inli', 'RETRY-3'));
+
+        $channel = $this->delivering();
+        $channel->refuses = [NotificationKind::MATCH];
+        $result = $this->scout($root, ['digest'], $channel);
+
+        self::assertStringContainsString('réémission non délivrée', $result['out'] . $result['err']);
+        $store = Store::open($root . '/state/rent-watch.sqlite3');
+        self::assertFalse($store->wasNotifiedAs($key, 'MATCH'), 'nothing marked on a refused send');
+        self::assertSame(1, $store->pendingLowScoreCount(), 'still queued for the next drain');
+    }
+
+    // ── C2 round 6 (2026-09-05): two tracks, ONE rollup entry ────────────────────────────────────
+
+    /**
+     * The pipeline's twin cover fires on a copy that was PUSHED; two copies both held BACK never
+     * met it, so one flat was announced twice in the same mail. Collapsed at the drain, which is
+     * the only place that holds both — and in BOTH orders, because survivorship must not depend on
+     * which pass queued which copy.
+     *
+     * @param bool $directFirst seed the institutional copy first, or the agency copy first
+     */
+    #[DataProvider('twinOrders')]
+    public function testTwinsInTheRollupCollapseToOneEntryNamingTheOtherRoute(bool $directFirst): void
+    {
+        $root = $this->tempRoot(['notify' => ['push_min_score' => 100]]);
+        $direct = $this->queueable('inli', 'TWIN-D');
+        $agency = $this->queueable('seloger', 'TWIN-A');
+
+        $first = $this->seedQueuedMatch($root, $directFirst ? $direct : $agency);
+        $second = $this->seedQueuedMatch($root, $directFirst ? $agency : $direct);
+
+        $channel = $this->delivering();
+        $result = $this->scout($root, ['digest'], $channel);
+
+        self::assertSame(0, $result['code'], $result['out'] . $result['err']);
+        self::assertStringContainsString('1 annonce(s) émise(s)', $result['out'], 'one entry, not two');
+        self::assertStringContainsString('aussi via seloger (agence / portail)', $result['out'], 'the direct route keeps the headline and names the other');
+        self::assertStringNotContainsString('aussi via inli', $result['out'], 'whichever copy was queued first');
+
+        // BOTH keys marked, or tomorrow's drain announces the survivor's twin on its own.
+        $store = Store::open($root . '/state/rent-watch.sqlite3');
+        self::assertTrue($store->wasNotifiedAs($first, 'ROLLUP'), 'first-queued copy marked');
+        self::assertTrue($store->wasNotifiedAs($second, 'ROLLUP'), 'second-queued copy marked too');
+        self::assertSame(0, $store->pendingLowScoreCount(), 'the queue is drained, both sides of it');
+    }
+
+    /**
+     * A `sources.json` this command cannot read must NOT take the drain down with it.
+     *
+     * The collapse is the one thing here that reads outside the store, and the digest is §1's only
+     * landing zone — a backlog no pass will re-offer. So the failure is VOICED and the entries pass
+     * through uncollapsed: a duplicate announcement, which is the behaviour of the day before the
+     * collapse existed, rather than a bin that can never empty.
+     */
+    public function testAnUnreadableSourceConfigIsVoicedAndStillDrainsTheQueue(): void
+    {
+        $root = $this->tempRoot(['notify' => ['push_min_score' => 100]]);
+        $this->seedQueuedMatch($root, $this->queueable('inli', 'BROKEN-D'));
+        $this->seedQueuedMatch($root, $this->queueable('seloger', 'BROKEN-A'));
+        file_put_contents($root . '/config/rent/sources.json', '{"sources": {"inli": {"enabled": 42}}}');
+
+        $result = $this->scout($root, ['digest'], $this->delivering());
+
+        self::assertSame(0, $result['code'], $result['out'] . $result['err']);
+        self::assertStringContainsString('familles des sources illisibles', $result['out'] . $result['err'], 'said out loud');
+        self::assertStringContainsString('2 annonce(s) émise(s)', $result['out'], 'uncollapsed, and both are still announced');
+        self::assertSame(0, Store::open($root . '/state/rent-watch.sqlite3')->pendingLowScoreCount(), 'the bin still empties');
+    }
+
+    /** @return iterable<string, array{bool}> */
+    public static function twinOrders(): iterable
+    {
+        yield 'the direct route was queued first' => [true];
+        yield 'the agency copy was queued first' => [false];
+    }
+
+    /**
+     * A mail carrying ONLY the rollup is a `ROLLUP` notification, never a `DIGEST`.
+     *
+     * The kind is what a channel routes and prioritises on, and *digest* here means §1's tenure
+     * bin. A settled LLI held back for its score is not a tenure doubt, so announcing it under the
+     * digest kind misreports its §1 status at the one layer that leaves the process.
+     */
+    public function testARollupOnlyMailIsAnnouncedUnderTheRollupKind(): void
+    {
+        $root = $this->tempRoot(['notify' => ['push_min_score' => 100]]);
+        $this->seedQueuedMatch($root, $this->queueable('inli', 'KIND-1'));
+
+        $channel = $this->delivering();
+        $result = $this->scout($root, ['digest'], $channel);
+
+        self::assertSame(0, $result['code'], $result['out'] . $result['err']);
+        self::assertCount(1, $channel->sent);
+        self::assertSame(NotificationKind::ROLLUP, $channel->sent[0]->kind);
+    }
+
+    /** A mail carrying a tenure doubt keeps the DIGEST kind, rollup beside it or not. */
+    public function testAMailCarryingATenureDoubtKeepsTheDigestKind(): void
+    {
+        $root = $this->tempRoot(['notify' => ['push_min_score' => 100]]);
+        $this->seedDigestRow($root, $this->digestListing('D-KIND'));
+        $this->seedQueuedMatch($root, $this->queueable('inli', 'KIND-2'));
+
+        $channel = $this->delivering();
+        $this->scout($root, ['digest'], $channel);
+
+        self::assertCount(1, $channel->sent);
+        self::assertSame(NotificationKind::DIGEST, $channel->sent[0]->kind);
+    }
+
+    /**
+     * A listing the temp root's criteria accept: the drain RE-SCORES from the snapshot, and a row
+     * today's criteria reject is left waiting rather than announced.
+     */
+    private function queueable(string $source, string $id): RawListing
+    {
+        return new RawListing(
+            sourceName: $source,
+            externalId: $id,
+            title: 'Appartement 3 pièces',
+            description: 'Logement intermédiaire (LLI).',
+            fields: ['financement' => 'LLI'],
+            commune: 'Sartrouville',
+            postcode: '78500',
+            rentCc: 1450,
+            surfaceM2: 88.0,
+            rooms: 4,
+        );
     }
 
     private function seedQueuedMatch(string $root, RawListing $listing): string
@@ -502,16 +695,25 @@ final class RentScoutDigestTest extends TestCase
             'max_rent_cc' => 1800,
         ], JSON_THROW_ON_ERROR));
 
+        $block = [
+            'enabled' => false,
+            'family' => 'institutional',
+            'mixed_tenure' => true,
+            'type' => 'fixture',
+            'fixture' => 'tests/fixtures/rent/fixture_demo/search.json',
+            'items_path' => 'results.items',
+            'map' => ['ref' => 'id', 'title' => 'title'],
+        ];
+
         file_put_contents($root . '/config/rent/sources.json', json_encode([
             'sources' => [
-                'fixture_demo' => [
-                    'enabled' => false,
-                    'family' => 'institutional',
-                    'type' => 'fixture',
-                    'fixture' => 'tests/fixtures/rent/fixture_demo/search.json',
-                    'items_path' => 'results.items',
-                    'map' => ['ref' => 'id', 'title' => 'title'],
-                ],
+                'fixture_demo' => $block,
+                // The two FAMILIES the twin collapse needs. `collapseTwins()` reads the family off
+                // the config by source NAME and falls back to `private` for a name it does not
+                // know — so a test seeding two unknown names would put both on one track, where
+                // `twinReason()` refuses by design, and would pass while proving nothing.
+                'inli' => $block,
+                'seloger' => ['family' => 'private'] + $block,
             ],
         ], JSON_THROW_ON_ERROR));
 

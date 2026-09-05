@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Scout\Tests\Repo;
 
+use Scout\Core\RecoverableForms;
+
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
@@ -286,32 +288,6 @@ final class FixtureSecretsTest extends TestCase
         $utf16 = "Content-Type: text/plain; charset=utf-16le\r\nContent-Transfer-Encoding: base64\r\n\r\n" . chunk_split(base64_encode((string) mb_convert_encoding($body, 'UTF-16LE', 'UTF-8')), 76, "\r\n");
         self::assertSame(['JWT'], array_column(self::suspects($utf16), 0), 'a UTF-16 body is read as text');
     }
-    /**
-     * Every credential-shaped string in `$content`, looked for in the raw bytes AND after
-     * quoted-printable decoding, minus the ones that announce themselves as placeholders.
-     *
-     * @return list<array{0: string, 1: string}> [kind, hit]
-     */
-    /**
-     * A BASE64 RUN IN EITHER ALPHABET.
-     *
-     * This was `[A-Za-z0-9_\-]` — URL-safe ONLY — and that is the `%`-encoding P0 one alphabet
-     * over: `+` and `/` are the STANDARD alphabet's two extra characters, so a standard-encoded
-     * blob SPLIT on them, each fragment started off the 4-byte boundary, strict `base64_decode`
-     * returned garbage, and the guard read *nothing recoverable here*. A round-5 lens measured
-     * 3 of 50 realistic ESP-shaped captures written with exit 0 while the address stayed one
-     * `rawurldecode` and one realignment away. The real header survived on alignment luck.
-     *
-     * `strtr($run, '-_', '+/')` below is a no-op on a standard-alphabet run, so widening the class
-     * needs no second decode path.
-     */
-    //
-    // THE `/` IS ESCAPED, and it must be: these patterns are `/`-delimited, and PCRE does not
-    // exempt a character class from delimiter parsing. Unescaped, `preg_match_all` returns FALSE
-    // rather than 0 — which is not `=== 0`, so the guard skipped its `continue`, read an empty
-    // `$runs`, and found nothing at all while looking like it had scanned. Silent `false` from a
-    // preg call is the same shape as the `u`-modifier defect this file already pins.
-    private const string B64_RUN = '[A-Za-z0-9_+\\/\\-]';
 
     /**
      * ADDRESSES THAT ARE LEGITIMATELY IN THE FIXTURES — portals, and one placeholder.
@@ -494,6 +470,20 @@ final class FixtureSecretsTest extends TestCase
             'plain' => 'To: ' . $planted,
             'base64' => 'X-Custom: ' . base64_encode('98986954~' . $planted . '~relay'),
             'percent-encoded base64' => 'X-Custom: ' . rawurlencode(base64_encode('98986954~' . $planted . '~relay')),
+            // ONE LAYER DEEPER (C2 round 6, resilience P1): percent-encoded INSIDE the base64. An
+            // ESP redirect-tracking shape. This guard's own copy of the cascade percent-decoded the
+            // raw content once, up front, and never a DECODED form — so this shape passed it while
+            // the scrubber refused it. Both now read `Scout\Core\RecoverableForms`. Measured by
+            // mutation: the shape is caught by the final percent pass over every form OR by the
+            // decode inside the depth loop, so the ledger removes BOTH in one case; removing either
+            // alone leaves it green, and a case claiming otherwise would be vacuous.
+            'base64 of percent-encoded' => 'X-Custom: ' . base64_encode('redirect=https://track.example.test/?email=' . rawurlencode($planted) . '&c=42'),
+            // The real `X-Mailin-EID` shape inside an OUTER base64. Kept as a regression shape and
+            // NOT claimed to isolate anything: percent-encoding touches only `+`, `/` and `=`, and
+            // an ASCII address never encodes to `+` or `/` (those need a `~` on a triple boundary),
+            // so the inner run survives intact and decodes with no percent pass at all — the same
+            // measurement the scrubber's shell test records for its `X-Custom-Tracking` case.
+            'base64 of percent-encoded base64' => 'X-Custom: ' . base64_encode('t=' . rawurlencode(base64_encode('98986954~' . $planted . '~<3bd70a6e@example.test>~relay.example.test')) . '&c=42'),
         ];
 
         foreach ($shapes as $label => $content) {
@@ -527,73 +517,9 @@ final class FixtureSecretsTest extends TestCase
 
     private static function allForms(string $content): array
     {
-        // PERCENT-DECODED TOO, and its absence was a P0 (2026-09-04). `%` is outside the run class
-        // below, so a percent-encoded base64 blob SPLITS: the surviving run starts two characters
-        // late and strict-decodes to garbage, which reads as "nothing recoverable". A real
-        // `X-Mailin-EID` header carried the subscriber's address past BOTH this guard and
-        // `tools/scrub-eml.php` into a pushed commit — the two are phase-shifted identically
-        // because they share the mechanism, which is exactly why they must not diverge.
-        //
-        // `rawurldecode`, NOT `urldecode`: the latter turns `+` into a space and would corrupt a run
-        // that is genuinely base64.
-        // HEADER FOLDING TOO (2026-09-05). A base64 blob folded across RFC 5322 continuation lines
-        // (`\r\n` + SP/TAB) is N fragments to the run scan, and an address straddling a fold is in
-        // none of them. A real La Centrale `X-MSFBL` header carried the subscriber's address past
-        // the scrubber that way; THIS guard caught it — by luck, one fragment happening to decode
-        // to the local part — one commit before a push. Joined continuation lines can only reveal.
-        $headersUnfolded = (string) preg_replace('~\r?\n[ \t]+~', '', $content);
-        $forms = [$content, quoted_printable_decode($content), rawurldecode($content), $headersUnfolded, quoted_printable_decode($headersUnfolded)];
-        foreach ([$content, quoted_printable_decode($content), rawurldecode($content), $headersUnfolded] as $text) {
-            foreach (self::base64Blocks($text) as $block) {
-                $forms[] = $block;
-            }
-        }
-        // A WORKLIST, NOT ONE PASS (round-5 panel, 2026-08-31), the twin of the same fix in
-        // `tools/scrub-eml.php`. A run whose decode contains ANOTHER run was never decoded twice —
-        // and Bien'ici wraps its links in an OUTER base64 layer, so the literal `eyJ` a JWT pattern
-        // anchors on never appears in the raw, quoted-printable or base64-block form at all. Three
-        // committed fixtures carried a live JWT past this guard for a week. It is the second line of
-        // defence for exactly the case the tool got wrong, so the two must not diverge.
-        $queue = $forms;
-        for ($depth = 0; $depth < 3 && $queue !== []; ++$depth) {
-            $next = [];
-
-            foreach ($queue as $text) {
-                if (preg_match_all('/' . self::B64_RUN . '{16,}/', $text, $runs) === 0) {
-                    continue;
-                }
-
-                foreach ($runs[0] as $run) {
-                    // FOUR ALIGNMENTS, not one. base64 carries 3 bytes per 4 characters, so a run
-                    // that does not START on a 4-character boundary decodes to noise — and whether
-                    // it does is an accident of what preceded it in the file. The real
-                    // `X-Mailin-EID` header was readable at offset 0 purely by luck; a round-5
-                    // lens measured a live-shaped JWT recoverable at only 2 of 8 offsets.
-                    //
-                    // Widening the run class made this REQUIRED rather than merely better: with
-                    // `+` and `/` inside the class a run no longer stops at them, so the boundary
-                    // moved and the offset-0-only decode stopped finding what it used to.
-                    for ($offset = 0; $offset < 4; ++$offset) {
-                        $slice = substr($run, $offset);
-
-                        if (strlen($slice) < 16) {
-                            break;
-                        }
-
-                        $decoded = base64_decode(strtr($slice . str_repeat('=', (4 - strlen($slice) % 4) % 4), '-_', '+/'), true);
-
-                        if ($decoded !== false && $decoded !== '') {
-                            $forms[] = $decoded;
-                            $next[] = $decoded;
-                        }
-                    }
-                }
-            }
-
-            $queue = $next;
-        }
-
-        return $forms;
+        // ONE cascade, shared with `tools/scrub-eml.php` — see `Scout\Core\RecoverableForms` for why
+        // a copy here was a P1 (C2 round 6): the copy had drifted one decode short of the tool.
+        return RecoverableForms::of($content);
     }
 
     private static function suspects(string $content): array
@@ -618,43 +544,4 @@ final class FixtureSecretsTest extends TestCase
         return array_values($found);
     }
 
-    /**
-     * Every block of consecutive base64 lines (a `Content-Transfer-Encoding: base64` body, or any
-     * base64 blob long enough to hide a token), decoded. A block that does not decode is not a
-     * body and is skipped.
-     *
-     * @return list<string>
-     */
-    private static function base64Blocks(string $text): array
-    {
-        // A run of lines that are PURELY base64 alphabet, at ANY width — gated only on the total
-        // decoded length below, which is the constraint that was always doing the real work. A
-        // per-line WIDTH floor is not: round 3 lowered it 40 -> 20 for a 36-column fold, and round 4
-        // showed a 19-column fold slipped past BOTH this guard and the scrubber. This is the twin of
-        // the same fix in `tools/scrub-eml.php`; the two must not diverge, because this test is the
-        // second line of defence for exactly the case the tool gets wrong.
-        if (preg_match_all('/(?:^[A-Za-z0-9+\/]+={0,2}\r?\n?)+/m', $text, $m) === 0) {
-            return [];
-        }
-        $blocks = [];
-        foreach ($m[0] as $block) {
-            $stripped = (string) preg_replace('/\s+/', '', $block);
-            if (strlen($stripped) < 40) {
-                continue;
-            }
-            $decoded = base64_decode($stripped, true);
-            if ($decoded !== false && $decoded !== '') {
-                $blocks[] = $decoded;
-                // A `charset=utf-16` body: every ASCII byte is followed by a NUL, so no pattern
-                // can match the raw bytes (round-3 panel). Both byte orders are tried.
-                if (str_contains($decoded, "\0")) {
-                    foreach (['UTF-16LE', 'UTF-16BE'] as $order) {
-                        $blocks[] = (string) @mb_convert_encoding($decoded, 'UTF-8', $order);
-                    }
-                }
-            }
-        }
-
-        return $blocks;
-    }
 }

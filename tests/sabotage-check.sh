@@ -37,6 +37,41 @@ failed_labels=()
 # `skipped` is printed at the end whenever the filter was in play. CI never sets it.
 _filter="${SABOTAGE_FILTER:-}"
 
+# ── SHARDING (2026-09-05, developer ruling) ──────────────────────────────────────────────────────
+# `SABOTAGE_SHARD=<i>/<n>` runs only the cases whose INDEX falls in shard i of n. It exists because
+# one CI job could not finish the ledger any more — 258 -> 527 -> 750 cases in three weeks, four of
+# the last eight nightlies cut off at the 240-minute cap — and GitHub's hosted ceiling is 360, so a
+# bigger budget had nowhere left to go.
+#
+# THE INDEX IS COUNTED BEFORE THE FILTER, deliberately: shard membership then depends only on a
+# case's position in this file, so it is the same whether or not `SABOTAGE_FILTER` is set, and the
+# two compose as an intersection rather than one silently re-partitioning the other.
+#
+# A MALFORMED OR EMPTY SPEC ABORTS. Both halves are the `--section=` typo defect one layer up: a
+# shard spec that is ignored means one job runs everything and the rest run nothing, and a spec that
+# selects NO case means six jobs report a clean ledger between them having proved nothing at all.
+# Neither is visible from any shard's own output, which is what makes the refusal necessary rather
+# than tidy.
+_shard_i=1
+_shard_n=1
+if [[ -n "${SABOTAGE_SHARD:-}" ]]; then
+  if [[ "$SABOTAGE_SHARD" =~ ^([0-9]+)/([0-9]+)$ ]]; then
+    _shard_i="${BASH_REMATCH[1]}"
+    _shard_n="${BASH_REMATCH[2]}"
+  else
+    printf '\n  \033[31mABORT\033[0m SABOTAGE_SHARD must read <i>/<n>; got "%s".\n\n' "$SABOTAGE_SHARD"
+    exit 1
+  fi
+  if (( _shard_n < 1 || _shard_i < 1 || _shard_i > _shard_n )); then
+    printf '\n  \033[31mABORT\033[0m SABOTAGE_SHARD "%s" names no shard of a %d-way split.\n\n' \
+      "$SABOTAGE_SHARD" "$_shard_n"
+    exit 1
+  fi
+fi
+_case_index=0
+_sharded_out=0
+_ran=0
+
 # Per case, not for the whole ledger — see the call site for what it is defending against.
 readonly SUITE_TIMEOUT_SECONDS="${SABOTAGE_SUITE_TIMEOUT:-300}"
 skipped=0
@@ -45,10 +80,19 @@ skipped=0
 run_sabotage() {
   local label="$1" target="$2" expr="$3"
 
+  # Counted for EVERY case, before any skip, so a shard is a stable slice of this file.
+  _case_index=$((_case_index + 1))
+  if (( _shard_n > 1 )) && (( (_case_index - 1) % _shard_n != _shard_i - 1 )); then
+    _sharded_out=$((_sharded_out + 1))
+    return
+  fi
+
   if [[ -n "$_filter" ]] && ! grep -qE -- "$_filter" <<<"$label"; then
     skipped=$((skipped + 1))
     return
   fi
+
+  _ran=$((_ran + 1))
 
   rm -rf "$work/repo"
   mkdir -p "$work/repo"
@@ -1807,7 +1851,7 @@ run_sabotage "the low-score queue also returns rows already announced (the rollu
 
 run_sabotage "the rent digest marks a rolled-up match as DIGEST (a settled LLI recorded as a tenure doubt)" \
   src/php/Rent/Cli/RentScout.php \
-  "s%\\\$store->markNotified(\\\$entry\\['key'\\], \\\$now, 'ROLLUP');%\\\$store->markNotified(\\\$entry['key'], \\\$now, 'DIGEST');%"
+  "s%\\\$store->markNotified(\\\$key, \\\$now, 'ROLLUP');%\\\$store->markNotified(\\\$key, \\\$now, 'DIGEST');%"
 
 run_sabotage "the rent digest drops the low-score section from the mail (queued matches are marked and never shown)" \
   src/php/Rent/Cli/RentScout.php \
@@ -1857,6 +1901,127 @@ run_sabotage "the car pass stops saying how many matches it held back for the ro
 run_sabotage "rent doctor stops naming the push gate and the low-score queue" \
   src/php/Rent/Cli/RentScout.php \
   's%if (\$criteria->notify->pushMinScore !== null) {%if (false) {%'
+
+# ── C2 round 6 (2026-09-05): a queued row AT the line is a failed push, not a low score ─────────
+#
+# The queue cannot tell a match HELD BACK by the gate from one whose push FAILED — both leave a
+# MATCH outcome with no notified_at. Every direction below is silent: a split that never retries
+# files a real match under « score bas » for ever; a drain that never collapses twins announces one
+# flat twice; a collapse that marks one key re-announces the other tomorrow; and a source config
+# the drain cannot read must not take §1's only landing zone down with it. The retry call is
+# DUPLICATED on purpose — verb and floor — so each site gets its own case: a fix landing on one of
+# two symmetric surfaces is this repo's named recurring defect.
+
+run_sabotage "the rent drain files every queued row as « score bas » (a failed push never retried)" \
+  src/php/Rent/Cli/RentScout.php \
+  's%if (\$pushMin === null || (\$verdict->score ?? 0) >= \$pushMin) {%if (false) {%'
+
+run_sabotage "the rent digest VERB stops re-pushing the retries" \
+  src/php/Rent/Cli/RentScout.php \
+  '/private function digest(/,/private function collectDigest/ s%\$this->pushRetries(\$notifier, \$store, \$batch->retries, \$now);%%'
+
+run_sabotage "the rent daily FLOOR stops re-pushing the retries" \
+  src/php/Rent/Cli/RentScout.php \
+  '/private function floorDigest(/,$ s%\$this->pushRetries(\$notifier, \$store, \$batch->retries, \$now);%%'
+
+run_sabotage "a rent retry marks the row even though the channel refused it" \
+  src/php/Rent/Cli/RentScout.php \
+  '/private function pushRetries/,/^    }/ s%if (!\$notifier->delivered(\$failures)) {%if (false) {%'
+
+run_sabotage "the rent drain stops collapsing cross-track twins in the rollup (one flat announced twice)" \
+  src/php/Rent/Cli/RentScout.php \
+  's%\$lowScore = \$this->collapseTwins(\$lowScore, \$warnings);%%'
+
+run_sabotage "the rent drain stops collapsing cross-track twins among the retries" \
+  src/php/Rent/Cli/RentScout.php \
+  's%\$retries = \$this->collapseTwins(\$retries, \$warnings);%%'
+
+run_sabotage "a collapsed twin marks only the survivor (the other route is announced again tomorrow)" \
+  src/php/Rent/Cli/RentScout.php \
+  "s%'keys' => array_values(array_unique(\\[...\\\$kept\\['keys'\\], ...\\\$entry\\['keys'\\]\\])),%'keys' => \\\$winner['keys'],%"
+
+run_sabotage "an unreadable sources.json degrades the twin collapse SILENTLY" \
+  src/php/Rent/Cli/RentScout.php \
+  "s%\\\$warnings\\[\\] = 'familles des sources illisibles.*%%"
+
+run_sabotage "a rollup-only rent mail is emitted under the DIGEST kind (a settled match filed as a tenure doubt)" \
+  src/php/Rent/Notify/Formatter.php \
+  's%kind: NotificationKind::ROLLUP,%kind: NotificationKind::DIGEST,%'
+
+run_sabotage "the car drain files every queued car as « score bas » (a failed push never retried)" \
+  src/php/Car/Cli/CarScout.php \
+  's%if (\$pushMin === null || (\$score !== null \&\& \$score >= \$pushMin)) {%if (false) {%'
+
+run_sabotage "the car rollup VERB stops re-pushing the retries" \
+  src/php/Car/Cli/CarScout.php \
+  's%\$this->pushRetries(\$notifier, \$store, \$retries, \$this->now());%%'
+
+run_sabotage "the car rollup FLOOR stops re-pushing the retries" \
+  src/php/Car/Cli/CarScout.php \
+  's%\$this->pushRetries(\$notifier, \$store, \$retries, \$now);%%'
+
+run_sabotage "a car retry marks the row even though the channel refused it" \
+  src/php/Car/Cli/CarScout.php \
+  '/private function pushRetries/,/^    }/ s%if (!\$notifier->delivered(\$failures)) {%if (false) {%'
+
+# ── ParuVendu writes its facts line in THREE shapes (2026-09-05) ────────────────────────────────
+#
+# The pattern required `body - fuel - Année YYYY - N km`, so `Essence - Année …` and a bare
+# `Année …` failed the WHOLE match and year, mileage, fuel and body went null TOGETHER on 17 of 160
+# stored cards (11 %; live doctor: 15/132). Year and mileage are the two heaviest score inputs, so
+# those cars were judged `année inconnue / kilométrage inconnu` with the facts on their own card —
+# and nothing read as a fault, because a card that extracts nothing looks exactly like a card that
+# says nothing. Each direction below is one of the three shapes the trial rejected.
+
+run_sabotage "the ParuVendu body becomes required again (a lone fuel loses year and mileage)" \
+  config/car/sources.json \
+  's%)??(?:%)(?:%'
+
+run_sabotage "the ParuVendu fuel becomes required again (a bare Année line loses year and mileage)" \
+  config/car/sources.json \
+  's%)?Année%)Année%'
+
+run_sabotage "the ParuVendu body turns greedy (a lone fuel lands in the BODY slot)" \
+  config/car/sources.json \
+  's%)??(?:%)?(?:%'
+
+run_sabotage "GPL ou GNL leaves the closed fuel list (a stated fuel becomes part of the body)" \
+  config/car/sources.json \
+  's%GPL ou GNL|%%'
+
+# ── C2 round 6 (2026-09-05): the drain a run mode ACTUALLY has ─────────────────────────────────
+#
+# The daily floors live inside the watch loop. Telling a cron-driven `--once` deployment to wait for
+# a *récapitulatif quotidien* names a drain that will never run there: the queue grows for ever and
+# the line reads as reassurance. Both the pass line and `doctor` say the scope, on both domains.
+
+run_sabotage "the rent pass promises a daily floor a --once deployment does not have" \
+  src/php/Rent/Cli/RentScout.php \
+  's%^                \$watching$%                true%'
+
+run_sabotage "the car pass promises a daily floor a --once deployment does not have" \
+  src/php/Car/Cli/CarScout.php \
+  's%^                \$watching$%                true%'
+
+run_sabotage "rent doctor stops saying the daily floor is --watch only" \
+  src/php/Rent/Cli/RentScout.php \
+  's% ; le plancher quotidien ne tourne que sous --watch%%'
+
+run_sabotage "car doctor stops saying the daily floor is --watch only" \
+  src/php/Car/Cli/CarScout.php \
+  's% sous --watch UNIQUEMENT%%'
+
+# ── C2 round 6 (2026-09-05): the ONE decode cascade ──────────────────────────────────────────────
+#
+# `FixtureSecretsTest::allForms()` and `tools/scrub-eml.php` were two copies of one cascade, and the
+# copy had drifted one decode short: the guard never percent-decoded a freshly decoded base64 layer,
+# so base64(percent-encoded(address)) passed CI while the tool refused it. Both now delegate to
+# `Scout\Core\RecoverableForms`. The shape is caught by EITHER the percent-decode inside the depth
+# loop OR the final percent pass over every form (measured: removing one leaves the test green),
+# so this case removes both — the planted-address test's fourth shape must then go red.
+run_sabotage "the shared decode cascade stops percent-decoding decoded forms" \
+  src/php/Core/RecoverableForms.php \
+  's%^                \$text = rawurldecode(\$text);$%                // mutated%;s%\$percent = rawurldecode(\$form);%$percent = $form;%'
 
 
 # ── Rows 40 + 41 (2026-09-05): the reopen repair, and the same-filter warning ──
@@ -3883,6 +4048,20 @@ run_sabotage "the Date header is parsed permissively again (a bad weekday shifts
   src/php/Adapters/Mail/ImapMailbox.php \
   's%$iso = EmailMessage::parse($raw)->sentAt();%$iso = (new \\DateTimeImmutable((string) EmailMessage::parse($raw)->header(\x27Date\x27)))->setTimezone(new \\DateTimeZone(\x27UTC\x27))->format(\x27c\x27);%'
 
+# THE MASK SET IS THE RFC'S GRAMMAR, not one portal's habit. It was two-digit-day-only for a month
+# and refused `Thu, 3 Sep 2026`, which RFC 5322 writes as `1*2DIGIT`: measured in production on
+# 2026-09-05, every PAP alert of 1–5 September stored NO observation time (disarming the
+# stale-sighting guard) while feed_newest_at froze on 31 August and doctor reported `feed_silent` on
+# a feed delivering daily. Five days a month, on any portal that does not zero-pad.
+
+run_sabotage "the date parse refuses an RFC-legal single-digit day again" \
+  src/php/Adapters/Mail/EmailMessage.php \
+  "s%foreach (\['d', 'j'\] as \\\$day) {%foreach (['d'] as \\\$day) {%"
+
+run_sabotage "the date parse refuses an RFC-legal time without seconds again" \
+  src/php/Adapters/Mail/EmailMessage.php \
+  "s%foreach (\['H:i:s', 'H:i'\] as \\\$time) {%foreach (['H:i:s'] as \\\$time) {%"
+
 # THE ROUND-TRIP is what makes the parse strict; createFromFormat alone accepts the bad weekday and
 # reports no error.
 run_sabotage "the date parse drops its round-trip check (strictness becomes theatre)" \
@@ -4194,9 +4373,10 @@ run_sabotage "reclassify re-judges a row its twin vetoed, on a snapshot the twin
   's%\$twin = \$store->twinTenure(\$key);%$twin = null;%'
 
 # The encoding after quoted-printable: a base64 BODY hides the token in opaque 76-column lines.
+# Retargeted 2026-09-05 (C2 round 6): the block scan moved into the shared cascade.
 run_sabotage "the fixture-secrets guard is blind to a base64 body again" \
-  tests/php/Repo/FixtureSecretsTest.php \
-  's%foreach (self::base64Blocks(\$text) as \$block) {%foreach ([] as $block) {%'
+  src/php/Core/RecoverableForms.php \
+  's%, \$text, \$blocks) > 0) {%, $text, $blocks) > 0 \&\& false) {%'
 
 # ── Round 3 (2026-08-30): the fact on every member, the own reading durable ───────────────────
 run_sabotage "the twin fact is written on the survivor's row only (an absorbed copy never learns it)" \
@@ -4291,9 +4471,11 @@ run_sabotage "a car pass that throws takes the heartbeat down with it" \
 
 # Retargeted in round 4: the per-line WIDTH floor is gone (a 19-column fold slipped past it), so the
 # guarantee is now "no floor at all". Reintroducing one is the regression.
-run_sabotage "the fixture-secrets guard reintroduces a per-line width floor on a base64 body" \
-  tests/php/Repo/FixtureSecretsTest.php \
-  's%9+\\/]+={0,2}%9+\\/]{40,}={0,2}%'
+# Retargeted again in C2 round 6: the block scan moved out of the test and into the ONE shared
+# cascade, `Scout\Core\RecoverableForms`, which the guard and `tools/scrub-eml.php` both call.
+run_sabotage "the shared cascade reintroduces a per-line width floor on a base64 body" \
+  src/php/Core/RecoverableForms.php \
+  's%9+/]+={0,2}%9+/]{40,}={0,2}%'
 
 run_sabotage "a car startup refusal is not recorded for the next beat" \
   src/php/Car/Cli/CarScout.php \
@@ -4777,6 +4959,21 @@ run_sabotage "the scorer stops rejecting on the classification first (the exclus
   "s%if (\$class->outcome === VehicleOutcome::REJECT) {%if (false) {%"
 
 printf '\n  %d sabotage(s) detected, %d undetected\n' "$pass" "$fail"
+
+if (( _shard_n > 1 )); then
+  # THE SCOPE TRAVELS WITH THE NUMBER. A shard result printed without saying it is one reads as the
+  # whole ledger, which is the same lie the PARTIAL RUN line below exists to prevent.
+  printf '  \033[33mSHARD %d/%d\033[0m — %d case(s) ran here, %d belong to other shards.\n' \
+    "$_shard_i" "$_shard_n" "$_ran" "$_sharded_out"
+  # ONLY when no filter is in play. With a filter, a shard holding none of the filtered cases is
+  # the expected arithmetic of an intersection, not a hole in the ledger — and aborting there would
+  # make the development aid unusable beside the mechanism it is helping to test.
+  if (( _ran == 0 )) && [[ -z "$_filter" ]]; then
+    printf '\n  \033[31mABORT\033[0m this shard selected NO case. Six jobs reporting a clean ledger\n'
+    printf '        between them, having proved nothing, is the failure this refusal exists for.\n\n'
+    exit 1
+  fi
+fi
 
 if [[ -n "$_filter" ]]; then
   # Loud, because a filtered run that looked like a full one would be the ledger lying about its own
