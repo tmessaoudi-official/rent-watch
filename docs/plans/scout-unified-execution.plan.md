@@ -1424,6 +1424,26 @@ read-only) and the merged prose as one review deep.
   Eight ledger cases (reopen half-done, dry-run clears, unknown key silent, warnings dropped on
   either pipeline, §1 counted, floor at one, "most" instead of "every"); mutation loop and full
   suite chained before the commit.
+- [2026-09-05 07:00] RECORD (**ROW 45 — CI HAD BEEN RED FOR TWO DAYS AND NOBODY LOOKED**; the
+  developer asked *"check the github ci and fix everything"*). `gh run list`: every push since
+  `46546bc` (2026-09-03 08:56) failed — twelve runs, 113 errors + 22 failures each — while every
+  local run and every live pass was green. Root causes, both measured: **(1)** the coliving
+  exclusion's variable-length lookbehind (`(?<![0-9]\s\w{1,14}\s)`, PCRE2 ≥ 10.43). Local PHP
+  8.5.9 and the container's 8.5.10 both bundle PCRE2 10.44; the runner's `setup-php` 8.5.10 links
+  the system libpcre2 (10.42), so `criteria.json` failed the loader's compile check there and 135
+  tests errored on `ConfigError`. Rewritten as a negative lookahead from the string start —
+  `^(?!.*(?:\b\d+|\b(?:une|…|six))\s+(?:\w{1,14}\s+)?chambres?\b).*\bchambres?\b(?!…)` — and
+  **measured identical over every stored title: 73 fire / 73 fire, 0 only-old, 0 only-new**.
+  `PortablePatternsTest` now scans every configured pattern in all four config files and refuses
+  a lookbehind with a non-fixed quantifier; its self-test flags the exact shape that broke CI and
+  passes the replacement and the fixed-alternatives shape. The ledger's coliving expression was
+  retargeted at the new line (verified: applies, and the mutated JSON still parses). **(2)**
+  `CredentialsNeverReachATraceTest` assumed the development ini; the runner ships the production
+  ini (`zend.exception_ignore_args = On`), so its premise failed while the guarantee held for
+  free. It now SETS the printing runtime (`ini_set` of both directives, restored in `finally`;
+  the child probe gets the same preamble) — proven by running the class under
+  `-d zend.exception_ignore_args=1` locally: green, where it was red. Nightly ledger: also red on
+  the same cause; dispatched on demand after the push so today's verdict is real.
 
 ---
 
@@ -2638,11 +2658,12 @@ tool/guard) and say which ones the fix covers.**
 | 37 | B-common — content-addressed identity for VehicleEmailSource (no-information floor, price out of the key, in-message duplicate announced) | M | done | 7e1d54b | src/php/Car/VehicleEmailSource.php src/php/Car/VehicleSourceLoader.php |
 | 38 | B-common — per-segment labelled field reader for VehicleEmailSource (the CapCar shape) | M | done | 7e1d54b | src/php/Car/VehicleEmailSource.php src/php/Car/VehicleSourceLoader.php |
 | 39 | B3 prerequisite — a NARROW scrubber stripper for a base64 JSON-array identity blob, all refusal guarantees kept | M | done | 74d15d1 | tools/scrub-eml.php tests/test-scrub-eml.sh |
-| 40 | F20 / Q39 — a repair route for a durably-excluded row: ruling (command vs stored distinction), then build | M | done | - | src/php/Rent/Store/Store.php src/php/Rent/Cli/RentScout.php |
-| 41 | Round-5 P2 — a selector drifting onto a 5-digit field extracts cleanly and health stays ok: ruling (build vs accept), then build | M | done | - | src/php/Rent/Adapters/ListingMapper.php |
+| 40 | F20 / Q39 — a repair route for a durably-excluded row: ruling (command vs stored distinction), then build | M | done | 2553c94 | src/php/Rent/Store/Store.php src/php/Rent/Cli/RentScout.php |
+| 41 | Round-5 P2 — a selector drifting onto a 5-digit field extracts cleanly and health stays ok: ruling (build vs accept), then build | M | done | 2553c94 | src/php/Rent/Adapters/ListingMapper.php |
 | 42 | Register + Known-issues bookkeeping — F1b, F3, F6 closers; three stale bullets | S | done | - | docs/plans/scout-unified-execution.plan.md |
 | 43 | Fresh test record at HEAD, then the freeze for row 35 | S | todo | - | - |
-| 44 | In'li answers HTTP 302 on ~2 of 5 passes (seen 2026-09-05 00:30, source reports broken) — measure the redirect, rule, fix or record | M | done | - | src/php/Rent/Adapters/HtmlSource.php config/rent/sources.json |
+| 44 | In'li answers HTTP 302 on ~2 of 5 passes (seen 2026-09-05 00:30, source reports broken) — measure the redirect, rule, fix or record | M | done | 2553c94 |
+| 45 | CI RED for two days (12 pushes, since 46546bc): a PCRE2 ≥ 10.43 lookbehind in criteria.json and a trace test assuming the development ini — fix at the root, add a portability guard, re-run the nightly ledger on demand | M | todo | - | config/rent/criteria.json tests/php/Repo/PortablePatternsTest.php tests/php/Repo/CredentialsNeverReachATraceTest.php | src/php/Rent/Adapters/HtmlSource.php config/rent/sources.json |
 <!-- /progress-block -->
 ### Blocked
 

@@ -2156,6 +2156,23 @@ var/claude/                 Reports, review outputs — gitignored scratch (hand
   is not done until the DEPLOYED watcher's first live pass says so — commute is the production-only
   path, and a test that reproduces the sequence on a path production does not take proves the
   sequence, not the production.**
+- **A GREEN TREE HERE IS NOT A GREEN CI, AND FOR TWO DAYS NOBODY LOOKED (row 45, 2026-09-05).**
+  Twelve consecutive pushes were red from `46546bc` (2026-09-03 08:56) on, 113 errors + 22
+  failures each, while every local run was green — found only when the developer asked to check
+  `gh run list`. Two root causes, both about the RUNTIME differing from this one: **(1)** the
+  coliving title exclusion used a variable-length lookbehind (`(?<![0-9]\s\w{1,14}\s)`), which
+  PCRE2 accepts from 10.43; the PHP built here and in the deployed image bundles 10.44, the CI
+  runner's `setup-php` links Ubuntu's libpcre2 10.42, so the loader's own compile check refused
+  the whole `criteria.json` there and every test that loads it errored on `ConfigError` — a rule
+  on one runtime, a syntax error on another. Rewritten as a negative lookahead from the string
+  start, **measured identical over every stored title (73/73, 0 differences)**, and
+  `tests/php/Repo/PortablePatternsTest.php` now refuses any configured lookbehind with a
+  non-fixed quantifier. **(2)** `CredentialsNeverReachATraceTest` ASSUMED the development ini
+  (trace arguments printed); the runner ships the production ini, so its premise assertion failed
+  while the guarantee held for free. The test now SETS the printing runtime (`ini_set`, both
+  directives are `PHP_INI_ALL`, restored in `finally`; the child probe likewise) instead of
+  finding it. **Run `gh run list --limit 5` after every push** — the notification half of CI is
+  the nightly ledger's issue, not the fast job's, and a red fast job is silent.
 - **A DURABLY-EXCLUDED ROW HAS ONE WAY BACK, AND IT IS A NAMED COMMAND (row 40, 2026-09-05).**
   `scout --domain=rent reclassify --reopen=<dedup_key>` prints where the exclusion came from
   (*lecture propre / jumeau / groupe*), clears the row's OWN and TWIN readings, and re-judges it

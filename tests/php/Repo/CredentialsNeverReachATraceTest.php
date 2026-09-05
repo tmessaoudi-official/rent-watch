@@ -64,6 +64,15 @@ final class CredentialsNeverReachATraceTest extends TestCase
             throw new \RuntimeException('refused');
         };
 
+        // THE PREMISE IS SET, NOT ASSUMED (CI, 2026-09-05). PHP's development ini prints trace
+        // arguments (`zend.exception_ignore_args = Off`, 15 characters each); the PRODUCTION ini —
+        // which the CI runner's PHP ships with — suppresses them, so this test failed on the
+        // runner for two days while guarding a mechanism the runner never exercised. The threat is
+        // the developer's own runtime and any host that prints arguments, so the test creates that
+        // runtime rather than depending on finding it: both directives are PHP_INI_ALL.
+        $ignore = ini_set('zend.exception_ignore_args', '0');
+        $budget = ini_set('zend.exception_string_param_max_len', '15');
+
         try {
             $viaArgument(self::PASSWORD);
             self::fail('the probe must throw');
@@ -86,6 +95,9 @@ final class CredentialsNeverReachATraceTest extends TestCase
             self::fail('the probe must throw');
         } catch (\Throwable $e) {
             self::assertStringNotContainsString('Super', $e->getTraceAsString(), 'a local is NOT printed');
+        } finally {
+            ini_set('zend.exception_ignore_args', (string) $ignore);
+            ini_set('zend.exception_string_param_max_len', (string) $budget);
         }
     }
 
@@ -199,7 +211,13 @@ final class CredentialsNeverReachATraceTest extends TestCase
         $strict = $probe . '.strict.php';
 
         file_put_contents($strict, "<?php\ndeclare(strict_types=1);\ntry { new Scout\\Adapters\\Mail\\ImapMailbox('h', 'annette-the-subscriber', '" . self::PASSWORD . "', 'INBOX', '993'); }\ncatch (Throwable \$e) { echo \$e->getTraceAsString(); }\n");
-        file_put_contents($probe, "<?php\n" . ($suppress ? "ini_set('zend.exception_ignore_args', '1');\n" : '') . "require '" . __DIR__ . "/../../../vendor/autoload.php';\nrequire '" . $strict . "';\n");
+        // The UNSUPPRESSED half creates the printing runtime explicitly (a production ini, as on the
+        // CI runner, would otherwise satisfy the "suppressed" assertion for free and fail the
+        // "leaked" one) — the same two directives the in-process premise test sets.
+        $preamble = $suppress
+            ? "ini_set('zend.exception_ignore_args', '1');\n"
+            : "ini_set('zend.exception_ignore_args', '0');\nini_set('zend.exception_string_param_max_len', '15');\n";
+        file_put_contents($probe, "<?php\n" . $preamble . "require '" . __DIR__ . "/../../../vendor/autoload.php';\nrequire '" . $strict . "';\n");
 
         try {
             return (string) shell_exec(escapeshellarg(PHP_BINARY) . ' ' . escapeshellarg($probe) . ' 2>&1');
