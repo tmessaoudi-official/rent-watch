@@ -103,6 +103,11 @@ Three things to know before using it:
 A raw alert contains your email address, often several times and often encoded. It must be scrubbed
 before it can be committed as a fixture.
 
+**It needs `vendor/autoload.php`** — the scrubber shares its decode cascade with the CI guard
+(`Scout\Core\RecoverableForms`), so run `composer install` first on a fresh clone. It refuses loudly
+with the remedy rather than scrubbing less thoroughly, which is the right direction for a tool whose
+success message is what lets a fixture be committed.
+
 ```bash
 php tools/scrub-eml.php <in.eml> <out.eml> <your-subscriber-address> [needle …]
 ```

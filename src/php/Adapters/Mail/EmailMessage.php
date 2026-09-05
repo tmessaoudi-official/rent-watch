@@ -83,7 +83,12 @@ final readonly class EmailMessage
      * accepted it. Shared with the feed-freshness reader in {@see ImapMailbox}, which learnt this
      * rule first (a `Fri, 09 Aug 2026` recorded as 14 August closed a FEED_SILENT verdict).
      *
-     * **THE MASK SET IS THE RFC'S OWN GRAMMAR, not the shapes one portal happened to send.** It was
+     * **THE MASK SET FOLLOWS THE RFC'S GRAMMAR WHERE IT MATTERS, not the shapes one portal happened
+     * to send** — and *where it matters* is the qualification, added after a round-7 lens measured
+     * the claim: the obsolete zone forms RFC 5322 §4.3 still permits (`-0000`, `UT`, and the single
+     * military letters) are legal and are REFUSED here. That is the safe direction — an unparsed
+     * date yields no verdict rather than a wrong instant — and no portal in this tree sends one, so
+     * it is a stated limit and not a defect. It was
      * four masks for a month and refused two legal ones, at a cost measured in production on
      * 2026-09-05: RFC 5322 writes the day as `1*2DIGIT` and makes the seconds optional, PAP writes
      * `Thu, 3 Sep 2026`, and the round-trip refused it because `createFromFormat` accepts `3` and

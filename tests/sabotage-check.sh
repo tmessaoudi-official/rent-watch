@@ -39,7 +39,7 @@ _filter="${SABOTAGE_FILTER:-}"
 
 # ── SHARDING (2026-09-05, developer ruling) ──────────────────────────────────────────────────────
 # `SABOTAGE_SHARD=<i>/<n>` runs only the cases whose INDEX falls in shard i of n. It exists because
-# one CI job could not finish the ledger any more — 258 -> 527 -> 750 cases in three weeks, four of
+# one CI job could not finish the ledger any more — 258 -> 527 -> 759 cases in three weeks, four of
 # the last eight nightlies cut off at the 240-minute cap — and GitHub's hosted ceiling is 360, so a
 # bigger budget had nowhere left to go.
 #
@@ -1914,7 +1914,7 @@ run_sabotage "rent doctor stops naming the push gate and the low-score queue" \
 
 run_sabotage "the rent drain files every queued row as « score bas » (a failed push never retried)" \
   src/php/Rent/Cli/RentScout.php \
-  's%if (\$pushMin === null || (\$verdict->score ?? 0) >= \$pushMin) {%if (false) {%'
+  's%if (\$pushMin === null || (\$entry\['"'"'verdict'"'"'\]->score ?? 0) >= \$pushMin) {%if (false) {%'
 
 run_sabotage "the rent digest VERB stops re-pushing the retries" \
   src/php/Rent/Cli/RentScout.php \
@@ -1928,13 +1928,9 @@ run_sabotage "a rent retry marks the row even though the channel refused it" \
   src/php/Rent/Cli/RentScout.php \
   '/private function pushRetries/,/^    }/ s%if (!\$notifier->delivered(\$failures)) {%if (false) {%'
 
-run_sabotage "the rent drain stops collapsing cross-track twins in the rollup (one flat announced twice)" \
+run_sabotage "the rent drain stops collapsing cross-track twins (one flat announced twice)" \
   src/php/Rent/Cli/RentScout.php \
-  's%\$lowScore = \$this->collapseTwins(\$lowScore, \$warnings);%%'
-
-run_sabotage "the rent drain stops collapsing cross-track twins among the retries" \
-  src/php/Rent/Cli/RentScout.php \
-  's%\$retries = \$this->collapseTwins(\$retries, \$warnings);%%'
+  's%\$queued = \$this->collapseTwins(\$queued, \$warnings);%%'
 
 run_sabotage "a collapsed twin marks only the survivor (the other route is announced again tomorrow)" \
   src/php/Rent/Cli/RentScout.php \
@@ -1988,6 +1984,39 @@ run_sabotage "the ParuVendu body turns greedy (a lone fuel lands in the BODY slo
 run_sabotage "GPL ou GNL leaves the closed fuel list (a stated fuel becomes part of the body)" \
   config/car/sources.json \
   's%GPL ou GNL|%%'
+
+# ── C2 round 7 (2026-09-05): §1 in the drain, and the answers a drain must not discard ──────────
+#
+# The drain is the THIRD verdict surface and the one that reaches the phone. `Pipeline` and
+# `reclassify` both refuse on the PERSISTED twin and group readings; the drain judged §1 from the
+# row's own `tenure` column alone, so a flat whose twin on the other track was judged `PLS` — the
+# exact state schema v12 persists the veto for — was pushed as an individual MATCH and marked
+# MATCH, which cannot be demoted. The car twin is the same shape one domain over: a re-judge that
+# says REJECT, discarded, and the row announced on the stored score with a reason line that lies.
+
+run_sabotage "the rent drain ignores the OTHER TRACK's excluded reading (a PLS twin is pushed)" \
+  src/php/Rent/Cli/RentScout.php \
+  's%\$twin = \$store->twinTenure(\$key);%$twin = null;%'
+
+run_sabotage "the rent drain ignores its cluster's excluded member (§1 across the group)" \
+  src/php/Rent/Cli/RentScout.php \
+  's%\$groupVeto = \$store->groupExcludedTenure(\$key);%$groupVeto = null;%'
+
+run_sabotage "the car drain announces a car today's rules REJECT (the excluded vehicle set)" \
+  src/php/Car/Cli/CarScout.php \
+  's%if (\$judged->outcome !== VehicleOutcome::MATCH) {%if (false) {%'
+
+run_sabotage "a snapshot-less queued row is filed under a threshold that may not exist" \
+  src/php/Rent/Cli/RentScout.php \
+  '/if (\$listing === null) {/,/^                }$/ s%\$queued\[\]%$lowScore[]%'
+
+run_sabotage "the remainder line counts a drained retry as still pending (a phantom backlog)" \
+  src/php/Rent/Cli/DigestBatch.php \
+  's%\$drained += .count(\$entry\['"'"'keys'"'"'\]);%$drained += 0;%'
+
+run_sabotage "the car remainder line counts a drained retry as still pending" \
+  src/php/Car/Cli/CarScout.php \
+  's%if (\$waiting > count(\$entries) + count(\$retries)) {%if ($waiting > count($entries)) {%'
 
 # ── C2 round 6 (2026-09-05): the drain a run mode ACTUALLY has ─────────────────────────────────
 #
@@ -4958,6 +4987,19 @@ run_sabotage "the scorer stops rejecting on the classification first (the exclus
   src/php/Car/VehicleScorer.php \
   "s%if (\$class->outcome === VehicleOutcome::REJECT) {%if (false) {%"
 
+# THE ABORT COMES BEFORE THE TALLY, and that ordering is the finding rather than a nicety (C2
+# round 7, resilience P3). The alert job harvests the `N sabotage(s) detected, M undetected` line;
+# printed AFTER it, a shard that selected no case ended its log with a clean-looking `0 / 0` and the
+# refusal never reached the issue body — a human alerted to a failure whose text says nothing failed.
+if (( _shard_n > 1 )) && (( _ran == 0 )) && [[ -z "$_filter" ]]; then
+  # ONLY when no filter is in play. With a filter, a shard holding none of the filtered cases is the
+  # expected arithmetic of an intersection, not a hole in the ledger — and aborting there would make
+  # the development aid unusable beside the mechanism it is helping to test.
+  printf '\n  \033[31mABORT\033[0m this shard selected NO case. Six jobs reporting a clean ledger\n'
+  printf '        between them, having proved nothing, is the failure this refusal exists for.\n\n'
+  exit 1
+fi
+
 printf '\n  %d sabotage(s) detected, %d undetected\n' "$pass" "$fail"
 
 if (( _shard_n > 1 )); then
@@ -4965,14 +5007,6 @@ if (( _shard_n > 1 )); then
   # whole ledger, which is the same lie the PARTIAL RUN line below exists to prevent.
   printf '  \033[33mSHARD %d/%d\033[0m — %d case(s) ran here, %d belong to other shards.\n' \
     "$_shard_i" "$_shard_n" "$_ran" "$_sharded_out"
-  # ONLY when no filter is in play. With a filter, a shard holding none of the filtered cases is
-  # the expected arithmetic of an intersection, not a hole in the ledger — and aborting there would
-  # make the development aid unusable beside the mechanism it is helping to test.
-  if (( _ran == 0 )) && [[ -z "$_filter" ]]; then
-    printf '\n  \033[31mABORT\033[0m this shard selected NO case. Six jobs reporting a clean ledger\n'
-    printf '        between them, having proved nothing, is the failure this refusal exists for.\n\n'
-    exit 1
-  fi
 fi
 
 if [[ -n "$_filter" ]]; then

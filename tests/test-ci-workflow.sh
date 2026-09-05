@@ -114,7 +114,7 @@ check "the red-ledger issue names WHICH cases were not caught" has 'undetected o
 # from one path to the collected set. Summing the tallies is what makes the issue name the whole
 # night rather than one sixth of it.
 check "and reads them from every shard's collected log" has 'ledger-${n}/ledger.log'
-check "and SUMS the shard tallies, so the issue speaks for the whole night" has '(6 shards)'
+check "and SUMS the shard tallies, so the issue speaks for the whole night" has 'shards reported)'
 check "runs the drift-scan self-test"        has "tests/test-drift-scan.sh"
 check "runs the sabotage ledger"             has "tests/sabotage-check.sh"
 
@@ -154,14 +154,17 @@ check "…and that path really calls issues.create" \
 # used to, and covers `skipped` shards besides. The job-level `always()` is what lets it run at all
 # after a cancelled dependency; without it GitHub skips the whole job and the timeout reaches
 # nobody again, which is the 2026-08-29 defect this block exists for.
-red_if_line="$(grep -n -A1 'A red ledger must reach a human' "$wf" | grep -m1 'if:' | sed 's/^[0-9]*-//')"
+# awk, not `grep -A`: the step now carries a four-line comment between its name and its `if:`, and
+# one of those comment lines contains the words "an `if:`" — so a substring match found the PROSE.
+# A check that pins a comment instead of the condition is worse than no check at all.
+red_if_line="$(awk '/A red ledger must reach a human/{f=1} f && /^[[:space:]]*if:/{print; exit}' "$wf")"
 check "the red-ledger notice fires on a CANCELLED ledger too (a timeout is a cancellation)" \
   bash -c 'grep -qE "needs\.sabotage\.result != .success." <<<"$1"' _ "$red_if_line"
 check "…and its job runs even after a cancelled dependency (always(), or GitHub skips it)" \
   grep -qE "if: always\(\) && needs\.sabotage\.result != .skipped." "$wf"
 
 # ── THE SHARDING CONTRACT (2026-09-05) ───────────────────────────────────────────────────────────
-# One job could not finish the ledger any more: 258 -> 527 -> 750 cases, four of the last eight
+# One job could not finish the ledger any more: 258 -> 527 -> 759 cases, four of the last eight
 # nightlies cut off at the cap and four red for the row-45 cause — eight days with no completed
 # detection proof. Each direction below is silent if it breaks.
 check "the ledger job is sharded" grep -q "shard: \[1, 2, 3, 4, 5, 6\]" "$wf"
@@ -180,6 +183,32 @@ shard_denom="$(grep -m1 -oE 'SABOTAGE_SHARD: \$\{\{ matrix\.shard \}\}/[0-9]+' "
 check "the shard denominator matches the matrix size (a /6 beside five shards drops a sixth)" \
   test "${shard_denom:-0}" = "$matrix_n"
 
+# THE THIRD COPY. The alert job's reader iterates shards 1..SHARDS; it used to iterate a hardcoded
+# ['1'…'6'], which the two checks above do not reach — widen the matrix and the new shards would be
+# neither summed into the tally nor named as missing, so their undetected regressions would be
+# absent from the issue and their silence would read as clean (C2 round 7, completeness).
+alert_shards="$(awk '/A red ledger must reach a human/{f=1} f && /SHARDS:/{print $2; exit}' "$wf")"
+check "the alert reader's shard count matches the matrix size too (three copies, all pinned now)" \
+  test "${alert_shards:-0}" = "$matrix_n"
+
+# A shard killed by `timeout-minutes` UPLOADS A PARTIAL LOG, so the file exists and the missing-log
+# branch never names it — while its tally line was never printed. Summing what it did print reports
+# five shards' work as six, on the very failure mode sharding was built for.
+check "a shard CUT OFF mid-run is named rather than summed as clean" \
+  grep -q "never reached their tally" "$wf"
+check "…and the tally says how many shards actually reported" \
+  grep -q "shards reported" "$wf"
+
+# An `if:` with no status check function gets an implicit `success()`, so a failing predecessor
+# (the artifact download, which is new) would skip the alert on a night the ledger was red. The
+# job-level `always()` does not reach step conditions.
+check "the red-ledger step carries its own always()" \
+  grep -q "if: always() && needs.sabotage.result != 'success'" "$wf"
+check "…and the retraction does too" \
+  grep -q "if: always() && needs.sabotage.result == 'success'" "$wf"
+check "…and the artifact download cannot suppress the alert by failing" \
+  grep -q "continue-on-error: true" "$wf"
+
 # AND THE LEDGER'S OWN HALF OF THE CONTRACT. Both refusals exit before any suite runs, so these
 # two checks are cheap — and they are the ones that matter: a shard spec silently ignored means one
 # job runs everything and five run nothing, and a spec selecting no case means six jobs report a
@@ -190,6 +219,15 @@ check "…and one that names no shard of the split" \
   bash -c 'SABOTAGE_SHARD=7/6 bash "$1/tests/sabotage-check.sh" >/dev/null 2>&1; test $? -eq 1' _ "$repo"
 # A shard result printed without its scope reads as the whole ledger.
 check "a shard says it is one" grep -q 'SHARD %d/%d' "$repo/tests/sabotage-check.sh"
+
+# AND THE REFUSAL COMES BEFORE THE TALLY. The alert job harvests the `N sabotage(s) detected, M
+# undetected` line; printed after it, a shard that selected no case ended its log with a
+# clean-looking `0 / 0` and the ABORT never reached the issue body — a human alerted to a failure
+# whose text says nothing failed (C2 round 7). Positional, because the ordering IS the guarantee.
+sab_abort_line="$(grep -n 'this shard selected NO case' "$repo/tests/sabotage-check.sh" | head -1 | cut -d: -f1)"
+sab_tally_line="$(grep -n 'sabotage(s) detected, %d undetected' "$repo/tests/sabotage-check.sh" | head -1 | cut -d: -f1)"
+check "the no-case ABORT is printed BEFORE the tally the alert harvests" \
+  test "${sab_abort_line:-0}" -lt "${sab_tally_line:-0}"
 
 # The evidence has to survive the job that produced it, or the alert reads six logs it cannot see.
 check "each shard keeps its ledger log for the alert job" grep -q "actions/upload-artifact" "$wf"

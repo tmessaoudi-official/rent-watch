@@ -1212,7 +1212,14 @@ final readonly class RentScout
 
         $failures = $notifier->send($notification);
         foreach ($failures as $failure) {
-            $this->warn($failure->getMessage());
+            // `Redact::text` here is DEFENCE IN DEPTH, not the guarantee. A round-7 lens reported
+            // three sites in this file as unredacted while `CarScout` redacted at all four of its
+            // own; the reading was right about the syntax and wrong about the leak, because
+            // `ChannelError::__construct()` redacts the message it is built with and
+            // `Notifier::send()` returns nothing else — measured, and now pinned by
+            // `ChannelErrorRedactionTest`. Do not remove the constructor's redaction on the
+            // strength of these calls: they cover the call sites, it covers everything.
+            $this->warn(Redact::text($failure->getMessage()));
         }
 
         if (!$notifier->delivered($failures)) {
@@ -1325,6 +1332,8 @@ final readonly class RentScout
         // its own test states). Never throws, never prints — the same contract as above.
         $lowScore = [];
         $retries = [];
+        /** @var list<array{listing: RawListing, verdict: Verdict, key: string, keys: list<string>}> $queued */
+        $queued = [];
         $waitingLowScore = $store->pendingLowScoreCount();
         if ($waitingLowScore > 0) {
             $criteria = $this->criteria();
@@ -1335,6 +1344,45 @@ final readonly class RentScout
                 $key = $row['dedup_key'];
                 /** @var list<string> $storedReasons */
                 $storedReasons = $this->decodeSignals($row['signals_json']);
+
+                // §1 FIRST, AND FROM EVERY PERSISTED READING — not from this row's own `tenure`
+                // column alone (C2 round 7, correctness P0). `pendingLowScore()` selects that
+                // column and nothing else, so a flat whose TWIN on the other track was judged
+                // `PLS`, or whose CLUSTER holds a `PLS` sibling, reached the retry arm and was
+                // PUSHED as an individual MATCH — the exact state schema v12 persists the veto
+                // for: *a pass seeing the agency copy alone pushed the PLS flat*. `Pipeline` and
+                // `reclassify` both refuse on these two, and this drain is the third surface —
+                // the one that reaches the phone.
+                //
+                // ABOVE THE SPLIT deliberately: both arms announce, so a guard inside
+                // `pushRetries()` would be *a fix landing on one of two symmetric surfaces*, this
+                // repo's named recurring defect, committed inside the fix for it.
+                //
+                // The UNDETERMINED twin is refused as well, exactly as `reclassify` refuses to
+                // PROMOTE on one: a doubt on the other track is not something this command may
+                // announce away, and it has no route to re-file the row as a doubt.
+                $groupVeto = $store->groupExcludedTenure($key);
+                if ($groupVeto !== null) {
+                    $warnings[] = sprintf(
+                        '%s : régime « %s » retenu contre son groupe — laissée en attente, `scout --domain=rent reclassify` la revoit',
+                        $key,
+                        $groupVeto->value,
+                    );
+
+                    continue;
+                }
+                $twin = $store->twinTenure($key);
+                if ($twin !== null && ($twin['tenure']->isExcluded() || $twin['tenure'] === Tenure::UNKNOWN)) {
+                    $warnings[] = sprintf(
+                        '%s : l\'autre voie (%s) la dit « %s » — laissée en attente, `scout --domain=rent reclassify` la revoit',
+                        $key,
+                        (string) $twin['source'],
+                        $twin['tenure']->value,
+                    );
+
+                    continue;
+                }
+
                 try {
                     $listing = $store->evidence($key);
                 } catch (\JsonException | \InvalidArgumentException $e) {
@@ -1345,8 +1393,16 @@ final readonly class RentScout
                 if ($listing === null) {
                     // An unencodable payload: announced from the stored columns with the reasons
                     // the verdict recorded, and WITHOUT a score — nothing can re-score it (§1).
+                    //
+                    // WHICH ARM IT TAKES IS THE GATE'S QUESTION, NOT THE SNAPSHOT'S (C2 round 7,
+                    // completeness P2). This row used to go to the rollup unconditionally, so on a
+                    // deployment with NO gate — where nothing is ever held back — a failed push
+                    // whose payload will not encode was announced under a heading asserting it
+                    // fell short of a threshold that does not exist, and marked ROLLUP, which
+                    // takes it out of `pendingLowScore()` for ever. The car drain already read it
+                    // the other way, and the documented rule is the car one.
                     ++$withoutSnapshot;
-                    $lowScore[] = [
+                    $queued[] = [
                         'listing' => new RawListing(sourceName: $row['source'], externalId: $row['external_id'], title: $row['title'], url: $row['url'], rentCc: $row['rent_cc']),
                         'verdict' => Verdict::matched(0, $storedReasons, false),
                         'key' => $key,
@@ -1376,29 +1432,39 @@ final readonly class RentScout
                     continue;
                 }
 
-                $entry = [
+                $queued[] = [
                     'listing' => $listing,
                     'verdict' => Verdict::matched($verdict->score ?? 0, [...$storedReasons, ...$verdict->reasons], $verdict->highPriority),
                     'key' => $key,
                     'keys' => [$key],
                 ];
-                // A RETRY, NOT A ROLLUP (C2 round 6, resilience P2): the queue cannot tell a
-                // match held back by the gate from one whose push failed, and on a deployment
-                // with no gate every queued row is the latter. Re-scored here, so the split is
-                // the gate's own comparison — and a row at or over the line is pushed as the
-                // match it is, never announced under a heading that says it fell short.
-                if ($pushMin === null || ($verdict->score ?? 0) >= $pushMin) {
+            }
+
+            // TWO TRACKS, ONE ANNOUNCEMENT — COLLAPSE FIRST, THEN SPLIT (C2 round 7). The
+            // pipeline's twin cover fires only on a copy that was PUSHED, so two queued copies of
+            // one flat were both announced. Round 6 collapsed each list separately, which left the
+            // case where the twins STRADDLE the gate: one entry in each list, `collapseTwins()`
+            // returns at `count < 2`, and the flat is announced twice in one drain — an individual
+            // MATCH push AND a rollup line, neither naming the other route. Measured, both ways
+            // round, and with the agency copy taking the headline when it scores higher — the
+            // opposite of *the better route is never hidden*.
+            //
+            // Collapsing over the UNION fixes both: one flat, one entry, one score (the surviving
+            // route's), and that score decides which arm it takes.
+            $queued = $this->collapseTwins($queued, $warnings);
+
+            // A RETRY, NOT A ROLLUP (C2 round 6, resilience P2): the queue cannot tell a match
+            // held back by the gate from one whose push failed, and on a deployment with no gate
+            // every queued row is the latter. The split is the gate's own comparison — a row at or
+            // over the line is pushed as the match it is, never announced under a heading that
+            // says it fell short.
+            foreach ($queued as $entry) {
+                if ($pushMin === null || ($entry['verdict']->score ?? 0) >= $pushMin) {
                     $retries[] = $entry;
                 } else {
                     $lowScore[] = $entry;
                 }
             }
-            // TWO TRACKS, ONE ROLLUP (C2 round 6, correctness P1): the pipeline's twin cover
-            // fires only on a copy that was PUSHED, so two below-gate copies of one flat — a
-            // direct route and an agency copy — were both queued and both announced. Collapsed
-            // here, at the drain, so it holds whichever pass saw which copy.
-            $lowScore = $this->collapseTwins($lowScore, $warnings);
-            $retries = $this->collapseTwins($retries, $warnings);
         }
 
         return new DigestBatch(
@@ -1418,6 +1484,13 @@ final readonly class RentScout
      * both, and the survivor's reasons name the other route with its link — the push's own rule,
      * *the better route is never hidden*. `Dedup::twinReason()` is the same test the pipeline
      * applies, so the two cannot disagree about what a twin is.
+     *
+     * **SCOPE: the QUEUE, never the tenure bin.** It is applied to the queued matches — which the
+     * caller collapses BEFORE splitting them into retries and rollup, so a pair straddling the gate
+     * is still one flat — and deliberately not to `entries`. A cross-track twin pair in the *à
+     * vérifier* bin is therefore still announced twice, which is noise rather than a §1 fault: both
+     * are doubts, both carry their own `DigestCause`, and merging two doubts would decide which
+     * cause the survivor keeps — a judgement this command does not make (C2 round 7, P3).
      *
      * The family map is the ONE thing this reads outside the store, and a config it cannot read
      * must not take the drain down with it: the digest is §1's only landing zone, and this command
@@ -1924,7 +1997,7 @@ final readonly class RentScout
         foreach ($promotions as $promotion) {
             $failures = $notifier->send($formatter->match($promotion['listing'], $promotion['verdict']));
             foreach ($failures as $failure) {
-                $this->warn($failure->getMessage());
+                $this->warn(Redact::text($failure->getMessage()));
             }
 
             if (!$notifier->delivered($failures)) {
@@ -1994,7 +2067,7 @@ final readonly class RentScout
         ));
 
         foreach ($failures as $failure) {
-            $this->warn($failure->getMessage());
+            $this->warn(Redact::text($failure->getMessage()));
         }
 
         return $notifier->delivered($failures) ? 0 : 1;
@@ -2318,13 +2391,18 @@ final readonly class RentScout
     {
         $batch = $this->collectDigest($store);
 
+        // WARNINGS FIRST, BECAUSE AN EMPTY BATCH CAN CARRY THEM (C2 round 7, resilience P2). Every
+        // queued row can be skipped — re-judged REJECT today, vetoed by its twin or its group, an
+        // unreadable snapshot — while the tenure bin is empty, and the floor returned before this
+        // loop. `--watch` is the DEPLOYED mode, so a row stuck in the queue for ever was reported
+        // only if a human happened to type the verb.
+        foreach ($batch->warnings as $warning) {
+            $this->warn($warning);
+        }
+
         if ($batch->isEmpty()) {
             // Nothing to say, so nothing is said, and the window stays open for whatever arrives.
             return;
-        }
-
-        foreach ($batch->warnings as $warning) {
-            $this->warn($warning);
         }
 
         if ($batch->withoutSnapshot > 0) {
@@ -2343,6 +2421,14 @@ final readonly class RentScout
         // The retries first, as individual pushes: the floor is the only automatic drain a
         // `--watch` deployment has, so a failed push that outlived its source's re-emission is
         // recovered HERE or nowhere. The verb does the same through the same method.
+        //
+        // STATED COST (C2 round 7, resilience P3): a retries-ONLY batch returns below without
+        // writing the window marker, so the "daily" floor is re-entered on the next pass — every
+        // ~15 minutes — draining another `Store::DIGEST_BATCH` of 50. That is the intended retry
+        // semantics for a failed send and it is capped, but on a no-gate deployment whose channel
+        // has been down it turns a backlog of N queued matches into N individual pushes at 50 per
+        // quarter-hour, where the pre-A5 behaviour was one capped mail per drain. `Pacer` covers
+        // source fetches, not notification sends, so there is no jitter between them.
         $this->pushRetries($notifier, $store, $batch->retries, $now);
 
         if ($batch->entries === [] && $batch->lowScore === []) {

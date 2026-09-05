@@ -90,7 +90,7 @@ closed one, so issues #1 and #2 stood open for days after the regression they re
 pushed, and an alert nobody retracts becomes furniture. Both halves are pinned by
 `tests/test-ci-workflow.sh` — by step NAME *and* by the API call that does the work, since a name
 alone survives the body being gutted. **THE LEDGER IS SHARDED SIX WAYS since 2026-09-05** (developer
-ruling), because one job could no longer finish it: 258 → 527 → 750 cases in three weeks, four of
+ruling), because one job could no longer finish it: 258 → 527 → 759 cases in three weeks, four of
 the last eight nightlies CANCELLED at the 240-minute cap and four failed on row 45's CI cause —
 eight days with no completed detection proof and seven issues nobody could close. GitHub's hosted
 ceiling is 360, so a bigger budget had nowhere left to go. `SABOTAGE_SHARD=<i>/<n>` selects by case
@@ -495,6 +495,41 @@ offered and **declined** (developer ruling: *keep the weights, push individually
   *« Vérifié, score bas : N annonce(s) »*. The drain RE-SCORES a queued row from its v7 snapshot
   with the STORED classification, never re-forming a verdict (the `reclassify` rule), and a row the
   current criteria reject is left waiting with a warning rather than announced.
+- **§1 IS JUDGED FROM EVERY PERSISTED READING, AND THE DRAIN IS THE THIRD SURFACE** (C2 round 7,
+  correctness P0 — the most serious finding of that round). `pendingLowScore()` selects the row's
+  OWN `tenure` column and nothing else, so the drain judged §1 from it alone while `Pipeline` (the
+  push path) and `reclassify` both refuse on the PERSISTED twin and group readings. A flat whose
+  twin on the other track was judged `PLS`, or whose cluster holds a `PLS` sibling, was therefore
+  pushed as an individual `MATCH` and marked `MATCH` — which cannot be demoted, so the row left the
+  queue for ever. **That is exactly the state schema v12 persists the veto for**, described in this
+  file already: *a pass seeing the agency copy alone pushed the PLS flat*. The two reads now sit in
+  `collectDigest()` ABOVE the retry/rollup split, because both arms announce and a guard inside
+  `pushRetries()` would be *a fix landing on one of two symmetric surfaces* committed inside the fix
+  for it. The UNDETERMINED twin is refused as well, exactly as `reclassify` refuses to PROMOTE on
+  one: a doubt on the other track is not something this command may announce away, and it has no
+  route to re-file the row as a doubt.
+- **A COMPUTED VERDICT IS AN ANSWER, AND THE CAR DRAIN THREW ONE AWAY** (C2 round 7, P0 on two
+  lenses). Round 6 added a re-judge to `CarScout::collectRollup()` and then discarded a `REJECT`:
+  `$verdict` stayed `null`, the score fell back to the STORED one, and the row was announced —
+  individually when that score cleared the gate — carrying *« réémission — score conservé,
+  instantané absent »*, which was false, the snapshot having decoded cleanly. So a car today's
+  classifier calls `accidenté` (the non-overridable excluded vehicle set) was pushed. Reachable with
+  no forged state: the excluded set was WIDENED in code on 2026-08-31 and `max_price_eur` /
+  `brand_avoid` have both changed since, each flipping previously-MATCH rows. The rent drain refused
+  the identical case 400 lines away in the same commit.
+- **COLLAPSE THE TWINS BEFORE THE SPLIT, NOT INSIDE EACH LIST** (C2 round 7). Collapsing per list
+  left the case where twins STRADDLE the gate: one entry in each list, `collapseTwins()` returns at
+  `count < 2`, and the flat goes out twice in one drain — an individual push AND a rollup line,
+  neither naming the other route, with the agency copy taking the headline whenever it scores
+  higher. Measured both ways round. The scope is the QUEUE only: a twin pair in the *à vérifier* bin
+  is still announced twice, which is noise rather than a §1 fault, because merging two doubts would
+  decide which `DigestCause` the survivor keeps.
+- **A REMAINDER LINE MUST STAY SILENT WHEN THERE IS NO REMAINDER** (C2 round 7, P1 on two lenses).
+  `overflow()` counted `waitingLowScore` — every queued row, retries included — against the rollup
+  list alone, so every retry was reported as still pending: a phantom backlog on every drain, and on
+  a no-gate deployment that is every drain there can be. Both domains. Every existing assertion and
+  the ledger case proved the line FIRES when there IS a remainder; **none proved it silent**, which
+  is this repo's named missing-counterweight shape.
 - **A QUEUED ROW IS NOT PROOF OF A LOW SCORE, and reading it as one loses a push for ever** (C2
   round 6). The queue is *matched, and nobody was told* — exactly what a FAILED push leaves behind,
   and on a deployment with no gate configured it is the only thing a queued row can be. So each
@@ -510,8 +545,11 @@ offered and **declined** (developer ruling: *keep the weights, push individually
   pair, in whichever order the passes queued them. A `sources.json` the drain cannot read is
   VOICED and the entries pass through uncollapsed: the digest is §1's only landing zone, so a
   duplicate announcement is the acceptable cost and a bin that never empties is not.
-- **The store records WHAT a row was announced as, and the ordering is monotone**:
-  `DIGEST (1) < ROLLUP (2) < MATCH (3)`. A rent drop that lifts a rolled-up flat over the line is
+- **The RENT store records WHAT a row was announced as, and the ordering is monotone**:
+  `DIGEST (1) < ROLLUP (2) < MATCH (3)`. **The car store has no kind column at all** —
+  `VehicleStore::markNotified()` writes `notified_at` and nothing else — so every sentence in this
+  block about `notified_as` scopes to rent; the car domain's rollup is distinguished by the
+  notification KIND it is sent under, not by anything persisted (C2 round 7, completeness P3). A rent drop that lifts a rolled-up flat over the line is
   a promotion and is pushed once; a pushed flat is never demoted to a rollup; a `DIGEST` write
   over a `ROLLUP` keeps `ROLLUP`. Schema untouched — `notified_as` already existed (v8).
 - **The car half is a ROLLUP, deliberately not a digest**: the car domain has no tenure doubt, so
@@ -1633,7 +1671,7 @@ impossible by design rather than by omission (`docs/PHORJ-REQUIREMENTS.md`).
 | Layer | Path | Responsibility |
 |---|---|---|
 | Entry point | `src/php/Cli/` | `Scout` — the `--domain=<slug>` dispatcher, which NEVER defaults — plus `Domains` (the registry: a new domain is one entry), `WatchLoop`, `ChannelFactory`. `bin/scout --domain=rent …` / `--domain=car …` |
-| Core (generic) | `src/php/Core/` | What no domain owns: `Text`, `Redact` (masks secrets in adapter error text), `Pacer`, `Heartbeat`, `health` (`SourceHealth` + `SourceStatus`), **`RunStore`** (the run log, health verdicts, feed silence and alert cooldowns — see below), `Offline`, and the Notify channels/transports |
+| Core (generic) | `src/php/Core/` | What no domain owns: `Text`, `Redact` (masks secrets in adapter error text), `RecoverableForms` (the ONE decode cascade the fixture scrubber and its CI guard share), `Pacer`, `Heartbeat`, `health` (`SourceHealth` + `SourceStatus`), **`RunStore`** (the run log, health verdicts, feed silence and alert cooldowns — see below), `Offline`, and the Notify channels/transports |
 | Rent domain | `src/php/Rent/{Core,Config,Adapters,Store,Enrich,Notify,Cli}/` · later `src/phorj/core/` | Everything housing-bound: `models`, `tenure` (the classifier), `criteria` (score + hard disqualifiers), `dedup`, the SQLite store, the field maps and source contract, transit enrichment, the rent formatter and `Cli/RentScout` |
 | Car domain | `src/php/Car/` | The vehicle twin — `Vehicle*` listing, classifier, criteria, scorer, store, sources, pipeline, formatter — and `Cli/CarScout` |
 | Store | `src/php/Rent/Store/` | SQLite seen-set, price history and the schema-v4 cross-portal `group_key`. The run log and health are DELEGATED to `Core/RunStore`, which it composes on its own PDO handle. **PHP-only** — it touches a database, so phorj will not transpile it. |
@@ -2036,6 +2074,11 @@ docs/plans/                 <topic>.plan.md, each with its own ## Decisions Log
 config/<domain>/            criteria.json + sources.json per domain (committed) — JSON, ruled 2026-08-07 (Q22)
 src/php/Cli/                Scout — the --domain dispatcher (never defaults) — Domains (the registry), WatchLoop, ChannelFactory
 src/php/Core/               the GENERIC core: Text, Redact, Pacer, Heartbeat, source health, RunStore,
+                            RecoverableForms (the ONE decode cascade — quoted-printable, header
+                            unfolding, base64 blocks, base64url runs, percent-encoding — that
+                            tools/scrub-eml.php and tests/php/Repo/FixtureSecretsTest.php BOTH call.
+                            They were two copies and the copy was one decode short, so
+                            base64(percent-encoded(address)) passed CI while the tool refused it),
                             PatternMissLog + CountsPatternMisses (extraction-miss counting and its
                             read side — moved out of Rent/Adapters 2026-09-01, because a portal
                             changing its template is neither a housing fact nor a vehicle one)

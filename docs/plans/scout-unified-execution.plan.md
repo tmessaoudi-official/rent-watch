@@ -1475,9 +1475,12 @@ read-only) and the merged prose as one review deep.
   COUNTS what it queued. Both corrected, README § Deploying it gained the `--once` cron step, and
   both pass lines and both `doctor`s now name the drain the RUN MODE actually has.
   **COMP-P2** — `Store.php`'s docblock still said `DIGEST < MATCH`. **COMP-P3** — `/add-source` now
-  carries a car-domain scope block. Full suite **2925 tests / 11582 assertions green**; applies gate
-  756/756 after retargeting two expressions the `RecoverableForms` extraction and the `keys`
-  refactor had orphaned.
+  carries a car-domain scope block. Full suite **2937 tests / 11626 assertions green**; applies gate
+  762/762 after retargeting two expressions the `RecoverableForms` extraction and the `keys`
+  refactor had orphaned. **The two figures in the sentence above were stale when written** — the
+  frozen tree gives `OK (2937 tests, 11626 assertions)` and 762 applying expressions, not 2925 /
+  11582 / 756; corrected here rather than left, because a record that misstates the tree it
+  describes is the drift this plan's own rule about written counts warns against (C2 round 7).
 
 - [2026-09-05 13:30] RECORD (**A LIVE SILENT DEFECT FOUND BY THE SOURCE AUDIT THE DEVELOPER ASKED
   FOR — an RFC-legal `Date` was refused, and it cost PAP its observation time AND its feed

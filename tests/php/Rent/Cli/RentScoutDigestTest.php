@@ -12,6 +12,7 @@ use Scout\Core\Notify\Notifier;
 use Scout\Core\Notify\NotificationKind;
 use Scout\Tests\Support\DeliveringChannel;
 use Scout\Rent\Core\RawListing;
+use Scout\Rent\Core\Tenure;
 use Scout\Rent\Store\Store;
 
 /**
@@ -451,6 +452,73 @@ final class RentScoutDigestTest extends TestCase
         self::assertSame(1, $store->pendingLowScoreCount(), 'still queued for the next drain');
     }
 
+    // ── C2 round 7 (2026-09-05): §1 IS JUDGED FROM EVERY PERSISTED READING, not from this row ────
+
+    /**
+     * A PLS TWIN ON THE OTHER TRACK VETOES THE DRAIN, and until round 7 it did not.
+     *
+     * `pendingLowScore()` selects the row's OWN `tenure` and nothing else, so the drain judged §1
+     * from that column alone while `Pipeline` (the push path) and `reclassify` both refuse on the
+     * PERSISTED twin and group readings. The retry arm then sent a full `MATCH` push and marked the
+     * row `MATCH`, which cannot be demoted — so the flat left the queue for ever.
+     *
+     * This is the exact state schema v12 persists the veto for: *a pass seeing the agency copy alone
+     * pushed the PLS flat*. The direct copy is queued; a later pass fetches only the agency copy,
+     * judges it `PLS`, and `recordTwin()` writes that onto the direct row; the direct row is never
+     * fetched again (delisted, a failed source, a `--source=` run). The drain is then the only thing
+     * that will ever look at it.
+     */
+    public function testAnExcludedTwinOnTheOtherTrackIsNeverAnnouncedByTheDrain(): void
+    {
+        $root = $this->tempRoot();
+        $key = $this->seedQueuedMatch($root, $this->queueable('inli', 'VETO-TWIN'));
+        Store::open($root . '/state/rent-watch.sqlite3')->recordTwin($key, Tenure::PLS, 'seloger', 9000);
+
+        $channel = $this->delivering();
+        $result = $this->scout($root, ['digest'], $channel);
+
+        self::assertSame([], $channel->sent, 'nothing announced, on either arm');
+        self::assertStringContainsString('autre voie', $result['out'] . $result['err'], 'and the veto is said out loud');
+        $store = Store::open($root . '/state/rent-watch.sqlite3');
+        self::assertFalse($store->wasNotified($key), 'nothing marked — `reclassify` owns verdict changes');
+        self::assertSame(1, $store->pendingLowScoreCount(), 'left in the queue, not consumed');
+    }
+
+    /** An UNDETERMINED twin is refused too — `reclassify` refuses to PROMOTE on one, and this drain cannot re-file. */
+    public function testAnUndeterminedTwinIsRefusedAsWell(): void
+    {
+        $root = $this->tempRoot();
+        $key = $this->seedQueuedMatch($root, $this->queueable('inli', 'VETO-TWIN-UNK'));
+        Store::open($root . '/state/rent-watch.sqlite3')->recordTwin($key, Tenure::UNKNOWN, 'seloger', 3000);
+
+        $channel = $this->delivering();
+        $this->scout($root, ['digest'], $channel);
+
+        self::assertSame([], $channel->sent);
+        self::assertFalse(Store::open($root . '/state/rent-watch.sqlite3')->wasNotified($key));
+    }
+
+    /** The group veto is durable and cluster-wide: an excluded SIBLING stops the drain announcing the survivor. */
+    public function testAnExcludedSiblingInTheClusterVetoesTheDrain(): void
+    {
+        $root = $this->tempRoot();
+        $key = $this->seedQueuedMatch($root, $this->queueable('inli', 'VETO-GROUP'));
+
+        $store = Store::open($root . '/state/rent-watch.sqlite3');
+        $sibling = $this->queueable('seloger', 'VETO-GROUP-SIB');
+        $sighting = $store->record($sibling, $sibling->effectiveRentCc(), self::NOW);
+        $store->recordVerdict($sighting->dedupKey, 'PLS', 9000, ['plafond de ressources PLS'], $sibling);
+        $store->recordOutcome($sighting->dedupKey, 'REJECT');
+        $store->assignGroup([$key, $sighting->dedupKey]);
+
+        $channel = $this->delivering();
+        $result = $this->scout($root, ['digest'], $channel);
+
+        self::assertSame([], $channel->sent, 'the cluster holds an excluded member');
+        self::assertStringContainsString('groupe', $result['out'] . $result['err']);
+        self::assertFalse(Store::open($root . '/state/rent-watch.sqlite3')->wasNotified($key));
+    }
+
     // ── C2 round 6 (2026-09-05): two tracks, ONE rollup entry ────────────────────────────────────
 
     /**
@@ -517,6 +585,88 @@ final class RentScoutDigestTest extends TestCase
     }
 
     /**
+     * TWINS THAT STRADDLE THE GATE ARE ONE FLAT, ONE ANNOUNCEMENT — and round 6 got this wrong.
+     *
+     * The collapse ran on each list AFTER the split, so a direct copy scoring over the gate and its
+     * agency twin scoring under it held one entry each, `collapseTwins()` returned at `count < 2`,
+     * and the same flat went out twice in one drain: an individual MATCH push AND a rollup line,
+     * neither naming the other route. Collapsing over the UNION before the split is what fixes it,
+     * and the surviving route's score is then what decides the arm.
+     */
+    public function testTwinsStraddlingTheGateAreCollapsedBeforeTheSplit(): void
+    {
+        // A gate BETWEEN the two scores: the elevator bonus lifts the direct copy over it.
+        $root = $this->tempRoot(['notify' => ['push_min_score' => 60]]);
+        $direct = $this->seedQueuedMatch($root, new RawListing(
+            sourceName: 'inli', externalId: 'STRADDLE-D', title: 'Appartement 3 pièces',
+            description: 'Logement intermédiaire (LLI).', fields: ['financement' => 'LLI'],
+            commune: 'Sartrouville', postcode: '78500', rentCc: 1450, surfaceM2: 88.0, rooms: 4,
+            floor: 2, hasElevator: true,
+        ));
+        $agency = $this->seedQueuedMatch($root, new RawListing(
+            sourceName: 'seloger', externalId: 'STRADDLE-A', title: 'Appartement 3 pièces',
+            description: 'Logement intermédiaire (LLI).', fields: ['financement' => 'LLI'],
+            commune: 'Sartrouville', postcode: '78500', rentCc: 1450, surfaceM2: 88.0, rooms: 4,
+        ));
+
+        $channel = $this->delivering();
+        $result = $this->scout($root, ['digest'], $channel);
+
+        self::assertSame(0, $result['code'], $result['out'] . $result['err']);
+        self::assertCount(1, $channel->sent, 'ONE announcement for one flat, not a push and a rollup');
+        self::assertStringContainsString('aussi via seloger', $result['out'], 'and it names the other route');
+
+        $store = Store::open($root . '/state/rent-watch.sqlite3');
+        self::assertSame(0, $store->pendingLowScoreCount(), 'both keys drained together');
+        self::assertTrue($store->wasNotified($direct));
+        self::assertTrue($store->wasNotified($agency));
+    }
+
+    /**
+     * WHICH ARM A SNAPSHOT-LESS ROW TAKES IS THE GATE'S QUESTION, NOT THE SNAPSHOT'S.
+     *
+     * An unencodable payload cannot be re-scored, and the rent drain used to file it in the rollup
+     * unconditionally — so on a deployment with NO gate, where nothing is ever held back, a failed
+     * push was announced under a heading asserting it fell short of a threshold that does not
+     * exist, and marked ROLLUP, which takes it out of the queue for ever. The car drain already
+     * read it the other way.
+     */
+    public function testASnapshotLessRowIsRetriedWhenNoGateIsConfigured(): void
+    {
+        $root = $this->tempRoot();
+        $key = $this->seedQueuedMatch($root, $this->queueable('inli', 'NOSNAP-1'));
+        $this->stripSnapshot($root, $key);
+
+        $channel = $this->delivering();
+        $result = $this->scout($root, ['digest'], $channel);
+
+        self::assertStringContainsString('réémise(s) individuellement', $result['out']);
+        self::assertSame(NotificationKind::MATCH, $channel->sent[0]->kind, 'pushed, not filed under a threshold that does not exist');
+        self::assertTrue(Store::open($root . '/state/rent-watch.sqlite3')->wasNotifiedAs($key, 'MATCH'));
+    }
+
+    /**
+     * THE COUNTERWEIGHT THE REMAINDER LINE NEVER HAD: it must stay SILENT when nothing is left.
+     *
+     * `overflow()` counted `waitingLowScore` — every queued row, retries included — against the
+     * rollup list alone, so every row that became a retry was reported as still pending. On a
+     * deployment with no gate that is a phantom backlog on every single drain, and a line that
+     * claims a backlog it has just emptied is how an operator learns to stop reading it. Every
+     * existing assertion proved the line FIRES when there IS a remainder; none proved it silent.
+     */
+    public function testADrainThatEmptiedTheQueueClaimsNoRemainder(): void
+    {
+        $root = $this->tempRoot();
+        $this->seedQueuedMatch($root, $this->queueable('inli', 'NOREM-1'));
+
+        $result = $this->scout($root, ['digest'], $this->delivering());
+
+        self::assertStringContainsString('réémise(s) individuellement', $result['out']);
+        self::assertStringNotContainsString('autre(s) en attente', $result['out'], 'there is no suite');
+        self::assertSame(0, Store::open($root . '/state/rent-watch.sqlite3')->pendingLowScoreCount());
+    }
+
+    /**
      * A mail carrying ONLY the rollup is a `ROLLUP` notification, never a `DIGEST`.
      *
      * The kind is what a channel routes and prioritises on, and *digest* here means §1's tenure
@@ -548,6 +698,31 @@ final class RentScoutDigestTest extends TestCase
 
         self::assertCount(1, $channel->sent);
         self::assertSame(NotificationKind::DIGEST, $channel->sent[0]->kind);
+    }
+
+    /**
+     * HARD RULE 7 AT THE ONE PLACE IT IS EASIEST TO FORGET: a channel failure carries the URL it
+     * failed on, and an ntfy topic, an SMTP DSN or a Telegram bot token lives in that URL.
+     *
+     * `CarScout` redacts at all four of its sites; `RentScout` redacted at three of six, including
+     * one seven lines below the redacting sibling this round added. These warnings go to stderr,
+     * which under `compose.yaml` is the container log.
+     */
+    public function testAChannelFailureIsRedactedBeforeItReachesTheLog(): void
+    {
+        $root = $this->tempRoot(['notify' => ['push_min_score' => 100]]);
+        $this->seedQueuedMatch($root, $this->queueable('inli', 'REDACT-1'));
+
+        $channel = $this->delivering();
+        $channel->refuses = [NotificationKind::ROLLUP];
+        $channel->refusalMessage = 'ntfy: POST https://ntfy.sh/scout-9f2ac?auth=tk_abc123 a répondu 401';
+
+        $result = $this->scout($root, ['digest'], $channel);
+
+        $said = $result['out'] . $result['err'];
+        self::assertStringContainsString('401', $said, 'the diagnosis survives');
+        self::assertStringNotContainsString('tk_abc123', $said, 'the credential does not');
+        self::assertStringNotContainsString('scout-9f2ac', $said, 'nor the topic that addresses it');
     }
 
     /**

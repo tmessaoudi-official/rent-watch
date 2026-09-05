@@ -237,6 +237,81 @@ final class CarScoutTest extends TestCase
     }
 
     /**
+     * A COMPUTED `REJECT` IS AN ANSWER, AND THE DRAIN USED TO DISCARD IT.
+     *
+     * The re-judge kept `$verdict = null` on a rejection and fell back to the STORED score, so a
+     * queued car that today's classifier calls `accidenté` — the non-overridable excluded vehicle
+     * set — was announced as an individual MATCH carrying the reason *« réémission — score
+     * conservé, instantané absent »*, which was false: the snapshot was present and decoded.
+     *
+     * Reachable with no forged state: the excluded set was WIDENED in code on 2026-08-31
+     * (`opposition`, the `[ _-]` multi-word fix), and `max_price_eur` / `brand_avoid` have both
+     * changed since — each flips previously-MATCH rows. The rent drain refuses the identical case;
+     * this is the other of the two symmetric surfaces.
+     */
+    public function testAQueuedCarTodaysRulesRejectIsLeftWaitingAndNeverAnnounced(): void
+    {
+        $key = $this->queueACarTheRulesNowReject();
+        $channel = new CarRecordingChannel();
+
+        $r = $this->scout(['--domain=car', 'rollup'], $channel);
+
+        self::assertSame([], $channel->sent, 'neither pushed nor rolled up');
+        self::assertStringContainsString('re-jugée REJECT', $r['out'] . $r['err'], 'and the refusal is said out loud');
+        self::assertFalse(\Scout\Car\VehicleStore::open($this->db)->wasNotified($key), 'nothing marked');
+        self::assertSame(1, \Scout\Car\VehicleStore::open($this->db)->pendingRollupCount(), 'still queued for a human to look at');
+    }
+
+    /** The daily floor refuses it too — one implementation, both call sites. */
+    public function testTheFloorAlsoRefusesACarTodaysRulesReject(): void
+    {
+        $key = $this->queueACarTheRulesNowReject();
+        $channel = new CarRecordingChannel();
+        putenv('SCOUT_MAX_PASSES=1');
+        try {
+            $r = $this->scout(['--domain=car', 'run', '--watch', '--source=paruvendu'], $channel);
+        } finally {
+            putenv('SCOUT_MAX_PASSES');
+        }
+
+        self::assertSame([], array_filter($channel->sent, static fn ($n) => str_contains($n->title, 'accident')));
+        self::assertStringContainsString('re-jugée REJECT', $r['out'] . $r['err'], 'the floor voices it even though the batch ends empty');
+        self::assertFalse(\Scout\Car\VehicleStore::open($this->db)->wasNotified($key));
+    }
+
+    /** And a drain that emptied the queue claims no remainder — the counterweight the line never had. */
+    public function testACarDrainThatEmptiedTheQueueClaimsNoRemainder(): void
+    {
+        $this->queueACarOverTheGate();
+
+        $r = $this->scout(['--domain=car', 'rollup'], new CarRecordingChannel());
+
+        self::assertStringContainsString('réémise(s) individuellement', $r['out']);
+        self::assertStringNotContainsString('autre(s) en attente', $r['out'], 'there is no suite');
+    }
+
+    /**
+     * A queued MATCH whose snapshot decodes and whose facts today's rules REJECT: a car recorded
+     * before the excluded set was widened, whose push failed or whose score sat under the gate.
+     */
+    private function queueACarTheRulesNowReject(): string
+    {
+        $store = \Scout\Car\VehicleStore::open($this->db);
+        $car = new \Scout\Car\VehicleListing(
+            sourceName: 'paruvendu',
+            externalId: 'REJET-1',
+            title: 'Renault Clio V accidente',
+            priceEur: 9000,
+            year: 2021,
+            mileageKm: 40000,
+        );
+        $sighting = $store->record($car, '2026-08-01T00:00:00Z');
+        $store->recordVerdict($sighting->dedupKey, \Scout\Car\VehicleVerdict::matched(90, ['jugée avant l\'élargissement de la liste'], false), $car);
+
+        return $sighting->dedupKey;
+    }
+
+    /**
      * A queued MATCH whose STORED score clears the shipped gate and whose snapshot could not be
      * encoded — the production shape of a push that failed, and the arm that has to fall back to
      * the stored score because nothing can be re-judged.

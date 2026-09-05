@@ -202,9 +202,10 @@ jobs:
       fail-fast: false
       matrix:
         shard: [1, 2, 3, 4, 5, 6]
-    # Heavy (75-90+ min on a runner at 527 cases; see the runtime note at the top): re-runs the
-    # whole suite once per seeded regression. Nightly + on demand,
-    # not per-push — the fast job above catches ordinary breakage on every push.
+    # Heavy: re-runs the whole suite once per seeded regression. SHARDED since 2026-09-05, so this
+    # budget covers ONE SIXTH of the ledger, not all of it — the 75-90 min figures in the note at
+    # the top are whole-ledger numbers. Nightly + on demand, not per-push — the fast job above
+    # catches ordinary breakage on every push.
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     # An explicit budget, below GitHub's silent 360-minute default so a ledger that HANGS is still a
     # red build the same day. It was 90 from 2026-08-21 (22 min measured, "4x headroom") until the
@@ -277,7 +278,12 @@ jobs:
       contents: read
       issues: write
     steps:
+      # `continue-on-error`, because THE ALERT IS THE DELIVERY MECHANISM and this step is only its
+      # evidence. A transient artifact-API failure must degrade the issue's detail, never suppress
+      # the issue — hard rule 2's shape inside the alerting job, which is the defect this job
+      # already carries a note about from 2026-08-29 (C2 round 7, two lenses).
       - name: Collect every shard's ledger log
+        continue-on-error: true
         uses: actions/download-artifact@v4
         with:
           path: ledger-logs
@@ -296,7 +302,18 @@ jobs:
       # budget reached nobody — hard rule 2's shape inside the alerting job itself. Stated cost: a
       # manual cancel now opens a spurious issue, which the green nightly retracts the next day.
       - name: A red ledger must reach a human
-        if: needs.sabotage.result != 'success'
+        # `always() &&` is NOT decoration: an `if:` containing no status check function gets an
+        # implicit `success()`, so ANY failing step before this one — the download above — would
+        # skip the alert on a night the ledger was red. The job-level `always()` does not reach
+        # step conditions (C2 round 7, two lenses).
+        if: always() && needs.sabotage.result != 'success'
+        env:
+          # THE THIRD COPY OF THE DENOMINATOR, and the one nothing pinned. The reader used to
+          # iterate a hardcoded ['1'…'6']; widening the matrix would have left the new shards
+          # neither summed nor named as missing, so their undetected regressions would be absent
+          # from the issue and their silence would read as clean. `test-ci-workflow.sh` now checks
+          # this value against the matrix size, as it already did for SABOTAGE_SHARD.
+          SHARDS: 6
         uses: actions/github-script@v7
         with:
           script: |
@@ -324,16 +341,28 @@ jobs:
             let detail = '';
             try {
               const dir = 'ledger-logs';
-              const shards = fs.existsSync(dir) ? fs.readdirSync(dir).sort() : [];
-              let detected = 0, undetected = 0, sawTally = false;
+              const total = Number(process.env.SHARDS);
+              let detected = 0, undetected = 0;
               const lines = [];
-              const missing = [];
-              for (const n of ['1', '2', '3', '4', '5', '6']) {
+              const missing = [];   // no log at all — the shard died before writing a byte
+              const partial = [];   // a log with no tally — CUT OFF, which is the timeout case
+              const counted = [];
+              for (let i = 1; i <= total; i++) {
+                const n = String(i);
                 const file = `${dir}/ledger-${n}/ledger.log`;
                 if (!fs.existsSync(file)) { missing.push(n); continue; }
                 const log = fs.readFileSync(file, 'utf8').replace(/\u001b\[[0-9;]*m/g, '');
                 const t = log.match(/^\s*(\d+) sabotage\(s\) detected, (\d+) undetected$/m);
-                if (t) { sawTally = true; detected += Number(t[1]); undetected += Number(t[2]); }
+                // A SHARD KILLED BY `timeout-minutes` UPLOADS A PARTIAL LOG — the upload carries
+                // `if: always()` — so the file EXISTS and `missing` never names it. Its tally line
+                // was never printed, and that is the tell. Summing what it did print would report
+                // five shards' work as six, on the very failure mode that motivated sharding.
+                if (t) { counted.push(n); detected += Number(t[1]); undetected += Number(t[2]); }
+                else { partial.push(n); }
+                // An ABORTing shard prints its refusal AFTER the tally, so it is harvested here or
+                // the issue quotes a clean-looking `0 / 0` and never shows the refusal.
+                const a = log.match(/^\s*ABORT[^\n]*/m);
+                if (a) { lines.push(`[shard ${n}] ${a[0].trim()}`); }
                 const b = log.match(/undetected or unapplied:\n([\s\S]*?)(?:\n\s*\n|$)/);
                 if (b) {
                   for (const l of b[1].split('\n').filter((x) => x.trim() !== '')) {
@@ -341,13 +370,17 @@ jobs:
                   }
                 }
               }
-              void shards;
-              const tally = sawTally
-                ? [`${detected} sabotage(s) detected, ${undetected} undetected (6 shards)`]
+              const tally = counted.length > 0
+                ? [`${detected} sabotage(s) detected, ${undetected} undetected`
+                   + ` (${counted.length} of ${total} shards reported)`]
                 : null;
               if (missing.length > 0) {
                 lines.push(`shard(s) ${missing.join(', ')} produced no log at all — killed before`
                   + ` writing, so what they cover is UNKNOWN, not clean`);
+              }
+              if (partial.length > 0) {
+                lines.push(`shard(s) ${partial.join(', ')} wrote a log but never reached their tally`
+                  + ` — CUT OFF mid-run, so their cases are UNKNOWN, not clean`);
               }
               const shown = lines.slice(0, 25);
               detail = [
@@ -420,7 +453,7 @@ jobs:
       # be invisible to it — and an alert that fails to close is the defect being fixed here, so
       # this path must read live state. It returns pull requests as issues, hence the filter.
       - name: A green ledger must retract the alert it raised
-        if: needs.sabotage.result == 'success'
+        if: always() && needs.sabotage.result == 'success'
         uses: actions/github-script@v7
         with:
           script: |

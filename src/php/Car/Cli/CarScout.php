@@ -713,8 +713,13 @@ final readonly class CarScout
                 $this->line($line);
             }
         }
-        if ($waiting > count($entries)) {
-            $this->line(sprintf('%d autre(s) en attente — relancer `scout --domain=car rollup` pour la suite.', $waiting - count($entries)));
+        // THE RETRIES LEFT THE QUEUE TOO (C2 round 7, P1 on two lenses). `$waiting` is
+        // `pendingRollupCount()` — every queued row, retries included — so counting only
+        // `$entries` reported a phantom remainder on every drain that produced a retry, which on a
+        // deployment with no gate is every drain there can be. A line that claims a backlog it has
+        // just emptied is how an operator learns to stop reading it.
+        if ($waiting > count($entries) + count($retries)) {
+            $this->line(sprintf('%d autre(s) en attente — relancer `scout --domain=car rollup` pour la suite.', $waiting - count($entries) - count($retries)));
         }
         if ($dryRun) {
             $this->line('--dry-run : rien n\'a été envoyé, rien n\'a été marqué comme émis.');
@@ -748,12 +753,20 @@ final readonly class CarScout
     }
 
     /**
-     * The queue, decoded — never throws, never prints (the floor calls this inside the loop's
+     * The queue, decoded — no longer "never throws", never prints (the floor calls this inside the loop's
      * `finally`). A row whose snapshot will not decode is announced from its columns and counted.
      *
      * @return array{0: list<array{car: VehicleListing, score: ?int, key: string}>, 1: int, 2: list<string>, 3: list<array{car: VehicleListing, verdict: VehicleVerdict, key: string}>}
+     *
+     * **IT CAN THROW SINCE ROUND 6, and the docblock said otherwise for a round** (C2 round 7,
+     * completeness P3): it calls `$this->criteria()` — an unmemoized `VehicleCriteriaLoader::load`
+     * — and `VehicleScorer::judge()`. The floor's call site wraps it in `catch (\Throwable)`, so an
+     * unreadable config skips the whole rollup for the day; the RENT drain chose the other
+     * treatment for the same condition, catching `ConfigError` inside `collapseTwins()` so §1's
+     * landing zone still empties. The two drains differ deliberately — the car domain has no §1
+     * landing zone to keep open — and now both say so.
      */
-    private function collectRollup(VehicleStore $store): array
+private function collectRollup(VehicleStore $store): array
     {
         $entries = [];
         $retries = [];
@@ -778,12 +791,33 @@ final readonly class CarScout
             // the latter. Re-judged from the snapshot (the stored score when there is none) so
             // the split is the gate's own comparison; at or over the line it is pushed as the
             // match it is, never filed under « score bas ».
+            // A COMPUTED REJECT IS AN ANSWER, NOT A MISSING ONE (C2 round 7, both P0 lenses).
+            // This used to keep `$verdict = null` on a rejection and fall back to the STORED
+            // score, so a queued car that today's classifier calls `accidenté` / `gagé` / `épave`
+            // was announced — as an individual MATCH when the stored score cleared the gate, in
+            // the rollup otherwise — carrying the reason line *« réémission — score conservé,
+            // instantané absent »*, which was false: the snapshot was present and decoded.
+            //
+            // Reachable with no forged state: the excluded vehicle set was WIDENED in code on
+            // 2026-08-31 (`opposition`, the `[ _-]` multi-word fix) and `max_price_eur` /
+            // `brand_avoid` have both changed since — each flips previously-MATCH rows.
+            //
+            // The rent drain refuses the identical case 400 lines away, in the same commit that
+            // introduced this one. Same treatment now: left waiting, with a warning naming the
+            // command that owns verdict changes.
             $verdict = null;
             if ($car !== null) {
                 $judged = $scorer->judge($car, $classifier->classify($car), $criteria, $year, $month);
-                if ($judged->outcome === VehicleOutcome::MATCH) {
-                    $verdict = $judged;
+                if ($judged->outcome !== VehicleOutcome::MATCH) {
+                    $warnings[] = sprintf(
+                        '%s re-jugée %s aujourd\'hui — laissée en attente, `scout --domain=car dump` la revoit',
+                        $row['dedup_key'],
+                        $judged->outcome->value,
+                    );
+
+                    continue;
                 }
+                $verdict = $judged;
             }
             $car ??= new VehicleListing(sourceName: $row['source'], externalId: $row['external_id'], title: $row['title'], url: $row['url'], priceEur: $row['price_eur'] === null ? null : (int) $row['price_eur']);
             $score = $verdict?->score ?? $stored;
@@ -830,11 +864,15 @@ final readonly class CarScout
     private function floorRollup(Notifier $notifier, VehicleStore $store, string $now): void
     {
         [$entries, $waiting, $warnings, $retries] = $this->collectRollup($store);
-        if ($entries === [] && $retries === []) {
-            return;
-        }
+        // WARNINGS FIRST — an empty batch can carry them (C2 round 7, the rent floor's twin). Every
+        // queued car can be skipped (re-judged REJECT today, an unreadable snapshot) while nothing
+        // is left to announce, and `--watch` is the deployed mode: returning above this loop meant
+        // a car stuck in the queue for ever was reported only if a human typed the verb.
         foreach ($warnings as $warning) {
             $this->warn($warning);
+        }
+        if ($entries === [] && $retries === []) {
+            return;
         }
         // Retries first, as individual pushes — the floor is the only automatic drain under
         // `--watch`, so a failed push is recovered here or nowhere (the verb does the same).
@@ -855,7 +893,14 @@ final readonly class CarScout
             $store->markNotified($entry['key'], $now);
         }
         @file_put_contents($this->stateFile('car-rollup.txt'), $now);
-        $this->line(sprintf('récapitulatif quotidien « vérifié, score bas » : %d véhicule(s) émis%s.', count($entries), $waiting > count($entries) ? sprintf(' — %d autre(s) en attente', $waiting - count($entries)) : ''));
+        $this->line(sprintf(
+            'récapitulatif quotidien « vérifié, score bas » : %d véhicule(s) émis%s.',
+            count($entries),
+            // Retries counted here too — same reason as the verb's line above.
+            $waiting > count($entries) + count($retries)
+                ? sprintf(' — %d autre(s) en attente', $waiting - count($entries) - count($retries))
+                : '',
+        ));
     }
 
     private function lastRollup(): ?string

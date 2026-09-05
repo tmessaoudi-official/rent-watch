@@ -70,10 +70,10 @@ final readonly class DigestBatch
         return $this->entries === [] && $this->lowScore === [] && $this->retries === [];
     }
 
-    /** Entries carried by this batch, both queues. */
+    /** Entries carried by this batch — the tenure bin, the rollup and the retries: all THREE lists. */
     public function count(): int
     {
-        return \count($this->entries) + \count($this->lowScore);
+        return \count($this->entries) + \count($this->lowScore) + \count($this->retries);
     }
 
     /**
@@ -81,10 +81,27 @@ final readonly class DigestBatch
      *
      * Said out loud by every caller, because a capped batch that stayed silent about the remainder
      * would look like the whole backlog — and the operator would stop draining it.
+     *
+     * **IT MUST STAY SILENT WHEN THERE IS NO REMAINDER, and for one round it did not** (C2 round 7,
+     * P1 on two lenses). Round 6 split the low-score queue into `lowScore` + `retries` and updated
+     * `isEmpty()` to know three lists; this method and `count()` still knew two. `waitingLowScore`
+     * counts EVERY queued row, so each row that became a retry was subtracted from nothing and
+     * reported as still pending — on a deployment with no `push_min_score`, where every queued row
+     * is a retry, that is a phantom backlog on every single drain, printed by the verb and by the
+     * daily floor. The guarantee above is the same lie pointing the other way, and it is what makes
+     * an operator stop reading the line.
+     *
+     * A COLLAPSED TWIN COUNTS FOR EVERY KEY IT DRAINED, not for one: the pair leaves the queue
+     * together, so counting the entry once would report the other route as a remainder for ever.
      */
     public function overflow(): int
     {
-        return max(0, $this->waiting - \count($this->entries)) + max(0, $this->waitingLowScore - \count($this->lowScore));
+        $drained = 0;
+        foreach ([...$this->lowScore, ...$this->retries] as $entry) {
+            $drained += \count($entry['keys']);
+        }
+
+        return max(0, $this->waiting - \count($this->entries)) + max(0, $this->waitingLowScore - $drained);
     }
 
     public function unreadable(): int

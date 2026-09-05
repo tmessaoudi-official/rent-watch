@@ -57,10 +57,24 @@ final class DeliveringChannel implements Channel
      */
     public array $refuses = [];
 
+    /**
+     * The message a refusal throws.
+     *
+     * Settable because a real channel error carries the URL it failed on — an ntfy topic, an SMTP
+     * DSN, a Telegram bot token — and hard rule 7 says none of that may be logged. A test that
+     * cannot put a credential in the message cannot prove the redaction (C2 round 7).
+     */
+    public string $refusalMessage = 'ntfy: HTTP 503 depuis ntfy.sh';
+
     public function send(Notification $notification): void
     {
         if (\in_array($notification->kind, $this->refuses, true)) {
-            throw new ChannelError('ntfy: HTTP 503 depuis ntfy.sh');
+            // TWO ARGUMENTS. It was one — `new ChannelError('ntfy: HTTP 503 …')` — which is a
+            // TypeError, not a ChannelError, and `Notifier::send()` catches `\Throwable` and wraps
+            // it. So every refusal test passed on a wrapped TypeError whose message named a PHP
+            // argument count, and the refusal path this double exists for was never exercised as
+            // itself (C2 round 7, found while proving the redaction).
+            throw new ChannelError($this->name(), $this->refusalMessage);
         }
 
         $this->sent[] = $notification;
